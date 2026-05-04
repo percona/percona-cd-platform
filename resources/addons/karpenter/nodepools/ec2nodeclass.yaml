@@ -3,15 +3,29 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
+  # AL2023 EKS-optimized AMI. The `@latest` alias rolls a new AMI silently
+  # whenever AWS publishes one — fine for security patching but bad for
+  # change-control. Pre-`tofu apply`, swap to a dated alias (e.g.
+  # `al2023@v20260415`) and roll forward via PR after a minor-version sweep.
+  # See docs/eks-hardening.md item #5.
   amiSelectorTerms:
     - alias: al2023@latest
-  role: percona-ci-platform-karpenter-node   # rewritten via ApplicationSet
+
+  # Worker IAM role — Pod Identity-bound by terraform/karpenter-prereqs.tf
+  # (stable name, no name-prefix). ApplicationSet helm valuesObject does NOT
+  # rewrite this field; the cluster-name prefix matches the TF default.
+  role: percona-ci-platform-karpenter-node
+
+  # Subnets + SGs auto-discovered by tag. Wave 1's vpc.tf tags every private
+  # subnet and the worker SG with `karpenter.sh/discovery = <cluster_name>`,
+  # so adding a subnet/SG to discovery is a one-tag change.
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: percona-ci-platform
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: percona-ci-platform
+
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
@@ -19,11 +33,23 @@ spec:
         volumeType: gp3
         encrypted: true
         deleteOnTermination: true
+
+  # IMDSv2 only, hop-limit 1. Matches the managed NGs (eks.tf). Hop=1 blocks
+  # non-host-network pods from reaching IMDS — desired, because pods should
+  # use Pod Identity (eks-pod-identity-agent runs host-network and is
+  # unaffected). docs/eks-hardening.md item #3.
   metadataOptions:
     httpEndpoint: enabled
     httpProtocolIPv6: disabled
-    httpPutResponseHopLimit: 2
+    httpPutResponseHopLimit: 1
     httpTokens: required
+
+  # Tags propagated onto every Karpenter-launched EC2 instance AND its EBS
+  # volumes. iit-billing-tag + PerconaKeep are MANDATORY — without them, the
+  # percona-dev-admin cleanup Lambdas reap nodes after 10 min and volumes
+  # daily. See CLAUDE.md item #7 and docs/eks-hardening.md.
   tags:
+    iit-billing-tag: percona-ci-platform
+    PerconaKeep: "True"
     managed-by: karpenter
     repo: github.com/nogueiraanderson/percona-ci-platform
