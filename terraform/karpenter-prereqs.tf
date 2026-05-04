@@ -29,7 +29,9 @@ module "karpenter" {
   node_iam_role_attach_cni_policy = true
 
   # SQS interruption queue (spot termination notices, scheduled-event
-  # rebalance recommendations). Encrypt with the cluster's KMS CMK.
+  # rebalance recommendations). AWS-managed SSE — interruption events carry
+  # no sensitive payload, so SQS-owned keys are sufficient and avoid an
+  # extra KMS grant on the cluster CMK.
   queue_name                = "${local.cluster_name}-karpenter"
   queue_managed_sse_enabled = true
 
