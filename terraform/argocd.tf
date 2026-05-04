@@ -87,6 +87,12 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       # ACM
       acm_wildcard_arn = module.acm.acm_certificate_arn
 
+      # Hostnames — single source of truth is var.* in terraform/variables.tf.
+      # Addon ApplicationSets pull these into Helm valuesObject so chart
+      # values.yaml never carries a hardcoded *.cd.percona.com.
+      argocd_hostname  = var.argocd_hostname
+      grafana_hostname = var.grafana_hostname
+
       # Pod Identity role ARNs (consumed by addon Helm valuesObject)
       alb_controller_role_arn   = module.pod_identity_alb_controller.iam_role_arn
       external_dns_role_arn     = module.pod_identity_external_dns.iam_role_arn

@@ -27,6 +27,12 @@ spec:
         path: '{{ path }}'
         helm:
           valueFiles: [values.yaml]
+          # valuesObject is merged on top of values.yaml. Source of truth for
+          # every cloud-shaped value lives in terraform/variables.tf and lands
+          # here via the cluster-secret annotations (see argocd.tf).
+          # Unknown keys are ignored by addons that don't declare them — Helm
+          # does not error on extra values, so the same valuesObject can be
+          # broadcast to every addon Application.
           valuesObject:
             aws:
               region: '{{ metadata.annotations.aws_region }}'
@@ -38,6 +44,14 @@ spec:
               ebsCsiRoleArn: '{{ metadata.annotations.ebs_csi_role_arn }}'
               externalSecretsRoleArn: '{{ metadata.annotations.external_secrets_role_arn }}'
               karpenterQueue: '{{ metadata.annotations.karpenter_sqs_name }}'
+
+            # kube-prometheus-stack overrides — Grafana hostname comes from
+            # terraform var.grafana_hostname. Other addons ignore this key.
+            kube-prometheus-stack:
+              grafana:
+                ingress:
+                  hosts:
+                    - '{{ metadata.annotations.grafana_hostname }}'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'
