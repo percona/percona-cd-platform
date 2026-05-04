@@ -131,3 +131,14 @@ output "jenkins_origin_records" {
   description = "FQDNs of all created origin-<host>.cd.percona.com records (Mode B proxy upstreams)."
   value       = [for h, _ in local.jenkins_origin_records : "origin-${h}.${var.route53_zone_name}"]
 }
+
+# Backup (backup.tf)
+output "backup_vault_arn" {
+  description = "AWS Backup vault ARN holding daily snapshots of stateful PVCs."
+  value       = aws_backup_vault.main.arn
+}
+
+output "backup_kms_key_arn" {
+  description = "CMK encrypting the backup vault. Required to restore in another account/region."
+  value       = aws_kms_key.backup.arn
+}
