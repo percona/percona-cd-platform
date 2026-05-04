@@ -176,6 +176,34 @@ variable "jenkins_hosts" {
   }
 }
 
+variable "jenkins_origin_targets" {
+  description = <<-EOT
+    Per-host origin record values for Mode B (proxy) Jenkins masters.
+    Keyed by short host name (matches a key in var.jenkins_hosts where
+    mode = "proxy"). Each entry is the existing EC2 master's reachable
+    public hostname or IP. The in-cluster NGINX proxy `proxy_pass`'es to
+    `origin-<host>.cd.percona.com`, which CNAME/A-records to `target` here.
+
+    Operationally sensitive (per-master, multi-region). Populate via
+    `terraform/local.auto.tfvars` (gitignored) — never commit. Hosts not
+    listed here get no origin record (intentional: roll out one at a time).
+
+    Example (in local.auto.tfvars):
+      jenkins_origin_targets = {
+        pmm  = { target = "ec2-X-Y-Z.compute-1.amazonaws.com", type = "CNAME" }
+        ps80 = { target = "203.0.113.10",                       type = "A"     }
+      }
+  EOT
+  type = map(object({
+    target = string
+    type   = optional(string, "CNAME")
+  }))
+  default = {}
+  # Not marked sensitive: target values are public DNS/IPs and `for_each`
+  # over sensitive values is forbidden. Privacy is enforced by keeping
+  # `terraform/local.auto.tfvars` out of git, not by the type system.
+}
+
 variable "tags" {
   description = <<-EOT
     Default tags for every taggable AWS resource. Two of these are required by

@@ -6,7 +6,11 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: platform
+  # Root lives in the built-in `default` project so it can create the
+  # `platform` AppProject (argocd-bootstrap/projects/platform.yaml) on
+  # first sync without a chicken-and-egg. Every downstream Application
+  # uses `project: platform`.
+  project: default
   source:
     repoURL: https://github.com/nogueiraanderson/percona-ci-platform
     targetRevision: HEAD

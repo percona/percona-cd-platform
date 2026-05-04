@@ -109,5 +109,25 @@ output "external_secrets_pod_identity_role_arn" {
   value       = module.pod_identity_external_secrets.iam_role_arn
 }
 
-# Downstream waves will append:
-# - acm_wildcard_arn (acm.tf, wave 3)
+# ACM (acm.tf)
+output "acm_wildcard_arn" {
+  description = "Wildcard *.cd.percona.com ACM certificate ARN (referenced by ALB Ingresses)."
+  value       = module.acm.acm_certificate_arn
+}
+
+# ArgoCD (argocd.tf)
+output "argocd_namespace" {
+  description = "Namespace where the ArgoCD HA install runs."
+  value       = helm_release.argocd.namespace
+}
+
+output "argocd_hostname" {
+  description = "Public hostname for the ArgoCD UI (resolved by external-dns to the shared ALB)."
+  value       = var.argocd_hostname
+}
+
+# Origins (origins.tf)
+output "jenkins_origin_records" {
+  description = "FQDNs of all created origin-<host>.cd.percona.com records (Mode B proxy upstreams)."
+  value       = [for h, _ in local.jenkins_origin_records : "origin-${h}.${var.route53_zone_name}"]
+}
