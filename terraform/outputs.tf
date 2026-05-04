@@ -56,7 +56,58 @@ output "public_subnets" {
   value       = module.vpc.public_subnets
 }
 
+output "aws_account_id" {
+  description = "AWS account ID; used in ArgoCD cluster-secret annotations."
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "route53_zone_id" {
+  description = "Public hosted zone ID for var.route53_zone_name."
+  value       = local.route53_zone_id
+}
+
+# Karpenter (karpenter-prereqs.tf)
+output "karpenter_node_iam_role_arn" {
+  description = "IAM role assumed by Karpenter-launched workers (referenced by EC2NodeClass)."
+  value       = module.karpenter.node_iam_role_arn
+}
+
+output "karpenter_node_iam_role_name" {
+  description = "IAM role name (some chart values want the name, not the ARN)."
+  value       = module.karpenter.node_iam_role_name
+}
+
+output "karpenter_queue_name" {
+  description = "SQS interruption queue name; goes into the Karpenter Helm values."
+  value       = module.karpenter.queue_name
+}
+
+output "karpenter_iam_role_arn" {
+  description = "Karpenter controller IAM role ARN (Pod Identity-bound)."
+  value       = module.karpenter.iam_role_arn
+}
+
+# Pod Identity associations (pod-identity.tf) — each *_pod_identity_role_arn is
+# what the cluster-secret annotation contract carries into addon Helm valuesObject.
+output "alb_controller_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for the AWS Load Balancer Controller."
+  value       = module.pod_identity_alb_controller.iam_role_arn
+}
+
+output "external_dns_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for external-dns."
+  value       = module.pod_identity_external_dns.iam_role_arn
+}
+
+output "ebs_csi_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for the EBS CSI controller."
+  value       = module.pod_identity_ebs_csi.iam_role_arn
+}
+
+output "external_secrets_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for the External Secrets Operator."
+  value       = module.pod_identity_external_secrets.iam_role_arn
+}
+
 # Downstream waves will append:
-# - acm_wildcard_arn (acm.tf)
-# - karpenter_sqs_name, karpenter_node_role_arn (karpenter-prereqs.tf)
-# - <addon>_role_arn for each Pod Identity association (pod-identity.tf)
+# - acm_wildcard_arn (acm.tf, wave 3)
