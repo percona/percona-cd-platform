@@ -66,7 +66,9 @@ kube-prometheus-stack:
         alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
         alb.ingress.kubernetes.io/ssl-redirect: '443'
         alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-      hosts: [grafana.cd.percona.com]
+        # hosts deliberately omitted — supplied by ApplicationSet valuesObject
+        # from cluster-secret annotation `grafana_hostname` (terraform var
+        # `grafana_hostname`). See argocd-bootstrap/applicationsets/addons.yaml.
 
   prometheusOperator:
     nodeSelector:
