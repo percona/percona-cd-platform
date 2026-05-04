@@ -108,6 +108,24 @@ variable "api_public_access_cidrs" {
   }
 }
 
+variable "addon_versions" {
+  description = <<-EOT
+    Per-addon version pins for the EKS managed addons (vpc-cni, kube-proxy,
+    coredns, eks-pod-identity-agent, aws-ebs-csi-driver). Empty map = let the
+    EKS API resolve to the channel default for var.cluster_version. After
+    first apply, populate via local.auto.tfvars and bump explicitly per
+    docs/eks-hardening.md item #5 — never tracking "latest".
+
+    Look values up with:
+      aws eks describe-addon-versions \
+        --kubernetes-version 1.35 \
+        --addon-name <name> \
+        --query 'addons[].addonVersions[?compatibilities[?defaultVersion==`true`]].addonVersion'
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
 variable "monitoring_az" {
   description = "Single AZ for stateful workloads (Prometheus, Jenkins masters). EBS is zonal."
   type        = string

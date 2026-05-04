@@ -14,6 +14,10 @@ locals {
   state_bucket = "terraform-state-storage-${local.cluster_name}"
   state_lock   = "terraform-state-lock-${local.cluster_name}"
 
+  # Resolved Route 53 ID for the platform zone. Cached locally so all consumers
+  # (pod-identity, acm, origins, argocd) reference the same value.
+  route53_zone_id = data.aws_route53_zone.main.zone_id
+
   # NodeGroup sizing knobs surfaced as locals so they're easy to find.
   ng = {
     system = {
