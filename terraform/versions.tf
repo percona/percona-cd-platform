@@ -6,7 +6,7 @@ terraform {
   required_version = ">= 1.11.0, < 2.0.0" # OpenTofu 1.11.x
 
   required_providers {
-    aws        = { source = "hashicorp/aws", version = "~> 5.95" }
+    aws        = { source = "hashicorp/aws", version = "~> 6.43" }
     kubernetes = { source = "hashicorp/kubernetes", version = "~> 2.35" }
     helm       = { source = "hashicorp/helm", version = "~> 2.17" }
     kubectl    = { source = "alekc/kubectl", version = "~> 2.1" }
@@ -18,12 +18,13 @@ terraform {
 # OpenTofu 1.8+ allows variable interpolation in module.source/version (early eval).
 locals {
   modules = {
-    vpc          = { source = "terraform-aws-modules/vpc/aws", version = "6.6.1" }
-    eks          = { source = "terraform-aws-modules/eks/aws", version = "21.19.0" }
-    karpenter    = { source = "terraform-aws-modules/eks/aws//modules/karpenter", version = "21.19.0" }
-    pod_identity = { source = "terraform-aws-modules/eks-pod-identity/aws", version = "2.8.0" }
-    iam_irsa     = { source = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks", version = "6.6.0" }
-    acm          = { source = "terraform-aws-modules/acm/aws", version = "6.3.0" }
+    vpc           = { source = "terraform-aws-modules/vpc/aws", version = "6.6.1" }
+    vpc_endpoints = { source = "terraform-aws-modules/vpc/aws//modules/vpc-endpoints", version = "6.6.1" }
+    eks           = { source = "terraform-aws-modules/eks/aws", version = "21.19.0" }
+    karpenter     = { source = "terraform-aws-modules/eks/aws//modules/karpenter", version = "21.19.0" }
+    pod_identity  = { source = "terraform-aws-modules/eks-pod-identity/aws", version = "2.8.0" }
+    iam_irsa      = { source = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks", version = "6.6.0" }
+    acm           = { source = "terraform-aws-modules/acm/aws", version = "6.3.0" }
   }
 
   # Helm chart pins. ArgoCD Applications template these via cluster-secret annotations.

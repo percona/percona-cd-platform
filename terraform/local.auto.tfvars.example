@@ -12,3 +12,26 @@
 #cluster_name      = "percona-ci-platform"
 #argocd_hostname   = "argocd.cd.percona.com"
 #grafana_hostname  = "grafana.cd.percona.com"
+
+# REQUIRED — EKS public-API allowlist (docs/eks-hardening.md #2).
+# Must contain at least one CIDR; 0.0.0.0/0 is rejected by validation.
+# Use Percona office / VPN egress + any operator laptops you allow direct kubectl from.
+#api_public_access_cidrs = [
+#  "203.0.113.0/24",  # Percona office
+#  "198.51.100.5/32", # operator laptop via VPN egress
+#]
+
+# REQUIRED for cluster admin — access entries (docs/eks-hardening.md #1).
+# enable_cluster_creator_admin_permissions is hardcoded to false; without at
+# least one entry below, no human can `kubectl` against the cluster.
+#access_entries = {
+#  anderson = {
+#    principal_arn = "arn:aws:iam::<account>:user/anderson.nogueira"
+#    policy_associations = {
+#      admin = {
+#        policy_arn   = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+#        access_scope = { type = "cluster" }
+#      }
+#    }
+#  }
+#}

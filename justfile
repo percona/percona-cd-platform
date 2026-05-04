@@ -25,7 +25,7 @@ help:
 ci: lint validate
     @echo "✅ ci passed"
 
-lint: tf-fmt-check tf-lint tf-trivy yaml-lint actionlint zizmor
+lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
 
 validate: tf-validate manifest-validate
 
@@ -45,11 +45,15 @@ tf-fmt-check:
 tf-validate: tf-init
     cd terraform && tofu validate
 
-tf-lint:
-    cd terraform && tflint --init && tflint --recursive --format compact
+# tflint disabled: its terraform plugin (v0.14.x) doesn't understand OpenTofu 1.8+
+# early-eval syntax we use for module pins (versions.tf, D11). Re-enable when supported.
+#tf-lint:
+#    cd terraform && tflint --init && tflint --recursive --format compact
 
 tf-trivy:
-    trivy config --quiet --severity HIGH,CRITICAL terraform/
+    trivy config --quiet --severity HIGH,CRITICAL --exit-code 1 \
+      --skip-dirs terraform/.terraform \
+      --ignorefile .trivyignore terraform/
 
 tf-plan:
     cd terraform && tofu plan -out=tfplan

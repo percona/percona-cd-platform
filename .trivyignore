@@ -1,0 +1,28 @@
+# trivy ignore list for `trivy config` runs over terraform/.
+# Each entry is a misconfiguration rule ID; trivy still loads the rule but
+# does not fail the run on it. Include a comment for every entry so the
+# rationale survives.
+
+# AWS-0104 — Security group rule allows unrestricted egress (0.0.0.0/0).
+# Triggered inside the bundled `terraform-aws-modules/eks/.../node_groups.tf`
+# (`aws_security_group_rule.node["egress_all"]`), which is the canonical EKS
+# worker-SG shape: workers must reach AWS APIs, ECR, image registries, and
+# the public internet (for OS / chart pulls) over NAT.
+#
+# Tightening egress would require interface VPC endpoints for ECR-API,
+# ECR-DKR, STS, Secrets Manager, EC2, autoscaling, EKS — deferred per
+# docs/eks-hardening.md follow-up #11 (pay endpoints when NAT bill warrants).
+# Reconsider this entry once those endpoints are wired.
+AWS-0104
+
+# AWS-0040 — Public cluster access is enabled.
+# We deliberately enable `endpoint_public_access = true` on the EKS control
+# plane, but **gated by `endpoint_public_access_cidrs = var.api_public_access_cidrs`**
+# (validation rejects empty list and 0.0.0.0/0 — see variables.tf). This is
+# docs/eks-hardening.md item #2: not fully private, but allowlisted, so
+# operators can `kubectl` from Percona office / VPN egress without a bastion.
+#
+# Going fully private (endpoint_public_access = false) would require a VPN
+# tunnel or bastion host inside the VPC for every operator session. Out of
+# scope for v1; revisit when the operator workflow can absorb that cost.
+AWS-0040

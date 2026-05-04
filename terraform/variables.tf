@@ -54,6 +54,60 @@ variable "route53_zone_name" {
   default     = "cd.percona.com"
 }
 
+variable "access_entries" {
+  description = <<-EOT
+    EKS access entries. Map keyed by entry name -> principal ARN + AWS-managed
+    access policies. Replaces the legacy aws-auth ConfigMap.
+
+    Operators populate this in `terraform/local.auto.tfvars` (gitignored) so
+    the public repo never carries IAM ARNs. Example:
+
+    access_entries = {
+      anderson = {
+        principal_arn = "arn:aws:iam::<account>:user/anderson.nogueira"
+        policy_associations = {
+          admin = {
+            policy_arn   = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+            access_scope = { type = "cluster" }
+          }
+        }
+      }
+    }
+
+    docs/eks-hardening.md item #1.
+  EOT
+  type = map(object({
+    principal_arn = string
+    policy_associations = optional(map(object({
+      policy_arn = string
+      access_scope = object({
+        type       = string
+        namespaces = optional(list(string))
+      })
+    })), {})
+    kubernetes_groups = optional(list(string), [])
+    type              = optional(string, "STANDARD")
+  }))
+  default = {}
+}
+
+variable "api_public_access_cidrs" {
+  description = <<-EOT
+    Allowlist for the EKS public API endpoint. No default — operators MUST set
+    this in `terraform/local.auto.tfvars` (gitignored) before applying. Public-
+    unrestricted (0.0.0.0/0) defeats the hardening baseline; use the Percona
+    office / VPN CIDRs and any operator-laptop egress IPs.
+
+    docs/eks-hardening.md item #2.
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.api_public_access_cidrs) > 0 && !contains(var.api_public_access_cidrs, "0.0.0.0/0")
+    error_message = "Set at least one CIDR; 0.0.0.0/0 is forbidden by the hardening baseline (docs/eks-hardening.md #2)."
+  }
+}
+
 variable "monitoring_az" {
   description = "Single AZ for stateful workloads (Prometheus, Jenkins masters). EBS is zonal."
   type        = string
