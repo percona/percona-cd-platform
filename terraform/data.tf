@@ -11,14 +11,14 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
-# Grafana SAML IdP metadata (Duo). Lives in SSM ParameterStore because
+# Authentik SAML IdP metadata (Duo). Lives in SSM ParameterStore because
 # it's public IdP config (the signing cert is the public half of the
 # IdP signature). Populated one-time via `aws ssm put-parameter`; TF
 # reads at apply time, base64-encodes into the cluster Secret annotation
-# (see argocd.tf), and the Grafana chart wrapper decodes into a
-# ConfigMap. Optional = empty value when var.grafana_saml_enabled = false
-# means the parameter doesn't have to exist for non-SAML applies.
-data "aws_ssm_parameter" "grafana_saml_idp_metadata" {
-  count = var.grafana_saml_enabled ? 1 : 0
-  name  = "/${local.cluster_name}/grafana/saml/idp_metadata"
+# (see argocd.tf), and the Authentik chart wrapper decodes into a
+# ConfigMap. Optional = empty value when var.authentik_saml_enabled =
+# false means the parameter doesn't have to exist for non-SAML applies.
+data "aws_ssm_parameter" "authentik_saml_idp_metadata" {
+  count = var.authentik_saml_enabled ? 1 : 0
+  name  = "/${local.cluster_name}/authentik/saml/idp_metadata"
 }

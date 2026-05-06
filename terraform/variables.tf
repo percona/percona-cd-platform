@@ -204,29 +204,39 @@ variable "jenkins_origin_targets" {
   # `terraform/local.auto.tfvars` out of git, not by the type system.
 }
 
-variable "grafana_saml_enabled" {
+variable "authentik_hostname" {
   description = <<-EOT
-    Toggles Grafana SAML/Duo authentication (HD-30780). Default false so
-    the cluster can boot on local-admin until IT Ops returns the SP
-    metadata and provisions the SAML cert/key in AWS Secrets Manager.
+    Public hostname for the Authentik bridge (SAML SP to Duo, OIDC IdP
+    to Grafana / future Jenkins masters / ArgoCD UI). external-dns
+    publishes the ALB alias when the chart Ingress is admitted.
+  EOT
+  type        = string
+  default     = "auth.cd.percona.com"
+}
 
-    When true, resources/addons/grafana/templates/external-secret-saml.yaml
-    syncs the cert/key from Secrets Manager (path
-    `$${cluster_name}/grafana/saml/{certificate,private_key}`) and Grafana
-    mounts them. Group → role mapping:
-      grafana_cd_admins → Admin
-      grafana_cd_users  → Viewer
+variable "authentik_saml_enabled" {
+  description = <<-EOT
+    Toggles Authentik's SAML SP source for Duo (HD-30780). Default
+    false so the cluster can boot before the SP cert/key + IdP metadata
+    are populated. When true:
 
-    Cutover runbook: docs/runbooks/grafana-saml-cutover.md.
+      - SP cert + private_key are fetched from AWS Secrets Manager
+        (paths `$${cluster_name}/authentik/saml/{certificate,private_key}`)
+        via External Secrets Operator into the `authentik-saml` Secret
+        in the authentik namespace.
+      - IdP metadata XML is read from SSM Parameter Store
+        (`/$${cluster_name}/authentik/saml/idp_metadata`) at apply time
+        and rendered into a ConfigMap mounted at
+        /etc/authentik/saml-idp/idp-metadata.xml.
+
+    Replaces the prior var.grafana_saml_enabled — Grafana OSS lacks
+    SAML support, so the SAML SP role moved to Authentik (which
+    front-doors Grafana via OIDC). See docs/adr/0012-authentik-bridge.md
+    (forthcoming) for the architecture rationale.
   EOT
   type        = bool
   default     = false
 }
-
-# IdP metadata is sourced from terraform/locals.tf via file() (reads
-# secrets/grafana-saml/idp-metadata.xml, gitignored). No variable —
-# .tfvars files can't call functions, and operators rotating the IdP
-# cert just edit the file in-place.
 
 variable "lgtm_push_hostnames" {
   description = <<-EOT
