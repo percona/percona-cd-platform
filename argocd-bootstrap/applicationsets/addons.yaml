@@ -118,6 +118,27 @@ spec:
             # IMDSv2 hop_limit=1 (terraform/eks.tf hardening #10).
             aws-load-balancer-controller:
               vpcId: '{{ metadata.annotations.cluster_vpc_id }}'
+
+            # Authentik — SAML SP to Duo (HD-30780), OIDC IdP to Grafana
+            # (and later Jenkins masters, ArgoCD UI). Top-level keys
+            # match the wrapper chart's local-scope values (host, saml.*).
+            # Per the wrapper-vs-subchart trap from the Grafana SAML PR,
+            # `host` and `saml` MUST be top-level (not nested under
+            # `authentik:`) — the chart-wrapper templates read
+            # `.Values.saml.*` and `.Values.host`, not `.Values.authentik.*`.
+            host: '{{ metadata.annotations.authentik_hostname }}'
+            saml:
+              enabled: '{{ metadata.annotations.authentik_saml_enabled }}'
+              idpMetadataB64: '{{ metadata.annotations.authentik_saml_idp_metadata_b64 }}'
+
+            # Authentik server's ingress.hosts — chart subchart key.
+            # Single Ingress, joins the existing jenkins-cd ALB group.
+            # Upstream chart wants hosts as a list of bare strings.
+            authentik:
+              server:
+                ingress:
+                  hosts:
+                    - '{{ metadata.annotations.authentik_hostname }}'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'

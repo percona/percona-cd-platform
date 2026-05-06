@@ -1,0 +1,147 @@
+# Authentik — SAML SP to Duo (HD-30780), OIDC IdP to Grafana (and later
+# Jenkins masters, ArgoCD UI). Bridge architecture per
+# docs/adr/0012-authentik-bridge.md (forthcoming).
+#
+# Why Authentik (not Authelia, not Grafana SAML directly):
+#   - Grafana OSS lacks SAML — Enterprise-only feature.
+#   - Authelia does not implement SAML in any form (no IdP, no SP).
+#   - Authentik (MIT) ships native SAML SP + OIDC IdP + group attribute
+#     mapping, exactly the bridge shape we need.
+#
+# Top-level keys consumed by the addons ApplicationSet valuesObject
+# (argocd-bootstrap/applicationsets/addons.yaml):
+#   host                   — set from cluster-secret annotation authentik_hostname
+#   saml.enabled           — set from var.authentik_saml_enabled
+#   saml.idpMetadataB64    — set from local.authentik_saml_idp_metadata (b64)
+
+# Local-scope keys (consumed by templates/external-secret-saml.yaml).
+# Defaults are placeholders — ApplicationSet overrides at sync time.
+host: auth.cd.percona.com
+saml:
+  enabled: "false"
+  idpMetadataB64: ""
+
+# Subchart values. The dependency `authentik` is the official chart at
+# https://charts.goauthentik.io which bundles Bitnami Postgres + Redis.
+authentik:
+  global:
+    # Pull all four runtime secrets from the ESO-synced k8s Secret
+    # `authentik-config` (sourced from AWS Secrets Manager
+    # percona-ci-platform/authentik/config — see terraform/authentik.tf).
+    # Keys exposed: AUTHENTIK_SECRET_KEY, AUTHENTIK_BOOTSTRAP_PASSWORD,
+    # AUTHENTIK_POSTGRESQL__PASSWORD, AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET.
+    # The first three are consumed by Authentik directly; the fourth is
+    # for the Grafana OIDC client (set up post-deploy via Authentik UI
+    # or the API; tracked in docs/runbooks/authentik-bootstrap.md).
+    envFrom:
+      - secretRef:
+          name: authentik-config
+
+    # Stateful — Authentik's session store + bootstrap admin live in
+    # the bundled Postgres. Karpenter consolidation MUST NOT preempt;
+    # if Authentik is down, every internal app's auth path is down.
+    priorityClassName: platform-system-critical
+
+    # Pin to the prometheus-system NG. AZ us-east-1a, on-demand, tainted
+    # `workload=prometheus`. Authentik shares the NG with Grafana for
+    # now; gets its own NG when HA replicas land (PR follow-up).
+    nodeSelector:
+      workload: prometheus
+    tolerations:
+      - key: workload
+        operator: Equal
+        value: prometheus
+        effect: NoSchedule
+
+  authentik:
+    # Empty here — values come from the envFrom secret above.
+    # The chart docs note: "WARNING: when set, authentik.* secret
+    # values are ignored" if existingSecret is also set; we use envFrom
+    # so the upstream Secret stays empty and Authentik resolves the
+    # vars at runtime from the env.
+    log_level: info
+    error_reporting:
+      enabled: false   # don't ship telemetry to authentik.io
+
+  # Single replica until RDS Postgres lands (RWO PVCs + bundled Postgres
+  # mean replica scaling = data corruption risk). PDB minAvailable=0 so
+  # node drains can roll the single pod cleanly.
+  server:
+    replicas: 1
+    pdb:
+      enabled: true
+      minAvailable: 0
+
+    ingress:
+      enabled: true
+      ingressClassName: alb
+      annotations:
+        # Same group as Grafana / future Jenkins → one ALB, $20/mo total.
+        alb.ingress.kubernetes.io/group.name: jenkins-cd
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+        alb.ingress.kubernetes.io/ssl-redirect: '443'
+        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+        # Direct pod targeting via VPC CNI — Authentik Service is ClusterIP.
+        alb.ingress.kubernetes.io/target-type: ip
+        # Sticky sessions for the OIDC + SAML round-trip.
+        alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=86400
+        # Authentik exposes a liveness check on /-/health/live/ port 9000.
+        alb.ingress.kubernetes.io/healthcheck-path: /-/health/live/
+        alb.ingress.kubernetes.io/healthcheck-port: "9000"
+        alb.ingress.kubernetes.io/success-codes: "200"
+      # Upstream chart expects a list of bare hostnames, not the
+      # k8s-native [{host, paths[]}] shape. ApplicationSet overrides
+      # at sync time from cluster-Secret annotation authentik_hostname.
+      hosts:
+        - auth.cd.percona.com
+
+  worker:
+    replicas: 1
+
+  # Bundled Bitnami Postgres — adequate for v1 (single Authentik replica,
+  # session DB only). Migrate to RDS when scaling Authentik horizontally.
+  # Password is picked up from the same authentik-config Secret via
+  # secretKeys.userPasswordKey.
+  postgresql:
+    enabled: true
+    auth:
+      username: authentik
+      database: authentik
+      existingSecret: authentik-config
+      secretKeys:
+        userPasswordKey: AUTHENTIK_POSTGRESQL__PASSWORD
+        adminPasswordKey: AUTHENTIK_POSTGRESQL__PASSWORD
+    primary:
+      persistence:
+        enabled: true
+        storageClass: gp3-monitoring-1a-retain
+        size: 8Gi
+      nodeSelector:
+        workload: prometheus
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: prometheus
+          effect: NoSchedule
+      priorityClassName: platform-stateful-high
+
+  # Bundled Bitnami Redis — Authentik's task queue + cache. Single
+  # master, no auth (cluster-internal). Persistence off; if Redis dies,
+  # Authentik recovers from Postgres + a brief auth interruption.
+  redis:
+    enabled: true
+    architecture: standalone
+    auth:
+      enabled: false
+    master:
+      persistence:
+        enabled: false
+      nodeSelector:
+        workload: prometheus
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: prometheus
+          effect: NoSchedule
+      priorityClassName: platform-stateful-high
