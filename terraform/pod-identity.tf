@@ -92,6 +92,15 @@ module "pod_identity_external_secrets" {
   name                           = "${local.cluster_name}-external-secrets"
   attach_external_secrets_policy = true
 
+  # The upstream `attach_external_secrets_policy` preset grants only
+  # kms:Decrypt — not secretsmanager:GetSecretValue. So ESO can decrypt
+  # but cannot actually fetch secrets, and every ExternalSecret reconcile
+  # fails with AccessDeniedException. This extra policy fills the gap,
+  # scoped to the cluster's prefix (percona-ci-platform/*).
+  additional_policy_arns = {
+    secrets_read = aws_iam_policy.eso_secrets_manager_read.arn
+  }
+
   associations = {
     main = {
       cluster_name    = module.eks.cluster_name
@@ -101,6 +110,31 @@ module "pod_identity_external_secrets" {
   }
 
   tags = local.tags
+}
+
+# Inline-shaped Secrets Manager + SSM read policy for ESO. Scoped to the
+# cluster's prefix (`${local.cluster_name}/*`) so adding new secrets
+# under that path is a no-op IAM-wise. Tightening to per-app prefixes
+# is a path-edit if/when warranted.
+data "aws_iam_policy_document" "eso_secrets_manager_read" {
+  statement {
+    sid = "SecretsManagerRead"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:ListSecrets",
+    ]
+    resources = [
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.cluster_name}/*",
+    ]
+  }
+}
+
+resource "aws_iam_policy" "eso_secrets_manager_read" {
+  name        = "${local.cluster_name}-eso-secrets-read"
+  description = "External-Secrets-Operator AWS Secrets Manager read for ${local.cluster_name}/*"
+  policy      = data.aws_iam_policy_document.eso_secrets_manager_read.json
+  tags        = local.tags
 }
 
 # ---------------------------------------------------------------------------
