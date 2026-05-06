@@ -103,6 +103,12 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       oidc_provider_arn = module.eks.oidc_provider_arn
       route53_zone_id   = local.route53_zone_id
 
+      # VPC ID — consumed by the AWS LBC chart (`vpcId` arg) so the controller
+      # skips the IMDS query path. Required because the system NG launch
+      # template enforces IMDSv2 hop_limit=1 (eks.tf hardening #10), which
+      # blocks the controller's pod-side IMDS metadata fetch.
+      cluster_vpc_id = module.vpc.vpc_id
+
       # ACM
       acm_wildcard_arn = module.acm.acm_certificate_arn
 
