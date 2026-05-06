@@ -223,19 +223,10 @@ variable "grafana_saml_enabled" {
   default     = false
 }
 
-variable "grafana_saml_metadata_url" {
-  description = <<-EOT
-    Duo IdP SAML metadata URL. Empty until IT Ops returns it via HD-30780.
-    When grafana_saml_enabled = true, MUST be set.
-  EOT
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = !var.grafana_saml_enabled || length(var.grafana_saml_metadata_url) > 0
-    error_message = "grafana_saml_metadata_url must be set when grafana_saml_enabled = true."
-  }
-}
+# IdP metadata is sourced from terraform/locals.tf via file() (reads
+# secrets/grafana-saml/idp-metadata.xml, gitignored). No variable —
+# .tfvars files can't call functions, and operators rotating the IdP
+# cert just edit the file in-place.
 
 variable "lgtm_push_hostnames" {
   description = <<-EOT

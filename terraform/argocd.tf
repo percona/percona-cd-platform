@@ -147,9 +147,13 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       lgtm_push_tempo = var.lgtm_push_hostnames.tempo
 
       # Grafana SAML/Duo (HD-30780). When enabled, ExternalSecret syncs
-      # cert/key from Secrets Manager and Grafana mounts them.
-      grafana_saml_enabled      = tostring(var.grafana_saml_enabled)
-      grafana_saml_metadata_url = var.grafana_saml_metadata_url
+      # cert/key from Secrets Manager and a ConfigMap holds the IdP
+      # metadata XML; Grafana mounts both at /etc/grafana/saml/.
+      # IdP metadata is base64-encoded for safe transit through the
+      # annotation → ApplicationSet valuesObject → Helm values pipeline
+      # (multi-line XML survives base64 cleanly).
+      grafana_saml_enabled          = tostring(var.grafana_saml_enabled)
+      grafana_saml_idp_metadata_b64 = base64encode(local.grafana_saml_idp_metadata)
     }
   }
 

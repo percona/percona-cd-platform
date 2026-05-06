@@ -12,12 +12,12 @@
 # Top-level keys consumed by the addons ApplicationSet valuesObject:
 #   ingress.hosts          — set from cluster-secret annotation grafana_hostname
 #   saml.enabled           — set from var.grafana_saml_enabled
-#   saml.idpMetadataUrl    — set from var.grafana_saml_metadata_url
+#   saml.idpMetadataB64    — set from var.grafana_saml_idp_metadata (b64)
 
 # Local-scope keys (consumed by templates/external-secret-saml.yaml).
 saml:
   enabled: "false"
-  idpMetadataUrl: ""
+  idpMetadataB64: ""
 
 ingress:
   hosts: []
@@ -106,15 +106,39 @@ grafana:
       auto_assign_org: true
       auto_assign_org_role: Viewer
 
-  # SAML config block — rendered conditionally via extraConfigmapMounts +
-  # an external-secret-mounted cert/key. The chart's `grafana.ini` doesn't
-  # support per-key conditionals, so we take a different tack: when
-  # SAML is enabled, the operator deploys a sealed grafana.ini override
-  # ConfigMap. For now (samlEnabled=false), nothing extra is rendered.
-  # See templates/saml-configmap.yaml.
-
-  extraSecretMounts: []
-  # Populated when SAML enabled (templates/saml-secret-mount.yaml).
+  # SAML wiring — uses Grafana env vars (GF_AUTH_SAML_*) which override
+  # grafana.ini. Always rendered; the gate is GF_AUTH_SAML_ENABLED, which
+  # echoes the saml.enabled value (string-typed because cluster-secret
+  # annotations are strings). When disabled, GF_AUTH_SAML_ENABLED=false and
+  # Grafana ignores the rest. The cert/key Secret + IdP ConfigMap are only
+  # rendered when saml.enabled=true (see templates/external-secret-saml.yaml),
+  # so the mount paths exist iff the gate is on.
+  extraSecretMounts:
+    - name: saml-keypair
+      secretName: grafana-saml
+      mountPath: /etc/grafana/saml
+      readOnly: true
+      defaultMode: 0440
+  extraConfigmapMounts:
+    - name: saml-idp
+      configMap: grafana-saml-idp
+      mountPath: /etc/grafana/saml-idp
+      readOnly: true
+      defaultMode: 0444
+  env:
+    GF_AUTH_SAML_ENABLED: "true"
+    GF_AUTH_SAML_SINGLE_LOGOUT: "false"
+    GF_AUTH_SAML_ALLOW_IDP_INITIATED: "false"
+    GF_AUTH_SAML_ALLOW_SIGN_UP: "true"
+    GF_AUTH_SAML_PRIVATE_KEY_PATH: /etc/grafana/saml/private_key
+    GF_AUTH_SAML_CERTIFICATE_PATH: /etc/grafana/saml/certificate
+    GF_AUTH_SAML_IDP_METADATA_PATH: /etc/grafana/saml-idp/idp-metadata.xml
+    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_GROUPS: groups
+    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_LOGIN: mail
+    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_EMAIL: mail
+    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_NAME: displayName
+    GF_AUTH_SAML_ROLE_VALUES_ADMIN: grafana_cd_admins
+    GF_AUTH_SAML_ROLE_VALUES_VIEWER: grafana_cd_users
 
   # LGTM datasources auto-provisioned. URLs are in-cluster Service DNS.
   datasources:
