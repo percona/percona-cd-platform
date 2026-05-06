@@ -19,13 +19,13 @@ locals {
   # (pod-identity, acm, origins, argocd) reference the same value.
   route53_zone_id = data.aws_route53_zone.main.zone_id
 
-  # Grafana SAML IdP metadata. Source of truth is an SSM Parameter at
-  #   /${cluster_name}/grafana/saml/idp_metadata
+  # Authentik SAML IdP metadata. Source of truth is an SSM Parameter at
+  #   /${cluster_name}/authentik/saml/idp_metadata
   # populated by the operator with `aws ssm put-parameter` (one-time;
   # rotates only when Duo's signing cert rotates). TF reads it at apply
-  # time via data.aws_ssm_parameter.grafana_saml_idp_metadata, base64-
-  # encodes into the cluster-Secret annotation, and the Grafana chart
-  # wrapper decodes into a ConfigMap that Grafana mounts. Empty string
+  # time via data.aws_ssm_parameter.authentik_saml_idp_metadata, base64-
+  # encodes into the cluster-Secret annotation, and the Authentik chart
+  # wrapper decodes into a ConfigMap that Authentik mounts. Empty string
   # when SAML is disabled — chart wrapper template no-ops in that case.
   #
   # Why SSM (not Secrets Manager): IdP metadata is public config —
@@ -36,9 +36,9 @@ locals {
   # Why TF data source (not ESO): metadata rotates ~yearly, well-suited
   # to apply-time read; avoids granting ESO ssm:GetParameter and the
   # extra ClusterSecretStore.
-  grafana_saml_idp_metadata = (
-    var.grafana_saml_enabled
-    ? data.aws_ssm_parameter.grafana_saml_idp_metadata[0].value
+  authentik_saml_idp_metadata = (
+    var.authentik_saml_enabled
+    ? data.aws_ssm_parameter.authentik_saml_idp_metadata[0].value
     : ""
   )
 

@@ -146,14 +146,24 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       lgtm_push_loki  = var.lgtm_push_hostnames.loki
       lgtm_push_tempo = var.lgtm_push_hostnames.tempo
 
-      # Grafana SAML/Duo (HD-30780). When enabled, ExternalSecret syncs
-      # cert/key from Secrets Manager and a ConfigMap holds the IdP
-      # metadata XML; Grafana mounts both at /etc/grafana/saml/.
+      # Authentik bridge (HD-30780, replaces direct Grafana SAML since
+      # Grafana OSS lacks SAML support). Authentik talks SAML to Duo as
+      # the SP, exposes OIDC inward to Grafana / future Jenkins masters.
       # IdP metadata is base64-encoded for safe transit through the
       # annotation → ApplicationSet valuesObject → Helm values pipeline
       # (multi-line XML survives base64 cleanly).
-      grafana_saml_enabled          = tostring(var.grafana_saml_enabled)
-      grafana_saml_idp_metadata_b64 = base64encode(local.grafana_saml_idp_metadata)
+      authentik_hostname             = var.authentik_hostname
+      authentik_saml_enabled         = tostring(var.authentik_saml_enabled)
+      authentik_saml_idp_metadata_b64 = base64encode(local.authentik_saml_idp_metadata)
+
+      # Grafana OIDC client config — Grafana points at Authentik's OIDC
+      # endpoints. The client_secret itself flows through ESO (not the
+      # cluster-Secret annotation): TF provisions it in Secrets Manager
+      # under percona-ci-platform/authentik/config (see authentik.tf),
+      # and the Grafana chart wrapper's external-secret-oidc.yaml
+      # template syncs it into a Secret that Grafana mounts as env.
+      grafana_oidc_issuer_url = "https://${var.authentik_hostname}"
+      grafana_oidc_client_id  = "grafana"
     }
   }
 
