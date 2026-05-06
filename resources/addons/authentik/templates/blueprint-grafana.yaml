@@ -43,10 +43,6 @@ data:
       name: grafana-bridge
       labels:
         blueprints.goauthentik.io/instantiate: "true"
-    context:
-      duo_sso_url: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/sso
-      duo_issuer: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/metadata
-      grafana_redirect: https://grafana.cd.percona.com/login/generic_oauth
     entries:
       # ---- 1. Duo groups -> Authentik groups (SAML Source Property Mapping) ----
       - model: authentik_sources_saml.samlsourcepropertymapping
@@ -76,8 +72,8 @@ data:
           pre_authentication_flow: !Find [authentik_flows.flow, [slug, default-source-pre-authentication]]
           authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
           enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
-          sso_url: !Context duo_sso_url
-          issuer: !Context duo_issuer
+          sso_url: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/sso
+          issuer: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/metadata
           binding_type: POST
           allow_idp_initiated: false
           name_id_policy: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
@@ -97,6 +93,9 @@ data:
           name: grafana
           authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+          # Authentik 2026.2+ requires invalidation_flow on OAuth2/OIDC providers
+          # (governs RP-initiated logout). Use the built-in default.
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           client_type: confidential
           client_id: grafana
           client_secret: !Env AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET
@@ -108,7 +107,7 @@ data:
           sub_mode: hashed_user_id
           redirect_uris:
             - matching_mode: strict
-              url: !Context grafana_redirect
+              url: https://grafana.cd.percona.com/login/generic_oauth
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
