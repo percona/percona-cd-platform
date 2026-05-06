@@ -8,3 +8,10 @@ aws-load-balancer-controller:
   defaultTags:
     managed-by: argocd
     repo: github.com/nogueiraanderson/percona-ci-platform
+
+  # Robustness: 2 replicas, PDB minAvailable=1 so node drain can't fully
+  # evict; system-critical priority so Karpenter consolidation never preempts.
+  replicaCount: 2
+  priorityClassName: platform-system-critical
+  podDisruptionBudget:
+    minAvailable: 1

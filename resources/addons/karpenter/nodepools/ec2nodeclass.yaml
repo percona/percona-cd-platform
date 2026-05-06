@@ -3,13 +3,14 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  # AL2023 EKS-optimized AMI. The `@latest` alias rolls a new AMI silently
-  # whenever AWS publishes one — fine for security patching but bad for
-  # change-control. Pre-`tofu apply`, swap to a dated alias (e.g.
-  # `al2023@v20260415`) and roll forward via PR after a minor-version sweep.
-  # See docs/eks-hardening.md item #5.
+  # AL2023 EKS-optimized AMI, pinned to a specific dated build. Resolved via:
+  #   aws ssm get-parameter --name \
+  #     /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/release_version
+  # Bump as part of the cluster-version sweep (see docs/runbooks/eks-upgrade.md
+  # — bumping AMIs without bumping the cluster version is also valid for
+  # security patches). docs/eks-hardening.md item #5.
   amiSelectorTerms:
-    - alias: al2023@latest
+    - alias: al2023@v20260423
 
   # Worker IAM role — Pod Identity-bound by terraform/karpenter-prereqs.tf
   # (stable name, no name-prefix). ApplicationSet helm valuesObject does NOT

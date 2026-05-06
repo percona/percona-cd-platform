@@ -53,6 +53,7 @@ tf-validate: tf-init
 tf-trivy:
     trivy config --quiet --severity HIGH,CRITICAL --exit-code 1 \
       --skip-dirs terraform/.terraform \
+      --skip-files terraform/tfplan \
       --ignorefile .trivyignore terraform/
 
 tf-plan:

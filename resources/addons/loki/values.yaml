@@ -37,31 +37,48 @@ loki:
 
   # Distributed-mode replicas. WAL PVCs use cluster-default `gp3` (multi-AZ,
   # Delete). Ingester chunk flush is ~5min, so WAL is short-lived.
+  #
+  # Robustness: stateful (ingester, indexGateway, compactor) -> stateful-high.
+  # Stateless edges -> default. PDBs at minAvailable = replicas - 1.
   distributor:
     replicas: 3
+    priorityClassName: platform-default
+    maxUnavailable: 1
   ingester:
     replicas: 3
+    priorityClassName: platform-stateful-high
+    maxUnavailable: 1
     persistence:
       enabled: true
       size: 50Gi
       storageClass: gp3
   querier:
     replicas: 2
+    priorityClassName: platform-default
+    maxUnavailable: 1
   queryFrontend:
     replicas: 2
+    priorityClassName: platform-default
+    maxUnavailable: 1
   queryScheduler:
     replicas: 2
+    priorityClassName: platform-default
+    maxUnavailable: 1
   compactor:
     replicas: 1
+    priorityClassName: platform-stateful-high
     persistence:
       enabled: true
       size: 30Gi
       storageClass: gp3
   indexGateway:
     replicas: 2
+    priorityClassName: platform-stateful-high
+    maxUnavailable: 1
   ruler:
     enabled: true
     replicas: 1
+    priorityClassName: platform-default
 
   # Disable monolithic / simple-scalable / single-binary modes — distributed
   # is mutually exclusive with these.

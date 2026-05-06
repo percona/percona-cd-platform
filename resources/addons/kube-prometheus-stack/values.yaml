@@ -50,6 +50,9 @@ kube-prometheus-stack:
           headers:
             X-Scope-OrgID: percona-ci
 
+      # Robustness: WAL workload that we cannot afford to lose mid-flight.
+      priorityClassName: platform-stateful-high
+
   alertmanager:
     alertmanagerSpec:
       # HA: 3 replicas, anti-affinity by hostname so a single node loss
@@ -79,6 +82,11 @@ kube-prometheus-stack:
               requests:
                 storage: 10Gi
 
+      # Robustness: AM holds silences + dedup state; treat it like a stateful workload.
+      priorityClassName: platform-stateful-high
+      podDisruptionBudget:
+        minAvailable: 2
+
   # Bundled Grafana is OFF — replaced by the standalone grafana chart in
   # L-4 (SAML/Duo configuration is too granular for the bundled chart's
   # values surface).
@@ -88,6 +96,7 @@ kube-prometheus-stack:
   prometheusOperator:
     nodeSelector:
       node-role: system
+    priorityClassName: platform-system-critical
     admissionWebhooks:
       patch:
         nodeSelector:
@@ -96,7 +105,9 @@ kube-prometheus-stack:
   prometheus-node-exporter:
     tolerations:
       - operator: Exists
+    priorityClassName: platform-system-critical
 
   kube-state-metrics:
     nodeSelector:
       node-role: system
+    priorityClassName: platform-system-critical

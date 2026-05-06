@@ -1,0 +1,5 @@
+apiVersion: v2
+name: priorityclasses
+version: 1.0.0
+description: Cluster-wide PriorityClass definitions referenced by every addon.
+type: application

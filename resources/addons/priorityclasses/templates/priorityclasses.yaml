@@ -1,0 +1,54 @@
+# Three priority tiers, in descending order of survivability.
+# Sync-wave -100 so they land before any pod that references them.
+#
+# Usage:
+#   - platform-system-critical (1_000_000_000): GitOps controllers, CNI helpers,
+#     cluster-DNS, Pod Identity agent, ALB controller. Loss of these breaks
+#     reconciliation for everything else.
+#   - platform-stateful-high (100_000): workloads with PVCs whose data is the
+#     last-mile copy (Prometheus WAL, Alertmanager silences, Mimir/Loki/Tempo
+#     ingester WAL, Jenkins JENKINS_HOME). Karpenter consolidation MUST NOT
+#     evict these.
+#   - platform-default (0): everything else. Stateless, fully preemptible.
+#
+# Built-in `system-cluster-critical` (2_000_000_000) is preferred for kubelet,
+# kube-proxy, coredns DaemonSets — set by the platform itself. We don't
+# redefine it.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-system-critical
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+value: 1000000000
+description: |
+  Cluster-critical platform addons (ArgoCD, ALB controller, external-dns,
+  Karpenter controller, External Secrets Operator). Eviction-resistant.
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-stateful-high
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+value: 100000
+description: |
+  Stateful workloads with PVCs (Prometheus, Alertmanager, Mimir/Loki/Tempo
+  ingesters, Jenkins masters). Protected from Karpenter consolidation.
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-default
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+value: 0
+description: |
+  Default priority for stateless workloads on the Karpenter pool. Fully
+  preemptible, fully consolidatable.
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority

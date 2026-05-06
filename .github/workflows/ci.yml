@@ -68,6 +68,10 @@ jobs:
           # `.terraform/` is the vendored module cache populated by `tofu init`
           # above; skip it so we only scan our own .tf, not the modules' internals.
           skip-dirs: terraform/.terraform
+          # tfplan: a saved plan produced by `tofu plan -out=tfplan` for local dev.
+          # Trivy descends into the snapshot and re-flags the modules' internals;
+          # gitignored so CI never sees it, listed here as belt-and-suspenders.
+          skip-files: terraform/tfplan
           # Per-rule allowlist with rationale; see .trivyignore for entries.
           trivyignores: .trivyignore
 

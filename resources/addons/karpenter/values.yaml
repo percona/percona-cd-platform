@@ -12,3 +12,10 @@ karpenter:
       limits: { cpu: "1", memory: "1Gi" }
   nodeSelector:
     node-role: system
+
+  # Robustness: Karpenter is the autoscaler. Without it, no new node
+  # provisioning. system-critical priority + PDB so it never gets fully evicted.
+  priorityClassName: platform-system-critical
+  podDisruptionBudget:
+    name: karpenter
+    maxUnavailable: 1

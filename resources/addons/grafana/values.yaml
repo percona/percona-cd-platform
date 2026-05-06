@@ -25,6 +25,12 @@ ingress:
 grafana:
   replicas: 2
 
+  # Robustness: not cluster-critical (data lives in datasources, not Grafana
+  # itself), but PDB so node drain doesn't kill both replicas at once.
+  priorityClassName: platform-default
+  podDisruptionBudget:
+    minAvailable: 1
+
   # Pin to the prometheus-system NG so addon churn doesn't evict Grafana.
   nodeSelector:
     workload: prometheus

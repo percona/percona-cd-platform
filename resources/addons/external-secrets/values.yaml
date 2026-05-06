@@ -3,9 +3,28 @@ external-secrets:
     create: true
     name: external-secrets
   installCRDs: true
+
+  # Robustness: HA all three components with PDBs and system-critical priority.
+  replicaCount: 2
+  priorityClassName: platform-system-critical
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
   webhook:
+    replicaCount: 2
+    priorityClassName: platform-system-critical
     nodeSelector:
       node-role: system
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+
   certController:
+    replicaCount: 2
+    priorityClassName: platform-system-critical
     nodeSelector:
       node-role: system
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
