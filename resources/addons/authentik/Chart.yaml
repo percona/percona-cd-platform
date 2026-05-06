@@ -1,0 +1,9 @@
+apiVersion: v2
+name: authentik
+description: Authentik bridge — SAML SP to Duo, OIDC IdP to Grafana / Jenkins / ArgoCD
+version: 1.0.0
+appVersion: "2026.2.2"
+dependencies:
+  - name: authentik
+    version: 2026.2.2
+    repository: https://charts.goauthentik.io
