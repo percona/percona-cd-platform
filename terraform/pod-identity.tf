@@ -26,7 +26,14 @@ module "pod_identity_alb_controller" {
   associations = {
     main = {
       cluster_name    = module.eks.cluster_name
-      namespace       = "kube-system"
+      # Namespace matches the ApplicationSet path basename
+      # (resources/addons/aws-load-balancer-controller/) which the
+      # addons ApplicationSet uses for `destination.namespace`. The
+      # historical default of `kube-system` (which the eks-charts AWS LBC
+      # docs assume) does not match this repo's GitOps layout, so the
+      # association would never bind and the controller falls back to
+      # IMDS on every AWS API call (ACM, EC2, ELBv2 …).
+      namespace       = "aws-load-balancer-controller"
       service_account = "aws-load-balancer-controller"
     }
   }
