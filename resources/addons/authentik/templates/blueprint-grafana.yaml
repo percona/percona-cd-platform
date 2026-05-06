@@ -52,8 +52,20 @@ data:
         attrs:
           name: duo-groups-to-authentik
           expression: |
+            # SAML Source Property Mapping: receives the parsed SAML
+            # assertion attributes via request.context["attributes"]
+            # (NOT "saml_attributes" — that key does not exist and crashes
+            # the mapping with KeyError, which the source view then turns
+            # into an HTTP 405 to the browser, which is wildly misleading).
+            #
+            # Duo's SAML response carries group memberships under the
+            # "http://schemas.xmlsoap.org/claims/Group" attribute name on
+            # some SP records and the bare "groups" name on others — try
+            # the modern key first, fall back to the schemas.xmlsoap.org
+            # one, default to [] if neither.
+            attrs = request.context.get("attributes", {})
             return {
-                "groups": request.context["saml_attributes"].get("http://schemas.xmlsoap.org/claims/Group", request.context["saml_attributes"].get("groups", [])),
+                "groups": attrs.get("groups", attrs.get("http://schemas.xmlsoap.org/claims/Group", [])),
             }
 
       # ---- 2. Duo SAML Source ----
