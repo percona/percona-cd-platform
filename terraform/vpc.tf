@@ -46,7 +46,7 @@ module "vpc" {
 # cluster CIDR. Single SG attached to all interface endpoints below.
 resource "aws_security_group" "vpc_endpoints" {
   name        = "${local.cluster_name}-vpc-endpoints"
-  description = "VPC interface endpoints — HTTPS from cluster CIDR"
+  description = "VPC interface endpoints - HTTPS from cluster CIDR"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
