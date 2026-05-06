@@ -10,9 +10,10 @@ locals {
   jenkins_friendly_hosts = [for h, _ in var.jenkins_hosts : "${h}.${var.route53_zone_name}"]
   jenkins_origin_hosts   = [for h, c in var.jenkins_hosts : c.upstream_origin if try(c.upstream_origin, "") != ""]
 
-  # Sub-resource names — keep cluster-name as the prefix everywhere.
+  # State bucket name — single source of truth referenced by docs/runbooks/.
+  # Native S3 locking (use_lockfile in backend.tf) writes a sibling .tflock
+  # object next to the state file; no separate lock service needed.
   state_bucket = "terraform-state-storage-${local.cluster_name}"
-  state_lock   = "terraform-state-lock-${local.cluster_name}"
 
   # Resolved Route 53 ID for the platform zone. Cached locally so all consumers
   # (pod-identity, acm, origins, argocd) reference the same value.

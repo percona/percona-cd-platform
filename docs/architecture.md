@@ -80,10 +80,11 @@
 
 ## Runbooks
 
-- [`runbooks/bootstrap-state.md`](runbooks/bootstrap-state.md) — recreate the S3 + DynamoDB state backend from scratch
+- [`runbooks/bootstrap-state.md`](runbooks/bootstrap-state.md) — recreate the S3 state backend from scratch
 - [`runbooks/eks-upgrade.md`](runbooks/eks-upgrade.md) — minor version bump procedure
 - [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md) — cross-region EBS snapshot lift
-- [`runbooks/restore-prometheus.md`](runbooks/restore-prometheus.md) — EBS snapshot restore drill
+- [`runbooks/restore-mimir.md`](runbooks/restore-mimir.md) — Mimir block restore from S3 versioning
+- [`runbooks/grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md) — flip SAML/Duo on once HD-30780 closes
 
 ## ADRs
 

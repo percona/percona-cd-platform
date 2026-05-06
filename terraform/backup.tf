@@ -57,7 +57,7 @@ resource "aws_backup_plan" "daily" {
 }
 
 # Service role assumed by AWS Backup itself. Two AWS-managed policies cover
-# the full backup + restore lifecycle for EBS (and any future RDS / EFS / DynamoDB
+# the full backup + restore lifecycle for EBS (and any future RDS / EFS
 # resources that pick up the same selection tag).
 resource "aws_iam_role" "backup" {
   name = "${local.cluster_name}-aws-backup"

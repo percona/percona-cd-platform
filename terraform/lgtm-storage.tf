@@ -72,10 +72,33 @@ resource "aws_s3_bucket" "lgtm" {
 
   bucket = "${local.cluster_name}-${each.value.suffix}"
 
+  # Object Lock requires the bucket to be created with object_lock_enabled = true.
+  # Once on, it cannot be disabled. Compliance-mode retention (set in
+  # aws_s3_bucket_object_lock_configuration below) blocks deletion even by
+  # the bucket owner / account root for the retention window — anti-ransomware.
+  object_lock_enabled = true
+
   tags = merge(local.tags, {
     Name      = "${local.cluster_name}-${each.value.suffix}"
     component = each.key
   })
+}
+
+# Default Object Lock retention: Compliance mode, 7-day window. Every object
+# uploaded inherits the retention; can be extended per-object but not shortened
+# while in compliance mode. 7d covers the typical ransomware window without
+# trapping operator-error cleanups indefinitely.
+resource "aws_s3_bucket_object_lock_configuration" "lgtm" {
+  for_each = local.lgtm_buckets
+
+  bucket = aws_s3_bucket.lgtm[each.key].id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 7
+    }
+  }
 }
 
 # BucketOwnerEnforced — disables ACLs, makes IAM the only access path.

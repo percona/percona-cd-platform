@@ -27,24 +27,43 @@ resource "helm_release" "argocd" {
   values = [yamlencode({
     global = {
       domain = var.argocd_hostname
+      # Every ArgoCD component gets the system-critical priority class so
+      # Karpenter consolidation never preempts the GitOps engine. Class
+      # is created by resources/addons/priorityclasses/ at sync-wave -100.
+      priorityClassName = "platform-system-critical"
     }
     controller = {
       replicas = 1 # leader-election; chart does not yet support active-active
+      pdb = {
+        enabled = true
+      }
     }
     "redis-ha" = {
       enabled = true
     }
     server = {
       replicas = 2
+      pdb = {
+        enabled      = true
+        minAvailable = 1
+      }
       ingress = {
         enabled = false
       }
     }
     repoServer = {
       replicas = 2
+      pdb = {
+        enabled      = true
+        minAvailable = 1
+      }
     }
     applicationSet = {
       replicas = 2
+      pdb = {
+        enabled      = true
+        minAvailable = 1
+      }
     }
     # Pin every ArgoCD pod to the system NG so addon churn (Karpenter
     # scale-from-zero, spot-replacement) never evicts the GitOps engine.
