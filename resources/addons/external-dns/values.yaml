@@ -10,3 +10,10 @@ external-dns:
   sources:
     - service
     - ingress
+
+  # Robustness: 2 replicas (chart uses leader-election so 2 is correct, not
+  # active-active); PDB minAvailable=1; system-critical priority.
+  replicas: 2
+  priorityClassName: platform-system-critical
+  podDisruptionBudget:
+    minAvailable: 1

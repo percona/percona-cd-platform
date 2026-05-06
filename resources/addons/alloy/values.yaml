@@ -63,3 +63,6 @@ alloy:
     # workload=prometheus / workload=jenkins (we want logs from those too).
     tolerations:
       - operator: Exists
+    # DaemonSet pods get system-critical priority so log/trace shipping
+    # survives node pressure that would evict default-priority pods.
+    priorityClassName: platform-system-critical

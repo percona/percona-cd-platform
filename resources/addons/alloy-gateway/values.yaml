@@ -87,6 +87,9 @@ alloy:
     replicas: 2
     # Default Karpenter NodePool. Gateway has no stateful data; clients
     # retry on spot interruption.
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      minAvailable: 1
 
   service:
     enabled: true

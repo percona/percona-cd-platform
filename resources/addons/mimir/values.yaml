@@ -38,36 +38,63 @@ mimir-distributed:
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
   # in-flight metrics, which is acceptable since durable data lives in S3.
+  #
+  # Robustness: stateful components (ingester, store-gateway, compactor,
+  # alertmanager) get platform-stateful-high so Karpenter consolidation
+  # never preempts them. Stateless edges get platform-default. PDBs sized
+  # at minAvailable = replicas - 1 across the board.
   distributor:
     replicas: 3
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      minAvailable: 2
   ingester:
     replicas: 3
+    priorityClassName: platform-stateful-high
+    podDisruptionBudget:
+      minAvailable: 2
     persistentVolume:
       enabled: true
       size: 50Gi
       storageClass: gp3
   querier:
     replicas: 2
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      minAvailable: 1
   store_gateway:
     replicas: 2
+    priorityClassName: platform-stateful-high
+    podDisruptionBudget:
+      minAvailable: 1
     persistentVolume:
       enabled: true
       size: 30Gi
       storageClass: gp3
   compactor:
     replicas: 1
+    priorityClassName: platform-stateful-high
     persistentVolume:
       enabled: true
       size: 30Gi
       storageClass: gp3
   query_frontend:
     replicas: 2
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      minAvailable: 1
   query_scheduler:
     enabled: true
     replicas: 2
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      minAvailable: 1
   alertmanager:
     enabled: true
     replicas: 3
+    priorityClassName: platform-stateful-high
+    podDisruptionBudget:
+      minAvailable: 2
     persistentVolume:
       enabled: true
       size: 5Gi
@@ -75,6 +102,7 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
+    priorityClassName: platform-default
 
   # MinIO + memcached defaults — disable bundled MinIO (we use S3); keep
   # the chart's bundled memcached caches.

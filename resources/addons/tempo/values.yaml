@@ -21,8 +21,13 @@ tempo-distributed:
 
   # Distributed-mode replicas. WAL PVC uses cluster-default `gp3` (multi-AZ,
   # Delete). Ingester block flush is ~5min, so WAL is short-lived.
+  #
+  # Robustness: ingester + compactor are stateful-high. Edges are default.
   distributor:
     replicas: 3
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      maxUnavailable: 1
     config:
       receivers:
         otlp:
@@ -42,6 +47,9 @@ tempo-distributed:
 
   ingester:
     replicas: 3
+    priorityClassName: platform-stateful-high
+    podDisruptionBudget:
+      maxUnavailable: 1
     persistence:
       enabled: true
       size: 30Gi
@@ -49,12 +57,19 @@ tempo-distributed:
 
   querier:
     replicas: 2
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      maxUnavailable: 1
 
   queryFrontend:
     replicas: 2
+    priorityClassName: platform-default
+    podDisruptionBudget:
+      maxUnavailable: 1
 
   compactor:
     replicas: 1
+    priorityClassName: platform-stateful-high
 
   # metricsGenerator emits service-graph + span metrics; defer until we
   # have a real trace volume. Enabling later is a values-file edit.

@@ -1,0 +1,2 @@
+# PriorityClasses are cluster-scoped and have no per-cluster values.
+# Templates live in templates/priorityclasses.yaml.
