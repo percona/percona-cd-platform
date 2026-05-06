@@ -1,0 +1,8 @@
+apiVersion: v2
+name: loki
+version: 1.0.0
+description: Umbrella chart for Grafana Loki in distributed mode.
+dependencies:
+  - name: loki
+    version: 7.0.0
+    repository: https://grafana.github.io/helm-charts

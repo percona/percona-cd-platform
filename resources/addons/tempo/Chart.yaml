@@ -1,0 +1,8 @@
+apiVersion: v2
+name: tempo
+version: 1.0.0
+description: Umbrella chart for Grafana Tempo in distributed (microservices) mode.
+dependencies:
+  - name: tempo-distributed
+    version: 1.61.3
+    repository: https://grafana.github.io/helm-charts

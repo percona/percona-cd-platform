@@ -1,0 +1,100 @@
+# Grafana Loki — distributed deployment mode, S3-backed.
+#
+# bucketNames fields are placeholders — actual values come from the addons
+# ApplicationSet valuesObject (see argocd-bootstrap/applicationsets/addons.yaml),
+# which reads cluster-secret annotations populated by terraform/lgtm-storage.tf.
+# Pod Identity (terraform/pod-identity.tf) maps namespace=loki + SA=loki to
+# the IAM role with S3 + KMS access scoped to the bucket below.
+loki:
+  deploymentMode: Distributed
+
+  serviceAccount:
+    create: true
+    name: loki
+
+  loki:
+    auth_enabled: false # single-tenant cluster
+    storage:
+      type: s3
+      bucketNames:
+        chunks: REPLACE_VIA_APPSET
+        ruler: REPLACE_VIA_APPSET
+        admin: REPLACE_VIA_APPSET
+      s3:
+        region: us-east-1
+        endpoint: s3.us-east-1.amazonaws.com
+        s3ForcePathStyle: false
+        insecure: false
+    schemaConfig:
+      configs:
+        - from: "2026-01-01"
+          object_store: s3
+          store: tsdb
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+  # Distributed-mode replicas. WAL PVCs use cluster-default `gp3` (multi-AZ,
+  # Delete). Ingester chunk flush is ~5min, so WAL is short-lived.
+  distributor:
+    replicas: 3
+  ingester:
+    replicas: 3
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: gp3
+  querier:
+    replicas: 2
+  queryFrontend:
+    replicas: 2
+  queryScheduler:
+    replicas: 2
+  compactor:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 30Gi
+      storageClass: gp3
+  indexGateway:
+    replicas: 2
+  ruler:
+    enabled: true
+    replicas: 1
+
+  # Disable monolithic / simple-scalable / single-binary modes — distributed
+  # is mutually exclusive with these.
+  singleBinary:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  backend:
+    replicas: 0
+
+  # Caches stay enabled (chart-bundled memcached).
+  chunksCache:
+    enabled: true
+  resultsCache:
+    enabled: true
+
+  # No bundled MinIO — S3 only.
+  minio:
+    enabled: false
+
+  # Loki gateway is a chart-bundled NGINX in front of distributors/queriers.
+  # Grafana queries the query-frontend Service directly; no need for the
+  # gateway in single-tenant mode.
+  gateway:
+    enabled: false
+
+  # Operator-managed ServiceMonitor for Prometheus scrape (kept on by L-3).
+  monitoring:
+    selfMonitoring:
+      enabled: false
+    serviceMonitor:
+      enabled: true
+    lokiCanary:
+      enabled: false

@@ -54,6 +54,23 @@ locals {
       name = "kube-prometheus-stack"
       ver  = "84.4.0"
     }
+    # LGTM stack — distributed-mode pins. Versions verified live via
+    # `helm search repo grafana/<chart> --versions | head -2` on 2026-05-06.
+    mimir_distributed = {
+      repo = "https://grafana.github.io/helm-charts"
+      name = "mimir-distributed"
+      ver  = "6.0.6"
+    }
+    loki = {
+      repo = "https://grafana.github.io/helm-charts"
+      name = "loki"
+      ver  = "7.0.0"
+    }
+    tempo_distributed = {
+      repo = "https://grafana.github.io/helm-charts"
+      name = "tempo-distributed"
+      ver  = "1.61.3"
+    }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }
   }

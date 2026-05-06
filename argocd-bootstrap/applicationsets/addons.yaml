@@ -52,6 +52,39 @@ spec:
                 ingress:
                   hosts:
                     - '{{ metadata.annotations.grafana_hostname }}'
+
+            # LGTM bucket-name overrides. Each chart's umbrella values.yaml
+            # uses placeholders that this block fills from the cluster-secret
+            # annotations (terraform/argocd.tf, fed by terraform/lgtm-storage.tf).
+            # Charts that don't declare a matching dep ignore these keys.
+            mimir-distributed:
+              mimir:
+                structuredConfig:
+                  common:
+                    storage:
+                      s3:
+                        bucket_name: '{{ metadata.annotations.mimir_bucket_name }}'
+                  blocks_storage:
+                    s3:
+                      bucket_name: '{{ metadata.annotations.mimir_bucket_name }}'
+                  alertmanager_storage:
+                    s3:
+                      bucket_name: '{{ metadata.annotations.mimir_bucket_name }}'
+                  ruler_storage:
+                    s3:
+                      bucket_name: '{{ metadata.annotations.mimir_bucket_name }}'
+            loki:
+              loki:
+                storage:
+                  bucketNames:
+                    chunks: '{{ metadata.annotations.loki_bucket_name }}'
+                    ruler: '{{ metadata.annotations.loki_bucket_name }}'
+                    admin: '{{ metadata.annotations.loki_bucket_name }}'
+            tempo-distributed:
+              storage:
+                trace:
+                  s3:
+                    bucket: '{{ metadata.annotations.tempo_bucket_name }}'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'
