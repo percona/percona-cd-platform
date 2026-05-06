@@ -80,6 +80,12 @@ grafana:
       # flow can land on a different replica than the one that issued
       # the AuthnRequest).
       alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=86400
+      # Health check on Grafana's /api/health endpoint (returns 200).
+      # Without this, ALB hits / and gets 302 → /login → marks targets
+      # ResponseCodeMismatch unhealthy.
+      alb.ingress.kubernetes.io/healthcheck-path: /api/health
+      alb.ingress.kubernetes.io/healthcheck-port: "3000"
+      alb.ingress.kubernetes.io/success-codes: "200"
       # hosts come from the addons ApplicationSet valuesObject.
 
   # SAML-conditional grafana.ini. Renders the [auth.saml] block only when
