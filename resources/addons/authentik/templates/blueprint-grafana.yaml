@@ -1,0 +1,130 @@
+{{/*
+Authentik blueprint — declarative bootstrap of:
+  1. Duo SAML Source (`duo-saml`)        — Authentik as SP to Duo IdP
+  2. SAML groups Property Mapping        — propagate Duo `groups` attr inward
+  3. OAuth2 Provider `grafana`           — Authentik as IdP to Grafana
+  4. Application `grafana`               — binds the provider; gives the launcher tile
+
+Why a blueprint (not a one-shot UI walkthrough):
+  - GitOps-native: blueprint state is reconciled on every worker restart, so a
+    UI drift gets repaired automatically.
+  - Idempotent: blueprints declare desired state; Authentik computes diffs.
+  - Reusable: adding Jenkins / ArgoCD as additional OIDC clients = appending
+    two entries (provider + application) here.
+
+What the blueprint can NOT do:
+  - Read kubernetes Secrets directly. The SP signing keypair (cert + private
+    key, sourced from AWS Secrets Manager via ESO into the `authentik-saml`
+    Secret) is uploaded by templates/bootstrap-keypair-job.yaml — a one-shot
+    Job that hits Authentik's API. Once the keypair exists by name, the
+    blueprint references it via `!Find`.
+  - Read the OIDC client_secret from the k8s Secret directly. We work around
+    that with `!Env AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET` — the Authentik
+    worker's `envFrom` (from values.yaml) injects the Secret as env vars, and
+    `!Env` resolves at blueprint apply time.
+
+Discovery:
+  Mounted as a blueprint ConfigMap via `authentik.blueprints.configMaps`
+  in values.yaml. The worker pod scans /blueprints/configmaps/<cm-name>/*.yaml
+  on startup and runs the BlueprintInstance reconciler.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprint-grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- /* Required label for the chart's blueprint mount path. */}}
+    app.kubernetes.io/component: blueprint
+data:
+  grafana-bridge.yaml: |
+    version: 1
+    metadata:
+      name: grafana-bridge
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    context:
+      duo_sso_url: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/sso
+      duo_issuer: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/metadata
+      grafana_redirect: https://grafana.cd.percona.com/login/generic_oauth
+    entries:
+      # ---- 1. Duo groups -> Authentik groups (SAML Source Property Mapping) ----
+      - model: authentik_sources_saml.usersamlsourcepropertymapping
+        identifiers:
+          name: duo-groups-to-authentik
+        id: duo-groups-mapping
+        attrs:
+          name: duo-groups-to-authentik
+          expression: |
+            return {
+                "groups": request.context["saml_attributes"].get("http://schemas.xmlsoap.org/claims/Group", request.context["saml_attributes"].get("groups", [])),
+            }
+
+      # ---- 2. Duo SAML Source ----
+      # signing_kp is referenced by name; templates/bootstrap-keypair-job.yaml
+      # uploads the SP cert+key into a CertificateKeyPair named `duo-saml-sp`
+      # before this blueprint applies.
+      - model: authentik_sources_saml.samlsource
+        identifiers:
+          slug: duo-saml
+        attrs:
+          name: Duo SSO
+          slug: duo-saml
+          enabled: true
+          user_matching_mode: email_link
+          user_path_template: "goauthentik.io/sources/%(slug)s"
+          pre_authentication_flow: !Find [authentik_flows.flow, [slug, default-source-pre-authentication]]
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+          enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+          sso_url: !Context duo_sso_url
+          issuer: !Context duo_issuer
+          binding_type: POST
+          allow_idp_initiated: false
+          name_id_policy: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+          signing_kp: !Find [authentik_crypto.certificatekeypair, [name, duo-saml-sp]]
+          digest_algorithm: "http://www.w3.org/2001/04/xmlenc#sha256"
+          signature_algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+          temporary_user_delete_after: "days=1"
+          user_property_mappings:
+            - !KeyOf duo-groups-mapping
+
+      # ---- 3. Grafana OAuth2 / OpenID Provider ----
+      - model: authentik_providers_oauth2.oauth2provider
+        identifiers:
+          name: grafana
+        id: grafana-provider
+        attrs:
+          name: grafana
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+          client_type: confidential
+          client_id: grafana
+          client_secret: !Env AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET
+          access_code_validity: minutes=1
+          access_token_validity: minutes=10
+          refresh_token_validity: days=30
+          include_claims_in_id_token: true
+          issuer_mode: per_provider
+          sub_mode: hashed_user_id
+          redirect_uris:
+            - matching_mode: strict
+              url: !Context grafana_redirect
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
+
+      # ---- 4. Grafana Application (binds provider, shows on user portal) ----
+      - model: authentik_core.application
+        identifiers:
+          slug: grafana
+        attrs:
+          name: Grafana
+          slug: grafana
+          provider: !KeyOf grafana-provider
+          meta_launch_url: https://grafana.cd.percona.com/
+          open_in_new_tab: false
+          policy_engine_mode: any
+          group: ""

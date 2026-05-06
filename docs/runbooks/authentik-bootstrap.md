@@ -1,8 +1,29 @@
 # Authentik bootstrap — first-time SAML source + Grafana OIDC client
 
+> **As of branch `feat/authentik-bootstrap-blueprint`, the bootstrap is
+> codified — the UI walkthrough below is the spec / fallback.** The chart now
+> renders two extra resources:
+>
+> - `templates/blueprint-grafana.yaml` — ConfigMap blueprint declaring the
+>   Duo SAML Source, the SAML groups Property Mapping, the Grafana OAuth2
+>   Provider, and the Grafana Application. Mounted into the worker via
+>   `authentik.blueprints.configMaps`; the worker reconciles on every boot
+>   so UI drift gets repaired automatically.
+> - `templates/bootstrap-keypair-job.yaml` — one-shot Job (ArgoCD PostSync
+>   hook) that uploads the SP signing keypair from the `authentik-saml`
+>   Secret into Authentik's CertificateKeyPair API. Idempotent — GETs by
+>   name first. The blueprint references the keypair via
+>   `!Find [authentik_crypto.certificatekeypair, [name, duo-saml-sp]]`.
+>
+> Adding Jenkins / ArgoCD UI as further OIDC clients = appending two
+> entries (provider + application) to `templates/blueprint-grafana.yaml`.
+>
+> **Skip to §6 (Test) on a healthy install.** Sections §2–§5 below describe
+> the manual equivalents and stay for debugging.
+
 After the Authentik chart wrapper (`resources/addons/authentik/`) is healthy in
-the cluster, do these one-time UI configuration steps to wire Duo SAML inward
-and Grafana OIDC outward. This file is the runbook for that.
+the cluster, the codified bootstrap above runs automatically. The sections
+below describe the equivalent UI walk-through, retained for reference.
 
 > **Prerequisites:**
 > - PR-A1 (terraform/authentik.tf) applied — Secrets Manager has `percona-ci-platform/authentik/config`, IdP metadata in SSM, SP cert + key in Secrets Manager.
