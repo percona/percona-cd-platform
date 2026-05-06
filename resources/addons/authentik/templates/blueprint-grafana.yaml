@@ -49,7 +49,7 @@ data:
       grafana_redirect: https://grafana.cd.percona.com/login/generic_oauth
     entries:
       # ---- 1. Duo groups -> Authentik groups (SAML Source Property Mapping) ----
-      - model: authentik_sources_saml.usersamlsourcepropertymapping
+      - model: authentik_sources_saml.samlsourcepropertymapping
         identifiers:
           name: duo-groups-to-authentik
         id: duo-groups-mapping
