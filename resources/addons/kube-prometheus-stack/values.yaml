@@ -1,11 +1,24 @@
+# kube-prometheus-stack — reconfigured for the LGTM topology.
+#
+# Role split after L-3:
+#   - Prometheus operator + CRDs: STAYS HERE. Every ServiceMonitor /
+#     PodMonitor / PrometheusRule cluster-wide flows through it.
+#   - Prometheus server: STAYS, but agent-shaped. 24h retention, 10Gi PVC.
+#     remoteWrite ships everything to Mimir; the local PVC is the WAL only.
+#   - Alertmanager: STAYS, scaled to 3 replicas with podAntiAffinity.
+#   - node-exporter, kube-state-metrics: STAY, unchanged.
+#   - Grafana: DISABLED — moved to standalone chart in L-4 with SAML/Duo wiring.
 kube-prometheus-stack:
   crds:
     enabled: true
 
   prometheus:
     prometheusSpec:
-      retention: 30d
-      retentionSize: 90GiB
+      # Agent-shaped storage. The bulk of metrics live in Mimir; this PVC
+      # is the WAL Prometheus writes while remoteWrite is in-flight or
+      # catching up after a Mimir blip.
+      retention: 24h
+      retentionSize: 8GiB
       nodeSelector:
         workload: prometheus
       tolerations:
@@ -20,13 +33,36 @@ kube-prometheus-stack:
             accessModes: [ReadWriteOnce]
             resources:
               requests:
-                storage: 100Gi
+                storage: 10Gi
+      # Pick up ServiceMonitor / PodMonitor / PrometheusRule from any
+      # namespace, not just the one Helm puts the CRD instances into.
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
       ruleSelectorNilUsesHelmValues: false
 
+      # Ship every sample to Mimir distributors. Single-tenant cluster,
+      # so X-Scope-OrgID is a constant. Mimir's distributor Service runs
+      # on port 8080 (chart default).
+      # Backoff defaults are sane (5s..5min). Bump max_shards if remote
+      # falls behind under sustained load — start with the chart default.
+      remoteWrite:
+        - url: http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push
+          headers:
+            X-Scope-OrgID: percona-ci
+
   alertmanager:
     alertmanagerSpec:
+      # HA: 3 replicas, anti-affinity by hostname so a single node loss
+      # never takes more than one peer down. Operator handles peer mesh
+      # config automatically.
+      replicas: 3
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: alertmanager
+              topologyKey: kubernetes.io/hostname
       nodeSelector:
         workload: prometheus
       tolerations:
@@ -43,32 +79,11 @@ kube-prometheus-stack:
               requests:
                 storage: 10Gi
 
+  # Bundled Grafana is OFF — replaced by the standalone grafana chart in
+  # L-4 (SAML/Duo configuration is too granular for the bundled chart's
+  # values surface).
   grafana:
-    enabled: true
-    defaultDashboardsEnabled: true
-    persistence:
-      enabled: true
-      storageClassName: gp3-monitoring-1a-retain
-      size: 10Gi
-    nodeSelector:
-      workload: prometheus
-    tolerations:
-      - key: workload
-        operator: Equal
-        value: prometheus
-        effect: NoSchedule
-    ingress:
-      enabled: true
-      ingressClassName: alb
-      annotations:
-        alb.ingress.kubernetes.io/group.name: jenkins-cd
-        alb.ingress.kubernetes.io/scheme: internet-facing
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-        alb.ingress.kubernetes.io/ssl-redirect: '443'
-        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-        # hosts deliberately omitted — supplied by ApplicationSet valuesObject
-        # from cluster-secret annotation `grafana_hostname` (terraform var
-        # `grafana_hostname`). See argocd-bootstrap/applicationsets/addons.yaml.
+    enabled: false
 
   prometheusOperator:
     nodeSelector:
