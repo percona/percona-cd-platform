@@ -44,41 +44,36 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
-      # ---- 1. Duo groups -> Authentik groups (SAML Source Property Mapping) ----
+      # ---- 1. Group Property Mapping: strip LDAP DN -> bare CN ----
+      # Authentik's SAML source pipeline (introduced in 2024.8) splits user
+      # mappings from group mappings. The user mapping cannot rename groups;
+      # group renaming happens via a SEPARATE mapping bound to the source's
+      # `group_property_mappings` field. This one runs ONCE PER raw SAML
+      # group attribute value, with that raw value at request.context["group_id"].
+      #
+      # Duo (FreeIPA-backed) sends groups as full LDAP DNs:
+      #   cn=grafana_cd_admins,cn=groups,cn=accounts,dc=int,dc=percona,dc=com
+      # Grafana's ALLOWED_GROUPS / role-mapping JMESPath expects the bare CN
+      # (`grafana_cd_admins`, `percona`). Strip the DN to its first CN value
+      # and return it as the Authentik Group's `name`.
+      #
+      # References:
+      #   - authentik/core/sources/flow_manager.py (per-group iteration over
+      #     user_properties["groups"], builds groups_properties dict)
+      #   - authentik/core/sources/mapper.py (SourceMapper.build_object_properties)
+      #   - GroupUpdateStage.handle_groups creates the Group with this name
+      #     and adds the user to it via GroupSAMLSourceConnection
       - model: authentik_sources_saml.samlsourcepropertymapping
         identifiers:
-          name: duo-groups-to-authentik
-        id: duo-groups-mapping
+          name: duo-group-strip-dn
+        id: duo-group-strip-dn
         attrs:
-          name: duo-groups-to-authentik
+          name: duo-group-strip-dn
           expression: |
-            # SAML Source Property Mapping: receives the parsed SAML
-            # assertion attributes via request.context["attributes"]
-            # (NOT "saml_attributes", which doesn't exist and crashes the
-            # mapping with KeyError, which the source view then surfaces
-            # as an HTTP 405 to the browser, very misleading).
-            #
-            # Duo's SAML response carries group memberships as full
-            # FreeIPA LDAP DNs:
-            #   cn=grafana_cd_admins,cn=groups,cn=accounts,dc=int,dc=percona,dc=com
-            # Authentik would assign those raw DN strings as Group names
-            # and the OIDC profile scope would surface them verbatim in
-            # the id_token's groups claim. Grafana's role mapping and
-            # ALLOWED_GROUPS check are both written for the bare CN value
-            # (`grafana_cd_admins`, `percona`), so we strip the DN here.
-            #
-            # Falls back to "http://schemas.xmlsoap.org/claims/Group" for
-            # the AzureAD/MS-claim attribute name in case the SP record is
-            # ever reconfigured.
             import re
-            attrs = request.context.get("attributes", {})
-            raw = attrs.get("groups", attrs.get("http://schemas.xmlsoap.org/claims/Group", []))
-            def cn_only(s):
-                m = re.match(r"^cn=([^,]+)", s, re.IGNORECASE)
-                return m.group(1) if m else s
-            return {
-                "groups": [cn_only(g) for g in raw],
-            }
+            raw = request.context.get("group_id", "")
+            m = re.match(r"^cn=([^,]+)", raw, re.IGNORECASE)
+            return {"name": m.group(1) if m else raw}
 
       # ---- 2. Duo SAML Source ----
       # signing_kp is referenced by name; templates/bootstrap-keypair-job.yaml
@@ -106,8 +101,13 @@ data:
           digest_algorithm: "http://www.w3.org/2001/04/xmlenc#sha256"
           signature_algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
           temporary_user_delete_after: "days=1"
-          user_property_mappings:
-            - !KeyOf duo-groups-mapping
+          # No user_property_mappings: Authentik's get_base_user_properties
+          # already extracts username/email/name/groups from the assertion;
+          # we only need to rewrite group names, which goes through the
+          # group_property_mappings field below (NOT user_property_mappings;
+          # that field can't rename groups in the post-2024.8 source pipeline).
+          group_property_mappings:
+            - !KeyOf duo-group-strip-dn
 
       # ---- 3. Grafana OAuth2 / OpenID Provider ----
       - model: authentik_providers_oauth2.oauth2provider
