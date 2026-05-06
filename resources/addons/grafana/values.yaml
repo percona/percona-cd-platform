@@ -104,9 +104,16 @@ grafana:
       cookie_secure: true
       cookie_samesite: lax
     auth:
-      # Keep emergency local-admin path open until OIDC is validated end-
-      # to-end. Flip to true after the soak.
-      disable_login_form: false
+      # Local username/password form removed from /login. Every browser
+      # sign-in goes through Duo MFA + Authentik. The local `admin` user
+      # still exists in Grafana's DB; emergency recovery is `kubectl exec
+      # deploy/grafana -n grafana -c grafana -- grafana-cli admin
+      # reset-admin-password <new>`, then `kubectl port-forward` to
+      # localhost and log in there.
+      disable_login_form: true
+      # Don't auto-redirect to OIDC: leaves the SSO button visible so
+      # the operator can see they're signing in via SSO (vs an opaque
+      # immediate redirect that's hard to diagnose if Authentik 5xxs).
       oauth_auto_login: false
     users:
       auto_assign_org: true
