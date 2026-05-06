@@ -22,6 +22,16 @@ module "karpenter" {
   namespace                       = "karpenter"
   service_account                 = "karpenter"
 
+  # The Karpenter v1 controller policy is ~7 KiB, which exceeds the default
+  # IAM managed-policy length quota of 6,144 chars (L-ED111B8C — not
+  # adjustable via Service Quotas, only via AWS Support ticket).
+  # `enable_inline_policy = true` switches to an inline IAM role policy
+  # whose limit is 10,240 chars — fits comfortably with no support ask.
+  # Trade-off: inline policies aren't reusable across roles and don't
+  # appear in `aws iam list-policies` — fine here since the policy is
+  # 1:1 with the controller role.
+  enable_inline_policy = true
+
   # Stable name for the worker IAM role so the EC2NodeClass instanceProfile
   # reference doesn't churn on rolls.
   node_iam_role_use_name_prefix   = false
