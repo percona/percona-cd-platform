@@ -76,10 +76,10 @@ resource "aws_secretsmanager_secret_version" "authentik_config" {
   secret_id = aws_secretsmanager_secret.authentik_config.id
 
   secret_string = jsonencode({
-    AUTHENTIK_SECRET_KEY                  = random_password.authentik_secret_key.result
-    AUTHENTIK_BOOTSTRAP_PASSWORD          = random_password.authentik_bootstrap_password.result
-    AUTHENTIK_BOOTSTRAP_TOKEN             = random_password.authentik_bootstrap_token.result
-    AUTHENTIK_POSTGRESQL__PASSWORD        = random_password.authentik_pg_password.result
-    AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET  = random_password.authentik_oidc_grafana_client_secret.result
+    AUTHENTIK_SECRET_KEY                 = random_password.authentik_secret_key.result
+    AUTHENTIK_BOOTSTRAP_PASSWORD         = random_password.authentik_bootstrap_password.result
+    AUTHENTIK_BOOTSTRAP_TOKEN            = random_password.authentik_bootstrap_token.result
+    AUTHENTIK_POSTGRESQL__PASSWORD       = random_password.authentik_pg_password.result
+    AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET = random_password.authentik_oidc_grafana_client_secret.result
   })
 }
