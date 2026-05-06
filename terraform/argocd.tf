@@ -103,6 +103,17 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       karpenter_iam_role_arn      = module.karpenter.iam_role_arn
       karpenter_sqs_name          = module.karpenter.queue_name
       karpenter_node_iam_role_arn = module.karpenter.node_iam_role_arn
+
+      # LGTM — bucket names + Pod Identity role ARNs. Each component reads
+      # only the matching annotation in its chart's values.yaml; unrelated
+      # keys are ignored (Helm tolerates extras).
+      mimir_bucket_name = aws_s3_bucket.lgtm["mimir"].bucket
+      loki_bucket_name  = aws_s3_bucket.lgtm["loki"].bucket
+      tempo_bucket_name = aws_s3_bucket.lgtm["tempo"].bucket
+      mimir_role_arn    = module.pod_identity_mimir.iam_role_arn
+      loki_role_arn     = module.pod_identity_loki.iam_role_arn
+      tempo_role_arn    = module.pod_identity_tempo.iam_role_arn
+      lgtm_kms_key_arn  = aws_kms_key.lgtm.arn
     }
   }
 

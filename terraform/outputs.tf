@@ -142,3 +142,39 @@ output "backup_kms_key_arn" {
   description = "CMK encrypting the backup vault. Required to restore in another account/region."
   value       = aws_kms_key.backup.arn
 }
+
+# LGTM storage (lgtm-storage.tf)
+output "mimir_bucket_name" {
+  description = "S3 bucket holding Mimir blocks."
+  value       = aws_s3_bucket.lgtm["mimir"].bucket
+}
+
+output "loki_bucket_name" {
+  description = "S3 bucket holding Loki chunks."
+  value       = aws_s3_bucket.lgtm["loki"].bucket
+}
+
+output "tempo_bucket_name" {
+  description = "S3 bucket holding Tempo traces."
+  value       = aws_s3_bucket.lgtm["tempo"].bucket
+}
+
+output "lgtm_kms_key_arn" {
+  description = "Shared CMK encrypting all three LGTM buckets."
+  value       = aws_kms_key.lgtm.arn
+}
+
+output "mimir_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for Mimir (S3 + KMS scoped to its bucket)."
+  value       = module.pod_identity_mimir.iam_role_arn
+}
+
+output "loki_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for Loki (S3 + KMS scoped to its bucket)."
+  value       = module.pod_identity_loki.iam_role_arn
+}
+
+output "tempo_pod_identity_role_arn" {
+  description = "Pod Identity role ARN for Tempo (S3 + KMS scoped to its bucket)."
+  value       = module.pod_identity_tempo.iam_role_arn
+}
