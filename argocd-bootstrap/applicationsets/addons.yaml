@@ -88,13 +88,21 @@ spec:
 
             # Standalone Grafana — SAML toggle + IdP metadata come from TF.
             # Datasource URLs are constructed in-cluster (Service DNS).
+            #
+            # `grafana.ingress.hosts` lands in the grafana subchart scope
+            # (resources/addons/grafana/Chart.yaml depends on `grafana`).
+            # `saml.*` MUST be at the top level — the wrapper chart's
+            # templates/external-secret-saml.yaml reads `.Values.saml.*`,
+            # not `.Values.grafana.saml.*`. Putting saml inside grafana
+            # makes the wrapper see the default "false" and the ExternalSecret
+            # + IdP ConfigMap never render.
             grafana:
               ingress:
                 hosts:
                   - '{{ metadata.annotations.grafana_hostname }}'
-              saml:
-                enabled: '{{ metadata.annotations.grafana_saml_enabled }}'
-                idpMetadataB64: '{{ metadata.annotations.grafana_saml_idp_metadata_b64 }}'
+            saml:
+              enabled: '{{ metadata.annotations.grafana_saml_enabled }}'
+              idpMetadataB64: '{{ metadata.annotations.grafana_saml_idp_metadata_b64 }}'
 
             # Alloy gateway — public ALB hostnames for external pushers.
             alloy-gateway:
