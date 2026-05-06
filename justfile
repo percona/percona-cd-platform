@@ -91,12 +91,11 @@ zizmor:
 check-versions:
     uv run --with pyyaml python3 scripts/check_versions.py
 
-# Bootstrap S3 state bucket + DynamoDB lock (one-time, manual on first apply)
+# Bootstrap S3 state bucket (one-time, manual on first apply)
 bootstrap-state:
-    @echo "State bucket and lock table are pre-created."
-    @echo "  S3:       s3://terraform-state-storage-{{cluster}}"
-    @echo "  DynamoDB: terraform-state-lock-{{cluster}}"
-    @echo "  Region:   {{aws_region}}"
+    @echo "State bucket is pre-created."
+    @echo "  S3:     s3://terraform-state-storage-{{cluster}}"
+    @echo "  Region: {{aws_region}}"
     @echo "See docs/runbooks/bootstrap-state.md for the recreate-from-zero recipe."
 
 # Update local kubeconfig to talk to the cluster.
