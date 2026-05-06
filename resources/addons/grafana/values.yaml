@@ -71,6 +71,10 @@ grafana:
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
       alb.ingress.kubernetes.io/ssl-redirect: '443'
+      # Target pods directly via VPC CNI pod IPs (skips kube-proxy NAT
+      # hop). Required because the Grafana Service is ClusterIP — the LBC
+      # default of `instance` target-type only works with NodePort services.
+      alb.ingress.kubernetes.io/target-type: ip
       alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
       # Sticky sessions for SAML round-trip (otherwise the SP-initiated
       # flow can land on a different replica than the one that issued
