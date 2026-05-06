@@ -159,16 +159,31 @@ grafana:
         name: grafana-oidc
         key: client_secret
 
-  # LGTM datasources auto-provisioned. URLs are in-cluster Service DNS.
+  # Datasources auto-provisioned. URLs are in-cluster Service DNS.
+  #
+  # Default datasource is the in-cluster Prometheus (kube-prometheus-stack)
+  # because Mimir is currently capacity-constrained on this cluster (no
+  # Karpenter NodePool, system nodes 84-99% mem, prometheus/jenkins NGs
+  # tainted) and most components crashloop / can't schedule. The dashboards
+  # the kube-prometheus-stack chart ships reference ${DS_PROMETHEUS} which
+  # resolves to the default datasource, so they query the working Prometheus.
+  # Once Mimir capacity is addressed, flip isDefault back to Mimir and the
+  # dashboards will transparently route long-term metrics through it.
   datasources:
     datasources.yaml:
       apiVersion: 1
       datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc.cluster.local:9090
+          isDefault: true
+          jsonData:
+            timeInterval: 30s
         - name: Mimir
           type: prometheus
           access: proxy
           url: http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
-          isDefault: true
           jsonData:
             httpHeaderName1: X-Scope-OrgID
             timeInterval: 60s
@@ -187,12 +202,6 @@ grafana:
               datasourceUid: loki
             tracesToMetrics:
               datasourceUid: mimir
-        # Transitional — drop after Prometheus agent's local store is no
-        # longer queried directly.
-        - name: Prometheus (in-cluster scrape)
-          type: prometheus
-          access: proxy
-          url: http://prometheus-operated.monitoring.svc.cluster.local:9090
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
   # grafana_dashboard label and auto-imports). kube-prometheus-stack
