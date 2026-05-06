@@ -152,8 +152,8 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       # IdP metadata is base64-encoded for safe transit through the
       # annotation → ApplicationSet valuesObject → Helm values pipeline
       # (multi-line XML survives base64 cleanly).
-      authentik_hostname             = var.authentik_hostname
-      authentik_saml_enabled         = tostring(var.authentik_saml_enabled)
+      authentik_hostname              = var.authentik_hostname
+      authentik_saml_enabled          = tostring(var.authentik_saml_enabled)
       authentik_saml_idp_metadata_b64 = base64encode(local.authentik_saml_idp_metadata)
 
       # Grafana OIDC client config — Grafana points at Authentik's OIDC

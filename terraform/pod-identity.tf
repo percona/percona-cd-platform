@@ -25,7 +25,7 @@ module "pod_identity_alb_controller" {
 
   associations = {
     main = {
-      cluster_name    = module.eks.cluster_name
+      cluster_name = module.eks.cluster_name
       # Namespace matches the ApplicationSet path basename
       # (resources/addons/aws-load-balancer-controller/) which the
       # addons ApplicationSet uses for `destination.namespace`. The
