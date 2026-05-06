@@ -103,6 +103,13 @@ spec:
                   mimir: '{{ metadata.annotations.lgtm_push_mimir }}'
                   loki: '{{ metadata.annotations.lgtm_push_loki }}'
                   tempo: '{{ metadata.annotations.lgtm_push_tempo }}'
+
+            # AWS LBC — pass vpcId so the controller skips IMDS at boot.
+            # Without this, the controller's `failed to fetch VPC ID from
+            # instance metadata` crash loops because the system NG enforces
+            # IMDSv2 hop_limit=1 (terraform/eks.tf hardening #10).
+            aws-load-balancer-controller:
+              vpcId: '{{ metadata.annotations.cluster_vpc_id }}'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'
