@@ -86,9 +86,11 @@ spec:
               done
 
               # Idempotent: GET by name first.
-              # Auth: username + token (NOT password — Authentik's
-              # BasicAuthentication rejects username:password on /api/v3/).
-              EXISTING=$(curl -fsS -u "akadmin:$AUTHENTIK_BOOTSTRAP_TOKEN" \
+              # Auth: Bearer <token>. Authentik's /api/v3/ uses TokenAuthentication
+              # against an Authorization: Bearer header — empirically verified;
+              # HTTP basic with akadmin:<token> returns 403 "credentials not
+              # provided" on the in-cluster Service.
+              EXISTING=$(curl -fsS -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
                 "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/?name=$KEYPAIR_NAME" \
                 | grep -c '"name":"'"$KEYPAIR_NAME"'"' || true)
               if [ "$EXISTING" != "0" ]; then
@@ -125,7 +127,7 @@ spec:
               } > "$BODY"
 
               HTTP=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
-                -u "akadmin:$AUTHENTIK_BOOTSTRAP_TOKEN" \
+                -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
                 -H 'Content-Type: application/json' \
                 -X POST "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/" \
                 --data-binary @"$BODY")
