@@ -89,9 +89,14 @@ kube-prometheus-stack:
 
   # Bundled Grafana is OFF — replaced by the standalone grafana chart in
   # L-4 (SAML/Duo configuration is too granular for the bundled chart's
-  # values surface).
+  # values surface). But we still want this chart's ~15 K8s dashboards
+  # (nodes, pods, deployments, etcd, kubelet, scheduler, etc.) shipped as
+  # ConfigMaps so the standalone Grafana's sidecar (label
+  # `grafana_dashboard=1`, searchNamespace=ALL) auto-imports them.
   grafana:
     enabled: false
+    forceDeployDashboards: true
+    forceDeployDatasources: false  # standalone chart owns its datasources
 
   prometheusOperator:
     nodeSelector:
