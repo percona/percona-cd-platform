@@ -13,6 +13,16 @@ mimir-distributed:
   mimir:
     structuredConfig:
       multitenancy_enabled: false
+      # Disable the Kafka ingest-storage path. The chart hardcodes
+      # `ingest_storage.enabled: true` in its mimir-config template and
+      # only conditionally fills in the Kafka address; setting
+      # `kafka.enabled: false` (above) drops the Kafka StatefulSet but
+      # leaves ingest_storage enabled with no address, so distributors
+      # crash with `invalid ingest storage config: the Kafka address has
+      # not been configured`. Override here to fully turn the path off
+      # and fall back to the classic distributor->ingester gRPC ring.
+      ingest_storage:
+        enabled: false
       common:
         storage:
           backend: s3
