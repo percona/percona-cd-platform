@@ -15,9 +15,11 @@ Idempotence:
   PostSync hook annotation.
 
 Auth:
-  HTTP basic with akadmin + AUTHENTIK_BOOTSTRAP_PASSWORD. Bootstrap admin
-  has full API access until the operator disables it (post-validation step
-  tracked in docs/runbooks/authentik-bootstrap.md).
+  HTTP basic with akadmin + AUTHENTIK_BOOTSTRAP_TOKEN. Authentik's
+  /api/v3/ rejects username:password on basic auth — it only accepts
+  username:token — so the bootstrap *token* is the credential here, not
+  the password. Both are provisioned by terraform/authentik.tf and
+  exposed via the authentik-config Secret.
 
 Secret hygiene:
   - Cert + key written to ephemeral files via env-var redirection inside the
@@ -52,15 +54,15 @@ spec:
           effect: NoSchedule
       containers:
         - name: upload-keypair
-          image: alpine/curl:8.10.1
+          image: curlimages/curl:8.20.0
           env:
             - name: AUTHENTIK_BASE_URL
               value: http://authentik-server.{{ .Release.Namespace }}.svc.cluster.local
-            - name: AUTHENTIK_BOOTSTRAP_PASSWORD
+            - name: AUTHENTIK_BOOTSTRAP_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: authentik-config
-                  key: AUTHENTIK_BOOTSTRAP_PASSWORD
+                  key: AUTHENTIK_BOOTSTRAP_TOKEN
             - name: KEYPAIR_NAME
               value: duo-saml-sp
           volumeMounts:
@@ -84,7 +86,9 @@ spec:
               done
 
               # Idempotent: GET by name first.
-              EXISTING=$(curl -fsS -u "akadmin:$AUTHENTIK_BOOTSTRAP_PASSWORD" \
+              # Auth: username + token (NOT password — Authentik's
+              # BasicAuthentication rejects username:password on /api/v3/).
+              EXISTING=$(curl -fsS -u "akadmin:$AUTHENTIK_BOOTSTRAP_TOKEN" \
                 "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/?name=$KEYPAIR_NAME" \
                 | grep -c '"name":"'"$KEYPAIR_NAME"'"' || true)
               if [ "$EXISTING" != "0" ]; then
@@ -121,7 +125,7 @@ spec:
               } > "$BODY"
 
               HTTP=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
-                -u "akadmin:$AUTHENTIK_BOOTSTRAP_PASSWORD" \
+                -u "akadmin:$AUTHENTIK_BOOTSTRAP_TOKEN" \
                 -H 'Content-Type: application/json' \
                 -X POST "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/" \
                 --data-binary @"$BODY")
@@ -140,4 +144,8 @@ spec:
         - name: saml-keypair
           secret:
             secretName: authentik-saml
-            defaultMode: 0400
+            # 0444 not 0400: the curlimages/curl image runs as a non-root
+            # user (UID 100), so root-only mode would block reads. The
+            # mount is a tmpfs scoped to this pod — cluster RBAC and pod
+            # isolation are the security boundary, not file mode.
+            defaultMode: 0444

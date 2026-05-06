@@ -48,6 +48,21 @@ resource "random_password" "authentik_oidc_grafana_client_secret" {
   special = false # OIDC client secret transmitted as basic-auth header
 }
 
+# AUTHENTIK_BOOTSTRAP_TOKEN: at first boot Authentik creates a long-lived API
+# token for the akadmin user with this exact value. Required by the
+# templates/bootstrap-keypair-job.yaml Job (which uploads the SP signing
+# keypair via the Authentik API). Authentik's API rejects HTTP basic auth
+# with username:password — only username:token works — so we cannot reuse
+# AUTHENTIK_BOOTSTRAP_PASSWORD for API automation.
+#
+# Rotation: taint + apply, then restart authentik-server so the new token
+# is picked up by the migration on next boot. The old token stays valid in
+# the database until the operator deletes it from Directory → Tokens.
+resource "random_password" "authentik_bootstrap_token" {
+  length  = 60
+  special = false # bearer token transported as basic-auth password
+}
+
 resource "aws_secretsmanager_secret" "authentik_config" {
   name        = "percona-ci-platform/authentik/config"
   description = "Authentik runtime secrets — synced to k8s by ESO into Secret 'authentik-config'"
@@ -63,6 +78,7 @@ resource "aws_secretsmanager_secret_version" "authentik_config" {
   secret_string = jsonencode({
     AUTHENTIK_SECRET_KEY                  = random_password.authentik_secret_key.result
     AUTHENTIK_BOOTSTRAP_PASSWORD          = random_password.authentik_bootstrap_password.result
+    AUTHENTIK_BOOTSTRAP_TOKEN             = random_password.authentik_bootstrap_token.result
     AUTHENTIK_POSTGRESQL__PASSWORD        = random_password.authentik_pg_password.result
     AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET  = random_password.authentik_oidc_grafana_client_secret.result
   })
