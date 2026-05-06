@@ -63,11 +63,13 @@ mimir-distributed:
     priorityClassName: platform-default
     podDisruptionBudget:
       minAvailable: 2
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
   ingester:
     replicas: 3
     priorityClassName: platform-stateful-high
     podDisruptionBudget:
       minAvailable: 2
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
     persistentVolume:
       enabled: true
       size: 50Gi
@@ -77,11 +79,13 @@ mimir-distributed:
     priorityClassName: platform-default
     podDisruptionBudget:
       minAvailable: 1
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
   store_gateway:
     replicas: 2
     priorityClassName: platform-stateful-high
     podDisruptionBudget:
       minAvailable: 1
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
     persistentVolume:
       enabled: true
       size: 30Gi
@@ -98,18 +102,21 @@ mimir-distributed:
     priorityClassName: platform-default
     podDisruptionBudget:
       minAvailable: 1
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
   query_scheduler:
     enabled: true
     replicas: 2
     priorityClassName: platform-default
     podDisruptionBudget:
       minAvailable: 1
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
   alertmanager:
     enabled: true
     replicas: 3
     priorityClassName: platform-stateful-high
     podDisruptionBudget:
       minAvailable: 2
+      maxUnavailable: null  # clear chart default; K8s rejects both being set
     persistentVolume:
       enabled: true
       size: 5Gi
