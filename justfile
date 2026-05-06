@@ -74,6 +74,7 @@ manifest-validate:
     URL='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{{{.Group}}}}/{{{{.ResourceKind}}}}_{{{{.ResourceAPIVersion}}}}.json'
     kubeconform -strict -summary -ignore-missing-schemas \
       -ignore-filename-pattern '(Chart|values.*)\.yaml' \
+      -ignore-filename-pattern '.*/templates/.*' \
       -schema-location default \
       -schema-location "$URL" \
       argocd-bootstrap/ resources/

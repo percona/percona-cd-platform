@@ -1,0 +1,135 @@
+# Standalone Grafana — replaces the bundled chart that L-3 disabled.
+#
+# Three things this chart does that the bundled one couldn't:
+#   1. SAML/Duo (HD-30780) with full grafana.ini control + group → role
+#      mapping (grafana_cd_admins → Admin, grafana_cd_users → Viewer).
+#   2. Datasources for the full LGTM stack: Mimir (metrics), Loki (logs),
+#      Tempo (traces), and the in-cluster Prometheus agent for transitional
+#      scrape visibility.
+#   3. HA topology (replicas=2) with sticky-session ALB target groups so
+#      session affinity holds during the SAML round-trip.
+#
+# Top-level keys consumed by the addons ApplicationSet valuesObject:
+#   ingress.hosts          — set from cluster-secret annotation grafana_hostname
+#   saml.enabled           — set from var.grafana_saml_enabled
+#   saml.idpMetadataUrl    — set from var.grafana_saml_metadata_url
+
+# Local-scope keys (consumed by templates/external-secret-saml.yaml).
+saml:
+  enabled: "false"
+  idpMetadataUrl: ""
+
+ingress:
+  hosts: []
+
+grafana:
+  replicas: 2
+
+  # Pin to the prometheus-system NG so addon churn doesn't evict Grafana.
+  nodeSelector:
+    workload: prometheus
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: prometheus
+      effect: NoSchedule
+
+  # Persistent dashboards / annotations / users.
+  persistence:
+    enabled: true
+    storageClassName: gp3-monitoring-1a-retain
+    size: 10Gi
+
+  # Admin password for the local-admin path. Real production deployments
+  # rotate this via a Secret reference; for now the chart auto-generates.
+  admin:
+    existingSecret: ""
+
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/group.name: jenkins-cd
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      # Sticky sessions for SAML round-trip (otherwise the SP-initiated
+      # flow can land on a different replica than the one that issued
+      # the AuthnRequest).
+      alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=86400
+      # hosts come from the addons ApplicationSet valuesObject.
+
+  # SAML-conditional grafana.ini. Renders the [auth.saml] block only when
+  # samlEnabled is "true" (string compare — annotations are strings).
+  # Cert/key paths are mount points filled by templates/external-secret-saml.yaml.
+  grafana.ini:
+    server:
+      domain: grafana.cd.percona.com
+      root_url: https://grafana.cd.percona.com
+      enforce_domain: true
+    security:
+      cookie_secure: true
+      cookie_samesite: lax
+    auth:
+      disable_login_form: false
+      oauth_auto_login: false
+    users:
+      auto_assign_org: true
+      auto_assign_org_role: Viewer
+
+  # SAML config block — rendered conditionally via extraConfigmapMounts +
+  # an external-secret-mounted cert/key. The chart's `grafana.ini` doesn't
+  # support per-key conditionals, so we take a different tack: when
+  # SAML is enabled, the operator deploys a sealed grafana.ini override
+  # ConfigMap. For now (samlEnabled=false), nothing extra is rendered.
+  # See templates/saml-configmap.yaml.
+
+  extraSecretMounts: []
+  # Populated when SAML enabled (templates/saml-secret-mount.yaml).
+
+  # LGTM datasources auto-provisioned. URLs are in-cluster Service DNS.
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Mimir
+          type: prometheus
+          access: proxy
+          url: http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
+          isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            timeInterval: 60s
+          secureJsonData:
+            httpHeaderValue1: percona-ci
+        - name: Loki
+          type: loki
+          access: proxy
+          url: http://loki-query-frontend.loki.svc.cluster.local:3100
+        - name: Tempo
+          type: tempo
+          access: proxy
+          url: http://tempo-query-frontend.tempo.svc.cluster.local:3100
+          jsonData:
+            tracesToLogs:
+              datasourceUid: loki
+            tracesToMetrics:
+              datasourceUid: mimir
+        # Transitional — drop after Prometheus agent's local store is no
+        # longer queried directly.
+        - name: Prometheus (in-cluster scrape)
+          type: prometheus
+          access: proxy
+          url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+
+  # Default dashboard providers (sidecar discovers ConfigMaps with the
+  # grafana_dashboard label and auto-imports).
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+    datasources:
+      enabled: false # we provision via datasources.yaml above

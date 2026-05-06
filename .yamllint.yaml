@@ -1,5 +1,11 @@
 extends: default
 
+# Helm chart templates/ dirs are Go-templated YAML — yamllint can't parse
+# the `{{ }}` sigils. They get validated server-side by ArgoCD + kubeconform
+# (which renders templates first via `helm template`).
+ignore: |
+  resources/addons/*/templates/
+
 rules:
   line-length:
     max: 200

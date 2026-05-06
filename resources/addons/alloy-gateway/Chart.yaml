@@ -1,0 +1,8 @@
+apiVersion: v2
+name: alloy-gateway
+version: 1.0.0
+description: Grafana Alloy gateway — external push receiver for Jenkins masters + Hetzner plugin metrics.
+dependencies:
+  - name: alloy
+    version: 1.8.0
+    repository: https://grafana.github.io/helm-charts
