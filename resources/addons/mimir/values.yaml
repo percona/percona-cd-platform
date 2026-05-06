@@ -24,16 +24,21 @@ mimir-distributed:
         backend: s3
         s3:
           bucket_name: REPLACE_VIA_APPSET
+      # Mimir 2.11+ moved the per-storage object-key prefix from
+      # `<storage>.s3.prefix` to top-level `<storage>.storage_prefix`.
+      # The old key trips a YAML unmarshal error on startup
+      # (`field prefix not found in type s3.Config`) and crashloops every
+      # component. Same bucket, namespaced inside via storage_prefix.
       alertmanager_storage:
         backend: s3
+        storage_prefix: alertmanager
         s3:
           bucket_name: REPLACE_VIA_APPSET
-          prefix: alertmanager
       ruler_storage:
         backend: s3
+        storage_prefix: rules
         s3:
           bucket_name: REPLACE_VIA_APPSET
-          prefix: rules
 
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
@@ -107,4 +112,14 @@ mimir-distributed:
   # MinIO + memcached defaults — disable bundled MinIO (we use S3); keep
   # the chart's bundled memcached caches.
   minio:
+    enabled: false
+
+  # Kafka-based ingest-storage is the chart's 2024+ default, an
+  # experimental path where the distributor writes samples to a Kafka
+  # topic that ingesters consume. Our cluster doesn't have the resource
+  # headroom for the kafka StatefulSet (mimir-kafka-0 stays Pending with
+  # 'Insufficient cpu/memory'), and we don't need that ingest topology
+  # for current scale. Disable it; Mimir falls back to the classic
+  # distributor-to-ingester gRPC ring path.
+  kafka:
     enabled: false
