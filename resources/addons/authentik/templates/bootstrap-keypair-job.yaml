@@ -1,0 +1,153 @@
+{{/*
+One-shot Job: upload the SP signing keypair into Authentik so the
+templates/blueprint-grafana.yaml SAML Source can reference it by name
+(`!Find [authentik_crypto.certificatekeypair, [name, duo-saml-sp]]`).
+
+Why a Job (not a blueprint):
+  Authentik blueprints can't read kubernetes Secrets — they only resolve
+  `!Env`, `!Find`, `!Context`, `!Format`. The SP cert + private_key live in
+  Secret `authentik-saml` (synced from AWS Secrets Manager via ESO). A Job
+  with the Secret mounted is the only way to bridge that.
+
+Idempotence:
+  GET /api/v3/crypto/certificatekeypairs/?name=duo-saml-sp first; POST only
+  on miss. Safe to re-run on every ArgoCD sync — that's why we use the
+  PostSync hook annotation.
+
+Auth:
+  HTTP basic with akadmin + AUTHENTIK_BOOTSTRAP_TOKEN. Authentik's
+  /api/v3/ rejects username:password on basic auth — it only accepts
+  username:token — so the bootstrap *token* is the credential here, not
+  the password. Both are provisioned by terraform/authentik.tf and
+  exposed via the authentik-config Secret.
+
+Secret hygiene:
+  - Cert + key written to ephemeral files via env-var redirection inside the
+    container; never echoed to logs.
+  - `set +x` (no shell tracing) is the default; we never enable -x.
+  - Job uses `ttlSecondsAfterFinished` to auto-clean the completed pod.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-bootstrap-keypair
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- /* Re-run on every ArgoCD sync; idempotent script handles re-runs. */}}
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: OnFailure
+      nodeSelector:
+        workload: prometheus
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: prometheus
+          effect: NoSchedule
+      containers:
+        - name: upload-keypair
+          image: curlimages/curl:8.20.0
+          env:
+            - name: AUTHENTIK_BASE_URL
+              value: http://authentik-server.{{ .Release.Namespace }}.svc.cluster.local
+            - name: AUTHENTIK_BOOTSTRAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-config
+                  key: AUTHENTIK_BOOTSTRAP_TOKEN
+            - name: KEYPAIR_NAME
+              value: duo-saml-sp
+          volumeMounts:
+            - name: saml-keypair
+              mountPath: /etc/saml
+              readOnly: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              # Wait for the API to come up. The chart's PostSync hook may
+              # fire before the server is fully ready on first install.
+              for i in $(seq 1 60); do
+                if curl -fsS -o /dev/null "$AUTHENTIK_BASE_URL/-/health/ready/"; then
+                  echo "[bootstrap] authentik API ready"
+                  break
+                fi
+                echo "[bootstrap] waiting for authentik API ($i/60)"
+                sleep 5
+              done
+
+              # Idempotent: GET by name first.
+              # Auth: Bearer <token>. Authentik's /api/v3/ uses TokenAuthentication
+              # against an Authorization: Bearer header — empirically verified;
+              # HTTP basic with akadmin:<token> returns 403 "credentials not
+              # provided" on the in-cluster Service.
+              EXISTING=$(curl -fsS -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
+                "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/?name=$KEYPAIR_NAME" \
+                | grep -c '"name":"'"$KEYPAIR_NAME"'"' || true)
+              if [ "$EXISTING" != "0" ]; then
+                echo "[bootstrap] keypair $KEYPAIR_NAME already exists — nothing to do"
+                exit 0
+              fi
+
+              # Build the JSON body without ever echoing cert/key. jq would be
+              # cleaner but isn't in the alpine/curl image; we use a here-doc
+              # piped through `python -c` is also unavailable. Use the file
+              # paths the Authentik API accepts inline as multipart? It only
+              # accepts JSON with `certificate_data` + `key_data` strings.
+              # We construct JSON safely by base64-encoding the PEM, then
+              # using the JSON Patch trick: write the raw PEM into a file and
+              # let a tiny embedded awk script splice it.
+              CERT_FILE=/etc/saml/certificate
+              KEY_FILE=/etc/saml/private_key
+              [ -s "$CERT_FILE" ] || { echo "[bootstrap] missing $CERT_FILE"; exit 1; }
+              [ -s "$KEY_FILE"  ] || { echo "[bootstrap] missing $KEY_FILE";  exit 1; }
+
+              # Authentik's CertificateKeyPair API expects the PEM strings
+              # in the JSON body. Newlines in JSON strings must be \n. We
+              # use awk to do the escape — no command-line exposure of the
+              # cert/key contents.
+              ESC_CERT=$(awk 'BEGIN{ORS="\\n"} {gsub(/"/, "\\\""); print}' "$CERT_FILE")
+              ESC_KEY=$(awk 'BEGIN{ORS="\\n"} {gsub(/"/, "\\\""); print}' "$KEY_FILE")
+
+              # Write the JSON body to a tmp file (no command-line exposure).
+              BODY=/tmp/keypair.json
+              umask 077
+              {
+                printf '{"name":"%s","certificate_data":"%s","key_data":"%s"}' \
+                  "$KEYPAIR_NAME" "$ESC_CERT" "$ESC_KEY"
+              } > "$BODY"
+
+              HTTP=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
+                -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
+                -H 'Content-Type: application/json' \
+                -X POST "$AUTHENTIK_BASE_URL/api/v3/crypto/certificatekeypairs/" \
+                --data-binary @"$BODY")
+              rm -f "$BODY"
+
+              if [ "$HTTP" = "201" ] || [ "$HTTP" = "200" ]; then
+                echo "[bootstrap] keypair $KEYPAIR_NAME uploaded"
+                exit 0
+              fi
+              echo "[bootstrap] keypair upload failed (HTTP $HTTP)"
+              # Do not cat the response if it might echo input — show only
+              # the trimmed error message field.
+              awk 'BEGIN{RS=","} /detail|error|name/' /tmp/resp.json || true
+              exit 1
+      volumes:
+        - name: saml-keypair
+          secret:
+            secretName: authentik-saml
+            # 0444 not 0400: the curlimages/curl image runs as a non-root
+            # user (UID 100), so root-only mode would block reads. The
+            # mount is a tmpfs scoped to this pod — cluster RBAC and pod
+            # isolation are the security boundary, not file mode.
+            defaultMode: 0444
