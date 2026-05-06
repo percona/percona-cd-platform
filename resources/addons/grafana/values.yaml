@@ -195,12 +195,55 @@ grafana:
           url: http://prometheus-operated.monitoring.svc.cluster.local:9090
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
-  # grafana_dashboard label and auto-imports).
+  # grafana_dashboard label and auto-imports). kube-prometheus-stack
+  # ships ~15 K8s dashboards via this path (forceDeployDashboards=true
+  # in resources/addons/kube-prometheus-stack/values.yaml).
   sidecar:
     dashboards:
       enabled: true
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+
+  # Static dashboards fetched from grafana.com at chart install time.
+  # Filling in the LGTM/Karpenter slots that kube-prometheus-stack doesn't
+  # cover. The chart's init container downloads each JSON from
+  # https://grafana.com/api/dashboards/<gnetId>/revisions/<revision>/download
+  # and writes it to /var/lib/grafana/dashboards/<provider>/<key>.json,
+  # which the file-based dashboardProvider below auto-imports on boot.
+  # Datasource binding: the JSON's `${DS_*}` placeholders resolve to the
+  # `datasource` field below. Names must match the datasources block above.
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: lgtm-karpenter
+          orgId: 1
+          folder: "LGTM + Karpenter"
+          type: file
+          disableDeletion: false
+          editable: true
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards/lgtm-karpenter
+  dashboards:
+    lgtm-karpenter:
+      loki-logs-app:
+        gnetId: 13407
+        revision: 1
+        datasource: Loki
+      mimir-overview:
+        # Mimir / Cortex overview (Grafana Labs official).
+        gnetId: 19279
+        revision: 1
+        datasource: Mimir
+      tempo-operational:
+        gnetId: 16886
+        revision: 1
+        datasource: Mimir
+      karpenter-cluster-capacity:
+        gnetId: 16237
+        revision: 1
+        datasource: Mimir
     datasources:
       enabled: false # we provision via datasources.yaml above
