@@ -213,6 +213,12 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+    # Datasources sidecar OFF: we provision via the datasources.yaml block
+    # above. Leaving the datasources sidecar enabled would race with our
+    # static config and could overwrite Mimir/Loki/Tempo with whatever
+    # ConfigMaps it finds.
+    datasources:
+      enabled: false
 
   # Static dashboards fetched from grafana.com at chart install time.
   # Filling in the LGTM/Karpenter slots that kube-prometheus-stack doesn't
@@ -254,5 +260,3 @@ grafana:
         gnetId: 16237
         revision: 1
         datasource: Mimir
-    datasources:
-      enabled: false # we provision via datasources.yaml above
