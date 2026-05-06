@@ -54,18 +54,30 @@ data:
           expression: |
             # SAML Source Property Mapping: receives the parsed SAML
             # assertion attributes via request.context["attributes"]
-            # (NOT "saml_attributes" — that key does not exist and crashes
-            # the mapping with KeyError, which the source view then turns
-            # into an HTTP 405 to the browser, which is wildly misleading).
+            # (NOT "saml_attributes", which doesn't exist and crashes the
+            # mapping with KeyError, which the source view then surfaces
+            # as an HTTP 405 to the browser, very misleading).
             #
-            # Duo's SAML response carries group memberships under the
-            # "http://schemas.xmlsoap.org/claims/Group" attribute name on
-            # some SP records and the bare "groups" name on others — try
-            # the modern key first, fall back to the schemas.xmlsoap.org
-            # one, default to [] if neither.
+            # Duo's SAML response carries group memberships as full
+            # FreeIPA LDAP DNs:
+            #   cn=grafana_cd_admins,cn=groups,cn=accounts,dc=int,dc=percona,dc=com
+            # Authentik would assign those raw DN strings as Group names
+            # and the OIDC profile scope would surface them verbatim in
+            # the id_token's groups claim. Grafana's role mapping and
+            # ALLOWED_GROUPS check are both written for the bare CN value
+            # (`grafana_cd_admins`, `percona`), so we strip the DN here.
+            #
+            # Falls back to "http://schemas.xmlsoap.org/claims/Group" for
+            # the AzureAD/MS-claim attribute name in case the SP record is
+            # ever reconfigured.
+            import re
             attrs = request.context.get("attributes", {})
+            raw = attrs.get("groups", attrs.get("http://schemas.xmlsoap.org/claims/Group", []))
+            def cn_only(s):
+                m = re.match(r"^cn=([^,]+)", s, re.IGNORECASE)
+                return m.group(1) if m else s
             return {
-                "groups": attrs.get("groups", attrs.get("http://schemas.xmlsoap.org/claims/Group", [])),
+                "groups": [cn_only(g) for g in raw],
             }
 
       # ---- 2. Duo SAML Source ----
