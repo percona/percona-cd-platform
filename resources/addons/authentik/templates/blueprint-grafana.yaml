@@ -61,6 +61,7 @@ data:
       # uploads the SP cert+key into a CertificateKeyPair named `duo-saml-sp`
       # before this blueprint applies.
       - model: authentik_sources_saml.samlsource
+        id: duo-saml-source
         identifiers:
           slug: duo-saml
         attrs:
@@ -127,3 +128,22 @@ data:
           open_in_new_tab: false
           policy_engine_mode: any
           group: ""
+
+      # ---- 5. Wire the Duo source into the default identification stage ----
+      # Authentik's default-authentication-identification stage ships with
+      # `sources: []` — meaning the login page only shows the username form,
+      # never the SAML source button. Patch the stage to include duo-saml so
+      # users see "Sign in with Duo SSO" on Authentik's login screen and the
+      # whole identification step delegates to Duo.
+      #
+      # We don't drop user_fields entirely (would break the akadmin emergency
+      # path until disabled). Instead we set show_source_labels=true and add
+      # the source to `sources` — Authentik renders both options, with the
+      # SAML source as a clickable button.
+      - model: authentik_stages_identification.identificationstage
+        identifiers:
+          name: default-authentication-identification
+        attrs:
+          sources:
+            - !KeyOf duo-saml-source
+          show_source_labels: true
