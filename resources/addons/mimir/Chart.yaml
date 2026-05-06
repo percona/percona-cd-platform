@@ -1,0 +1,8 @@
+apiVersion: v2
+name: mimir
+version: 1.0.0
+description: Umbrella chart for Grafana Mimir in distributed mode.
+dependencies:
+  - name: mimir-distributed
+    version: 6.0.6
+    repository: https://grafana.github.io/helm-charts

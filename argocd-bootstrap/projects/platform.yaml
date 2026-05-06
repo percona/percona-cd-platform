@@ -15,6 +15,7 @@ spec:
     - https://kubernetes-sigs.github.io/external-dns/
     - https://prometheus-community.github.io/helm-charts
     - https://charts.external-secrets.io
+    - https://grafana.github.io/helm-charts
     - oci://public.ecr.aws/karpenter
   destinations:
     - server: https://kubernetes.default.svc

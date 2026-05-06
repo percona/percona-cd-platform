@@ -1,0 +1,65 @@
+# Grafana Tempo — distributed-mode topology, S3-backed.
+#
+# storage.trace.s3.bucket is a placeholder — actual value comes from the
+# addons ApplicationSet valuesObject (see argocd-bootstrap/applicationsets/
+# addons.yaml), which reads cluster-secret annotations populated by
+# terraform/lgtm-storage.tf. Pod Identity (terraform/pod-identity.tf) maps
+# namespace=tempo + SA=tempo to the IAM role with S3 + KMS access scoped
+# to the bucket below.
+tempo-distributed:
+  serviceAccount:
+    create: true
+    name: tempo
+
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: REPLACE_VIA_APPSET
+        region: us-east-1
+        endpoint: s3.us-east-1.amazonaws.com
+
+  # Distributed-mode replicas. WAL PVC uses cluster-default `gp3` (multi-AZ,
+  # Delete). Ingester block flush is ~5min, so WAL is short-lived.
+  distributor:
+    replicas: 3
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+        jaeger:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:14250
+            thrift_http:
+              endpoint: 0.0.0.0:14268
+        zipkin:
+          endpoint: 0.0.0.0:9411
+
+  ingester:
+    replicas: 3
+    persistence:
+      enabled: true
+      size: 30Gi
+      storageClass: gp3
+
+  querier:
+    replicas: 2
+
+  queryFrontend:
+    replicas: 2
+
+  compactor:
+    replicas: 1
+
+  # metricsGenerator emits service-graph + span metrics; defer until we
+  # have a real trace volume. Enabling later is a values-file edit.
+  metricsGenerator:
+    enabled: false
+
+  minio:
+    enabled: false
