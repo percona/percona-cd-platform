@@ -1,23 +1,32 @@
 # Standalone Grafana — replaces the bundled chart that L-3 disabled.
 #
 # Three things this chart does that the bundled one couldn't:
-#   1. SAML/Duo (HD-30780) with full grafana.ini control + group → role
-#      mapping (grafana_cd_admins → Admin, grafana_cd_users → Viewer).
+#   1. OIDC SSO via Authentik (which talks SAML to Duo on our behalf).
+#      Group → role mapping: grafana_cd_admins → GrafanaAdmin (server-
+#      admin + org-Admin), grafana_cd_users → Editor.
 #   2. Datasources for the full LGTM stack: Mimir (metrics), Loki (logs),
 #      Tempo (traces), and the in-cluster Prometheus agent for transitional
 #      scrape visibility.
 #   3. HA topology (replicas=2) with sticky-session ALB target groups so
-#      session affinity holds during the SAML round-trip.
+#      session affinity holds during the OIDC round-trip.
+#
+# History: original wiring was direct SAML to Duo (HD-30780). Grafana OSS
+# does not ship SAML — it's an Enterprise-only feature. The OSS image
+# returned 404 for /saml/metadata and showed only the local login form.
+# The SAML SP role moved to Authentik (resources/addons/authentik/);
+# Grafana now consumes plain OIDC.
 #
 # Top-level keys consumed by the addons ApplicationSet valuesObject:
-#   ingress.hosts          — set from cluster-secret annotation grafana_hostname
-#   saml.enabled           — set from var.grafana_saml_enabled
-#   saml.idpMetadataB64    — set from var.grafana_saml_idp_metadata (b64)
+#   ingress.hosts                    — set from cluster-secret annotation grafana_hostname
+#   oidc.enabled                     — fixed "true" (no toggle anymore)
+#   oidc.issuerUrl                   — set from cluster-secret annotation grafana_oidc_issuer_url
+#   oidc.clientId                    — set from cluster-secret annotation grafana_oidc_client_id
 
-# Local-scope keys (consumed by templates/external-secret-saml.yaml).
-saml:
-  enabled: "false"
-  idpMetadataB64: ""
+# Local-scope keys.
+oidc:
+  enabled: "true"
+  issuerUrl: "https://auth.cd.percona.com"
+  clientId: "grafana"
 
 ingress:
   hosts: []
@@ -58,8 +67,8 @@ grafana:
     storageClassName: gp3-monitoring-1a-retain
     size: 10Gi
 
-  # Admin password for the local-admin path. Real production deployments
-  # rotate this via a Secret reference; for now the chart auto-generates.
+  # Admin password for the local-admin emergency path. Real production
+  # rotates via Secret reference; for now the chart auto-generates.
   admin:
     existingSecret: ""
 
@@ -76,9 +85,9 @@ grafana:
       # default of `instance` target-type only works with NodePort services.
       alb.ingress.kubernetes.io/target-type: ip
       alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-      # Sticky sessions for SAML round-trip (otherwise the SP-initiated
+      # Sticky sessions for the OIDC round-trip (otherwise the SP-initiated
       # flow can land on a different replica than the one that issued
-      # the AuthnRequest).
+      # the AuthnRequest and the state-cookie check fails).
       alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=86400
       # Health check on Grafana's /api/health endpoint (returns 200).
       # Without this, ALB hits / and gets 302 → /login → marks targets
@@ -88,9 +97,9 @@ grafana:
       alb.ingress.kubernetes.io/success-codes: "200"
       # hosts come from the addons ApplicationSet valuesObject.
 
-  # SAML-conditional grafana.ini. Renders the [auth.saml] block only when
-  # samlEnabled is "true" (string compare — annotations are strings).
-  # Cert/key paths are mount points filled by templates/external-secret-saml.yaml.
+  # Server domain settings — only effective when ApplicationSet sets the
+  # actual hostname via `grafana.ini` override. Local default kept for
+  # helm-template sanity; real value flows from cluster-Secret annotation.
   grafana.ini:
     server:
       domain: grafana.cd.percona.com
@@ -100,45 +109,50 @@ grafana:
       cookie_secure: true
       cookie_samesite: lax
     auth:
+      # Keep emergency local-admin path open until OIDC is validated end-
+      # to-end. Flip to true after the soak.
       disable_login_form: false
       oauth_auto_login: false
     users:
       auto_assign_org: true
       auto_assign_org_role: Viewer
 
-  # SAML wiring — uses Grafana env vars (GF_AUTH_SAML_*) which override
-  # grafana.ini. Always rendered; the gate is GF_AUTH_SAML_ENABLED, which
-  # echoes the saml.enabled value (string-typed because cluster-secret
-  # annotations are strings). When disabled, GF_AUTH_SAML_ENABLED=false and
-  # Grafana ignores the rest. The cert/key Secret + IdP ConfigMap are only
-  # rendered when saml.enabled=true (see templates/external-secret-saml.yaml),
-  # so the mount paths exist iff the gate is on.
-  extraSecretMounts:
-    - name: saml-keypair
-      secretName: grafana-saml
-      mountPath: /etc/grafana/saml
-      readOnly: true
-      defaultMode: 0440
-  extraConfigmapMounts:
-    - name: saml-idp
-      configMap: grafana-saml-idp
-      mountPath: /etc/grafana/saml-idp
-      readOnly: true
-      defaultMode: 0444
+  # OIDC env vars (GF_AUTH_GENERIC_OAUTH_*) override grafana.ini at runtime.
+  # Authentik issuer URL + client_id come from cluster-Secret annotations
+  # via .Values.oidc; client_secret is mounted via envValueFrom from the
+  # ESO-synced `grafana-oidc` Secret (see templates/external-secret-oidc.yaml).
   env:
-    GF_AUTH_SAML_ENABLED: "true"
-    GF_AUTH_SAML_SINGLE_LOGOUT: "false"
-    GF_AUTH_SAML_ALLOW_IDP_INITIATED: "false"
-    GF_AUTH_SAML_ALLOW_SIGN_UP: "true"
-    GF_AUTH_SAML_PRIVATE_KEY_PATH: /etc/grafana/saml/private_key
-    GF_AUTH_SAML_CERTIFICATE_PATH: /etc/grafana/saml/certificate
-    GF_AUTH_SAML_IDP_METADATA_PATH: /etc/grafana/saml-idp/idp-metadata.xml
-    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_GROUPS: groups
-    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_LOGIN: mail
-    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_EMAIL: mail
-    GF_AUTH_SAML_ASSERTION_ATTRIBUTE_NAME: displayName
-    GF_AUTH_SAML_ROLE_VALUES_ADMIN: grafana_cd_admins
-    GF_AUTH_SAML_ROLE_VALUES_VIEWER: grafana_cd_users
+    GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+    GF_AUTH_GENERIC_OAUTH_NAME: "Percona SSO"
+    GF_AUTH_GENERIC_OAUTH_ICON: "signin"
+    GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "grafana"
+    GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email groups offline_access"
+    GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://auth.cd.percona.com/application/o/authorize/"
+    GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://auth.cd.percona.com/application/o/token/"
+    GF_AUTH_GENERIC_OAUTH_API_URL:  "https://auth.cd.percona.com/application/o/userinfo/"
+    GF_AUTH_GENERIC_OAUTH_SIGNOUT_REDIRECT_URL: "https://auth.cd.percona.com/application/o/grafana/end-session/"
+    # Group → role mapping. JMESPath: ordered fall-through. Server-admin
+    # via grafana_cd_admins, Editor via grafana_cd_users, else Viewer
+    # (unreachable due to ALLOWED_GROUPS but kept as a safety net).
+    GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
+    GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin' || contains(groups[*], 'grafana_cd_users') && 'Editor' || 'Viewer'"
+    GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS: "grafana_cd_admins grafana_cd_users"
+    GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH: "preferred_username"
+    GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH:  "name"
+    GF_AUTH_GENERIC_OAUTH_EMAIL_ATTRIBUTE_PATH: "email"
+    GF_AUTH_GENERIC_OAUTH_GROUPS_ATTRIBUTE_PATH: "groups"
+    GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
+    GF_AUTH_GENERIC_OAUTH_USE_REFRESH_TOKEN: "true"
+    GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "false"
+    GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+
+  # client_secret comes from the ESO-synced `grafana-oidc` Secret
+  # (templates/external-secret-oidc.yaml).
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef:
+        name: grafana-oidc
+        key: client_secret
 
   # LGTM datasources auto-provisioned. URLs are in-cluster Service DNS.
   datasources:
