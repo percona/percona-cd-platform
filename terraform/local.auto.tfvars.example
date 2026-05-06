@@ -45,3 +45,12 @@
 #  pmm  = { target = "ec2-X-Y-Z.compute-1.amazonaws.com", type = "CNAME" }
 #  ps80 = { target = "203.0.113.10",                       type = "A"     }
 #}
+
+# Grafana SAML/Duo (HD-30780). Default false — the cluster boots on
+# local-admin. Flip to true once IT Ops returns the IdP metadata URL AND
+# the SAML cert/key are populated in Secrets Manager at:
+#   ${cluster_name}/grafana/saml/certificate
+#   ${cluster_name}/grafana/saml/private_key
+# Cutover runbook: docs/runbooks/grafana-saml-cutover.md
+#grafana_saml_enabled      = true
+#grafana_saml_metadata_url = "https://sso.duosecurity.com/saml2/sp/.../metadata"

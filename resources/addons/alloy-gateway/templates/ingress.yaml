@@ -1,0 +1,95 @@
+{{/*
+Three ALB Ingress objects, one per signal type — gives the operator
+independent auth/CIDR control per signal. All three share the same
+jenkins-cd ALB group, so they collapse onto one load balancer.
+
+Backends: the chart-bundled Service in the same namespace as this
+Application (alloy-gateway). Alloy listens on different ports per signal,
+so each Ingress points at the right port.
+*/}}
+{{- if .Values.ingress.hosts.mimir }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alloy-gateway-mimir-push
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: jenkins-cd
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/healthcheck-path: /-/ready
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.ingress.hosts.mimir | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-alloy
+                port:
+                  number: 9009
+---
+{{- end }}
+{{- if .Values.ingress.hosts.loki }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alloy-gateway-loki-push
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: jenkins-cd
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/healthcheck-path: /-/ready
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.ingress.hosts.loki | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-alloy
+                port:
+                  number: 3100
+---
+{{- end }}
+{{- if .Values.ingress.hosts.tempo }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alloy-gateway-tempo-push
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: jenkins-cd
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/healthcheck-path: /-/ready
+    # Tempo OTLP-HTTP (4318); OTLP-gRPC (4317) needs an NLB or HTTP/2 path.
+    # gRPC support over ALB requires backend-protocol-version annotations
+    # which add complexity — start with HTTP, add gRPC in a follow-up.
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.ingress.hosts.tempo | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-alloy
+                port:
+                  number: 4318
+{{- end }}

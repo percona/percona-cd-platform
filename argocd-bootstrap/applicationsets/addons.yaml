@@ -85,6 +85,24 @@ spec:
                 trace:
                   s3:
                     bucket: '{{ metadata.annotations.tempo_bucket_name }}'
+
+            # Standalone Grafana — SAML toggle + metadata URL come from TF.
+            # Datasource URLs are constructed in-cluster (Service DNS).
+            grafana:
+              ingress:
+                hosts:
+                  - '{{ metadata.annotations.grafana_hostname }}'
+              saml:
+                enabled: '{{ metadata.annotations.grafana_saml_enabled }}'
+                idpMetadataUrl: '{{ metadata.annotations.grafana_saml_metadata_url }}'
+
+            # Alloy gateway — public ALB hostnames for external pushers.
+            alloy-gateway:
+              ingress:
+                hosts:
+                  mimir: '{{ metadata.annotations.lgtm_push_mimir }}'
+                  loki: '{{ metadata.annotations.lgtm_push_loki }}'
+                  tempo: '{{ metadata.annotations.lgtm_push_tempo }}'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'

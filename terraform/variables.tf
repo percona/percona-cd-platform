@@ -204,6 +204,59 @@ variable "jenkins_origin_targets" {
   # `terraform/local.auto.tfvars` out of git, not by the type system.
 }
 
+variable "grafana_saml_enabled" {
+  description = <<-EOT
+    Toggles Grafana SAML/Duo authentication (HD-30780). Default false so
+    the cluster can boot on local-admin until IT Ops returns the SP
+    metadata and provisions the SAML cert/key in AWS Secrets Manager.
+
+    When true, resources/addons/grafana/templates/external-secret-saml.yaml
+    syncs the cert/key from Secrets Manager (path
+    `$${cluster_name}/grafana/saml/{certificate,private_key}`) and Grafana
+    mounts them. Group → role mapping:
+      grafana_cd_admins → Admin
+      grafana_cd_users  → Viewer
+
+    Cutover runbook: docs/runbooks/grafana-saml-cutover.md.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "grafana_saml_metadata_url" {
+  description = <<-EOT
+    Duo IdP SAML metadata URL. Empty until IT Ops returns it via HD-30780.
+    When grafana_saml_enabled = true, MUST be set.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.grafana_saml_enabled || length(var.grafana_saml_metadata_url) > 0
+    error_message = "grafana_saml_metadata_url must be set when grafana_saml_enabled = true."
+  }
+}
+
+variable "lgtm_push_hostnames" {
+  description = <<-EOT
+    Public ALB hostnames for external pushers (Jenkins masters with
+    prometheus-plugin + Hetzner cloud plugin metrics, etc.) to send
+    metrics/logs/traces into Mimir/Loki/Tempo via the in-cluster Alloy
+    gateway. Default values land under cd.percona.com — change only if
+    a different DNS shape is needed.
+  EOT
+  type = object({
+    mimir = string
+    loki  = string
+    tempo = string
+  })
+  default = {
+    mimir = "mimir-push.cd.percona.com"
+    loki  = "loki-push.cd.percona.com"
+    tempo = "tempo-push.cd.percona.com"
+  }
+}
+
 variable "tags" {
   description = <<-EOT
     Default tags for every taggable AWS resource. Two of these are required by

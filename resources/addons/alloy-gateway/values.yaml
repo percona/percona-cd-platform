@@ -1,0 +1,109 @@
+# Grafana Alloy gateway — Deployment with public ALB Ingress.
+#
+# Use case: external pushers (Jenkins masters in 5 regions, Hetzner cloud
+# plugin metrics, future PMM agents) ship metrics/logs/traces into the
+# in-cluster Mimir/Loki/Tempo via this gateway. The cluster never exposes
+# its Mimir/Loki/Tempo distributors directly — Alloy is the auth + buffer +
+# forward boundary.
+#
+# Three ALB-fronted hostnames (set by addons ApplicationSet valuesObject):
+#   - {{ ingress.hosts.mimir }} → /api/v1/push   → Mimir distributor
+#   - {{ ingress.hosts.loki  }} → /loki/api/v1/push → Loki distributor
+#   - {{ ingress.hosts.tempo }} → :4317 (gRPC) / :4318 (HTTP) → Tempo distributor
+#
+# Auth model for v1: ALB-level CIDR allowlist (operator populates
+# alb.ingress.kubernetes.io/inbound-cidrs in local.auto.tfvars / addon
+# overrides). Bearer-token enforcement via NGINX sidecar is a follow-up
+# hardening item — see docs/eks-hardening.md.
+
+# Local-scope keys consumed by templates/ingress.yaml (rendered below)
+ingress:
+  hosts:
+    mimir: ""
+    loki: ""
+    tempo: ""
+
+alloy:
+  alloy:
+    configMap:
+      content: |-
+        // Prometheus remote_write receiver (Jenkins master agents push here).
+        prometheus.receive_http "default" {
+          http {
+            listen_address = "0.0.0.0"
+            listen_port    = 9009
+          }
+          forward_to = [prometheus.remote_write.mimir.receiver]
+        }
+
+        prometheus.remote_write "mimir" {
+          endpoint {
+            url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+            headers = {
+              "X-Scope-OrgID" = "percona-ci",
+            }
+          }
+        }
+
+        // Loki push receiver (Jenkins console → external promtail/alloy → here).
+        loki.source.api "default" {
+          http {
+            listen_address = "0.0.0.0"
+            listen_port    = 3100
+          }
+          forward_to = [loki.write.default.receiver]
+        }
+
+        loki.write "default" {
+          endpoint {
+            url = "http://loki-distributor.loki.svc.cluster.local:3100/loki/api/v1/push"
+          }
+        }
+
+        // OTLP receiver for external traces (CI pipeline instrumentation).
+        otelcol.receiver.otlp "default" {
+          grpc {
+            endpoint = "0.0.0.0:4317"
+          }
+          http {
+            endpoint = "0.0.0.0:4318"
+          }
+          output {
+            traces = [otelcol.exporter.otlp.tempo.input]
+          }
+        }
+
+        otelcol.exporter.otlp "tempo" {
+          client {
+            endpoint = "tempo-distributor.tempo.svc.cluster.local:4317"
+            tls {
+              insecure = true
+            }
+          }
+        }
+
+  controller:
+    type: deployment
+    replicas: 2
+    # Default Karpenter NodePool. Gateway has no stateful data; clients
+    # retry on spot interruption.
+
+  service:
+    enabled: true
+    extraPorts:
+      - name: prom-rw
+        port: 9009
+        targetPort: 9009
+        protocol: TCP
+      - name: loki-push
+        port: 3100
+        targetPort: 3100
+        protocol: TCP
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP

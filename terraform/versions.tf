@@ -71,6 +71,16 @@ locals {
       name = "tempo-distributed"
       ver  = "1.61.3"
     }
+    grafana = {
+      repo = "https://grafana.github.io/helm-charts"
+      name = "grafana"
+      ver  = "10.5.15"
+    }
+    alloy = {
+      repo = "https://grafana.github.io/helm-charts"
+      name = "alloy"
+      ver  = "1.8.0"
+    }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }
   }

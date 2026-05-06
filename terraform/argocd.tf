@@ -114,6 +114,17 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       loki_role_arn     = module.pod_identity_loki.iam_role_arn
       tempo_role_arn    = module.pod_identity_tempo.iam_role_arn
       lgtm_kms_key_arn  = aws_kms_key.lgtm.arn
+
+      # External-push hostnames for the Alloy gateway (resources/addons/
+      # alloy-gateway/). These resolve via external-dns to the shared ALB.
+      lgtm_push_mimir = var.lgtm_push_hostnames.mimir
+      lgtm_push_loki  = var.lgtm_push_hostnames.loki
+      lgtm_push_tempo = var.lgtm_push_hostnames.tempo
+
+      # Grafana SAML/Duo (HD-30780). When enabled, ExternalSecret syncs
+      # cert/key from Secrets Manager and Grafana mounts them.
+      grafana_saml_enabled      = tostring(var.grafana_saml_enabled)
+      grafana_saml_metadata_url = var.grafana_saml_metadata_url
     }
   }
 

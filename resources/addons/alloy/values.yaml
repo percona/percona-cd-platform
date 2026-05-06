@@ -1,0 +1,65 @@
+# Grafana Alloy — DaemonSet for in-cluster observability data plane.
+#
+# Role split:
+#   - alloy (this chart): DaemonSet, scrapes node + pod logs (kubelet
+#     discovery, /var/log/pods, /var/log/containers) and ships to Loki.
+#     Also accepts OTLP traces from in-cluster apps and forwards to Tempo.
+#   - alloy-gateway (sibling chart): Deployment with public ALB Ingress
+#     for external pushers (Jenkins masters, Hetzner plugin metrics).
+#
+# Metrics scraping is NOT done here — kube-prometheus-stack's Prometheus
+# is the cluster scraper (with remoteWrite to Mimir). Running Alloy +
+# Prometheus in parallel for the same scrape job is duplicative.
+alloy:
+  alloy:
+    configMap:
+      content: |-
+        // Discover pods + nodes via the in-cluster Kubernetes API.
+        discovery.kubernetes "pods" {
+          role = "pod"
+        }
+
+        // Scrape pod logs from the node's filesystem (cri-containerd shape).
+        loki.source.kubernetes "pods" {
+          targets    = discovery.kubernetes.pods.targets
+          forward_to = [loki.write.default.receiver]
+        }
+
+        // Forward to the in-cluster Loki distributor.
+        loki.write "default" {
+          endpoint {
+            url = "http://loki-distributor.loki.svc.cluster.local:3100/loki/api/v1/push"
+          }
+        }
+
+        // OTLP receiver for in-cluster apps that emit traces. App pods
+        // configure OTEL_EXPORTER_OTLP_ENDPOINT to the headless DaemonSet
+        // service so spans land on the local node's Alloy.
+        otelcol.receiver.otlp "default" {
+          grpc {
+            endpoint = "0.0.0.0:4317"
+          }
+          http {
+            endpoint = "0.0.0.0:4318"
+          }
+          output {
+            traces = [otelcol.exporter.otlp.tempo.input]
+          }
+        }
+
+        // Forward traces to the in-cluster Tempo distributor.
+        otelcol.exporter.otlp "tempo" {
+          client {
+            endpoint = "tempo-distributor.tempo.svc.cluster.local:4317"
+            tls {
+              insecure = true
+            }
+          }
+        }
+
+  controller:
+    type: daemonset
+    # Tolerate every taint — the DaemonSet must run on every node, including
+    # workload=prometheus / workload=jenkins (we want logs from those too).
+    tolerations:
+      - operator: Exists
