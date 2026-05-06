@@ -25,6 +25,18 @@ ingress:
 grafana:
   replicas: 2
 
+  # Pin both chart + image to the same Grafana version. Chart 10.5.15
+  # ships appVersion=12.3.1; without an explicit pin Helm renders
+  # `image.tag = appVersion` which is fine — but ArgoCD's diffing keeps
+  # re-rendering when the chart's appVersion floats on a re-pull. Pinning
+  # makes the deployed image deterministic and gives one place to bump.
+  # The "no such column: uid" CrashLoop on first bring-up was a chart-vs-
+  # image schema collision triggered by emptyDir-backed sqlite churn; this
+  # pin + the persistent PVC below stop the regression.
+  image:
+    repository: grafana/grafana
+    tag: "12.3.1"
+
   # Robustness: not cluster-critical (data lives in datasources, not Grafana
   # itself), but PDB so node drain doesn't kill both replicas at once.
   priorityClassName: platform-default
