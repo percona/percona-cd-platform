@@ -23,6 +23,13 @@ mimir-distributed:
       # and fall back to the classic distributor->ingester gRPC ring.
       ingest_storage:
         enabled: false
+      # The chart also hardcodes ingester.push_grpc_method_enabled=false
+      # (intended for kafka mode where distributors don't push to ingesters).
+      # In classic ring mode we need Push back on, otherwise ingester boot
+      # validates with: "cannot disable Push gRPC method in ingester, while
+      # ingest storage (-ingest-storage.enabled) is not enabled".
+      ingester:
+        push_grpc_method_enabled: true
       common:
         storage:
           backend: s3
