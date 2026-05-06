@@ -27,12 +27,16 @@ through at uncomment time.
 | 9 | **Customer-managed KMS CMK** for cluster secrets envelope encryption + EBS volume encryption | `terraform/kms.tf` (new), `terraform/eks.tf` (`encryption_config`), StorageClass `parameters.kmsKeyId` | [Envelope encryption](https://docs.aws.amazon.com/eks/latest/userguide/envelope-encryption.html) |
 | 10 | **IMDSv2 enforcement + hop-limit=1** on worker nodes (Pod Identity removes the need for hop=2) | EKS managed-NG launch template (`metadata_options`) | [Restrict node IMDS](https://kubedemy.io/aws-eks-part-15-restrict-node-imds-to-secure-aws-account-access) |
 | 11 | **S3 gateway VPC endpoint** (free); revisit STS / ECR / Secrets Manager interface endpoints when NAT-GW bill warrants | `terraform/vpc.tf` (`enable_s3_endpoint`) | [Cost-opt networking](https://docs.aws.amazon.com/eks/latest/best-practices/cost-opt-networking.html) |
-| 12 | **fluent-bit DaemonSet → CloudWatch Logs** for app logs (without it, all stdout is on ephemeral EBS only) | new addon `resources/addons/fluent-bit/` | [aws-for-fluent-bit](https://github.com/aws/aws-for-fluent-bit) |
+| 12 | **~~fluent-bit DaemonSet → CloudWatch Logs~~** — superseded by Alloy DaemonSet → Loki ([ADR 0010](adr/0010-distributed-lgtm.md)). |  | |
 | 13 | **Karpenter** `consolidationPolicy: WhenEmptyOrUnderutilized`, `disruption.budgets`, `expireAfter: 720h`, NodePool `limits.cpu`. Annotate long Jenkins build pods with `karpenter.sh/do-not-disrupt`. | `resources/addons/karpenter/nodepools/default.yaml` | [Karpenter](https://docs.aws.amazon.com/eks/latest/best-practices/karpenter.html) |
 | 14 | **VolumeSnapshotClass** for EBS CSI (independent of AWS Backup; useful for Velero / ad-hoc) | new manifest under `resources/addons/storageclass-gp3/templates/` | [EBS CSI driver](https://github.com/kubernetes-sigs/aws-ebs-csi-driver/blob/master/docs/install.md) |
 | 15 | **Alertmanager routing** — Slack `#opensource-jenkins` / PagerDuty (chart ships empty config) | `resources/addons/kube-prometheus-stack/values.yaml` (`alertmanager.config`) | upstream chart |
 | 16 | **VPC CNI native NetworkPolicy** default-deny baseline; revisit Cilium chaining if L7/FQDN ever needed | `terraform/eks-addons.tf` (`vpc-cni` `configuration_values.enableNetworkPolicy=true`), per-namespace `NetworkPolicy` | [Network Policy engine](https://aws.amazon.com/blogs/containers/rippling-vpc-cni-network-policy-engine/) |
 | 17 | **VPA recommender mode** (no auto-update) for sizing the NGINX reverse-proxy Deployments | new addon `resources/addons/vpa/` (recommender only) | [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) |
+| 18 | **Bearer-token auth on Alloy gateway** (NGINX sidecar validating `Authorization` header against ESO-synced Secrets Manager value) — current v1 auth is ALB CIDR allowlist only | `resources/addons/alloy-gateway/` (new sidecar pattern) | [Alloy auth components](https://grafana.com/docs/alloy/latest/reference/components/) |
+| 19 | **S3 cross-region replication** for the three LGTM buckets (mimir-blocks, loki-chunks, tempo-traces) — replica bucket in `us-west-2` or `eu-central-1` | `terraform/lgtm-storage.tf` (`aws_s3_bucket_replication_configuration`) | [Replication](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html) |
+| 20 | **S3 Object Lock (Compliance, 7–14 d)** on the LGTM buckets to block ransomware-style mass-delete | `terraform/lgtm-storage.tf` (`object_lock_enabled`) | [Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html) |
+| 21 | **SAML cert rotation tracking** for Grafana — Alertmanager rule on cert expiry, calendar reminder 30 d before, runbook in `docs/runbooks/grafana-saml-cutover.md` | `resources/addons/kube-prometheus-stack/` (PrometheusRule), runbook | upstream Grafana SAML |
 
 ## Explicitly deferred (not gaps — documented choices)
 
@@ -42,7 +46,7 @@ through at uncomment time.
 - **EKS Hybrid Nodes** — pure cloud, not applicable.
 - **IPv6 cluster mode** — `10.220.0.0/16` has plenty of address space.
 - **cert-manager** — deferred to v1.5 per [ADR 0007](adr/0007-cert-manager-deferred.md).
-- **LGTM (Mimir / Tempo / Loki)** — deferred per [ADR 0006](adr/0006-kube-prometheus-stack-over-mimir.md).
+- ~~**LGTM (Mimir / Tempo / Loki)** — deferred per ADR 0006~~ — adopted in distributed mode per [ADR 0010](adr/0010-distributed-lgtm.md). Items 18–21 above carry the post-adoption hardening backlog.
 
 ## Source-document index
 

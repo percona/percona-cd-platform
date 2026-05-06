@@ -1,6 +1,11 @@
 # 0006 — kube-prometheus-stack at v1, LGTM deferred
 
-**Status:** Accepted (2026-04-30)
+**Status:** Superseded (2026-05-06) by [ADR 0010](0010-distributed-lgtm.md).
+The "v1 only" framing was reversed once the platform's scope expanded to
+cover the durable Jenkins fleet rather than a PoC. Original text below
+preserved for history.
+
+**Original status:** Accepted (2026-04-30)
 
 ## Context
 
