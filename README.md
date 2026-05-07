@@ -1,102 +1,60 @@
 # percona-ci-platform
 
-Public OpenTofu + ArgoCD platform repo that provisions an EKS cluster in
-`us-east-1` and bootstraps it via GitOps. Initial workload: terminate SSL
-for `*.cd.percona.com` on a single shared ALB, reverse-proxy the existing
-EC2 Jenkins masters, and run the first in-cluster replica
-(`ps3-k8s.cd.percona.com`, seeded from production ps3) alongside them.
+Public OpenTofu + ArgoCD platform repo. Provisions an EKS cluster (`us-east-1`,
+EKS 1.35) and bootstraps the addon stack via GitOps. Hosts Percona's CI
+infrastructure: Jenkins masters, observability (LGTM), shared ALB SSL
+termination for `*.cd.percona.com`.
 
-The repo lives initially under `nogueiraanderson` and will move to
-`Percona-Lab/` once it's stable.
-
-## Architecture
-
-```
-                          *.cd.percona.com
-                                 │
-                                 ▼
-                       ALB :443 (ACM wildcard)
-                ┌─── Ingress group jenkins-cd ───┐
-                │                                │
-        Mode A (in-cluster)               Mode B (proxy → EC2)
-                │                                │
-                ▼                                ▼
-        StatefulSet jenkins-<host>      Deployment jenkins-proxy-<host>
-        (NodePool jenkins-system,                  │
-         AZ us-east-1a, gp3 PVC)                   ▼
-                                          origin-<host>.cd.percona.com
-                                                   │
-                                                   ▼
-                                          EC2 Jenkins master (other region)
-```
-
-- **Terraform/OpenTofu** owns AWS-side state up to "ArgoCD healthy."
-- **ArgoCD** owns everything in-cluster from there (App-of-Apps, ApplicationSets, sync waves).
-- **Karpenter** scales the spot-default workload NodePool; on-demand managed NGs host stateful workloads (`prometheus-system`, `jenkins-system`).
-- **kube-prometheus-stack** scrapes the Jenkins fleet (incl. Hetzner / EC2 plugin metrics, gated on PS-10543/996/997) and exposes Grafana on the same ALB.
+Migrating from `nogueiraanderson/` to `Percona-Lab/` once stable.
 
 ## Repo layout
 
 | Path | Owner | What |
 |---|---|---|
-| `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, AWS Backup |
-| `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets that reconcile `resources/` |
-| `resources/` | ArgoCD-driven | Helm umbrella charts for addons + Jenkins masters + fleet monitoring |
-| `image/` | Docker build | Jenkins 2.x + 249 plugins + 2 Percona forks |
-| `scripts/` | Helpers | `check_versions.py` and other one-shots |
-| `docs/` | Markdown | Architecture, runbooks, ADRs, lessons-from-PoC |
-| `.github/workflows/` | CI | Lint + validate only — no plan, no deploy |
+| `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap |
+| `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
+| `resources/addons/` | ArgoCD | Helm umbrella charts per addon |
+| `image/` | Docker build | Jenkins 2.x + plugins |
+| `docs/` | Markdown | Architecture, runbooks, ADRs, lessons |
+| `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |
 
 ## Quickstart
 
-Local validation:
-```
-just ci
-```
-
-Plan + apply:
-```
-export AWS_PROFILE=<your-profile>      # or copy terraform/local.auto.tfvars.example
-just tf-plan
-just tf-apply
+```sh
+just ci                # local lint + validate
+just tf-plan           # TF plan
+just tf-apply          # TF apply
 ```
 
 State bucket + lock are pre-created — see [`docs/runbooks/bootstrap-state.md`](docs/runbooks/bootstrap-state.md).
 
-## Versions
+## Documentation
 
-Source of truth: [`terraform/versions.tf`](terraform/versions.tf). Verify
-with [`scripts/check_versions.py`](scripts/check_versions.py) before any
-PR that touches a pin.
+| Topic | Doc |
+|---|---|
+| Architecture overview | [`docs/architecture.md`](docs/architecture.md) |
+| Authentication (Duo SAML → Authentik → OIDC) | [`docs/authentication.md`](docs/authentication.md) |
+| ArgoCD bootstrap | [`docs/argocd-bootstrap.md`](docs/argocd-bootstrap.md) |
+| EKS hardening | [`docs/eks-hardening.md`](docs/eks-hardening.md) |
+| Pod Identity (vs IRSA) | [`docs/pod-identity.md`](docs/pod-identity.md) |
+| Karpenter | [`docs/karpenter.md`](docs/karpenter.md) |
+| Observability (LGTM) | [`docs/observability.md`](docs/observability.md) |
+| TLS strategy | [`docs/tls-strategy.md`](docs/tls-strategy.md) |
+| Connectivity | [`docs/connectivity.md`](docs/connectivity.md) |
+| Jenkins fleet scrape | [`docs/jenkins-fleet-scrape.md`](docs/jenkins-fleet-scrape.md) |
+| Runbooks | [`docs/runbooks/`](docs/runbooks/) |
+| ADRs | [`docs/adr/`](docs/adr/) |
+| PoC history & lessons | [`docs/poc-history.md`](docs/poc-history.md), [`docs/lessons-from-poc.md`](docs/lessons-from-poc.md) |
 
-| Component | Pin | Verified |
-|---|---|---|
-| OpenTofu | 1.11.6 | 2026-04-08 |
-| EKS | 1.35 (default, EOS 2027-03-27) | aws eks describe-cluster-versions |
-| terraform-aws-modules/vpc | 6.6.1 | 2026-04-02 |
-| terraform-aws-modules/eks | 21.19.0 | 2026-04-27 |
-| terraform-aws-modules/iam | 6.6.0 | 2026-04-29 |
-| terraform-aws-modules/eks-pod-identity | 2.8.0 | 2026-04-25 |
-| terraform-aws-modules/acm | 6.3.0 | 2026-01-08 |
-| ArgoCD chart | 9.5.9 | 2026-04-29 |
-| AWS LB Controller chart | 3.2.2 | 2026-04-29 |
-| external-dns chart | 1.21.1 | 2026-04-30 |
-| Karpenter | 1.12.0 | 2026-04-24 |
-| kube-prometheus-stack | 84.4.0 | 2026-04-29 |
-
-## Status
-
-`rewrite/percona-ci-platform` branch is the incumbent. The previous private
-PoC (single-node eksctl in eu-central-1) lives in this repo's history; key
-learnings are in [`docs/lessons-from-poc.md`](docs/lessons-from-poc.md) and
-[`docs/poc-history.md`](docs/poc-history.md).
+Pinned versions: [`terraform/versions.tf`](terraform/versions.tf). Run
+[`scripts/check_versions.py`](scripts/check_versions.py) before changing pins.
 
 ## Contributing
 
 - `just ci` must pass before PR.
 - Pre-commit hooks mirror CI ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)).
 - ADRs in [`docs/adr/`](docs/adr/) — propose architecture changes there first.
-- Commit format: `type(scope): subject` (no AI footers).
+- Commit format: `type(scope): subject`. No AI footers.
 
 ## License
 
