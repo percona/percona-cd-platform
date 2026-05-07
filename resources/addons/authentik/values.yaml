@@ -99,14 +99,18 @@ authentik:
   worker:
     replicas: 1
 
-  # Mount our declarative bootstrap blueprint (templates/blueprint-grafana.yaml)
-  # into the worker so it reconciles SAML Source + groups Property Mapping +
-  # Grafana OAuth2 Provider + Application on every worker boot. The keypair
-  # the SAML Source references is uploaded by templates/bootstrap-keypair-job.yaml
-  # (a one-shot Job; runs as an ArgoCD PostSync hook).
+  # Mount our declarative bootstrap blueprints into the worker so it
+  # reconciles each consumer's OAuth2 Provider + Application on every
+  # worker boot. The keypair referenced by the SAML Source (in the
+  # grafana blueprint) is uploaded by templates/bootstrap-keypair-job.yaml
+  # — a one-shot Job that runs as an ArgoCD PostSync hook.
+  #
+  # One ConfigMap per consumer keeps blast-radius small: a syntax error
+  # in one consumer's blueprint doesn't break the others.
   blueprints:
     configMaps:
       - authentik-blueprint-grafana
+      - authentik-blueprint-argocd
 
   # Bundled Bitnami Postgres — adequate for v1 (single Authentik replica,
   # session DB only). Migrate to RDS when scaling Authentik horizontally.

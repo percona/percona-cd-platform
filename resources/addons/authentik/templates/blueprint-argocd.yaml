@@ -27,7 +27,8 @@ metadata:
   name: authentik-blueprint-argocd
   namespace: {{ .Release.Namespace }}
   labels:
-    blueprints.goauthentik.io/instance: "true"
+    {{- /* Required label for the chart's blueprint mount path. */}}
+    app.kubernetes.io/component: blueprint
 data:
   argocd-bridge.yaml: |
     version: 1
