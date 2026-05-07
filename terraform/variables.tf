@@ -39,7 +39,7 @@ variable "vpc_cidr" {
 variable "argocd_hostname" {
   description = "Public hostname for ArgoCD UI. external-dns publishes the ALB alias."
   type        = string
-  default     = "argocd.cd.percona.com"
+  default     = "argo.cd.percona.com"
 }
 
 variable "grafana_hostname" {
