@@ -1,0 +1,92 @@
+{{/*
+NGINX bearer-token validator running as a sidecar in the alloy-gateway Pod.
+
+External clients hit this nginx (ports 9009, 3100, 4318 on the Pod IP via
+the alloy-gateway-alloy Service). Each server block enforces
+`Authorization: Bearer <token>` against the value of $BEARER_TOKEN, which
+nginx picks up at startup from the env var (sourced from the
+alloy-gateway-bearer Secret synced by ExternalSecret). The Authorization
+header is stripped before proxy_pass so the upstream Alloy never sees the
+token. Alloy listens only on loopback (127.0.0.1:19009 / 13100 / 14318) per
+the receiver port shift in values.yaml; OTLP gRPC stays on 0.0.0.0:4317
+(cluster-internal-only via the bundled Service, no Ingress).
+
+Token rotation: update AWS Secrets Manager
+percona-ci-platform/alloy-gateway/bearer, ESO refresh (1h default) +
+nginx pod reload (kubectl rollout restart) materialises the new token.
+
+ADR 0013 (Layer 1 of the two-layer auth model). Layer 2 is the ALB
+inbound-CIDRs allowlist annotation rendered in templates/ingress.yaml.
+
+The official nginx image's envsubst preprocessor expands ${BEARER_TOKEN}
+inside *.template files at startup. NGINX_ENVSUBST_FILTER restricts
+substitution to that one variable so $http_authorization, $request_id,
+etc. survive verbatim.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-gateway-nginx-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth-sidecar
+data:
+  default.conf.template: |
+    # Mimir push (Prometheus remote_write).
+    server {
+      listen 9009;
+      server_name _;
+      client_max_body_size 100m;
+
+      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+        return 401;
+      }
+
+      location / {
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "";
+        proxy_set_header Connection "";
+        proxy_pass http://127.0.0.1:19009;
+      }
+    }
+
+    # Loki push.
+    server {
+      listen 3100;
+      server_name _;
+      client_max_body_size 100m;
+
+      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+        return 401;
+      }
+
+      location / {
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "";
+        proxy_set_header Connection "";
+        proxy_pass http://127.0.0.1:13100;
+      }
+    }
+
+    # Tempo OTLP HTTP push.
+    server {
+      listen 4318;
+      server_name _;
+      client_max_body_size 100m;
+
+      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+        return 401;
+      }
+
+      location / {
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "";
+        proxy_set_header Connection "";
+        proxy_pass http://127.0.0.1:14318;
+      }
+    }

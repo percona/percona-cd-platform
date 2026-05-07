@@ -24,6 +24,9 @@ metadata:
     # alloy-gateway-alloy is a ClusterIP Service; LBC default of `instance`
     # would need NodePort/LoadBalancer.
     alb.ingress.kubernetes.io/target-type: ip
+    {{- with .Values.ingress.inboundCidrs }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ join "," . | quote }}
+    {{- end }}
 spec:
   ingressClassName: alb
   rules:
@@ -56,6 +59,9 @@ metadata:
     # alloy-gateway-alloy is a ClusterIP Service; LBC default of `instance`
     # would need NodePort/LoadBalancer.
     alb.ingress.kubernetes.io/target-type: ip
+    {{- with .Values.ingress.inboundCidrs }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ join "," . | quote }}
+    {{- end }}
 spec:
   ingressClassName: alb
   rules:
@@ -88,6 +94,9 @@ metadata:
     # alloy-gateway-alloy is a ClusterIP Service; LBC default of `instance`
     # would need NodePort/LoadBalancer.
     alb.ingress.kubernetes.io/target-type: ip
+    {{- with .Values.ingress.inboundCidrs }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ join "," . | quote }}
+    {{- end }}
     # Tempo OTLP-HTTP (4318); OTLP-gRPC (4317) needs an NLB or HTTP/2 path.
     # gRPC support over ALB requires backend-protocol-version annotations
     # which add complexity — start with HTTP, add gRPC in a follow-up.

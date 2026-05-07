@@ -1,37 +1,54 @@
-# Grafana Alloy gateway — Deployment with public ALB Ingress.
+# Grafana Alloy gateway: Deployment with public ALB Ingress fronted by a
+# per-Pod NGINX bearer-token sidecar.
 #
 # Use case: external pushers (Jenkins masters in 5 regions, Hetzner cloud
-# plugin metrics, future PMM agents) ship metrics/logs/traces into the
-# in-cluster Mimir/Loki/Tempo via this gateway. The cluster never exposes
-# its Mimir/Loki/Tempo distributors directly — Alloy is the auth + buffer +
-# forward boundary.
+# plugin metrics, future PMM agents, future EC2 plugin metrics) ship
+# metrics, logs, and traces into the in-cluster Mimir/Loki/Tempo via this
+# gateway. The cluster never exposes its Mimir/Loki/Tempo distributors
+# directly. Alloy is the auth, buffer, and forward boundary.
 #
 # Three ALB-fronted hostnames (set by addons ApplicationSet valuesObject):
-#   - {{ ingress.hosts.mimir }} → /api/v1/push   → Mimir distributor
-#   - {{ ingress.hosts.loki  }} → /loki/api/v1/push → Loki distributor
-#   - {{ ingress.hosts.tempo }} → :4317 (gRPC) / :4318 (HTTP) → Tempo distributor
+#   - {{ ingress.hosts.mimir }} -> /api/v1/push       -> Mimir distributor
+#   - {{ ingress.hosts.loki  }} -> /loki/api/v1/push  -> Loki distributor
+#   - {{ ingress.hosts.tempo }} -> :4318 (HTTP)       -> Tempo distributor
+#     (OTLP gRPC :4317 stays cluster-internal, no Ingress, no auth)
 #
-# Auth model for v1: ALB-level CIDR allowlist (operator populates
-# alb.ingress.kubernetes.io/inbound-cidrs in local.auto.tfvars / addon
-# overrides). Bearer-token enforcement via NGINX sidecar is a follow-up
-# hardening item — see docs/eks-hardening.md.
+# Auth model (ADR 0013, two independent layers):
+#   Layer 1: NGINX bearer-token sidecar inside the Pod. nginx listens on
+#            ports 9009/3100/4318, enforces `Authorization: Bearer <token>`,
+#            strips the header, and proxy_passes to Alloy on loopback at
+#            127.0.0.1:19009/13100/14318. Token sourced from AWS Secrets
+#            Manager via ExternalSecret (templates/external-secret-bearer.yaml)
+#            and exposed as the BEARER_TOKEN env var to the nginx container.
+#   Layer 2: ALB inbound-CIDRs allowlist set via valuesObject
+#            ingress.inboundCidrs in argocd-bootstrap/applicationsets/addons.yaml
+#            (operator populates with the 9 EC2 master EIPs + 3 cluster
+#            NAT-GW EIPs).
 
-# Local-scope keys consumed by templates/ingress.yaml (rendered below)
+# Local-scope keys consumed by templates/ingress.yaml.
 ingress:
   hosts:
     mimir: ""
     loki: ""
     tempo: ""
+  # Operator-supplied list of CIDRs allowed to reach the ALB receivers.
+  # Empty list = annotation not rendered = ALB stays open (defence in
+  # depth still active via Layer 1 bearer auth, but Layer 2 disabled).
+  # Populated via the addons ApplicationSet valuesObject from
+  # cluster-secret annotations sourced in terraform/variables.tf.
+  inboundCidrs: []
 
 alloy:
   alloy:
     configMap:
       content: |-
-        // Prometheus remote_write receiver (Jenkins master agents push here).
+        // Prometheus remote_write receiver. Bound to loopback only;
+        // the NGINX bearer-auth sidecar (templates/configmap-nginx-auth.yaml)
+        // listens on 9009 for external clients and proxy_passes here.
         prometheus.receive_http "default" {
           http {
-            listen_address = "0.0.0.0"
-            listen_port    = 9009
+            listen_address = "127.0.0.1"
+            listen_port    = 19009
           }
           forward_to = [prometheus.remote_write.mimir.receiver]
         }
@@ -45,11 +62,11 @@ alloy:
           }
         }
 
-        // Loki push receiver (Jenkins console → external promtail/alloy → here).
+        // Loki push receiver. Loopback-only, nginx fronts on 3100.
         loki.source.api "default" {
           http {
-            listen_address = "0.0.0.0"
-            listen_port    = 3100
+            listen_address = "127.0.0.1"
+            listen_port    = 13100
           }
           forward_to = [loki.write.default.receiver]
         }
@@ -60,13 +77,15 @@ alloy:
           }
         }
 
-        // OTLP receiver for external traces (CI pipeline instrumentation).
+        // OTLP receiver. HTTP (14318) is loopback, fronted by nginx on 4318.
+        // gRPC (4317) stays Pod-IP-bound for cluster-internal pushers via
+        // the alloy-gateway-alloy Service; no Ingress, no nginx, no auth.
         otelcol.receiver.otlp "default" {
           grpc {
             endpoint = "0.0.0.0:4317"
           }
           http {
-            endpoint = "0.0.0.0:4318"
+            endpoint = "127.0.0.1:14318"
           }
           output {
             traces = [otelcol.exporter.otlp.tempo.input]
@@ -91,12 +110,100 @@ alloy:
     podDisruptionBudget:
       minAvailable: 1
 
+    # Mount the nginx config template (rendered from
+    # templates/configmap-nginx-auth.yaml) plus the writable scratch
+    # dirs nginx needs when readOnlyRootFilesystem is on. The bearer
+    # token itself is consumed via env var on the nginx container, not
+    # mounted, so its Secret is not in this list.
+    volumes:
+      extra:
+        - name: nginx-auth-conf
+          configMap:
+            name: alloy-gateway-nginx-auth
+        - name: nginx-conf-d
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+
+    # NGINX bearer-token sidecar (ADR 0013 Layer 1). Sits in front of
+    # Alloy's loopback receivers, validates Authorization: Bearer
+    # <token> against the BEARER_TOKEN env var sourced from the
+    # alloy-gateway-bearer Secret (templates/external-secret-bearer.yaml),
+    # strips the header, and proxy_passes to localhost.
+    extraContainers:
+      - name: nginx-auth
+        image: nginx:1.27-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: prom-rw
+            containerPort: 9009
+            protocol: TCP
+          - name: loki-push
+            containerPort: 3100
+            protocol: TCP
+          - name: otlp-http
+            containerPort: 4318
+            protocol: TCP
+        env:
+          - name: BEARER_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: alloy-gateway-bearer
+                key: bearer_token
+          - name: NGINX_ENVSUBST_TEMPLATE_DIR
+            value: /etc/nginx/templates
+          - name: NGINX_ENVSUBST_OUTPUT_DIR
+            value: /etc/nginx/conf.d
+          # Restrict envsubst to BEARER_TOKEN so $http_authorization,
+          # $request_id, etc. survive verbatim.
+          - name: NGINX_ENVSUBST_FILTER
+            value: '^BEARER_TOKEN$'
+        volumeMounts:
+          - name: nginx-auth-conf
+            mountPath: /etc/nginx/templates
+            readOnly: true
+          - name: nginx-conf-d
+            mountPath: /etc/nginx/conf.d
+          - name: nginx-cache
+            mountPath: /var/cache/nginx
+          - name: nginx-run
+            mountPath: /var/run
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 101
+          runAsGroup: 101
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        readinessProbe:
+          tcpSocket:
+            port: 9009
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: 9009
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
   # Subchart Service stays as default (port 12345, management/gossip).
-  # Receiver ports (Loki 3100, Prom 9009, OTLP 4317/4318) are exposed by
-  # a separate Service `{{ .Release.Name }}-alloy` rendered by the
-  # wrapper template at templates/service-receivers.yaml. The upstream
-  # alloy chart 1.8.0 does not honour `service.extraPorts`, so the
-  # additional Service is the only way to surface those ports for the
-  # ALB Ingress backends in templates/ingress.yaml.
+  # Receiver ports (9009, 3100, 4318) are owned by the nginx sidecar in
+  # the same Pod; the wrapper Service `{{ .Release.Name }}-alloy`
+  # (templates/service-receivers.yaml) maps Service ports to those Pod
+  # ports. OTLP gRPC (4317) is exposed by the same wrapper Service but
+  # routes directly to Alloy (no auth, cluster-internal only). The
+  # upstream alloy chart 1.8.0 does not honour `service.extraPorts`, so
+  # the wrapper Service remains the source of truth for the receiver
+  # surface.
   service:
     enabled: true
