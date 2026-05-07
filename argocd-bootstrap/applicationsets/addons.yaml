@@ -98,12 +98,20 @@ spec:
                   - '{{ metadata.annotations.grafana_hostname }}'
 
             # Alloy gateway — public ALB hostnames for external pushers.
-            alloy-gateway:
-              ingress:
-                hosts:
-                  mimir: '{{ metadata.annotations.lgtm_push_mimir }}'
-                  loki: '{{ metadata.annotations.lgtm_push_loki }}'
-                  tempo: '{{ metadata.annotations.lgtm_push_tempo }}'
+            # Wrapper chart: `ingress.hosts` MUST be top-level. The wrapper's
+            # templates/ingress.yaml reads `.Values.ingress.hosts` directly
+            # (the only real subchart is `alloy`, see alloy-gateway/Chart.yaml).
+            # Nesting under `alloy-gateway:` lands the values at
+            # `.Values.alloy-gateway.ingress.hosts`, which the wrapper never
+            # reads, so the Ingress conditional renders nothing and the ALB +
+            # Route53 records are never created (NXDOMAIN). Same trap as the
+            # authentik `host` / `saml` block below; PS-10997 Phase 2.5
+            # follow-up.
+            ingress:
+              hosts:
+                mimir: '{{ metadata.annotations.lgtm_push_mimir }}'
+                loki: '{{ metadata.annotations.lgtm_push_loki }}'
+                tempo: '{{ metadata.annotations.lgtm_push_tempo }}'
 
             # AWS LBC — pass vpcId so the controller skips IMDS at boot.
             # Without this, the controller's `failed to fetch VPC ID from
