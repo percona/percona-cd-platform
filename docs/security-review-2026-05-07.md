@@ -81,7 +81,7 @@ those are wired.
 - **B1.** Enumerate every IAM principal with `secretsmanager:GetSecretValue *` or scoped to `percona-ci-platform/*`. SSO `AdministratorAccess` via Identity Center hits this trivially. List the human roles and bots that have it — that's the realistic compromise pool.
 - **B2.** Resource policy on the Secrets Manager secret restricting reads to `aws:PrincipalArn` = ESO IRSA role + a named break-glass role only. Cuts the blast radius to two principals.
 - **B3.** CloudTrail alarm: `GetSecretValue` on `percona-ci-platform/authentik/config` from any principal **other than** the ESO role → page.
-- **B4.** Once a real Authentik admin user is provisioned (federated to Duo with MFA), revoke the akadmin local-login (set `is_active=False`, or remove from `default-authentication-flow`'s allowed users). Right now akadmin is the persistent god-mode bypass of Duo MFA. **Highest-value fix in this report.**
+- **B4.** ~~Once a real Authentik admin user is provisioned (federated to Duo with MFA), revoke the akadmin local-login.~~ **Addressed 2026-05-07** by setting `user_fields: []` on `default-authentication-identification` (commit landing alongside this update). The Authentik frontend now auto-redirects to Duo with no form rendered, so the form-based MFA bypass for akadmin is gone. akadmin still exists as a user; recovery is via `ak create_recovery_key` in the worker pod, which requires `kubectl exec` to the `authentik` namespace. The bar has moved from "anyone with the akadmin password" to "anyone with cluster-admin."
 - **B5.** Rotate `AUTHENTIK_BOOTSTRAP_TOKEN` periodically. The migration creates the token once; old tokens stay valid until manually deleted from Directory → Tokens.
 
 ## Attack chain C — Legitimate "percona"-group employee (TA-3) — REAL
@@ -188,8 +188,8 @@ silently dying breaks all auth and there's no warning.
 
 What I'd land first if this were my system:
 
-1. **B4 — kill the akadmin local-login** once a federated admin exists. *Highest leverage. Removes the persistent Duo-MFA bypass.*
-2. **E1 — NetworkPolicy default-deny on `authentik`** (and other high-value namespaces). *Containment for any future RCE-class CVE.*
+1. ~~**B4 — kill the akadmin local-login**~~ — landed 2026-05-07 via `user_fields: []`. *Removed the persistent Duo-MFA bypass.*
+2. **E1 — NetworkPolicy default-deny on `authentik`** (and other high-value namespaces). *Now the highest-priority remaining item. Containment for any future RCE-class CVE.*
 3. **C1 — drop `percona` group from Grafana ALLOWED_GROUPS, switch to `grafana_cd_users`.** *Reduces Loki read pool from every employee to a controlled set.*
 4. **B2 — Secrets Manager resource policy** restricting reads to ESO + break-glass.
 5. **F1 — rotate the SAML SP keypair** to invalidate any copies of the pre-rename key.

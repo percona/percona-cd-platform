@@ -155,19 +155,38 @@ data:
 
       # ---- 5. Wire the Duo source into the default identification stage ----
       # Authentik's default-authentication-identification stage ships with
-      # `sources: []` — meaning the login page only shows the username form,
-      # never the SAML source button. Patch the stage to include duo-saml so
-      # users see "Sign in with Duo SSO" on Authentik's login screen and the
-      # whole identification step delegates to Duo.
+      # `sources: []` and `user_fields: ["username", "email"]` — meaning the
+      # login page renders a username/email form and never offers the SAML
+      # source button. Patch the stage to:
       #
-      # We don't drop user_fields entirely (would break the akadmin emergency
-      # path until disabled). Instead we set show_source_labels=true and add
-      # the source to `sources` — Authentik renders both options, with the
-      # SAML source as a clickable button.
+      #   1. Add duo-saml to `sources` so the SAML round-trip is reachable.
+      #   2. Set `user_fields: []` to hide the local username/email form
+      #      entirely. With one source + empty user_fields, the frontend
+      #      renderer at web/src/flow/stages/identification/IdentificationStage.ts
+      #      L136-151 auto-redirects the browser straight to the SAML IdP —
+      #      users never see an Authentik form, just go to Duo.
+      #   3. show_source_labels=true so when the auto-redirect doesn't fire
+      #      (e.g. browser back-button to Authentik with multiple sources
+      #      registered later), the source button shows its label, not just
+      #      its icon.
+      #
+      # Why drop user_fields: the username form was a Duo-MFA bypass for the
+      # local akadmin user (akadmin is a local Authentik user, not
+      # Duo-federated, so passing it through the username form skipped Duo).
+      # Closing the form closes the bypass. Recovery for akadmin is now via
+      # Authentik's official troubleshooting path: `ak create_recovery_key
+      # <minutes> akadmin` in the worker pod generates a one-shot URL that
+      # bypasses the identification stage entirely. See
+      # docs/runbooks/authentik-bootstrap.md "Lockout recovery — akadmin".
+      #
+      # Validation guard: IdentificationStageSerializer.validate() rejects
+      # user_fields=[] AND sources=[] together. We have one source, so the
+      # blueprint applies cleanly.
       - model: authentik_stages_identification.identificationstage
         identifiers:
           name: default-authentication-identification
         attrs:
+          user_fields: []
           sources:
             - !KeyOf duo-saml-source
           show_source_labels: true

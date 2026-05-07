@@ -66,8 +66,57 @@ contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin'
 `GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS` gates entry to `grafana_cd_admins
 grafana_cd_users` only — non-members are denied at the OIDC step.
 
-After the soak (~1 day), flip `GF_AUTH_DISABLE_LOGIN_FORM=true` in
-`resources/addons/grafana/values.yaml` to remove the local-admin path.
+Both consumers now run SSO-only:
+
+- Grafana — `GF_AUTH_DISABLE_LOGIN_FORM=true` (closed in commit `684095d`).
+- Authentik itself — `default-authentication-identification` stage has
+  `user_fields: []`, so the username/email form is not rendered. With a
+  single SAML source registered, the frontend auto-redirects directly to
+  Duo. The akadmin local-login path is no longer reachable from the
+  browser; recovery is documented below.
+
+## Lockout recovery — akadmin
+
+If SSO is broken (Duo down, SAML SP cert expired, blueprint mis-applied)
+the only path back into Authentik admin is via the worker pod's `ak`
+CLI. Two procedures, in order of preference.
+
+**A. One-shot recovery URL (preferred — does not change any state).**
+
+```bash
+kubectl -n authentik exec deploy/authentik-worker -c worker -- \
+  ak create_recovery_key 10 akadmin
+# → https://auth.cd.percona.com/if/flow/default-recovery-flow/?token=...
+```
+
+The URL is valid for the given duration (minutes; default 60). Open it
+in a clean browser session — it bypasses the identification stage
+entirely and lands you in Authentik admin as `akadmin`. Token is
+single-use.
+
+**B. Reset akadmin password + log in via the unbroken flow.**
+
+Only useful if the recovery flow itself is somehow broken.
+
+```bash
+kubectl -n authentik exec -it deploy/authentik-server -c server -- \
+  ak changepassword akadmin
+```
+
+Then visit the recovery flow directly: `https://auth.cd.percona.com/if/flow/default-recovery-flow/`.
+Note: the *authentication* flow at `/if/flow/default-authentication-flow/`
+will still auto-redirect to Duo because of `user_fields: []`.
+
+**Pre-requisites for either path:**
+
+- The `authentik-worker` (procedure A) or `authentik-server` (procedure
+  B) pod must be Running.
+- You need `kubectl exec` access to the `authentik` namespace — same
+  bar as cluster-admin in this cluster.
+
+If both pods are down, the recovery story is "wait for ArgoCD to
+re-roll them, or fix the underlying chart issue" — there is no API or
+UI shortcut.
 
 ## Troubleshooting
 

@@ -147,12 +147,15 @@ trip is confirmed, the form is disabled. Recovery moves to in-pod
   recovery path (Grafana `grafana-cli admin reset-admin-password`,
   ArgoCD admin Secret, Jenkins script console). `priorityClassName:
   platform-system-critical` blocks Karpenter consolidation.
-- **akadmin local-login path stays open.** Authentik's default
-  identification stage now shows the Duo SSO source button, but the
-  username field is still rendered as a fallback for emergency recovery
-  of the akadmin user itself. Disable later by setting
-  `default-authentication-identification` stage's `user_fields: []` once
-  we have a tested out-of-band recovery for akadmin.
+- **akadmin local-login is closed at the browser surface** as of 2026-05-07
+  (`user_fields: []` on the identification stage). With one registered
+  source, the frontend auto-redirects to Duo without rendering an
+  Authentik form — closing the previous Duo-MFA bypass via the local
+  `akadmin` user. Recovery is via `ak create_recovery_key <minutes>
+  akadmin` in the worker pod (Authentik's official troubleshooting
+  procedure); see [runbook](../runbooks/authentik-bootstrap.md#lockout-recovery--akadmin).
+  This raises the bar for "use akadmin to bypass Duo" from "anyone with
+  the password" to "anyone with kubectl exec on the cluster."
 - **No automation for Duo SP record changes.** Cert rotation, ACS URL
   changes, and group attribute mappings all require an HD JSM ticket or
   IT-Ops Slack. Tracked separately under hardening item #21 (PrometheusRule
