@@ -1,0 +1,33 @@
+{{/*
+Hetzner Cloud Jenkins plugin dashboard (PS-10997 Phase 3).
+
+Wraps dashboards/hetzner-plugin.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it (sidecar.dashboards block in values.yaml lines
+220-225, searchNamespace=ALL). The `grafana_folder` annotation
+targets the existing "LGTM + Karpenter" folder used by the
+gnetId-fetched dashboards in dashboardProviders, so this
+sidecar-imported dashboard lands next to them in the UI.
+
+This is the first repo-owned dashboard shipped via the sidecar
+ConfigMap pattern; existing LGTM dashboards in this addon use the
+file-based dashboardProvider with grafana.com gnetIds.
+
+Datasource UIDs `prometheus` and `loki` are bound to the
+datasources block in values.yaml (around line 200) and resolve
+once the chart renders.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-hetzner-plugin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "LGTM + Karpenter"
+data:
+  hetzner-plugin.json: |-
+{{ .Files.Get "dashboards/hetzner-plugin.json" | indent 4 }}

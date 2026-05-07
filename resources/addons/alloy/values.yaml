@@ -22,7 +22,24 @@ alloy:
         // Scrape pod logs from the node's filesystem (cri-containerd shape).
         loki.source.kubernetes "pods" {
           targets    = discovery.kubernetes.pods.targets
+          forward_to = [loki.relabel.jenkins_master.receiver]
+        }
+
+        // PS-10997 Phase 2.5b: align in-cluster Jenkins log labels with
+        // the metric label schema. Pods in namespace=jenkins-<inst> are
+        // the in-cluster Jenkins masters (today: jenkins-ps3-k8s; later
+        // ps57-k8s / ps80-k8s as the EKS migration progresses). Inject
+        // a master label so LogQL queries can use {master=~"$master"}
+        // identically to PromQL across the dashboard variable.
+        loki.relabel "jenkins_master" {
           forward_to = [loki.write.default.receiver]
+
+          rule {
+            source_labels = ["namespace"]
+            regex         = "jenkins-(.+)"
+            target_label  = "master"
+            replacement   = "$1"
+          }
         }
 
         // Forward to the in-cluster Loki distributor.

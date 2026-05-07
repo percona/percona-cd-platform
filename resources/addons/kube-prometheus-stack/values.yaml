@@ -53,6 +53,51 @@ kube-prometheus-stack:
       # Robustness: WAL workload that we cannot afford to lose mid-flight.
       priorityClassName: platform-stateful-high
 
+      # PS-10997 Phase 2: scrape /hetzner-prometheus on each of the 10
+      # Percona Jenkins masters. Endpoint is gated by Jenkins.SYSTEM_READ;
+      # auth is HTTP basic with the shared `prom-scraper` user, token
+      # mounted from Secret `jenkins-scraper-auth` (provisioned by the
+      # ExternalSecret in templates/external-secret-jenkins-scraper.yaml).
+      #
+      # Connectivity is hybrid: 7 masters reachable via VPC peering with
+      # the cluster VPC (resolved to private IPs via the Route53 private
+      # hosted zone for cd.percona.com); 3 masters share CIDR 10.177/22
+      # with another peered master and fall back to public+NAT-GW. The
+      # `master` relabel makes the path transparent to dashboards.
+      #
+      # The 5 PENDING masters (HPI pinned, awaiting next JVM restart)
+      # will return up=0 until they activate; expected and benign.
+      additionalScrapeConfigs:
+        - job_name: jenkins-hetzner
+          metrics_path: /hetzner-prometheus
+          scheme: https
+          scrape_interval: 60s
+          scrape_timeout: 30s
+          basic_auth:
+            username: prom-scraper
+            password:
+              name: jenkins-scraper-auth
+              key: password
+          static_configs:
+            - targets:
+                - ps3.cd.percona.com:443
+                - rel.cd.percona.com:443
+                - pg.cd.percona.com:443
+                - ps57.cd.percona.com:443
+                - psmdb.cd.percona.com:443
+                - pxb.cd.percona.com:443
+                - ps80.cd.percona.com:443
+                - pmm.cd.percona.com:443
+                - cloud.cd.percona.com:443
+                - pxc.cd.percona.com:443
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: '([^.]+)\.cd\.percona\.com:.*'
+              target_label: master
+              replacement: '$1'
+            - target_label: fleet
+              replacement: percona-jenkins
+
   alertmanager:
     alertmanagerSpec:
       # HA: 3 replicas, anti-affinity by hostname so a single node loss

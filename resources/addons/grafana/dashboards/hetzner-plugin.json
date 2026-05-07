@@ -1,0 +1,291 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alarms",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Hetzner Cloud Jenkins plugin (v103.percona.9+): circuit breakers, provisioning latency, rate-limit headroom, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. PS-10997 Phase 3 MVP.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "DC circuit breaker state",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "0 = CLOSED (healthy), 1 = HALF_OPEN (probing), 2 = OPEN (skipping). One series per master/location.",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 20, "spanNulls": true},
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "CLOSED", "color": "green"}, "1": {"text": "HALF_OPEN", "color": "yellow"}, "2": {"text": "OPEN", "color": "red"}}}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 2}
+            ]
+          },
+          "min": 0, "max": 2
+        }
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "max by (master, location) (hetzner_dc_circuit_breaker_state{master=~\"$master\"})",
+          "legendFormat": "{{master}} {{location}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Provisioning success rate (5m)",
+      "type": "gauge",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Successful provisions / total provision attempts, last 5 minutes. Returns NaN if no attempts in window.",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.8},
+              {"color": "green", "value": 0.95}
+            ]
+          }
+        }
+      },
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showThresholdLabels": false, "showThresholdMarkers": true, "orientation": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(rate(hetzner_provision_attempts_total{master=~\"$master\",outcome=\"success\"}[5m])) / clamp_min(sum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m])), 1e-9)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Provision latency p95 by template (5m)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "95th percentile of hetzner_provision_duration_seconds_bucket, grouped by template label.",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10}
+        }
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "right"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "histogram_quantile(0.95, sum by (template, le) (rate(hetzner_provision_duration_seconds_bucket{master=~\"$master\"}[5m])))",
+          "legendFormat": "{{template}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "API rate-limit headroom",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Hetzner API requests remaining in the current rate-limit window. Threshold at 200 (typically 5–10 % of full budget).",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 200},
+              {"color": "green", "value": 500}
+            ]
+          }
+        }
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "right"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "min by (credentials_id, master) (hetzner_api_rate_limit_remaining{master=~\"$master\"})",
+          "legendFormat": "{{master}} {{credentials_id}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pending provisions vs orphan reap rate",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "In-flight provisions (gauge) overlaid with orphan-server reap rate (5m). A growing gap suggests provision attempts are leaking.",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10}
+        }
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "right"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by (master) (hetzner_provisioning_pending{master=~\"$master\"})",
+          "legendFormat": "{{master}} pending",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum by (master) (rate(hetzner_orphan_servers_reaped_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "{{master}} reap/s",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Anomaly counters (last 1h)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Increase over the last hour: CRW death canary, uncaught provision exceptions, ghost nodes removed, DC failovers. Any non-zero value warrants a glance at the logs panel below.",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "graphMode": "none", "colorMode": "value", "textMode": "value_and_name", "orientation": "horizontal"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(increase(hetzner_provision_underflow_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "CRW underflow",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(increase(hetzner_provision_uncaught_exceptions_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Uncaught",
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(increase(hetzner_ghost_nodes_removed_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Ghost nodes",
+          "refId": "C"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(increase(hetzner_dc_failover_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "DC failovers",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Hetzner-plugin log stream",
+      "type": "logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "SLF4J output from the patched plugin (HetznerCloud, NodeCallable, OrphanedNodesCleaner, DcCircuitBreaker, HetznerApiClient, RateLimitInterceptor, RetryInterceptor, TemplateErrorTracker). For ps3-k8s the stream is live today; for the EC2 masters it appears once the master-side Alloy systemd unit ships (Phase 2.5c).",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 24},
+      "options": {"showTime": true, "showLabels": false, "showCommonLabels": false, "wrapLogMessage": true, "prettifyLogMessage": false, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending"},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "{master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Log rate by level (5m)",
+      "type": "timeseries",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "WARN/ERROR/INFO message rate parsed via logfmt. Unparseable lines are dropped; non-zero ERROR rate is the leading indicator most operators want.",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 34},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "bars", "fillOpacity": 50, "lineWidth": 1}
+        }
+      },
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "sum by (level) (rate({master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | logfmt | level=~\"WARN|ERROR|INFO\" [5m]))",
+          "legendFormat": "{{level}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["hetzner", "jenkins", "lgtm", "ps-10997"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(hetzner_plugin_info, master)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Master",
+        "multi": true,
+        "name": "master",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(hetzner_plugin_info, master)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-3h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Hetzner Cloud Plugin",
+  "uid": "hetzner-plugin",
+  "version": 1,
+  "weekStart": ""
+}
