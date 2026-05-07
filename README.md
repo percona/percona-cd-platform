@@ -34,6 +34,7 @@ State bucket + lock are pre-created — see [`docs/runbooks/bootstrap-state.md`]
 |---|---|
 | Architecture overview | [`docs/architecture.md`](docs/architecture.md) |
 | Authentication (Duo SAML → Authentik → OIDC) | [`docs/authentication.md`](docs/authentication.md) |
+| Red-team review (2026-05-07) | [`docs/security-review-2026-05-07.md`](docs/security-review-2026-05-07.md) |
 | ArgoCD bootstrap | [`docs/argocd-bootstrap.md`](docs/argocd-bootstrap.md) |
 | EKS hardening | [`docs/eks-hardening.md`](docs/eks-hardening.md) |
 | Pod Identity (vs IRSA) | [`docs/pod-identity.md`](docs/pod-identity.md) |
