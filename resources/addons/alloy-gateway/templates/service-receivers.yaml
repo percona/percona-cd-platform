@@ -1,0 +1,46 @@
+{{/*
+Receiver Service for the Alloy gateway.
+
+The upstream `alloy` chart 1.8.0 only exposes the management port 12345
+on its bundled Service (named `{{ .Release.Name }}`). The push receivers
+configured in the wrapper's `alloy.alloy.configMap.content` (Loki 3100,
+Prometheus remote_write 9009, OTLP gRPC 4317, OTLP HTTP 4318) are bound
+inside the pods but no Service exposes them — making them unreachable
+from outside the pod (and from the ALB Ingresses in `templates/ingress.yaml`).
+
+This second Service fills that gap. Name `{{ .Release.Name }}-alloy`
+matches the Ingress backend service name; selector targets the same
+Pods as the chart-bundled Service. PS-10997 Phase 2.5 follow-up to the
+addons.yaml unwrap fix.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-alloy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: receiver
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: prom-rw
+      port: 9009
+      targetPort: 9009
+      protocol: TCP
+    - name: loki-push
+      port: 3100
+      targetPort: 3100
+      protocol: TCP
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP

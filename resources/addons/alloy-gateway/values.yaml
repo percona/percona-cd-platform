@@ -91,22 +91,12 @@ alloy:
     podDisruptionBudget:
       minAvailable: 1
 
+  # Subchart Service stays as default (port 12345, management/gossip).
+  # Receiver ports (Loki 3100, Prom 9009, OTLP 4317/4318) are exposed by
+  # a separate Service `{{ .Release.Name }}-alloy` rendered by the
+  # wrapper template at templates/service-receivers.yaml. The upstream
+  # alloy chart 1.8.0 does not honour `service.extraPorts`, so the
+  # additional Service is the only way to surface those ports for the
+  # ALB Ingress backends in templates/ingress.yaml.
   service:
     enabled: true
-    extraPorts:
-      - name: prom-rw
-        port: 9009
-        targetPort: 9009
-        protocol: TCP
-      - name: loki-push
-        port: 3100
-        targetPort: 3100
-        protocol: TCP
-      - name: otlp-grpc
-        port: 4317
-        targetPort: 4317
-        protocol: TCP
-      - name: otlp-http
-        port: 4318
-        targetPort: 4318
-        protocol: TCP
