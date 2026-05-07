@@ -47,12 +47,22 @@ resource "helm_release" "argocd" {
         "server.insecure" = true
       }
       # argocd-cm — Authentik OIDC config + URL.
-      # admin.enabled stays true during the initial soak (24h) so we have
-      # a recovery path if SSO config has a typo. Flip to false in a
-      # follow-up commit once SSO is validated end-to-end.
+      # admin.enabled: false — local 'admin' login form disabled after
+      # SSO was validated end-to-end (browser flow + CLI). SSO-only path.
+      #
+      # Recovery if Authentik / Duo / SAML SP cert is broken:
+      #   kubectl -n argocd patch cm argocd-cm --type merge \
+      #     -p '{"data":{"admin.enabled":"true"}}'
+      #   kubectl -n argocd rollout restart deploy/argocd-server
+      #   # then reset the admin password via the bcrypt'd argocd-secret:
+      #   kubectl -n argocd patch secret argocd-secret --type=json \
+      #     -p '[{"op":"remove","path":"/data/admin.password"},
+      #          {"op":"remove","path":"/data/admin.passwordMtime"}]'
+      #   kubectl -n argocd rollout restart deploy/argocd-server
+      #   # the new admin password prints to argocd-server stdout on boot
       cm = {
         url             = "https://${var.argocd_hostname}"
-        "admin.enabled" = "true"
+        "admin.enabled" = "false"
         "oidc.config"   = <<-OIDC
           name: Authentik
           issuer: https://${var.authentik_hostname}/application/o/argocd/
