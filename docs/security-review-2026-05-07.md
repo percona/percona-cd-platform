@@ -104,7 +104,7 @@ query everything.
 
 **Mitigations**:
 
-- **C1.** ~~Drop `percona` from `ALLOWED_GROUPS`.~~ **Addressed 2026-05-07.** `ALLOWED_GROUPS = "grafana_cd_admins"` only; the `percona → Viewer` leg was removed from `ROLE_ATTRIBUTE_PATH`. The Loki read pool dropped from "every Perconian with a Duo account" to the three named operators in `grafana_cd_admins`. To re-open Viewer access later, define `grafana_cd_users` via Santiago and append.
+- **C1.** Drop `percona` from `ALLOWED_GROUPS`. **Status: re-opened 2026-05-07 — accepted risk during bootstrap.** Briefly tightened to `grafana_cd_admins`-only earlier the same day, then re-opened to `grafana_cd_admins percona` so Percona employees can dogfood the platform without waiting on a dedicated `grafana_cd_users` Duo group from IT-Ops. The chain C exposure (every Viewer → all-namespace Loki query) is back. Proper close: ask Santiago for `grafana_cd_users`, swap `percona` for it, and tighten Loki datasource to Editor+ via Grafana 11 OSS RBAC. Track as a follow-up alongside C4.
 - **C2.** Audit Authentik log level (target `info`, not `debug`). Reduce information density of `{namespace="authentik"}` logs. Authentik already persists structured events to Postgres; stdout doesn't need to mirror them.
 - **C3.** Loki tenant separation. Today `auth_enabled: false` (single-tenant). Per-namespace ACLs in Loki = multi-tenant rebuild — out of scope, but track. In the meantime, **don't trust Loki with anything you don't want every Viewer to read.**
 - **C4.** Grafana datasource permissions: Grafana 10+ supports per-datasource role gates. Restrict the Loki datasource to Editor+ for now. Loses log-search for ICs, gains containment.
@@ -190,7 +190,7 @@ What I'd land first if this were my system:
 
 1. ~~**B4 — kill the akadmin local-login**~~ — landed 2026-05-07 via `user_fields: []`. *Removed the persistent Duo-MFA bypass.*
 2. **E1 — NetworkPolicy default-deny on `authentik`** (and other high-value namespaces). *Now the highest-priority remaining item. Containment for any future RCE-class CVE.*
-3. ~~**C1 — drop `percona` group from Grafana ALLOWED_GROUPS**~~ — landed 2026-05-07. *Reduced Loki read pool to the three named operators.*
+3. **C1 — restrict Viewer pool to a dedicated `grafana_cd_users` group + Loki datasource Editor+ gate.** *Re-opened 2026-05-07 as accepted bootstrap-phase risk; needs Santiago coordination + Grafana 11 RBAC config to close properly.*
 4. **B2 — Secrets Manager resource policy** restricting reads to ESO + break-glass.
 5. **F1 — rotate the SAML SP keypair** to invalidate any copies of the pre-rename key.
 6. **D2 — ConfigMap-mutation audit alert** on `authentik` namespace.

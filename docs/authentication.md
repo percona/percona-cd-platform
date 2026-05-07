@@ -102,24 +102,28 @@ Each consuming app applies its own role rules against the `groups` claim.
 ### Grafana
 
 ```yaml
-GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS: "grafana_cd_admins"
+GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS: "grafana_cd_admins percona"
 GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: |
-  contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin' || 'Viewer'
+  contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin'
+    || contains(groups[*], 'percona') && 'Viewer'
+    || 'Viewer'
 ```
 
-`grafana_cd_admins` is the only allowed group during the bootstrap
-phase — lands as Grafana server-admin (full curate rights).
-`ALLOWED_GROUPS` rejects users not in the group at the token-validation
-step. The previously-included broad `percona` group was dropped on
-2026-05-07 to close [security review chain C](security-review-2026-05-07.md)
-(every employee with a Duo account had Viewer access and could query
-Loki for every namespace's logs).
+`grafana_cd_admins` lands as Grafana server-admin (full curate rights).
+`percona` (every Perconian) lands as Viewer. `ALLOWED_GROUPS` rejects
+users in neither group at the token-validation step.
 
-To re-open Viewer access for a specific cohort later, register a Duo
-group (e.g. `grafana_cd_users`), append it to `ALLOWED_GROUPS`, and
-add a `contains(groups[*], 'grafana_cd_users') && 'Viewer'` leg before
-the fallback. Editor tier: same shape with `grafana_cd_editors` and
-`'Editor'`.
+Bootstrap-phase trade-off: re-opening `percona` for Viewer access
+re-introduces [security review chain C](security-review-2026-05-07.md)
+(every Viewer can query Loki and read all-namespace auth/build
+telemetry). Accepted as known exposure during bootstrap to skip the
+IT-Ops coordination round-trip for a dedicated `grafana_cd_users` group.
+The proper close is: ask Santiago for `grafana_cd_users`, swap `percona`
+for it, and tighten the Loki datasource to Editor+ via Grafana 11 RBAC.
+
+To add Editor capability later, register a Duo group (e.g.
+`grafana_cd_editors`) and append a `contains()` clause before the
+Viewer leg.
 
 ## Adding a new OIDC client
 
