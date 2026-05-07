@@ -62,7 +62,6 @@ resource "helm_release" "argocd" {
             - openid
             - profile
             - email
-            - groups
           requestedIDTokenClaims:
             groups:
               essential: true

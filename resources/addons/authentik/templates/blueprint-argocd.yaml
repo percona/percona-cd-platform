@@ -54,11 +54,19 @@ data:
             - matching_mode: regex
               url: ^http://localhost:[0-9]+/auth/callback$
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          # No separate `groups` scope mapping is needed (or available):
+          # Authentik 2026.2.2 does NOT ship one. The default `profile`
+          # scope mapping already emits `groups` per its expression at
+          # blueprints/system/providers-oauth2.yaml:45 —
+          #   "groups": [group.name for group in request.user.groups.all()]
+          # ArgoCD reads `groups` from the id_token claims map regardless
+          # of which scope it came in (util/oidc/oidc.go:575-580 +
+          # util/jwt/jwt.go:50-75 in argo-cd v3.4.1), so binding profile
+          # is sufficient. Same set as the working grafana provider.
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-            - !Find [authentik_providers_oauth2.scopemapping, [managed, "goauthentik.io/providers/oauth2/scope-groups"]]
 
       - model: authentik_core.application
         identifiers:
