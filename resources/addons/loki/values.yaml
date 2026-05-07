@@ -91,11 +91,24 @@ loki:
   backend:
     replicas: 0
 
-  # Caches stay enabled (chart-bundled memcached).
+  # Caches stay enabled (chart-bundled memcached). Chart defaults size
+  # the chunks cache at 8192 MB and the results cache at 1024 MB
+  # (allocatedMemory), then renders a memory request/limit at 1.2x
+  # — that's ~10 GB and ~1.2 GB respectively. With no Karpenter
+  # NodePool and the system NG nodes at 84-99% memory, both pods stay
+  # Pending forever.
+  #
+  # Right-size for current scale (no logs flowing yet, low query volume).
+  # Easy to bump these later as traffic grows. Scaling expectation:
+  # double allocatedMemory for every ~10x increase in stored chunks.
   chunksCache:
     enabled: true
+    allocatedMemory: 256
+    allocatedCPU: 100m
   resultsCache:
     enabled: true
+    allocatedMemory: 128
+    allocatedCPU: 100m
 
   # No bundled MinIO — S3 only.
   minio:
