@@ -112,7 +112,7 @@
       "title": "API rate-limit headroom",
       "type": "timeseries",
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "description": "Hetzner API requests remaining in the current rate-limit window. Threshold at 200 (typically 5–10 % of full budget).",
+      "description": "Hetzner API requests remaining in the current rate-limit window. Threshold at 200 (typically 5 to 10 percent of full budget).",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
       "fieldConfig": {
         "defaults": {
