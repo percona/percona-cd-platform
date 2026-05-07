@@ -1,5 +1,9 @@
 # Authentication — Duo → Authentik → OIDC bridge
 
+Architecture decision and rejected alternatives in
+[ADR 0012](adr/0012-authentik-saml-oidc-bridge.md). This doc covers
+operational detail and recovery paths.
+
 ## Why a bridge
 
 Percona's internal IdP is **Duo SSO** (FreeIPA-backed, owned by IT-Ops).
