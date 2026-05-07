@@ -75,6 +75,38 @@ Both consumers now run SSO-only:
   Duo. The akadmin local-login path is no longer reachable from the
   browser; recovery is documented below.
 
+## Promote operator to internal
+
+Authentik 2024.10+ enrolls source-federated users as `user_type=external`
+by default, and externals are blocked from `/if/admin/` and `/if/user/`
+with "Interface can only be accessed by internal users." For operators
+who need to visit Authentik directly (debug a flow, inspect events,
+rotate a token), promote them to `internal` after their first Duo
+login enrolls the user record.
+
+```bash
+# 1. Identify the user pk (look for the email or username)
+kubectl -n authentik exec deploy/authentik-worker -c worker -- /bin/sh -c \
+  'curl -sS -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
+   "http://authentik-server.authentik.svc.cluster.local/api/v3/core/users/?include_groups=false"' \
+  | jq -r '.results[] | "\(.pk)\t\(.username)\ttype=\(.type)"'
+
+# 2. PATCH to internal (replace <PK> with the value from step 1)
+kubectl -n authentik exec deploy/authentik-worker -c worker -- /bin/sh -c \
+  'curl -sS -X PATCH \
+     -H "Authorization: Bearer $AUTHENTIK_BOOTSTRAP_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d "{\"type\": \"internal\"}" \
+     "http://authentik-server.authentik.svc.cluster.local/api/v3/core/users/<PK>/"' \
+  | jq '{username, type, is_active}'
+```
+
+Promoted users keep their groups and OIDC role mappings — only their
+ability to access Authentik's own UI changes. **Don't promote
+non-operators.** Non-admin users access Grafana via the OIDC redirect
+and never need to load Authentik's UI; keeping them as `external`
+matches least-privilege.
+
 ## Lockout recovery — akadmin
 
 If SSO is broken (Duo down, SAML SP cert expired, blueprint mis-applied)

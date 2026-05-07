@@ -190,3 +190,13 @@ data:
           sources:
             - !KeyOf duo-saml-source
           show_source_labels: true
+
+      # Note on user types: we deliberately do NOT override
+      # default-source-enrollment-write's user_type. Authentik defaults
+      # source-enrolled users to user_type=external in 2024.10+, which is
+      # what we want — non-admin users only ever see Authentik via the
+      # OIDC redirect flow (Grafana → Authentik → Duo → back), so the
+      # external type blocks nothing. It only matters for operators who
+      # visit /if/admin/ directly to debug; promote them one-shot via the
+      # API. See docs/runbooks/authentik-bootstrap.md "Promote operator
+      # to internal" for the procedure.

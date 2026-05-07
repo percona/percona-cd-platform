@@ -104,7 +104,7 @@ query everything.
 
 **Mitigations**:
 
-- **C1.** Drop `percona` from `ALLOWED_GROUPS`. Create `grafana_cd_users` for the explicit Viewer audience and use that. Reduces the read pool from "every employee" to "people who need Grafana." Trivial change in `resources/addons/grafana/values.yaml:144` plus a Duo group.
+- **C1.** ~~Drop `percona` from `ALLOWED_GROUPS`.~~ **Addressed 2026-05-07.** `ALLOWED_GROUPS = "grafana_cd_admins"` only; the `percona → Viewer` leg was removed from `ROLE_ATTRIBUTE_PATH`. The Loki read pool dropped from "every Perconian with a Duo account" to the three named operators in `grafana_cd_admins`. To re-open Viewer access later, define `grafana_cd_users` via Santiago and append.
 - **C2.** Audit Authentik log level (target `info`, not `debug`). Reduce information density of `{namespace="authentik"}` logs. Authentik already persists structured events to Postgres; stdout doesn't need to mirror them.
 - **C3.** Loki tenant separation. Today `auth_enabled: false` (single-tenant). Per-namespace ACLs in Loki = multi-tenant rebuild — out of scope, but track. In the meantime, **don't trust Loki with anything you don't want every Viewer to read.**
 - **C4.** Grafana datasource permissions: Grafana 10+ supports per-datasource role gates. Restrict the Loki datasource to Editor+ for now. Loses log-search for ICs, gains containment.
@@ -190,7 +190,7 @@ What I'd land first if this were my system:
 
 1. ~~**B4 — kill the akadmin local-login**~~ — landed 2026-05-07 via `user_fields: []`. *Removed the persistent Duo-MFA bypass.*
 2. **E1 — NetworkPolicy default-deny on `authentik`** (and other high-value namespaces). *Now the highest-priority remaining item. Containment for any future RCE-class CVE.*
-3. **C1 — drop `percona` group from Grafana ALLOWED_GROUPS, switch to `grafana_cd_users`.** *Reduces Loki read pool from every employee to a controlled set.*
+3. ~~**C1 — drop `percona` group from Grafana ALLOWED_GROUPS**~~ — landed 2026-05-07. *Reduced Loki read pool to the three named operators.*
 4. **B2 — Secrets Manager resource policy** restricting reads to ESO + break-glass.
 5. **F1 — rotate the SAML SP keypair** to invalidate any copies of the pre-rename key.
 6. **D2 — ConfigMap-mutation audit alert** on `authentik` namespace.
