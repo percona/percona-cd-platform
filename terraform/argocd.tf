@@ -19,11 +19,13 @@ resource "helm_release" "argocd" {
   chart            = local.charts.argo_cd.name
   version          = local.charts.argo_cd.ver
 
-  # HA topology. server.ingress is intentionally disabled — ArgoCD will
-  # create its own Ingress later via the addons ApplicationSet, once
-  # aws-load-balancer-controller and external-dns are healthy. Going through
-  # GitOps for the Ingress means a single source of truth for ALB groups,
-  # health checks, and ACM ARN reference.
+  # HA topology + Authentik OIDC + ALB Ingress at argo.cd.percona.com.
+  #
+  # Why values stay in TF (not GitOps): ArgoCD bootstraps itself via this
+  # helm_release. Putting OIDC config / Ingress in a self-managed addon
+  # at resources/addons/argocd/ would create a chicken-and-egg on first
+  # bring-up. Keeping it here means TF apply rolls argocd-server with the
+  # right cm + new Ingress in one step.
   values = [yamlencode({
     global = {
       domain = var.argocd_hostname
@@ -31,6 +33,58 @@ resource "helm_release" "argocd" {
       # Karpenter consolidation never preempts the GitOps engine. Class
       # is created by resources/addons/priorityclasses/ at sync-wave -100.
       priorityClassName = "platform-system-critical"
+    }
+    # Drop the bundled Dex pod entirely — Authentik replaces it.
+    dex = {
+      enabled = false
+    }
+    configs = {
+      # argocd-cmd-params-cm — argocd-server speaks plain HTTP on 8080
+      # since TLS terminates at the ALB. Without this, the chart's default
+      # self-signed cert breaks the ALB target-group health check and
+      # browsers see 502.
+      params = {
+        "server.insecure" = true
+      }
+      # argocd-cm — Authentik OIDC config + URL.
+      # admin.enabled stays true during the initial soak (24h) so we have
+      # a recovery path if SSO config has a typo. Flip to false in a
+      # follow-up commit once SSO is validated end-to-end.
+      cm = {
+        url             = "https://${var.argocd_hostname}"
+        "admin.enabled" = "true"
+        "oidc.config"   = <<-OIDC
+          name: Authentik
+          issuer: https://${var.authentik_hostname}/application/o/argocd/
+          clientID: argocd
+          clientSecret: $argocd-oidc:client_secret
+          requestedScopes:
+            - openid
+            - profile
+            - email
+            - groups
+          requestedIDTokenClaims:
+            groups:
+              essential: true
+        OIDC
+      }
+      # argocd-rbac-cm — group → role mapping. Reuses the Grafana group
+      # naming for now (single bootstrap-phase admin cohort: Anderson,
+      # Alex Miroshnychenko, Vadim Yalovets in grafana_cd_admins). Split
+      # into dedicated argocd_cd_admins / argocd_cd_users via Santiago
+      # later if the cohorts diverge.
+      #
+      # policy.default: '' (deny by default) — unmapped users get nothing.
+      # scopes: '[groups]' — ArgoCD reads the OIDC `groups` claim only.
+      rbac = {
+        create           = true
+        scopes           = "[groups]"
+        "policy.default" = ""
+        "policy.csv"     = <<-RBAC
+          g, grafana_cd_admins, role:admin
+          g, percona, role:readonly
+        RBAC
+      }
     }
     controller = {
       replicas = 1 # leader-election; chart does not yet support active-active
@@ -47,8 +101,43 @@ resource "helm_release" "argocd" {
         enabled      = true
         minAvailable = 1
       }
+      # Single Ingress, dual-Service via the chart's `controller: aws`
+      # mode: the chart auto-generates an `argogrpc` synthetic Service
+      # with backend-protocol-version=GRPC, and the Ingress condition-
+      # routes Content-Type=application/grpc to it (CLI gRPC), everything
+      # else to argocd-server (UI/REST). Single hostname covers both.
+      #
+      # Joins the existing jenkins-cd ALB IngressGroup — same ALB as
+      # Authentik and Grafana, ACM wildcard *.cd.percona.com already
+      # covers the host, external-dns auto-creates the Route53 record.
+      #
+      # Sticky sessions are NOT needed here: argocd-server is stateless
+      # OIDC-wise (state lives in the argocd.token cookie + OAuth state
+      # param). Different from Authentik's flow which needs in-memory
+      # affinity.
       ingress = {
-        enabled = false
+        enabled          = true
+        controller       = "aws"
+        ingressClassName = "alb"
+        hostname         = var.argocd_hostname
+        path             = "/"
+        pathType         = "Prefix"
+        tls              = true
+        aws = {
+          backendProtocolVersion = "GRPC"
+          serviceType            = "NodePort"
+        }
+        annotations = {
+          "alb.ingress.kubernetes.io/group.name"       = "jenkins-cd"
+          "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
+          "alb.ingress.kubernetes.io/target-type"      = "ip"
+          "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTPS\":443}]"
+          "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+          "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
+          "alb.ingress.kubernetes.io/healthcheck-path" = "/healthz"
+          "alb.ingress.kubernetes.io/healthcheck-port" = "traffic-port"
+          "alb.ingress.kubernetes.io/success-codes"    = "200"
+        }
       }
     }
     repoServer = {
@@ -183,4 +272,54 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
 resource "kubectl_manifest" "argocd_root_app" {
   yaml_body  = file("${path.module}/../argocd-bootstrap/root-app.yaml")
   depends_on = [kubernetes_secret_v1.argocd_cluster]
+}
+
+# ExternalSecret syncing the Authentik-issued OIDC client_secret for ArgoCD
+# from the shared percona-ci-platform/authentik/config bundle into a
+# single-key Secret (argocd-oidc, key client_secret) in the argocd
+# namespace. ArgoCD's `oidc.config` references it as $argocd-oidc:client_secret.
+#
+# CRITICAL: the synced Secret MUST carry label
+# `app.kubernetes.io/part-of: argocd` or argocd-server silently fails to
+# resolve the $secret-name:key reference and OIDC login is broken with no
+# clear error in the logs. This is enforced via the `template.metadata.labels`
+# block below — ESO honors it on the materialized Secret.
+#
+# Why kubectl_manifest (not a chart wrapper or addons ApplicationSet):
+# argocd-server reads $argocd-oidc:client_secret at startup. The Secret
+# must exist before the helm_release upgrade rolls server pods, otherwise
+# the new pods come up with OIDC silently broken until a manual rollout
+# restart. depends_on = [helm_release.argocd] guarantees the argocd
+# namespace exists; ESO reconciliation is fast (seconds), so by the time
+# helm rolls server pods on a cm-checksum change, the Secret is in place.
+# On a TF apply that touches helm values AND this resource together,
+# Terraform applies the kubectl_manifest first (no helm-state diff), so
+# ESO has a head-start before helm starts the rolling update.
+resource "kubectl_manifest" "argocd_oidc_external_secret" {
+  yaml_body = <<-YAML
+    apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    metadata:
+      name: argocd-oidc
+      namespace: argocd
+    spec:
+      refreshInterval: 1h
+      secretStoreRef:
+        kind: ClusterSecretStore
+        name: aws-secrets-manager
+      target:
+        name: argocd-oidc
+        creationPolicy: Owner
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/part-of: argocd
+      data:
+        - secretKey: client_secret
+          remoteRef:
+            key: percona-ci-platform/authentik/config
+            property: AUTHENTIK_OIDC_ARGOCD_CLIENT_SECRET
+  YAML
+
+  depends_on = [helm_release.argocd]
 }

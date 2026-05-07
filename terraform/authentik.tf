@@ -48,6 +48,11 @@ resource "random_password" "authentik_oidc_grafana_client_secret" {
   special = false # OIDC client secret transmitted as basic-auth header
 }
 
+resource "random_password" "authentik_oidc_argocd_client_secret" {
+  length  = 48
+  special = false # OIDC client secret transmitted as basic-auth header
+}
+
 # AUTHENTIK_BOOTSTRAP_TOKEN: at first boot Authentik creates a long-lived API
 # token for the akadmin user with this exact value. Required by the
 # templates/bootstrap-keypair-job.yaml Job (which uploads the SP signing
@@ -81,5 +86,6 @@ resource "aws_secretsmanager_secret_version" "authentik_config" {
     AUTHENTIK_BOOTSTRAP_TOKEN            = random_password.authentik_bootstrap_token.result
     AUTHENTIK_POSTGRESQL__PASSWORD       = random_password.authentik_pg_password.result
     AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET = random_password.authentik_oidc_grafana_client_secret.result
+    AUTHENTIK_OIDC_ARGOCD_CLIENT_SECRET  = random_password.authentik_oidc_argocd_client_secret.result
   })
 }
