@@ -19,7 +19,7 @@ resource "helm_release" "argocd" {
   chart            = local.charts.argo_cd.name
   version          = local.charts.argo_cd.ver
 
-  # HA topology + Authentik OIDC + ALB Ingress at argo.cd.percona.com.
+  # HA topology + Authentik OIDC + ALB Ingress at var.argocd_hostname.
   #
   # Why values stay in TF (not GitOps): ArgoCD bootstraps itself via this
   # helm_release. Putting OIDC config / Ingress in a self-managed addon

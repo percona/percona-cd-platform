@@ -49,7 +49,7 @@ data:
           refresh_token_validity: days=30
           redirect_uris:
             - matching_mode: strict
-              url: https://argo.cd.percona.com/auth/callback
+              url: https://argocd.cd.percona.com/auth/callback
             - matching_mode: regex
               url: ^http://localhost:[0-9]+/auth/callback$
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -65,7 +65,7 @@ data:
         attrs:
           name: ArgoCD
           provider: !Find [authentik_providers_oauth2.oauth2provider, [name, argocd-provider]]
-          meta_launch_url: https://argo.cd.percona.com
+          meta_launch_url: https://argocd.cd.percona.com
           open_in_new_tab: false
           policy_engine_mode: any
           group: ""

@@ -11,10 +11,13 @@ yamllint_ver    := "1.38.0"
 just_ver        := "1.50.0"
 
 # ---------- AWS context ----------
-# Set AWS_PROFILE in your shell; or copy terraform/local.auto.tfvars.example to
-# terraform/local.auto.tfvars (gitignored) and put `aws_profile = "..."` there.
-aws_region := env_var_or_default("AWS_REGION", "us-east-1")
-cluster    := "percona-ci-platform"
+# AWS_PROFILE: set in your shell to override; defaults to percona-dev-admin
+# (the only profile with the IAM scope to manage this cluster's resources).
+# Recipes that touch AWS (tf-plan, tf-apply, tf-destroy, tf-init-backend)
+# inject this so a fresh shell `just tf-apply` works without manual export.
+aws_profile := env_var_or_default("AWS_PROFILE", "percona-dev-admin")
+aws_region  := env_var_or_default("AWS_REGION", "us-east-1")
+cluster     := "percona-ci-platform"
 
 # ---------- top-level ----------
 default: help
@@ -34,7 +37,7 @@ tf-init:
     cd terraform && tofu init -backend=false -upgrade
 
 tf-init-backend:
-    cd terraform && tofu init -upgrade
+    cd terraform && AWS_PROFILE={{aws_profile}} tofu init -upgrade
 
 tf-fmt:
     tofu fmt -recursive
@@ -57,13 +60,18 @@ tf-trivy:
       --ignorefile .trivyignore terraform/
 
 tf-plan:
-    cd terraform && tofu plan -out=tfplan
+    cd terraform && AWS_PROFILE={{aws_profile}} tofu plan -out=tfplan
 
 tf-apply:
-    cd terraform && tofu apply tfplan
+    cd terraform && AWS_PROFILE={{aws_profile}} tofu apply tfplan
+
+# Fast path for routine apply: plan + apply in one shot, auto-approved.
+# Use tf-plan + tf-apply when you want a separate review step.
+tf-apply-now:
+    cd terraform && AWS_PROFILE={{aws_profile}} tofu apply -auto-approve
 
 tf-destroy:
-    cd terraform && tofu destroy
+    cd terraform && AWS_PROFILE={{aws_profile}} tofu destroy
 
 # ---------- gitops / yaml ----------
 yaml-lint:
