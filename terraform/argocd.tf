@@ -126,6 +126,16 @@ resource "helm_release" "argocd" {
         aws = {
           backendProtocolVersion = "GRPC"
           serviceType            = "NodePort"
+          # Per-TG annotations on the auto-generated argocd-server-grpc
+          # Service. AWS LBC's per-Service annotations override the
+          # Ingress-level ones for that specific target group. Required
+          # because the gRPC TG can't accept httpCode 200 (it expects
+          # grpcCode in 0-99). Setting success-codes "0" on the Service
+          # makes the gRPC TG happy; the HTTP TG keeps its httpCode 200
+          # from the Ingress-level success-codes annotation.
+          serviceAnnotations = {
+            "alb.ingress.kubernetes.io/success-codes" = "0"
+          }
         }
         annotations = {
           "alb.ingress.kubernetes.io/group.name"       = "jenkins-cd"
