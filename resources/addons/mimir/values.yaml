@@ -76,6 +76,23 @@ mimir-distributed:
         cluster_label: "mimir-percona-ci"
         cluster_label_verification_disabled: false
 
+      # Per-tenant ingestion rate limit. Defaults are 10000 samples/s
+      # with 200000 burst -- below what the LGTM-only stack pushes
+      # under steady load (kube-state-metrics + node-exporter +
+      # in-cluster Mimir/Loki/Tempo self-metrics + master-side
+      # hetzner_* push from the Jenkins fleet). Hit live as
+      # err-mimir-tenant-max-ingestion-rate / HTTP 429 from
+      # distributor logs after the cutover.
+      #
+      # Single-tenant cluster today (multitenancy_enabled=false above
+      # routes everything to the `anonymous` tenant; the X-Scope-OrgID
+      # header from external pushers is honored on read but ignored on
+      # write under multitenancy=false). 50k/s with 1M burst gives
+      # comfortable headroom for the current ~10k/s sustained.
+      limits:
+        ingestion_rate: 50000
+        ingestion_burst_size: 1000000
+
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
   # in-flight metrics, which is acceptable since durable data lives in S3.

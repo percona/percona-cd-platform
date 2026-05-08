@@ -108,5 +108,20 @@ module "eks" {
     }
   }
 
+  # Karpenter discovers the SGs to attach to its launched nodes via the
+  # `karpenter.sh/discovery=<cluster_name>` tag (see
+  # resources/addons/karpenter/templates/ec2nodeclass-default.yaml). The
+  # private subnets carry it via vpc.tf; tag both the module-managed
+  # cluster SG and node SG here so the tag is durable. Without these,
+  # Karpenter logs `SecurityGroupSelector did not match any
+  # SecurityGroups` and never provisions a node, even though the
+  # NodePool/EC2NodeClass are otherwise ready.
+  security_group_tags = {
+    "karpenter.sh/discovery" = local.cluster_name
+  }
+  node_security_group_tags = {
+    "karpenter.sh/discovery" = local.cluster_name
+  }
+
   tags = local.tags
 }
