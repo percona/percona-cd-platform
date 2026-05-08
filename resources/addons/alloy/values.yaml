@@ -7,9 +7,16 @@
 #   - alloy-gateway (sibling chart): Deployment with public ALB Ingress
 #     for external pushers (Jenkins masters, Hetzner plugin metrics).
 #
-# Metrics scraping is NOT done here — kube-prometheus-stack's Prometheus
-# is the cluster scraper (with remoteWrite to Mimir). Running Alloy +
-# Prometheus in parallel for the same scrape job is duplicative.
+# LGTM-only migration (ADR 0016 incoming):
+#   P3 (this commit): adds `mimir.rules.kubernetes` so PrometheusRule
+#     CRDs sync to Mimir's ruler — Mimir starts evaluating the same
+#     rules kps Prometheus already evaluates. Identical sample
+#     timestamps -> Mimir ingester dedupes harmlessly.
+#   P4 (next): adds `prometheus.operator.{servicemonitors,podmonitors,
+#     probes}` + clustering so Alloy DS replaces kps Prometheus as the
+#     scrape source. The `prometheus.remote_write "mimir"` block below
+#     is wired now so it's ready when P4 lands.
+#   P5/P6: kps Prometheus scaled to 0; chart deleted.
 alloy:
   alloy:
     configMap:
@@ -71,6 +78,65 @@ alloy:
             tls {
               insecure = true
             }
+          }
+        }
+
+        // === Metrics: PrometheusRule -> Mimir ruler (P3) ===
+        //
+        // Watch every PrometheusRule cluster-wide and POST it to Mimir's
+        // ruler API (/api/v1/rules/<namespace>) under tenant `percona-ci`.
+        // The mimir_namespace_prefix lets us trace any rule group back to
+        // its source K8s namespace (e.g. kube-prometheus-stack ->
+        // kps-kube-prometheus-stack inside Mimir).
+        //
+        // Empty selectors mirror today's kps configuration
+        // (ruleSelectorNilUsesHelmValues=false), so the same rule
+        // surface evaluates in BOTH places during the parallel window
+        // (P3 -> P5). Mimir ingester dedupes identical timestamps.
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/mimir/mimir.rules.kubernetes/
+        mimir.rules.kubernetes "ruler" {
+          address                = "http://mimir-ruler.mimir.svc.cluster.local:8080"
+          tenant_id              = "percona-ci"
+          mimir_namespace_prefix = "kps-"
+          sync_interval          = "1m"
+          rule_selector {
+            match_labels = {}
+          }
+          rule_namespace_selector {
+            match_labels = {}
+          }
+        }
+
+        // === Metrics: remote_write sink (declared in P3, used in P4) ===
+        //
+        // Sink for the `prometheus.operator.*` components arriving in P4.
+        // Declared now so the rollout to P4 is just adding the operator
+        // components without touching the writer config in the same PR.
+        //
+        // WAL truncate_frequency=2h matches Mimir distributor restart
+        // tolerance: a longer outage requires reducing scrape interval
+        // or sharding the WAL across more replicas.
+        //
+        // external_labels.cluster disambiguates from kps Prometheus
+        // during the P4 parallel-scrape window so a `count by (cluster)
+        // (up)` query can prove both writers are active before kps
+        // Prom is scaled down in P5.
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/
+        prometheus.remote_write "mimir" {
+          endpoint {
+            url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+            headers = {
+              "X-Scope-OrgID" = "percona-ci",
+            }
+          }
+          external_labels = {
+            cluster = "percona-ci-platform",
+            fleet   = "platform-cluster",
+          }
+          wal {
+            truncate_frequency = "2h"
           }
         }
 
