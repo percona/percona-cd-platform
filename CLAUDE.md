@@ -30,13 +30,23 @@ Verify with `scripts/check_versions.py` before any pin bump.
 5. **Karpenter taint exclusion.** Stateful NGs (`prometheus-system`, `jenkins-system`) carry `workload=<x>:NoSchedule`. Default Karpenter NodePool must `NotIn` that taint.
 6. **EKS hardening checklist.** Before uncommenting `terraform/eks.tf` / `eks-addons.tf` modules, work through `docs/eks-hardening.md` (Top-5: access entries with `authenticationMode=API`, `publicAccessCidrs` allowlist, control-plane logging, VPC CNI prefix delegation, addon-version pinning).
 7. **`percona-dev-admin` cleanup tags.** Two tags are mandatory on all resources or AWS-side cleanup Lambdas wipe them: `iit-billing-tag` (any value — EC2 cleanup terminates instances missing this tag after 10 min) and `PerconaKeep=True` (capital P, capital K — volume cleanup deletes any `available` EBS volume daily without it). Both are in `var.tags` defaults. EBS volumes provisioned by the in-cluster CSI driver carry them via `parameters.tagSpecification_*` in `resources/addons/storageclass-gp3/templates/storageclasses.yaml`.
+8. **Memberlist `cluster_label` isolation.** Mimir/Loki/Tempo charts default `cluster_label_verification_disabled: true`; without a unique `cluster_label` per stack, gossip cross-pollinates and Loki ingester pods land in Mimir's `collectors/ring`, breaking PromQL with `cortex.Ingester Unimplemented`. Set per-stack labels in `resources/addons/{mimir,loki,tempo}/values.yaml`. See ADR 0014.
+9. **Loki + S3 Object Lock incompatibility.** Loki's bundled AWS SDK Go v1 doesn't emit `Content-MD5` / `x-amz-checksum-*` on PutObject, so an Object-Lock-enabled bucket rejects every write and ingesters never flush or become Ready. Use lifecycle expiration for retention, not Object Lock. Mimir (SDK v2 via Thanos objstore) is unaffected; Tempo's SDK is at the same risk class. See ADR 0015 and commit `7df2f57`.
+10. **Loki ingester ring resilience.** Set `loki.loki.ingester.autoforget_unhealthy: true` in `resources/addons/loki/values.yaml`. Without it, ungraceful pod terminations pin `UNHEALTHY` ring entries forever and the lifecycler readiness gate never flips Ready; distroless containers make manual `forget` POSTs fragile. Same commit `7df2f57`.
+11. **Push URL + master-label conventions.** `prometheus.receive_http` (the alloy-gateway receiver) accepts `/api/v1/metrics/write`, NOT Mimir's distributor-native `/api/v1/push` (easy 404). Use `master="<inst>.cd"` for EC2 masters and `master="<inst>-k8s"` for in-cluster POC; bare `master="ps3"` collides between ps3.cd and ps3-k8s and triggers `err-mimir-sample-out-of-order`. See ADR 0013 amendments and the `percona-observability` skill.
+12. **alloy-gateway auth split.** The NGINX bearer-auth sidecar strips the `Authorization` header before proxying loopback to inner Alloy receivers. Two-bearer split (separate AWS SM secrets `…/alloy-gateway/bearer` and `…/alloy-gateway/worker-bearer`) recommended for masters vs workers so leak blast-radius is bounded.
+13. **EC2 master IAM drift (active).** ps3.cd has no ec2-instance-connect agent. Live additions on 2026-05-08: `AmazonSSMManagedInstanceCore` (managed) + scoped `AlloyGatewayBearerRead` (inline) on every `jenkins-<inst>-master` role for the 9 EC2 masters. NOT yet reflected in `Percona-Lab/jenkins-pipelines/IaC/<inst>.cd/JenkinsStack.yml` `JMasterRole.ManagedPolicyArns`. CF will drift on next change-set; codify in the next IaC PR.
+
+## End-to-end verification
+
+`scripts/verify-observability.sh [<inst>]` walks the whole LGTM push pipeline (master Hetzner-plugin endpoint, master-side Alloy systemd, ALB + bearer, alloy-gateway pods, Mimir distributor + canary query, Loki distributor + ring + canary query, Grafana). Read-only, exits nonzero on any failure. Default master `ps3`. Pass `--skip-master` to omit SSH-dependent stages.
 
 ## Related repos
 
 | Repo | Purpose |
 |---|---|
 | `Percona-Lab/jenkins-pipelines` | Jenkins pipeline code, cloud.groovy, job definitions (master + hetzner branches) |
-| `nogueiraanderson/hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.7` — DC breakers, type fallback, in-progress Prom metrics for PS-10997) |
+| `nogueiraanderson/hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.11`, DC breakers, type fallback, `/hetzner-prometheus` `UnprotectedRootAction` for PS-10997 push model) |
 | `nogueiraanderson/ec2-plugin` | Patched EC2 plugin (`v5.24.percona.2` — IRSA classloader fix, NPE guards) |
 
 ## Skill loading reminders
