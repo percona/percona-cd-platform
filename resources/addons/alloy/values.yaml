@@ -8,14 +8,14 @@
 #     for external pushers (Jenkins masters, Hetzner plugin metrics).
 #
 # LGTM-only migration (ADR 0016 incoming):
-#   P3 (this commit): adds `mimir.rules.kubernetes` so PrometheusRule
-#     CRDs sync to Mimir's ruler — Mimir starts evaluating the same
-#     rules kps Prometheus already evaluates. Identical sample
-#     timestamps -> Mimir ingester dedupes harmlessly.
-#   P4 (next): adds `prometheus.operator.{servicemonitors,podmonitors,
-#     probes}` + clustering so Alloy DS replaces kps Prometheus as the
-#     scrape source. The `prometheus.remote_write "mimir"` block below
-#     is wired now so it's ready when P4 lands.
+#   P3: added `mimir.rules.kubernetes` so PrometheusRule CRDs sync to
+#     Mimir's ruler — Mimir starts evaluating the same rules kps
+#     Prometheus already evaluates. Identical sample timestamps ->
+#     Mimir ingester dedupes harmlessly.
+#   P4 (this commit): adds `prometheus.operator.{servicemonitors,
+#     podmonitors,probes}` + chart-side clustering. Alloy DS now
+#     scrapes everything kps Prometheus does, in parallel. Both
+#     writers' samples are deduped by Mimir.
 #   P5/P6: kps Prometheus scaled to 0; chart deleted.
 alloy:
   alloy:
@@ -139,6 +139,63 @@ alloy:
             truncate_frequency = "2h"
           }
         }
+
+        // === Metrics: ServiceMonitor / PodMonitor / Probe scrape (P4) ===
+        //
+        // Discovers every monitoring.coreos.com CRD instance cluster-wide
+        // and scrapes the matching endpoints. Empty selectors mirror today's
+        // kps `*SelectorNilUsesHelmValues=false` posture so the same scrape
+        // surface (12 default kps SMs + Loki's SM + KSM + node-exporter +
+        // future Alloy-shipped SMs) lands in Mimir via the remote_write
+        // block above.
+        //
+        // Clustering peer-shards discovered targets across the DS pods —
+        // without it, every DS pod scrapes every target (5x duplication on
+        // a 5-node cluster). The clustering port is wired by the chart
+        // (alloy.alloy.clustering.enabled below).
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.operator.servicemonitors/
+        prometheus.operator.servicemonitors "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.operator.podmonitors/
+        prometheus.operator.podmonitors "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.operator.probes/
+        prometheus.operator.probes "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+
+    # Cluster mode shards discovered targets across DaemonSet pods.
+    # Required for `prometheus.operator.*` to avoid each DS pod scraping
+    # every target. Cluster name keeps gossip isolated from any future
+    # Alloy clusters in the same VPC.
+    clustering:
+      enabled: true
+      name: "alloy-platform"
+
+    # Scrape + WAL workload needs more headroom than the logs/traces-only
+    # baseline (~50Mi steady). Sized for ~13 SM targets cluster-wide
+    # today, with room for the Alloy operator components arriving in
+    # later phases.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
 
   controller:
     type: daemonset
