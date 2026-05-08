@@ -41,7 +41,17 @@ loki:
     # `logproto.Pusher`), and every PromQL fails. Set a stack-unique label
     # and flip cluster_label_verification on so handshake-time gossip from
     # foreign stacks is rejected.
-    memberlist:
+    #
+    # The chart's memberlist key is `loki.extraMemberlistConfig` (see
+    # charts/loki/templates/config.yaml line 179-194). The plain
+    # `loki.memberlist` block we used previously was a no-op: Helm rendered
+    # the chart's auto-generated `memberlist: { join_members: [...] }` and
+    # ignored the override entirely. Result: cluster_label was never
+    # emitted, gossip cross-pollinated, distributors timed out on
+    # ingester stream-rate RPCs (DeadlineExceeded against zone-b/zone-c
+    # ingesters, ~22 hits/10m), and a querier IP appeared in the ingester
+    # ring on port 7946.
+    extraMemberlistConfig:
       cluster_label: "loki-percona-ci"
       cluster_label_verification_disabled: false
     # Auto-evict ring entries whose heartbeat is past the timeout. Without
