@@ -200,6 +200,19 @@ grafana:
   datasources:
     datasources.yaml:
       apiVersion: 1
+      # Purge a stale `Prometheus` datasource left in the SQLite DB from
+      # the kps era (PR #39 removed kube-prometheus-stack but the persistent
+      # PVC still carries the row). Grafana 12.3.x reconciles provisioning
+      # against existing DB rows; the orphan triggers a generic
+      # `data source not found` provisioning error and crashloops every
+      # fresh pod. `deleteDatasources` is the upstream-supported way to
+      # remove a previously-provisioned entry: list the name + orgId here,
+      # the entry disappears at startup, and the pod boots clean.
+      # Once #39's stale entry is gone everywhere we can remove this block,
+      # but it stays harmless if left in.
+      deleteDatasources:
+        - name: Prometheus
+          orgId: 1
       datasources:
         - name: Mimir
           uid: mimir
