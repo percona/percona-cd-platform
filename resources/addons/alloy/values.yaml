@@ -154,12 +154,16 @@ alloy:
       name: "alloy-platform"
 
     # Scrape + WAL workload needs more headroom than the logs/traces-only
-    # baseline (~50Mi steady). Sized for ~13 SM targets cluster-wide
-    # (Loki SM, KSM SM, NE SM, future Alloy-shipped SMs) plus rule sync.
+    # baseline (~50Mi steady). 512Mi requests / 2Gi limit handles the
+    # current ~13 SM targets cluster-wide (Loki SM, KSM SM, NE SM,
+    # future Alloy-shipped SMs) plus rule sync. The DS runs on every
+    # node including the 4Gi system NG ones — 1Gi requests x 5 pods
+    # left no headroom for Mimir distributors during the LGTM-only
+    # cutover, hence 512Mi.
     resources:
       requests:
-        cpu: 200m
-        memory: 1Gi
+        cpu: 100m
+        memory: 512Mi
       limits:
         memory: 2Gi
 
