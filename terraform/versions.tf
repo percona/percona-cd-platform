@@ -49,10 +49,24 @@ locals {
       name = "karpenter"
       ver  = "1.12.0"
     }
-    kube_prometheus_stack = {
+    # LGTM-only metrics stack (ADR 0016). kube-prometheus-stack was
+    # retired -- Alloy DS owns scrape, Mimir is the long-term store,
+    # Mimir ruler evaluates PrometheusRules. The standalone CRDs +
+    # KSM + node-exporter charts replace what kps used to bundle.
+    prometheus_operator_crds = {
       repo = "https://prometheus-community.github.io/helm-charts"
-      name = "kube-prometheus-stack"
-      ver  = "84.4.0"
+      name = "prometheus-operator-crds"
+      ver  = "28.0.1"
+    }
+    kube_state_metrics = {
+      repo = "https://prometheus-community.github.io/helm-charts"
+      name = "kube-state-metrics"
+      ver  = "7.3.0"
+    }
+    prometheus_node_exporter = {
+      repo = "https://prometheus-community.github.io/helm-charts"
+      name = "prometheus-node-exporter"
+      ver  = "4.55.0"
     }
     # LGTM stack — distributed-mode pins. Versions verified live via
     # `helm search repo grafana/<chart> --versions | head -2` on 2026-05-06.

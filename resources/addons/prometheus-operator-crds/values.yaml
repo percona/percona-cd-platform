@@ -1,0 +1,31 @@
+# prometheus-operator-crds 28.0.1 (AppVersion v0.90.1).
+#
+# `helm.sh/resource-policy: keep` annotation on every CRD so a chart
+# uninstall never deletes them (which would cascade-delete every
+# ServiceMonitor / PrometheusRule cluster-wide). ArgoCD `prune: true`
+# respects the annotation per CRD.
+
+prometheus-operator-crds:
+  crds:
+    alertmanagerconfigs:
+      enabled: true
+    alertmanagers:
+      enabled: true
+    podmonitors:
+      enabled: true
+    probes:
+      enabled: true
+    prometheusagents:
+      enabled: true
+    prometheuses:
+      enabled: true
+    prometheusrules:
+      enabled: true
+    scrapeconfigs:
+      enabled: true
+    servicemonitors:
+      enabled: true
+    thanosrulers:
+      enabled: true
+    annotations:
+      helm.sh/resource-policy: keep

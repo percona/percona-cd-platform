@@ -1,0 +1,17 @@
+# Standalone prometheus-node-exporter. Why standalone instead of in-Alloy
+# `prometheus.exporter.unix`: the unix exporter requires hostPID +
+# host-mounting /proc, /sys, / on the same DS that handles logs, traces,
+# rule sync, and metrics scrape. Standalone keeps the host-priv surface
+# scoped to one DaemonSet that does only this one thing.
+
+prometheus-node-exporter:
+  # Run on every node, including those carrying workload taints
+  # (workload=prometheus, workload=jenkins). Without `Exists`, tainted
+  # nodes don't get an instance and their metrics go dark.
+  tolerations:
+    - operator: Exists
+  priorityClassName: platform-system-critical
+  prometheus:
+    monitor:
+      enabled: true
+      interval: 30s

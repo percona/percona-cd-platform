@@ -1,0 +1,15 @@
+# Standalone kube-state-metrics. Why standalone instead of in-Alloy
+# `prometheus.exporter.kube_state_metrics`: in-Alloy KSM bakes
+# cluster-wide read RBAC for every K8s object kind into the Alloy DS
+# pod that also handles logs, traces, rule sync, and metrics scrape.
+# Standalone keeps that surface scoped to one Deployment.
+
+kube-state-metrics:
+  nodeSelector:
+    node-role: system
+  priorityClassName: platform-system-critical
+  prometheus:
+    monitor:
+      enabled: true
+      interval: 30s
+      honorLabels: true

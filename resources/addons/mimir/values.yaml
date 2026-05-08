@@ -5,6 +5,13 @@
 # which reads cluster-secret annotations populated by terraform/lgtm-storage.tf.
 # Pod Identity (terraform/pod-identity.tf) maps namespace=mimir + SA=mimir to
 # the IAM role with S3 + KMS access scoped to the bucket below.
+#
+# Alertmanager: Mimir's built-in 3-replica STS is the cluster's sole alert
+# router (LGTM-only, ADR 0016). PrometheusRule resources should set their
+# `spec.alerting` routes to
+# `http://mimir-alertmanager.mimir.svc.cluster.local:8080`. Rules sync to
+# Mimir's ruler via the Alloy DS `mimir.rules.kubernetes` component
+# (resources/addons/alloy/values.yaml).
 mimir-distributed:
   serviceAccount:
     create: true

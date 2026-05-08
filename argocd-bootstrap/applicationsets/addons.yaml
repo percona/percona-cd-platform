@@ -45,14 +45,6 @@ spec:
               externalSecretsRoleArn: '{{ metadata.annotations.external_secrets_role_arn }}'
               karpenterQueue: '{{ metadata.annotations.karpenter_sqs_name }}'
 
-            # kube-prometheus-stack overrides — Grafana hostname comes from
-            # terraform var.grafana_hostname. Other addons ignore this key.
-            kube-prometheus-stack:
-              grafana:
-                ingress:
-                  hosts:
-                    - '{{ metadata.annotations.grafana_hostname }}'
-
             # LGTM bucket-name overrides. Each chart's umbrella values.yaml
             # uses placeholders that this block fills from the cluster-secret
             # annotations (terraform/argocd.tf, fed by terraform/lgtm-storage.tf).
