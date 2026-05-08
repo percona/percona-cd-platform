@@ -78,6 +78,20 @@ spec:
                   s3:
                     bucket: '{{ metadata.annotations.tempo_bucket_name }}'
 
+            # Karpenter — interruptionQueue must match the SQS queue created
+            # by terraform/karpenter-prereqs.tf (`<cluster_name>-karpenter`,
+            # i.e. `percona-ci-platform-karpenter`). Without this nested
+            # overlay, the chart used the literal placeholder
+            # `interruptionQueue: percona-ci-platform` from values.yaml, the
+            # interruption controller called sqs:GetQueueUrl on a queue that
+            # doesn't exist, and Karpenter spammed `failed to create valid
+            # sqs provider ... NonExistentQueue` every ~16m. Spot-interruption
+            # / scheduled-event handling silently disabled (provisioning still
+            # worked because the launch path doesn't depend on this queue).
+            karpenter:
+              settings:
+                interruptionQueue: '{{ metadata.annotations.karpenter_sqs_name }}'
+
             # Standalone Grafana — datasource URLs are constructed in-cluster
             # (Service DNS). Grafana SAML was removed: OSS doesn't ship the
             # SAML feature (Enterprise-only). The Authentik bridge takes over
