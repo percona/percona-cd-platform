@@ -180,8 +180,22 @@ grafana:
   # `Prometheus` datasource entry — kube-prometheus-stack is gone and
   # nothing in the repo references `uid: prometheus` (the dashboard
   # JSONs were migrated in the same PR).
+  # Datasource provisioning is split across TWO files so the cross-UID
+  # references in the Tempo entry (tracesToLogsV2/tracesToMetrics/serviceMap
+  # all point at `loki` and `mimir`) resolve. Grafana 12.3.x ships a stricter
+  # provisioner that validates `datasourceUid:` references against the SQLite
+  # DB at parse time. Within a single YAML the referenced datasources aren't
+  # committed yet, and Grafana fails the whole pod with
+  #   level=error msg="Failed to provision data sources"
+  #     error="Datasource provisioning error: data source not found"
+  # The pod then crashloops (`/api/health` never opens since the provisioning
+  # module fails to start). Splitting into a numbered base file (Mimir + Loki)
+  # and a downstream file (Tempo) makes Grafana process them alphabetically:
+  # `00-base.yaml` is parsed and committed first, then `10-tempo.yaml` finds
+  # `loki` and `mimir` UIDs already in the DB. Same pattern Grafana docs
+  # recommend for inter-datasource references.
   datasources:
-    datasources.yaml:
+    00-base.yaml:
       apiVersion: 1
       datasources:
         - name: Mimir
@@ -202,6 +216,9 @@ grafana:
           type: loki
           access: proxy
           url: http://loki-query-frontend.loki.svc.cluster.local:3100
+    10-tempo.yaml:
+      apiVersion: 1
+      datasources:
         - name: Tempo
           uid: tempo
           type: tempo
