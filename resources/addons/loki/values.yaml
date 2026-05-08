@@ -147,5 +147,14 @@ loki:
       enabled: false
     serviceMonitor:
       enabled: true
-    lokiCanary:
-      enabled: false
+
+  # Disable the bundled loki-canary DaemonSet. The chart's canary tries to
+  # POST to `loki-gateway.loki.svc.cluster.local:3100/loki/api/v1/push`, but
+  # we run gateway-less (Alloy DS is the in-cluster gateway, the alloy-gateway
+  # ALB is the external gateway). Without the Service, every canary entry
+  # gets `dial tcp: lookup loki-gateway.loki.svc.cluster.local: no such host`
+  # and the canary spams ~120 NXDOMAIN/min/pod. The chart's canary toggle is
+  # `lokiCanary.enabled` at top level, not under `monitoring.lokiCanary`
+  # (where it had no effect).
+  lokiCanary:
+    enabled: false
