@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bigreq
+  namespace: karpenter-validation
+spec:
+  replicas: 4
+  selector:
+    matchLabels: { app: bigreq }
+  template:
+    metadata:
+      labels: { app: bigreq }
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: karpenter-validation
+  labels:
+    purpose: karpenter-harness
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: harness-cap
+  namespace: karpenter-validation
+spec:
+  hard:
+    requests.cpu: "180"
+    requests.memory: 720Gi
+    limits.cpu: "180"
+    limits.memory: 720Gi
+    pods: "120"
