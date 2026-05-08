@@ -1,0 +1,49 @@
+# Standalone prometheus-operator-crds — decouples the monitoring.coreos.com
+# CRDs from the kube-prometheus-stack lifecycle. Required so:
+#  - the Loki / Tempo / future Alloy ServiceMonitors keep working
+#    after kps is removed (ADR 0016, LGTM-only),
+#  - Alloy DS's `prometheus.operator.{servicemonitors,podmonitors,probes}`
+#    + `mimir.rules.kubernetes` components have their CRDs to consume.
+#
+# AppVersion v0.90.1 matches the operator image kube-prometheus-stack
+# 84.4.0 ships (quay.io/prometheus-operator/prometheus-operator:v0.90.1).
+# When the migration is complete and kps is gone, this chart is the sole
+# CRD owner.
+#
+# During the migration window (P2 -> P6) both kps and this chart create
+# the CRDs. Server-side apply makes that safe: each manager owns the
+# fields it last wrote, and the CRD object itself is idempotent (same
+# spec). Updates from either side converge.
+
+prometheus-operator-crds:
+  crds:
+    # Install every CRD the upstream chart ships. The defaults are all
+    # `enabled: true`; we list them explicitly so a future bump that adds
+    # a new CRD type doesn't silently change behavior here.
+    alertmanagerconfigs:
+      enabled: true
+    alertmanagers:
+      enabled: true
+    podmonitors:
+      enabled: true
+    probes:
+      enabled: true
+    prometheusagents:
+      enabled: true
+    prometheuses:
+      enabled: true
+    prometheusrules:
+      enabled: true
+    scrapeconfigs:
+      enabled: true
+    servicemonitors:
+      enabled: true
+    thanosrulers:
+      enabled: true
+
+    # `helm.sh/resource-policy: keep` annotation so a chart uninstall
+    # never deletes the CRDs (which would cascade-delete every
+    # ServiceMonitor / PrometheusRule cluster-wide). ArgoCD `prune: true`
+    # respects this annotation per CRD.
+    annotations:
+      helm.sh/resource-policy: keep

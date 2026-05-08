@@ -54,6 +54,15 @@ locals {
       name = "kube-prometheus-stack"
       ver  = "84.4.0"
     }
+    # Standalone CRDs — decoupled from kube-prometheus-stack so the
+    # monitoring.coreos.com CRDs survive when kps is removed
+    # (LGTM-only, ADR 0016). AppVersion v0.90.1 must match the operator
+    # image kps ships.
+    prometheus_operator_crds = {
+      repo = "https://prometheus-community.github.io/helm-charts"
+      name = "prometheus-operator-crds"
+      ver  = "28.0.1"
+    }
     # LGTM stack — distributed-mode pins. Versions verified live via
     # `helm search repo grafana/<chart> --versions | head -2` on 2026-05-06.
     mimir_distributed = {
