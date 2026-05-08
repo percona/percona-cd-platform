@@ -200,19 +200,26 @@ grafana:
   datasources:
     datasources.yaml:
       apiVersion: 1
-      # Purge a stale `Prometheus` datasource left in the SQLite DB from
-      # the kps era (PR #39 removed kube-prometheus-stack but the persistent
-      # PVC still carries the row). Grafana 12.3.x reconciles provisioning
-      # against existing DB rows; the orphan triggers a generic
-      # `data source not found` provisioning error and crashloops every
-      # fresh pod. `deleteDatasources` is the upstream-supported way to
-      # remove a previously-provisioned entry: list the name + orgId here,
-      # the entry disappears at startup, and the pod boots clean.
-      # Once #39's stale entry is gone everywhere we can remove this block,
-      # but it stays harmless if left in.
+      # Persistent PVC inherited from the kps era carries 4 datasource rows
+      # (`Mimir`, `Loki`, `Tempo`, `Prometheus (in-cluster scrape)`) with
+      # auto-generated `P*` UIDs. The YAML below provisions Mimir/Loki/Tempo
+      # with static UIDs `mimir`/`loki`/`tempo`. Grafana 12.3.x's reconciler
+      # sees a name match but a UID mismatch on the existing rows, fails to
+      # upsert, and crashloops every fresh pod with the generic
+      # `data source not found` provisioning error.
+      #
+      # Wipe the orphaned rows up-front so the YAML provisions cleanly.
+      # `deleteDatasources` runs before `datasources`; matching is by name
+      # + orgId, so listing the same names below has the effect of "delete
+      # the legacy row, then create the new one with the static UID".
+      # Safe to leave in place — once the rows are gone the deletes are
+      # no-ops on every subsequent restart.
       deleteDatasources:
-        - name: Prometheus
-          orgId: 1
+        - { name: Mimir, orgId: 1 }
+        - { name: Loki, orgId: 1 }
+        - { name: Tempo, orgId: 1 }
+        - { name: "Prometheus (in-cluster scrape)", orgId: 1 }
+        - { name: Prometheus, orgId: 1 }
       datasources:
         - name: Mimir
           uid: mimir
