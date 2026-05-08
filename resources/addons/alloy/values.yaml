@@ -1,15 +1,18 @@
-# Grafana Alloy — DaemonSet for in-cluster observability data plane.
+# Grafana Alloy — DaemonSet for the in-cluster observability data plane.
 #
 # Role split:
-#   - alloy (this chart): DaemonSet, scrapes node + pod logs (kubelet
-#     discovery, /var/log/pods, /var/log/containers) and ships to Loki.
-#     Also accepts OTLP traces from in-cluster apps and forwards to Tempo.
+#   - alloy (this chart): DaemonSet on every node. Scrapes pod logs
+#     (kubelet discovery, /var/log/pods); accepts OTLP traces from
+#     in-cluster apps and ships them to Tempo; discovers and scrapes
+#     ServiceMonitor / PodMonitor / Probe CRDs and ships samples to
+#     Mimir; syncs PrometheusRule CRDs into Mimir's ruler.
 #   - alloy-gateway (sibling chart): Deployment with public ALB Ingress
 #     for external pushers (Jenkins masters, Hetzner plugin metrics).
 #
-# Metrics scraping is NOT done here — kube-prometheus-stack's Prometheus
-# is the cluster scraper (with remoteWrite to Mimir). Running Alloy +
-# Prometheus in parallel for the same scrape job is duplicative.
+# This is the LGTM-only state — kube-prometheus-stack was removed in
+# the same PR (ADR 0016). Mimir is the sole metrics store; the Alloy
+# DS is the sole in-cluster scraper; Mimir's ruler is the sole rule
+# evaluator.
 alloy:
   alloy:
     configMap:
@@ -73,6 +76,92 @@ alloy:
             }
           }
         }
+
+        // === Metrics: ServiceMonitor / PodMonitor / Probe scrape ===
+        //
+        // Discovers every monitoring.coreos.com CRD instance cluster-wide
+        // and scrapes the matching endpoints. Samples flow into the
+        // remote_write sink below and out to Mimir.
+        //
+        // Clustering peer-shards discovered targets across the DS pods --
+        // without it, every DS pod scrapes every target (5x duplication on
+        // a 5-node cluster). The clustering port is wired by the chart
+        // (alloy.alloy.clustering.enabled below).
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.operator.servicemonitors/
+        prometheus.operator.servicemonitors "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+        prometheus.operator.podmonitors "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+        prometheus.operator.probes "all" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+
+        // === Metrics: PrometheusRule -> Mimir ruler ===
+        //
+        // Watch every PrometheusRule cluster-wide and POST it to Mimir's
+        // ruler API (/api/v1/rules/<namespace>) under tenant `percona-ci`.
+        // Empty selectors match everything (no committed PrometheusRule
+        // instances live in main today; consumers add them as needed).
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/mimir/mimir.rules.kubernetes/
+        mimir.rules.kubernetes "ruler" {
+          address       = "http://mimir-ruler.mimir.svc.cluster.local:8080"
+          tenant_id     = "percona-ci"
+          sync_interval = "1m"
+          rule_selector {
+            match_labels = {}
+          }
+          rule_namespace_selector {
+            match_labels = {}
+          }
+        }
+
+        // === Metrics: remote_write to Mimir ===
+        //
+        // Sink for the operator components above. WAL truncate_frequency=2h
+        // matches Mimir distributor restart tolerance.
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/
+        prometheus.remote_write "mimir" {
+          endpoint {
+            url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+            headers = {
+              "X-Scope-OrgID" = "percona-ci",
+            }
+          }
+          wal {
+            truncate_frequency = "2h"
+          }
+        }
+
+    # Cluster mode shards discovered targets across DaemonSet pods.
+    # Required for `prometheus.operator.*` to avoid each DS pod scraping
+    # every target.
+    clustering:
+      enabled: true
+      name: "alloy-platform"
+
+    # Scrape + WAL workload needs more headroom than the logs/traces-only
+    # baseline (~50Mi steady). Sized for ~13 SM targets cluster-wide
+    # (Loki SM, KSM SM, NE SM, future Alloy-shipped SMs) plus rule sync.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
 
   controller:
     type: daemonset

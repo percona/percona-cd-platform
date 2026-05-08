@@ -171,46 +171,48 @@ grafana:
 
   # Datasources auto-provisioned. URLs are in-cluster Service DNS.
   #
-  # Default datasource is the in-cluster Prometheus (kube-prometheus-stack)
-  # because Mimir is currently capacity-constrained on this cluster (no
-  # Karpenter NodePool, system nodes 84-99% mem, prometheus/jenkins NGs
-  # tainted) and most components crashloop / can't schedule. The dashboards
-  # the kube-prometheus-stack chart ships reference ${DS_PROMETHEUS} which
-  # resolves to the default datasource, so they query the working Prometheus.
-  # Once Mimir capacity is addressed, flip isDefault back to Mimir and the
-  # dashboards will transparently route long-term metrics through it.
+  # UIDs are pinned explicitly so dashboard JSON references resolve
+  # deterministically across Grafana reinstalls (a fresh PVC otherwise
+  # generates new auto-derived UIDs and every hardcoded `"uid":"..."` in
+  # committed dashboards breaks).
+  #
+  # Mimir is the sole metrics store (LGTM-only, ADR 0016). There's no
+  # `Prometheus` datasource entry — kube-prometheus-stack is gone and
+  # nothing in the repo references `uid: prometheus` (the dashboard
+  # JSONs were migrated in the same PR).
   datasources:
     datasources.yaml:
       apiVersion: 1
       datasources:
-        - name: Prometheus
-          type: prometheus
-          access: proxy
-          url: http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc.cluster.local:9090
-          isDefault: true
-          jsonData:
-            timeInterval: 30s
         - name: Mimir
+          uid: mimir
           type: prometheus
           access: proxy
           url: http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
+          isDefault: true
           jsonData:
             httpHeaderName1: X-Scope-OrgID
             timeInterval: 60s
+            prometheusType: Mimir
+            manageAlerts: false
           secureJsonData:
             httpHeaderValue1: percona-ci
         - name: Loki
+          uid: loki
           type: loki
           access: proxy
           url: http://loki-query-frontend.loki.svc.cluster.local:3100
         - name: Tempo
+          uid: tempo
           type: tempo
           access: proxy
           url: http://tempo-query-frontend.tempo.svc.cluster.local:3100
           jsonData:
-            tracesToLogs:
+            tracesToLogsV2:
               datasourceUid: loki
             tracesToMetrics:
+              datasourceUid: mimir
+            serviceMap:
               datasourceUid: mimir
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
