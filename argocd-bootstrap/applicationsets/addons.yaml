@@ -135,6 +135,21 @@ spec:
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'
+      # ESO defaults `conversionStrategy: Default`, `decodingStrategy: None`,
+      # and (sometimes) `metadataPolicy` on every ExternalSecret entry. Our
+      # manifests only set `key:`, so ArgoCD diffs the live resource against
+      # the rendered spec forever and the Application stays OutOfSync. The
+      # actual Secret data ESO produces is correct -- this is pure cosmetic
+      # noise on alloy-gateway, authentik, and grafana. Ignoring the three
+      # ESO-defaulted enum fields leaves real drift on `key:` / `secretRef:`
+      # / mapping changes visible.
+      ignoreDifferences:
+        - group: external-secrets.io
+          kind: ExternalSecret
+          jqPathExpressions:
+            - .spec.data[].remoteRef.conversionStrategy
+            - .spec.data[].remoteRef.decodingStrategy
+            - .spec.data[].remoteRef.metadataPolicy
       syncPolicy:
         automated:
           prune: true
