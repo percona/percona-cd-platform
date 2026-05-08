@@ -44,6 +44,17 @@ loki:
     memberlist:
       cluster_label: "loki-percona-ci"
       cluster_label_verification_disabled: false
+    # Auto-evict ring entries whose heartbeat is past the timeout. Without
+    # this, ungraceful pod terminations leave UNHEALTHY entries pinned in
+    # the ring forever, the lifecycler's readiness gate refuses to declare
+    # the new ingester ready ("found an existing instance(s) with a problem
+    # in the ring"), and the ring never quorates. Was hit during the
+    # 2026-05-08 Object-Lock recovery on ps3 canary; the only manual remedy
+    # is forget POSTs to the ring endpoint, but distroless containers make
+    # that fragile. Auto-forget is the upstream-recommended posture for
+    # distributed Loki running on a churning K8s scheduler.
+    ingester:
+      autoforget_unhealthy: true
 
   # Distributed-mode replicas. WAL PVCs use cluster-default `gp3` (multi-AZ,
   # Delete). Ingester chunk flush is ~5min, so WAL is short-lived.
