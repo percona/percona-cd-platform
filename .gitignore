@@ -57,6 +57,8 @@ node_modules/
 # committing them just bloats the repo with vendored upstream charts.
 resources/addons/*/Chart.lock
 resources/addons/*/charts/
+resources/jenkins/*/Chart.lock
+resources/jenkins/*/charts/
 
 # Local kubectl context dumps
 kubeconfig-*.yaml

@@ -95,6 +95,15 @@ locals {
       name = "alloy"
       ver  = "1.8.0"
     }
+    # Jenkins controller chart — wraps the upstream jenkinsci/jenkins chart in
+    # resources/jenkins/master/Chart.yaml. Per-instance values live in
+    # resources/jenkins/master/instances/<host>/values.yaml; the
+    # `jenkins-masters` ApplicationSet renders one Application per instance dir.
+    jenkins = {
+      repo = "https://charts.jenkins.io"
+      name = "jenkins"
+      ver  = "5.9.18"
+    }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }
   }
