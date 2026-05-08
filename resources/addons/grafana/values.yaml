@@ -177,25 +177,36 @@ grafana:
   # committed dashboards breaks). Names are also stable, but Grafana looks
   # up by UID when both are present in panel datasource refs.
   #
-  # Today the `Prometheus` datasource still points at kube-prometheus-stack's
-  # in-cluster Prometheus (the default) and `Mimir` is the long-term store
-  # (master-side Alloy push, X-Scope-OrgID: percona-ci). The LGTM-only
-  # migration (ADR 0016) moves dashboards onto Mimir and re-aliases
-  # `uid: prometheus` to Mimir's query frontend so legacy refs keep working.
+  # `Mimir` is the default datasource: every cluster + external metric
+  # lives there. The 28 chart-shipped sidecar dashboards use a templated
+  # `${datasource}` variable that follows isDefault, so they transparently
+  # query Mimir. The `Prometheus` datasource is kept as a Mimir-pointing
+  # alias so any committed dashboard hardcoding `uid: prometheus` still
+  # works without a JSON edit; once D7 has flipped every literal to
+  # `uid: mimir`, the alias entry can be retired (P6 follow-up).
   datasources:
     datasources.yaml:
       apiVersion: 1
       datasources:
-        - name: Prometheus
-          uid: prometheus
-          type: prometheus
-          access: proxy
-          url: http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc.cluster.local:9090
-          isDefault: true
-          jsonData:
-            timeInterval: 30s
         - name: Mimir
           uid: mimir
+          type: prometheus
+          access: proxy
+          url: http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
+          isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            timeInterval: 60s
+            prometheusType: Mimir
+            manageAlerts: false
+          secureJsonData:
+            httpHeaderValue1: percona-ci
+        # Aliased to Mimir for legacy `uid: prometheus` dashboards.
+        # Retire after D7 (every dashboard JSON migrated). The kps Prom
+        # service URL it used to point at is unreachable once kps's
+        # Prometheus is scaled to 0 in P5b — that's why this alias exists.
+        - name: Prometheus
+          uid: prometheus
           type: prometheus
           access: proxy
           url: http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
