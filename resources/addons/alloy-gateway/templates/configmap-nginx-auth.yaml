@@ -34,17 +34,26 @@ metadata:
     app.kubernetes.io/component: auth-sidecar
 data:
   default.conf.template: |
+    # ALB target-group health-check probes hit /-/ready (set via the
+    # `alb.ingress.kubernetes.io/healthcheck-path: /-/ready` annotation in
+    # templates/ingress.yaml). The check carries no Authorization header,
+    # so a server-level bearer guard returns 401 every probe and the ALB
+    # eventually marks targets unhealthy. Allow /-/ready and /-/healthy
+    # without auth — they expose no secrets, just static OK responses.
+
     # Mimir push (Prometheus remote_write).
     server {
       listen 9009;
       server_name _;
       client_max_body_size 100m;
 
-      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
-        return 401;
-      }
+      location = /-/ready   { return 200 "ready\n"; }
+      location = /-/healthy { return 200 "ok\n"; }
 
       location / {
+        if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+          return 401;
+        }
         proxy_request_buffering off;
         proxy_http_version 1.1;
         proxy_set_header Authorization "";
@@ -59,11 +68,13 @@ data:
       server_name _;
       client_max_body_size 100m;
 
-      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
-        return 401;
-      }
+      location = /-/ready   { return 200 "ready\n"; }
+      location = /-/healthy { return 200 "ok\n"; }
 
       location / {
+        if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+          return 401;
+        }
         proxy_request_buffering off;
         proxy_http_version 1.1;
         proxy_set_header Authorization "";
@@ -78,11 +89,13 @@ data:
       server_name _;
       client_max_body_size 100m;
 
-      if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
-        return 401;
-      }
+      location = /-/ready   { return 200 "ready\n"; }
+      location = /-/healthy { return 200 "ok\n"; }
 
       location / {
+        if ($http_authorization != "Bearer ${BEARER_TOKEN}") {
+          return 401;
+        }
         proxy_request_buffering off;
         proxy_http_version 1.1;
         proxy_set_header Authorization "";
