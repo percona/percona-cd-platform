@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: family-mem
+  namespace: karpenter-validation
+  annotations:
+    karpenter-test/notes: |
+      High memory-to-CPU request ratio (~8Gi per 1 CPU) drives Karpenter
+      toward memory-optimized families (r7i / r7a). Pod anti-affinity
+      forces a fresh node for each replica.
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: family-mem }
+  template:
+    metadata:
+      labels: { app: family-mem }
+    spec:
+      terminationGracePeriodSeconds: 10
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels: { app: family-mem }
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "1"
+              memory: 8Gi
+            limits:
+              cpu: "1"
+              memory: 8Gi

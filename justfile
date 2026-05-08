@@ -121,6 +121,12 @@ status:
 sync-all:
     argocd app list -o name | xargs -n1 argocd app sync
 
+# ---------- Karpenter validation ----------
+# Systematic before/during/after harness for scale-up + scale-down.
+# Plan: ~/.claude/plans/hashed-shimmying-crane.md.
+verify-karpenter *ARGS:
+    AWS_PROFILE={{aws_profile}} scripts/verify-karpenter.sh {{ARGS}}
+
 # ---------- ArgoCD UI port-forward (browser) ----------
 argocd-ui:
     @echo "Open https://localhost:8443 (admin / from initial-admin-secret)"

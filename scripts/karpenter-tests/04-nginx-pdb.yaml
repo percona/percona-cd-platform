@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdb-guarded
+  namespace: karpenter-validation
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: pdb-guarded }
+  template:
+    metadata:
+      labels: { app: pdb-guarded }
+    spec:
+      terminationGracePeriodSeconds: 10
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels: { app: pdb-guarded }
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-guarded
+  namespace: karpenter-validation
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels: { app: pdb-guarded }
