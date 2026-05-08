@@ -180,22 +180,25 @@ grafana:
   # `Prometheus` datasource entry — kube-prometheus-stack is gone and
   # nothing in the repo references `uid: prometheus` (the dashboard
   # JSONs were migrated in the same PR).
-  # Datasource provisioning is split across TWO files so the cross-UID
-  # references in the Tempo entry (tracesToLogsV2/tracesToMetrics/serviceMap
-  # all point at `loki` and `mimir`) resolve. Grafana 12.3.x ships a stricter
-  # provisioner that validates `datasourceUid:` references against the SQLite
-  # DB at parse time. Within a single YAML the referenced datasources aren't
-  # committed yet, and Grafana fails the whole pod with
+  # Provision the three LGTM datasources (Mimir / Loki / Tempo). Grafana
+  # 12.3.x's datasource provisioner has a regression: any cross-datasource
+  # reference (e.g. `tempo.jsonData.tracesToLogsV2.datasourceUid: loki`)
+  # that resolves to a sibling-provisioned UID is validated synchronously
+  # before commit, but the SQLite DB is empty during that pass, so the
+  # provisioner fails the whole pod with
   #   level=error msg="Failed to provision data sources"
   #     error="Datasource provisioning error: data source not found"
-  # The pod then crashloops (`/api/health` never opens since the provisioning
-  # module fails to start). Splitting into a numbered base file (Mimir + Loki)
-  # and a downstream file (Tempo) makes Grafana process them alphabetically:
-  # `00-base.yaml` is parsed and committed first, then `10-tempo.yaml` finds
-  # `loki` and `mimir` UIDs already in the DB. Same pattern Grafana docs
-  # recommend for inter-datasource references.
+  # and the chained module-startup blocks DashboardUpdater + HTTPServer too.
+  # PR-#48 tried splitting into numbered files; Grafana 12.3 still validates
+  # all files in one pass before commit, so the split was a no-op.
+  #
+  # Workaround: ship the datasources WITHOUT inter-datasource correlation
+  # hints (`tracesToLogsV2`, `tracesToMetrics`, `serviceMap`). Trace-to-log
+  # and trace-to-metric jumps still work via the per-panel "Linked" UI in
+  # Explore once a user picks the target datasource by hand. Re-enable the
+  # provisioning hints when Grafana fixes the regression upstream.
   datasources:
-    00-base.yaml:
+    datasources.yaml:
       apiVersion: 1
       datasources:
         - name: Mimir
@@ -216,21 +219,11 @@ grafana:
           type: loki
           access: proxy
           url: http://loki-query-frontend.loki.svc.cluster.local:3100
-    10-tempo.yaml:
-      apiVersion: 1
-      datasources:
         - name: Tempo
           uid: tempo
           type: tempo
           access: proxy
           url: http://tempo-query-frontend.tempo.svc.cluster.local:3100
-          jsonData:
-            tracesToLogsV2:
-              datasourceUid: loki
-            tracesToMetrics:
-              datasourceUid: mimir
-            serviceMap:
-              datasourceUid: mimir
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
   # grafana_dashboard label and auto-imports). kube-prometheus-stack
