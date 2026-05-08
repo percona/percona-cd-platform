@@ -1,22 +1,45 @@
-# kube-prometheus-stack — reconfigured for the LGTM topology.
+# kube-prometheus-stack — staged for removal (LGTM-only, ADR 0016).
 #
-# Role split after L-3:
-#   - Prometheus operator + CRDs: STAYS HERE. Every ServiceMonitor /
-#     PodMonitor / PrometheusRule cluster-wide flows through it.
-#   - Prometheus server: STAYS, but agent-shaped. 24h retention, 10Gi PVC.
-#     remoteWrite ships everything to Mimir; the local PVC is the WAL only.
-#   - Alertmanager: STAYS, scaled to 3 replicas with podAntiAffinity.
-#   - node-exporter, kube-state-metrics: STAY, unchanged.
-#   - Grafana: DISABLED — moved to standalone chart in L-4 with SAML/Duo wiring.
+# State at this commit (P5b):
+#   - Prometheus server: SCALED TO 0. Alloy DS owns scrape (P4). The
+#     PVC is retained for fast rollback (un-scale -> read WAL).
+#   - Alertmanager: STAYS at 3 replicas — Mimir's built-in AM is enabled
+#     but no PrometheusRule routes to it yet. P6 will document the
+#     `mimir-alertmanager.mimir:8080` target and remove kps's AM.
+#   - kube-state-metrics: DISABLED. Standalone chart at
+#     resources/addons/kube-state-metrics/ replaces it.
+#   - node-exporter: DISABLED. Standalone chart at
+#     resources/addons/prometheus-node-exporter/ replaces it.
+#   - prometheus-operator: STAYS — controls AM until P6.
+#   - CRDs: STAYS owned here too (resources/addons/prometheus-operator-crds/
+#     also reconciles them via server-side apply, with `helm.sh/resource-
+#     policy: keep` so kps's prune in P6 doesn't take them down).
+#   - Grafana: DISABLED (long-standing, standalone Grafana addon owns it).
 kube-prometheus-stack:
   crds:
     enabled: true
 
+  # KSM: DISABLED. resources/addons/kube-state-metrics/ replaces it.
+  # The standalone chart's ServiceMonitor is picked up by Alloy DS via
+  # `prometheus.operator.servicemonitors` (P4).
+  kubeStateMetrics:
+    enabled: false
+
+  # node-exporter: DISABLED. resources/addons/prometheus-node-exporter/
+  # replaces it.
+  nodeExporter:
+    enabled: false
+
   prometheus:
     prometheusSpec:
-      # Agent-shaped storage. The bulk of metrics live in Mimir; this PVC
-      # is the WAL Prometheus writes while remoteWrite is in-flight or
-      # catching up after a Mimir blip.
+      # Scaled to 0 — Alloy DS is the scraper now (P4). Keep the
+      # Prometheus CR + PVC around so a rollback is `replicas: 1` and
+      # a few minutes wait, no chart dance.
+      replicas: 0
+
+      # Agent-shaped storage. Retained at scale=0 so the WAL is
+      # available if we need to read recent samples that hadn't yet
+      # flushed to Mimir at the moment we scaled down.
       retention: 24h
       retentionSize: 8GiB
       nodeSelector:
@@ -106,13 +129,3 @@ kube-prometheus-stack:
       patch:
         nodeSelector:
           node-role: system
-
-  prometheus-node-exporter:
-    tolerations:
-      - operator: Exists
-    priorityClassName: platform-system-critical
-
-  kube-state-metrics:
-    nodeSelector:
-      node-role: system
-    priorityClassName: platform-system-critical

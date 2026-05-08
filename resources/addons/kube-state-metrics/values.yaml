@@ -1,0 +1,26 @@
+# Standalone kube-state-metrics. Replaces the kube-prometheus-stack
+# subchart (kps `kubeStateMetrics.enabled: false` lands in this same PR).
+#
+# Why standalone instead of in-Alloy `prometheus.exporter.kube_state_metrics`:
+#   In-Alloy KSM bakes cluster-wide read RBAC (deployments, statefulsets,
+#   daemonsets, replicasets, jobs, cronjobs, pods, services, endpoints,
+#   nodes, namespaces, configmaps, secrets, ...) into the Alloy DS that
+#   also handles logs, traces, rule sync, and metrics scrape. Keeping
+#   KSM in its own Deployment isolates that read surface to a single pod.
+
+kube-state-metrics:
+  # System nodegroup placement (matches the kps subchart it replaces).
+  # See terraform/eks.tf for the system NG taint/label scheme.
+  nodeSelector:
+    node-role: system
+  priorityClassName: platform-system-critical
+
+  # ServiceMonitor for the Alloy DS `prometheus.operator.servicemonitors`
+  # to discover. Also picked up by kps Prom during the parallel-scrape
+  # window (P4) — Mimir dedupes identical samples on identical timestamps,
+  # so a brief overlap during the rollout is harmless.
+  prometheus:
+    monitor:
+      enabled: true
+      interval: 30s
+      honorLabels: true

@@ -1,0 +1,29 @@
+# Standalone prometheus-node-exporter — DaemonSet that exports per-node
+# metrics (cpu, meminfo, diskstats, filesystem, netdev, pressure, ...).
+# Replaces the kube-prometheus-stack subchart (kps `nodeExporter.enabled:
+# false` lands in this same PR).
+#
+# Why standalone instead of in-Alloy `prometheus.exporter.unix`:
+#   The unix exporter requires hostPID + host-mounting `/proc`, `/sys`,
+#   and `/` into the Alloy DS pod. Putting that on the same pod that
+#   handles logs, traces, rule sync, and the in-cluster scrape broadens
+#   the blast radius of any vulnerability and mixes failure domains.
+#   A separate DaemonSet keeps the host-priv surface scoped to one pod
+#   per node that does only this one thing.
+
+prometheus-node-exporter:
+  # Run on every node, including those carrying workload taints
+  # (workload=prometheus, workload=jenkins). Without `Exists`, the
+  # tainted nodes never get an instance and their metrics go dark.
+  tolerations:
+    - operator: Exists
+  priorityClassName: platform-system-critical
+
+  # ServiceMonitor for the Alloy DS `prometheus.operator.servicemonitors`
+  # to discover. Same reasoning as the KSM ServiceMonitor in the sibling
+  # addon: brief overlap with kps's NE scrape during the rollout window
+  # is deduped by Mimir.
+  prometheus:
+    monitor:
+      enabled: true
+      interval: 30s

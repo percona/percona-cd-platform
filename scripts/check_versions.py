@@ -80,10 +80,16 @@ def main() -> int:
     helm_charts = [
         ("argo-cd chart", "argoproj/argo-helm", "argo-cd-", "9.5.9"),
         ("kube-prometheus-stack chart", "prometheus-community/helm-charts", "kube-prometheus-stack-", "84.4.0"),
+        ("prometheus-operator-crds chart", "prometheus-community/helm-charts", "prometheus-operator-crds-", "28.0.1"),
+        ("kube-state-metrics chart", "prometheus-community/helm-charts", "kube-state-metrics-", "7.3.0"),
+        ("prometheus-node-exporter chart", "prometheus-community/helm-charts", "prometheus-node-exporter-", "4.55.0"),
         ("external-dns chart", "kubernetes-sigs/external-dns", "external-dns-helm-chart-", "1.21.1"),
     ]
     for name, repo, prefix, pinned in helm_charts:
-        rels = gh_releases(repo, prefix=prefix, per_page=30)
+        # The prometheus-community/helm-charts monorepo publishes a release
+        # per chart per bump — well over 30/week. per_page=100 keeps less
+        # frequently bumped charts (e.g. prometheus-operator-crds) visible.
+        rels = gh_releases(repo, prefix=prefix, per_page=100)
         latest = rels[0][0].replace(prefix, "") if rels else "?"
         date = rels[0][1] if rels else "?"
         rows.append(Pin(name, pinned, latest, date, status(pinned, latest)))
