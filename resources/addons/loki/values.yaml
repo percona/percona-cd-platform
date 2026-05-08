@@ -34,6 +34,16 @@ loki:
           index:
             prefix: index_
             period: 24h
+    # Isolate Loki's memberlist from neighbouring Mimir/Tempo rings. Without
+    # this, gossip cross-pollinates: Loki ingesters end up in the Mimir
+    # `collectors/ring`, Mimir querier dials them at :9095 expecting the
+    # `cortex.Ingester` service, gets Unimplemented (Loki only registers
+    # `logproto.Pusher`), and every PromQL fails. Set a stack-unique label
+    # and flip cluster_label_verification on so handshake-time gossip from
+    # foreign stacks is rejected.
+    memberlist:
+      cluster_label: "loki-percona-ci"
+      cluster_label_verification_disabled: false
 
   # Distributed-mode replicas. WAL PVCs use cluster-default `gp3` (multi-AZ,
   # Delete). Ingester chunk flush is ~5min, so WAL is short-lived.

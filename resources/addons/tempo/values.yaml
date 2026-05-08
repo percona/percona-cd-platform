@@ -19,6 +19,15 @@ tempo-distributed:
         region: us-east-1
         endpoint: s3.us-east-1.amazonaws.com
 
+  # Isolate Tempo's memberlist from neighbouring Mimir/Loki rings. Without
+  # this, gossip cross-pollinates: foreign stacks land in the `collectors`
+  # ring, queries fan out to wrong-API ingesters, and the Unimplemented
+  # gRPC errors on neighbouring stacks (e.g. cortex.Ingester on Loki) ripple
+  # outward. Set a stack-unique label and enforce verification.
+  memberlist:
+    cluster_label: "tempo-percona-ci"
+    cluster_label_verification_disabled: false
+
   # Distributed-mode replicas. WAL PVC uses cluster-default `gp3` (multi-AZ,
   # Delete). Ingester block flush is ~5min, so WAL is short-lived.
   #

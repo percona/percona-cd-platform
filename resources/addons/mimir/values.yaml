@@ -56,6 +56,18 @@ mimir-distributed:
         storage_prefix: rules
         s3:
           bucket_name: REPLACE_VIA_APPSET
+      # Isolate the Mimir memberlist from the Loki and Tempo memberlists.
+      # Without this, all three rings cross-pollinate in the same namespace
+      # neighbourhood: Mimir distributors end up dialing Loki ingesters
+      # at :9095, get `code = Unimplemented desc = unknown service
+      # cortex.Ingester` because Loki's gRPC server only registers
+      # `logproto.Pusher`, and every PromQL query fails. Cluster-label
+      # verification is opt-in upstream (`cluster_label_verification_disabled:
+      # true` is the chart default) — we flip it off so mismatched gossip is
+      # rejected at handshake.
+      memberlist:
+        cluster_label: "mimir-percona-ci"
+        cluster_label_verification_disabled: false
 
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
