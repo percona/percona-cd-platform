@@ -158,3 +158,12 @@ loki:
   # (where it had no effect).
   lokiCanary:
     enabled: false
+
+  # Chart `templates/validate.yaml` line 5-7 fail-fasts when `lokiCanary.enabled`
+  # is false but `test.enabled` is still true (chart default). Without this
+  # the Loki Application stops rendering manifests entirely with
+  # `Helm test requires the Loki Canary to be enabled` and ArgoCD shows
+  # ComparisonError on every reconcile. We don't run `helm test` in this
+  # cluster — disable the optional test-pod hook altogether.
+  test:
+    enabled: false
