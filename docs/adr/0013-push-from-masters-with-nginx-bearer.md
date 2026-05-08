@@ -55,9 +55,9 @@ Each Jenkins master runs a Grafana Alloy systemd unit. One config file
 (`/etc/alloy/config.alloy`) handles:
 
 - `prometheus.scrape "hetzner_local"` against
-  `localhost:8080/hetzner-prometheus` at 60 s interval, forwarded to
+  `localhost:8080/hetzner-prometheus/` at 60 s interval, forwarded to
   `prometheus.remote_write "mimir"` at
-  `https://mimir-push.cd.percona.com/api/v1/push`.
+  `https://mimir-push.cd.percona.com/api/v1/metrics/write`.
 - `loki.source.file "jenkins"` tailing `/var/log/jenkins/jenkins.log`,
   forwarded to `loki.write "gateway"` at
   `https://loki-push.cd.percona.com/loki/api/v1/push`.
@@ -186,3 +186,80 @@ ADR 0009's "Update 2026-05-07: implementation diverges from original
 assumptions" section is now historical. Hybrid scrape never shipped beyond
 the GitOps scaffolding in commit `bf2f68f`. This ADR supersedes the "v1
 ships Option A" decision.
+
+## Amendments
+
+### 2026-05-08 — `UnprotectedRootAction`, master label convention, gateway path
+
+Three corrections ratified during the ps3.cd Alloy canary verification.
+
+**A1. Plugin fix is `UnprotectedRootAction`, not the SYSTEM_READ removal.**
+Section B3 above describes `v103.percona.10` as removing the
+`Jenkins.get().checkPermission(Jenkins.SYSTEM_READ)` call inside
+`HetznerPrometheusEndpoint.doIndex()`. That change shipped, but it was
+insufficient: anonymous `curl http://127.0.0.1:8080/hetzner-prometheus/`
+on ps3.cd still returned 403. The pre-handler authn filter from
+`GlobalMatrixAuthorizationStrategy` denies anonymous access to any URL
+served by a `RootAction` before `doIndex()` ever runs, so removing the
+permission check inside the method had no effect.
+
+The actual fix shipped in **`v103.percona.11`**: change
+`HetznerPrometheusEndpoint` from `implements RootAction` to
+`implements UnprotectedRootAction` (`hudson.model.UnprotectedRootAction`).
+`UnprotectedRootAction` is the documented Jenkins extension point for
+endpoints that opt out of the global authentication filter — the same
+mechanism `cli-proxy` and `instance-identity` use.
+
+Source: `nogueiraanderson/hetzner-cloud-plugin` commits `226b669` (code
+change) and `fed1d15` (README + CHANGELOG); GitHub Release
+[`v103.percona.11`](https://github.com/nogueiraanderson/hetzner-cloud-plugin/releases/tag/v103.percona.11).
+
+Verification on ps3.cd, 2026-05-08:
+
+```
+$ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/hetzner-prometheus/
+200
+$ curl -sS http://127.0.0.1:8080/hetzner-prometheus/ | grep -c '^# HELP '
+40
+```
+
+40 metric families served anonymously over the loopback interface, which
+matches the master-side Alloy's expected scrape surface.
+
+**A1a. Trailing-slash 302 quirk.** Without the trailing slash, the
+endpoint returns `302 Found` to the slashed URL. Alloy's
+`prometheus.scrape` runs with `follow_redirects = true` by default and
+handles either form, but the master-side Alloy config pins the slashed
+form (`http://127.0.0.1:8080/hetzner-prometheus/`) to avoid the redirect
+hop on every scrape interval. Cosmetic, but it keeps the access log
+clean.
+
+**A2. Master label convention.** External labels from the master-side
+Alloy must use:
+
+- `master="<inst>.cd"` for the EC2 masters (e.g. `master="ps3.cd"`,
+  `master="psmdb.cd"`).
+- `master="<inst>-k8s"` for the in-cluster POC masters
+  (e.g. `master="ps3-k8s"`).
+
+Plain `master="ps3"` collides between `ps3.cd` (EC2) and `ps3-k8s`
+(in-cluster), which both run the Hetzner plugin and therefore both push
+the same series names. Confirmed during the canary by Mimir distributor
+rejections: `err-mimir-sample-out-of-order` on `hetzner_dc_health_state`
+and friends, where two pushers were writing the same `(__name__, master)`
+tuple at near-identical timestamps.
+
+This convention applies to both the metric path (`prometheus.remote_write`
+external_labels) and the log path (`loki.write` external_labels) so that
+log-to-metric correlation in Grafana lines up.
+
+**A3. Mimir push URL.** The remote_write URL in section B1 above is
+`https://mimir-push.cd.percona.com/api/v1/push`. That path is what the
+Mimir distributor itself serves, but the alloy-gateway's
+`prometheus.receive_http` component (the actual ALB upstream) routes
+remote_write traffic at `/api/v1/metrics/write`. The correct URL is
+`https://mimir-push.cd.percona.com/api/v1/metrics/write`. The body of
+this ADR is now corrected; the canary config uses the corrected path.
+
+The Loki and Tempo push URLs (`/loki/api/v1/push` and `/v1/traces`) are
+unchanged.

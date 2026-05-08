@@ -19,8 +19,9 @@ this page is the operator's tour.
                                                                               │      tempo-push.cd.percona.com
                                                                               ▼
                                           ┌───────────────────────────  alloy-gateway (Deployment x2)  ──┐
-                                          │                                                              │
-                                          │   prom-rw :9009  loki-push :3100  OTLP :4317/:4318           │
+                                          │   nginx bearer sidecar :9009/:3100/:4318 (strips auth header)│
+                                          │   alloy receivers loopback :19009/:13100/:14318              │
+                                          │     /api/v1/metrics/write   /loki/api/v1/push   /v1/traces   │
                                           │                                                              │
                                           ▼                          ▼                                   ▼
    ┌───────────────────────────────────  Mimir (distributed)         Loki (distributed)                Tempo (distributed)
@@ -99,14 +100,51 @@ by Grafana datasource secureJsonData and by Prometheus remoteWrite headers.
 ## External push endpoints
 
 ```
-mimir-push.cd.percona.com  → /api/v1/push (Prometheus remote_write)
+mimir-push.cd.percona.com  → /api/v1/metrics/write (Prometheus remote_write
+                              into Alloy's prometheus.receive_http; NOT
+                              /api/v1/push, which Mimir's distributor takes
+                              but Alloy's receiver does not)
 loki-push.cd.percona.com   → /loki/api/v1/push
-tempo-push.cd.percona.com  → / (OTLP HTTP :4318); OTLP gRPC :4317 deferred (ALB doesn't yet support gRPC backend health)
+tempo-push.cd.percona.com  → /v1/traces (OTLP HTTP :4318); OTLP gRPC :4317
+                              stays cluster-internal (ALB doesn't yet support
+                              gRPC backend health)
 ```
 
 The Alloy gateway translates these to in-cluster Service DNS calls
-against Mimir/Loki/Tempo distributors. Auth at v1 is ALB CIDR allowlist;
-bearer-token via NGINX sidecar is the next hardening pass.
+against Mimir/Loki/Tempo distributors.
+
+Auth at the gateway is two intentional layers, both wired up. The active
+gate is the **NGINX bearer-token sidecar** in the alloy-gateway Pod; it
+validates `Authorization: Bearer <token>`, strips the header, and
+proxies to Alloy's loopback receivers. The token is a single shared
+value at AWS Secrets Manager
+`percona-ci-platform/alloy-gateway/bearer`, synced into the cluster by
+External Secrets Operator. The second layer, the **ALB CIDR allowlist**
+(`alb.ingress.kubernetes.io/inbound-cidrs`), is also valued: it is
+empty by default in `resources/addons/alloy-gateway/values.yaml` and is
+slated to populate from a cluster-secret annotation (the 9 EC2 master
+EIPs plus 3 cluster NAT-GW EIPs) in a follow-up. See
+[ADR 0013](adr/0013-push-from-masters-with-nginx-bearer.md) and
+[`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) for the master-side
+push config.
+
+## Memberlist isolation
+
+Mimir, Loki, and Tempo all use Hashicorp memberlist for ring gossip and
+all default to `cluster_label = ""`. Without explicit labels, three
+co-tenant LGTM stacks in the same cluster (or in the same VPC) would
+gossip into each other's rings on handshake, log noise at best and
+cross-stack ring pollution at worst. Each stack now carries a unique
+`cluster_label` (added 2026-05-08, follow-up ADR forthcoming):
+
+```
+mimir   memberlist.cluster_label = "mimir-percona-ci"
+loki    memberlist.cluster_label = "loki-percona-ci"
+tempo   memberlist.cluster_label = "tempo-percona-ci"
+```
+
+`cluster_label_verification_disabled: false` on all three so unlabelled
+gossip from a future neighbour stack is rejected at handshake time.
 
 ## Grafana auth
 
