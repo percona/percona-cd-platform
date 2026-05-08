@@ -49,23 +49,21 @@ locals {
       name = "karpenter"
       ver  = "1.12.0"
     }
-    kube_prometheus_stack = {
-      repo = "https://prometheus-community.github.io/helm-charts"
-      name = "kube-prometheus-stack"
-      ver  = "84.4.0"
-    }
-    # Standalone CRDs — decoupled from kube-prometheus-stack so the
-    # monitoring.coreos.com CRDs survive when kps is removed
-    # (LGTM-only, ADR 0016). AppVersion v0.90.1 must match the operator
-    # image kps ships.
+    # kube-prometheus-stack was the cluster's metrics stack until
+    # the LGTM-only migration (ADR 0016). It's gone as of P6 — Alloy DS
+    # owns scrape, Mimir is the long-term store, Mimir ruler evaluates
+    # rules. The CRDs and KSM/NE are now their own addons (below).
+    #
+    # Standalone CRDs. AppVersion v0.90.1 must match the prometheus-
+    # operator image used by anything that talks to these CRDs.
     prometheus_operator_crds = {
       repo = "https://prometheus-community.github.io/helm-charts"
       name = "prometheus-operator-crds"
       ver  = "28.0.1"
     }
-    # Standalone KSM and node-exporter — replace the kps subcharts so
-    # they survive kps removal (P6). Versions track upstream; verify
-    # latest with scripts/check_versions.py before bumping.
+    # Standalone KSM and node-exporter — replace the kps subcharts.
+    # Versions track upstream; verify latest with
+    # scripts/check_versions.py before bumping.
     kube_state_metrics = {
       repo = "https://prometheus-community.github.io/helm-charts"
       name = "kube-state-metrics"
