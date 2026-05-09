@@ -255,6 +255,21 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+      # Honour the per-ConfigMap `grafana_folder` annotation so each
+      # sidecar-provisioned dashboard lands in the right folder. Without
+      # this, the chart's kiwigrid sidecar drops everything into the
+      # default sidecarProvider directory and Grafana renders them all
+      # under (General) regardless of annotation, which surfaced when
+      # the Hetzner Cloud Plugin dashboard refused to move from
+      # (General) to "Jenkins" after the folder reorg.
+      folderAnnotation: grafana_folder
+      provider:
+        # Auto-create folders that match the directory structure under
+        # /tmp/dashboards. Combined with folderAnnotation, this gives
+        # ConfigMaps a stable path: annotation "Jenkins" -> sidecar
+        # writes /tmp/dashboards/Jenkins/<file>.json -> Grafana imports
+        # into the Jenkins folder, creating it if missing.
+        foldersFromFilesStructure: true
     # Datasources sidecar OFF: we provision via the datasources.yaml block
     # above. Leaving the datasources sidecar enabled would race with our
     # static config and could overwrite Mimir/Loki/Tempo with whatever
