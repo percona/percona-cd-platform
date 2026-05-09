@@ -5,9 +5,9 @@ Wraps dashboards/hetzner-plugin.json in a ConfigMap labelled
 `grafana_dashboard: "1"` so the Grafana sidecar discovers and
 auto-imports it (sidecar.dashboards block in values.yaml lines
 220-225, searchNamespace=ALL). The `grafana_folder` annotation
-targets the existing "LGTM + Karpenter" folder used by the
-gnetId-fetched dashboards in dashboardProviders, so this
-sidecar-imported dashboard lands next to them in the UI.
+puts it in the "Jenkins" folder alongside other Jenkins-fleet
+dashboards (separate from the Platform / LGTM and Platform /
+Karpenter folders the gnetId-fetched dashboards land in).
 
 This is the first repo-owned dashboard shipped via the sidecar
 ConfigMap pattern; existing LGTM dashboards in this addon use the
@@ -27,7 +27,7 @@ metadata:
     app.kubernetes.io/part-of: lgtm
     app.kubernetes.io/component: dashboard
   annotations:
-    grafana_folder: "LGTM + Karpenter"
+    grafana_folder: "Jenkins"
 data:
   hetzner-plugin.json: |-
 {{ .Files.Get "dashboards/hetzner-plugin.json" | indent 4 }}

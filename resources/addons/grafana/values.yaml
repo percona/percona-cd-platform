@@ -270,43 +270,77 @@ grafana:
   # which the file-based dashboardProvider below auto-imports on boot.
   # Datasource binding: the JSON's `${DS_*}` placeholders resolve to the
   # `datasource` field below. Names must match the datasources block above.
+  # Folder layout split by owner: Platform team owns the LGTM + Karpenter
+  # observability dashboards; Jenkins-specific dashboards (Hetzner plugin,
+  # future EC2 plugin) sit in their own folder so future-me knows what's
+  # in scope when changing each addon. Each provider points at its own
+  # subdirectory so the chart's init container groups downloaded JSON by
+  # owner. The General folder stays empty.
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1
       providers:
-        - name: lgtm-karpenter
+        - name: platform-lgtm
           orgId: 1
-          folder: "LGTM + Karpenter"
+          folder: "Platform / LGTM"
           type: file
           disableDeletion: false
           editable: true
           allowUiUpdates: true
           options:
-            path: /var/lib/grafana/dashboards/lgtm-karpenter
+            path: /var/lib/grafana/dashboards/platform-lgtm
+        - name: platform-karpenter
+          orgId: 1
+          folder: "Platform / Karpenter"
+          type: file
+          disableDeletion: false
+          editable: true
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards/platform-karpenter
+        - name: jenkins
+          orgId: 1
+          folder: "Jenkins"
+          type: file
+          disableDeletion: false
+          editable: true
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards/jenkins
+  # gnetId selection notes:
+  #   loki-operational  17781 r1  (third-party "Loki Metrics Dashboard"
+  #     by frankfegert; the Grafana Labs Loki mixin is NOT published on
+  #     grafana.com, so this is the best gnet-fetchable option. Queries
+  #     `loki_distributor_lines_received_total`, `loki_request_duration_
+  #     seconds_bucket`, `loki_ingester_streams_created_total`. Avoids
+  #     deprecated names like `log_messages_total` and `cortex_prometheus_*`
+  #     that the older 13407 had).
+  #   mimir-overview    17607 r13 (Grafana Labs official, auto-published
+  #     from grafana/mimir's `operations/mimir-mixin-compiled/dashboards/`.
+  #     Queries `cortex_distributor_received_samples_total`,
+  #     `cortex_request_duration_seconds_*`. Note: depends on mimir-mixin
+  #     recording rules; without those rules loaded into Mimir the panels
+  #     will be sparse. Tracking rule import as a follow-up).
+  #   karpenter-overview 22171 r5 (adinhodovic karpenter-mixin, v1.0+
+  #     metric surface with `karpenter_nodepools_*` / `karpenter_nodeclaims_*`
+  #     / `nodepool=` label. Replaces the stale 16237 which predates
+  #     Karpenter v1).
+  # Tempo and the Loki Grafana-Labs mixin do NOT publish to grafana.com.
+  # Loading those operational dashboards needs a ConfigMap path (drop the
+  # JSON under resources/addons/grafana/dashboards/ with grafana_dashboard=1
+  # label). Tracked separately.
   dashboards:
-    lgtm-karpenter:
-      loki-logs-app:
-        # gnetId 13407 ("Loki2.0 Global Metrics") queries Loki's self-
-        # emitted metrics (loki_build_info, loki_distributor_lines_
-        # received_total, loki_request_duration_*, loki_panic_total,
-        # loki_ingester_chunk_stored_bytes_total). Those series are
-        # scraped from Loki pods by kube-prometheus-stack and remote-
-        # written to Mimir; Loki itself only answers LogQL on /loki/api.
-        # Binding the dashboard to the Loki datasource gives a 404 on
-        # every panel and the whole board renders "No data".
-        gnetId: 13407
+    platform-lgtm:
+      loki-operational:
+        gnetId: 17781
         revision: 1
         datasource: Mimir
       mimir-overview:
-        # Mimir / Cortex overview (Grafana Labs official).
-        gnetId: 19279
-        revision: 1
+        gnetId: 17607
+        revision: 13
         datasource: Mimir
-      tempo-operational:
-        gnetId: 16886
-        revision: 1
-        datasource: Mimir
-      karpenter-cluster-capacity:
-        gnetId: 16237
-        revision: 1
+    platform-karpenter:
+      karpenter-overview:
+        gnetId: 22171
+        revision: 5
         datasource: Mimir

@@ -19,3 +19,18 @@ karpenter:
   podDisruptionBudget:
     name: karpenter
     maxUnavailable: 1
+
+  # Expose karpenter_* metrics to the Alloy scraper. The chart's default
+  # is serviceMonitor.enabled=false, which leaves the controller's
+  # /metrics endpoint unscraped even though the Service publishes
+  # http-metrics on :8080. Alloy's prometheus.operator.servicemonitors
+  # "all" component (resources/addons/alloy/values.yaml) auto-discovers
+  # any ServiceMonitor cluster-wide and remote-writes to Mimir, so just
+  # flipping this on is sufficient. Note that v1.x emits most counters
+  # lazily (NodePool/NodeClaim metrics show up after first provisioning
+  # or disruption event), so initial cardinality is small and grows as
+  # cluster activity happens.
+  serviceMonitor:
+    enabled: true
+    endpointConfig:
+      interval: 30s
