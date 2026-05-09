@@ -344,15 +344,18 @@ grafana:
   # Loading those operational dashboards needs a ConfigMap path (drop the
   # JSON under resources/addons/grafana/dashboards/ with grafana_dashboard=1
   # label). Tracked separately.
+  # mimir-overview was a gnetId 17607 r13 import here. It now ships via
+  # the ConfigMap-provisioned upstream `Mimir / Overview` from the
+  # mimir-mixin bundle (resources/addons/grafana/templates/configmap-
+  # mimir-mixin-dashboards.yaml). Both share UID
+  # ffcd83628d7d4b5a03d1cafd159e6c9c so we keep only the ConfigMap one,
+  # because it ships the full sibling-dashboard set and its inline
+  # cross-links resolve.
   dashboards:
     platform-lgtm:
       loki-operational:
         gnetId: 17781
         revision: 1
-        datasource: Mimir
-      mimir-overview:
-        gnetId: 17607
-        revision: 13
         datasource: Mimir
     platform-karpenter:
       karpenter-overview:
