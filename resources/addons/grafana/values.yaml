@@ -264,12 +264,24 @@ grafana:
       # (General) to "Jenkins" after the folder reorg.
       folderAnnotation: grafana_folder
       provider:
-        # Auto-create folders that match the directory structure under
-        # /tmp/dashboards. Combined with folderAnnotation, this gives
-        # ConfigMaps a stable path: annotation "Jenkins" -> sidecar
-        # writes /tmp/dashboards/Jenkins/<file>.json -> Grafana imports
-        # into the Jenkins folder, creating it if missing.
-        foldersFromFilesStructure: true
+        # `foldersFromFilesStructure: true` is the chart default but it
+        # is RACY against Grafana's SQLite store. When the file
+        # provisioner re-imports a sidecar-written dashboard (the
+        # kiwigrid sidecar rewrites the file every reconcile pass even
+        # if content is unchanged), Grafana looks up the parent folder
+        # by directory name. Under SQLite write contention the lookup
+        # fails and the provisioner allocates a fresh folder UID
+        # instead of reusing the existing one. With folder annotation
+        # `Mimir Mixin` and 21 dashboards we hit ~9 stale-folder
+        # creations per second; live cluster reached >12k empty
+        # `Mimir` folders before manual cleanup. Disabling here forces
+        # all sidecar-discovered ConfigMaps to land in the provider's
+        # default folder (no per-annotation folder synthesis), which
+        # is the safe failure mode. Folder organisation now lives in
+        # the static dashboardProviders block below — sidecar
+        # ConfigMaps go to (General) and that is acceptable since
+        # they are upstream/operational dashboards, not curated views.
+        foldersFromFilesStructure: false
     # Datasources sidecar OFF: we provision via the datasources.yaml block
     # above. Leaving the datasources sidecar enabled would race with our
     # static config and could overwrite Mimir/Loki/Tempo with whatever
