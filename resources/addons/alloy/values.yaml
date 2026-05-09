@@ -133,6 +133,18 @@ alloy:
         // Sink for the operator components above. WAL truncate_frequency=2h
         // matches Mimir distributor restart tolerance.
         //
+        // external_labels.cluster: every gnetId-imported dashboard
+        // (kube-prometheus-stack lineage, Karpenter mixin, Mimir mixin)
+        // assumes a `cluster=<name>` label on every scraped series and
+        // its template variables resolve via
+        // `label_values(kube_pod_info, cluster)`. Without it, `$cluster`
+        // is empty and every panel filters `cluster=""` (Karpenter
+        // Overview was 0/25 panels with data on first audit). Setting
+        // this here adds the label to series that don't already carry
+        // one; the Mimir/Loki memberlist self-metrics keep their
+        // existing `cluster=mimir|loki` value because remote_write
+        // external_labels only fill in missing labels, never overwrite.
+        //
         // Doc: grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/
         prometheus.remote_write "mimir" {
           endpoint {
@@ -140,6 +152,9 @@ alloy:
             headers = {
               "X-Scope-OrgID" = "percona-ci",
             }
+          }
+          external_labels = {
+            cluster = "percona-ci-platform",
           }
           wal {
             truncate_frequency = "2h"
