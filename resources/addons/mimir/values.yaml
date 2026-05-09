@@ -193,9 +193,20 @@ mimir-distributed:
   # and the overview dashboard renders blank. Alloy DS already runs
   # `prometheus.operator.servicemonitors "all"` cluster-wide, so just
   # asking the chart to publish ServiceMonitors is sufficient.
+  #
+  # `interval: 15s` overrides the Alloy default 60s. The mimir-mixin
+  # recording rules (resources/addons/mimir/files/mimir-mixin-rules.yaml)
+  # use `rate(...[1m])` for the cortex_request_duration_seconds_*
+  # families, which needs >=2 samples per minute. With the default 60s
+  # scrape interval the 1m window contains exactly 1 sample, so every
+  # `cluster_job:cortex_request_duration_seconds_*:sum_rate` rule
+  # records empty -- and every Mimir / Overview headline panel
+  # (Write latency / Read latency / Ingestion / sec) renders "No data".
+  # 15s matches Grafana Labs' reference deployment cadence.
   metaMonitoring:
     serviceMonitor:
       enabled: true
+      interval: 15s
 
   # Kafka-based ingest-storage is the chart's 2024+ default, an
   # experimental path where the distributor writes samples to a Kafka

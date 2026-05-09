@@ -104,9 +104,14 @@ jobs:
         run: |
           # Grafana dashboard JSONs under resources/addons/grafana/dashboards/
           # are not K8s manifests; ignore them.
+          # resources/addons/*/files/ holds upstream-shipped artefacts
+          # (e.g. mimir-mixin-rules.yaml) that are read via `.Files.Get`
+          # in templates and only become valid manifests after Helm
+          # rendering -- skip them at file-level validation.
           kubeconform -strict -summary -ignore-missing-schemas \
             -ignore-filename-pattern '(Chart|values.*)\.yaml' \
             -ignore-filename-pattern '.*/templates/.*' \
+            -ignore-filename-pattern '.*/files/.*' \
             -ignore-filename-pattern '.*/dashboards/.*\.json' \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
