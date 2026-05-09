@@ -1,0 +1,203 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alarms",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Jenkins master log streams from Loki: volume, error rate, exceptions, Hetzner/EC2 provisioning events, build start/finish, live tail. Pulls jenkins.log lines pushed by per-master Grafana Alloy via the alloy-gateway (ADR 0013). Filter by master via the dashboard variable; defaults to ps3.cd while it is the only master wired up.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Log volume (lines/sec by master, 1m rate)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "mimir"},
+      "description": "Sustained log throughput per master. Sudden drops to zero usually mean Alloy on the master died or the alloy-gateway bearer is misconfigured. Computed via Loki count_over_time, surfaced as a metric query through the Loki datasource.",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "logs/sec",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15},
+          "color": {"mode": "palette-classic"}
+        }
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "sum by (master) (rate({master=~\"$master\"}[1m]))",
+          "queryType": "range",
+          "legendFormat": "{{master}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error rate (errors/sec by master, 5m rate)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "mimir"},
+      "description": "Rate of log lines matching error|exception|fatal|severe (case-insensitive). A sustained nonzero baseline is normal (Jenkins is verbose); spikes correlate with provisioning failures, plugin issues, or ungraceful node terminations.",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "errors/sec",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 25},
+          "color": {"mode": "fixed", "fixedColor": "red"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "red", "value": 2}]}
+        }
+      },
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "sum by (master) (rate({master=~\"$master\"} |~ \"(?i)error|exception|fatal|severe\" [5m]))",
+          "queryType": "range",
+          "legendFormat": "{{master}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Top exceptions (1h)",
+      "type": "barchart",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "Most-seen Java exception class names in the last hour. Captures stacktrace headers via the regexp parser; trims package prefixes for readability. Use the legend to jump into Explore on a specific exception.",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisPlacement": "auto", "axisLabel": "occurrences"}
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {"showLegend": false},
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "topk(15, sum by (exc) (count_over_time({master=~\"$master\"} |~ \"Exception|Error:\" | regexp \"(?P<exc>[A-Z][A-Za-z0-9_]+(Exception|Error))\" [1h])))",
+          "queryType": "instant",
+          "legendFormat": "{{exc}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Build start / finish events",
+      "type": "logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "Build-lifecycle markers from jenkins.log. Started by user / SCM trigger / timer, plus `Finished: SUCCESS|FAILURE|ABORTED|UNSTABLE` results. Quick way to see which jobs ran during an incident window.",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
+      "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": false, "dedupStrategy": "none", "sortOrder": "Descending"},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "{master=~\"$master\"} |~ \"Started by|Finished:|Triggering a new build of\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Hetzner plugin events",
+      "type": "logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "Lines from the Hetzner cloud plugin: provisioning attempts, server creation, Helper bootstrap, retention timer, DC circuit breaker transitions, orphan reaping. Captures the `cloud.dnation.jenkins.plugins.hetzner` SLF4J logger plus common keyword markers.",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 15},
+      "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": false, "dedupStrategy": "exact", "sortOrder": "Descending"},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "{master=~\"$master\"} |~ \"hetzner|HetznerCloud|HetznerServer|launcher-x64|cpx22|cpx42|cax31|cax41|DcCircuit|OrphanedNodes|ComputerRetention\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "EC2 plugin events",
+      "type": "logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "Lines from the EC2 cloud plugin: instance launch/termination, spot bidding, idle reaping, IRSA credential resolution, NPE-guard hits in EC2Computer.getState (v5.24.percona.2 patches).",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 15},
+      "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": false, "dedupStrategy": "exact", "sortOrder": "Descending"},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "{master=~\"$master\"} |~ \"EC2Cloud|EC2Computer|EC2AbstractSlave|spot|i-[0-9a-f]{8,}|idle.*terminat|connecting to ec2\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Live tail",
+      "type": "logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "description": "All jenkins.log lines from the selected master(s), newest first. Use the time picker to scope; for active tailing switch to Explore where Loki streams in real time.",
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 24},
+      "options": {"showTime": true, "wrapLogMessage": true, "enableLogDetails": false, "dedupStrategy": "none", "sortOrder": "Descending"},
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "loki"},
+          "expr": "{master=~\"$master\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["jenkins", "loki", "logs"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "ps3.cd", "value": "ps3.cd"},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "definition": "label_values({master=~\".+\"}, master)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Master",
+        "multi": true,
+        "name": "master",
+        "options": [],
+        "query": {"label": "master", "stream": "{master=~\".+\"}", "type": 1},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Jenkins Logs",
+  "uid": "jenkins-logs",
+  "version": 1,
+  "weekStart": ""
+}

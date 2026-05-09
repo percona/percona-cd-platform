@@ -1,0 +1,35 @@
+{{/*
+Jenkins log streams dashboard.
+
+Wraps dashboards/jenkins-logs.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it (sidecar.dashboards block in values.yaml,
+searchNamespace=ALL). The `grafana_folder` annotation puts it in
+the Jenkins folder alongside the Hetzner plugin metrics dashboard.
+
+LogQL only: every panel queries the Loki datasource. Volume and
+error-rate panels are surfaced as a metric query (rate over a
+LogQL stream), so they render in a timeseries panel with a
+prometheus datasource declaration; targets still hit Loki. This
+is the standard Grafana pattern for `rate({...} [1m])` from Loki.
+
+Master template variable defaults to ps3.cd while it is the only
+Jenkins instance pushing logs into Loki via per-master Alloy.
+The variable resolves via `label_values({master=~".+"}, master)`,
+so additional masters appear automatically once they are wired
+up to the alloy-gateway.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-jenkins-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "Jenkins"
+data:
+  jenkins-logs.json: |-
+{{ .Files.Get "dashboards/jenkins-logs.json" | indent 4 }}
