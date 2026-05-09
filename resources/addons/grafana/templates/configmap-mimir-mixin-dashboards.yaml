@@ -37,7 +37,13 @@ metadata:
     app.kubernetes.io/component: dashboard
     mixin: mimir
   annotations:
-    grafana_folder: "Platform / LGTM / Mimir"
+    # Single-segment folder name. Slashes here combine pathologically with
+    # the chart's `sidecar.dashboards.provider.foldersFromFilesStructure:
+    # true`: each `/` is interpreted as a nested directory and Grafana's
+    # file-based provisioner allocates a fresh folder UID on every k8s-
+    # sidecar reconcile (~60s), creating ~21 stale empty "Mimir" folders
+    # per cycle. Use a flat label instead. See PR #62 follow-up cleanup.
+    grafana_folder: "Mimir Mixin"
 data:
   {{ $base }}.json: |-
 {{ $.Files.Get $path | indent 4 }}
