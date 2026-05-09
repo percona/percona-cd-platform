@@ -92,6 +92,17 @@ mimir-distributed:
       limits:
         ingestion_rate: 50000
         ingestion_burst_size: 1000000
+        # Per-tenant in-memory series cap. Default 150000 was hit cleanly
+        # at exactly 150000 on every ingester after the cluster-label
+        # external_label landed (PR #58, alloy DS rolled), causing the
+        # mimir-mixin recording rules (PR #59) to fail every push with
+        # err-mimir-max-series-per-user. Mimir runs
+        # multitenancy_enabled=false, so every write lands under the
+        # `anonymous` tenant; the rule writes from the ruler share the
+        # quota with live scrape ingest. 1.5M gives ~10x headroom and
+        # accommodates the ~5K mimir-mixin recording series plus future
+        # KSM / Karpenter / Loki cardinality growth.
+        max_global_series_per_user: 1500000
 
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
