@@ -1,10 +1,17 @@
 extends: default
 
-# Helm chart templates/ dirs are Go-templated YAML — yamllint can't parse
+# Helm chart templates/ dirs are Go-templated YAML, yamllint can't parse
 # the `{{ }}` sigils. They get validated server-side by ArgoCD + kubeconform
 # (which renders templates first via `helm template`).
+#
+# resources/addons/*/files/ holds upstream-shipped artefacts checked in
+# verbatim (e.g. mimir-mixin-rules.yaml from grafana/mimir compiled
+# bundle). Reformatting them would drift them from upstream; they are
+# read via `.Files.Get` and yield a valid Kubernetes object after Helm
+# rendering, which kubeconform then validates.
 ignore: |
   resources/addons/*/templates/
+  resources/addons/*/files/
 
 rules:
   line-length:

@@ -1,0 +1,36 @@
+{{/*
+Mimir mixin recording rules sourced from upstream
+github.com/grafana/mimir at tag mimir-2.16.0:
+  operations/mimir-mixin-compiled/rules.yaml
+
+These compute the precomputed series the Mimir mixin DASHBOARDS reference,
+e.g. `cluster_job_route:cortex_request_duration_seconds:99quantile`,
+`cluster_namespace_job:cortex_distributor_received_samples:rate1m`,
+`cluster_namespace_pod:cortex_ingester_ingested_samples_total:rate1m`.
+Without these rules loaded, every "Write latency" / "Ingestion / sec" /
+similar headline panel on `Mimir / Overview` and the sibling dashboards
+renders empty even though the raw `cortex_*` series exist in Mimir.
+
+The Alloy DS's `mimir.rules.kubernetes "ruler"` component
+(resources/addons/alloy/values.yaml) discovers PrometheusRule resources
+cluster-wide with empty selectors, so this PrometheusRule is auto-synced
+to Mimir's ruler under tenant `percona-ci`. The ruler then evaluates each
+group on its own schedule and writes the recording results back into
+Mimir, where the dashboards read them.
+
+Rules file lives at resources/addons/mimir/files/mimir-mixin-rules.yaml
+and is checked in verbatim from the upstream bundle (no jsonnet
+recompilation in this repo). To bump versions: re-fetch from
+operations/mimir-mixin-compiled/rules.yaml at the chart-matching tag.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mimir-mixin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: rules
+    mixin: mimir
+spec:
+{{ .Files.Get "files/mimir-mixin-rules.yaml" | indent 2 }}
