@@ -304,12 +304,19 @@ grafana:
   # which the file-based dashboardProvider below auto-imports on boot.
   # Datasource binding: the JSON's `${DS_*}` placeholders resolve to the
   # `datasource` field below. Names must match the datasources block above.
-  # Folder layout split by owner: Platform team owns the LGTM + Karpenter
-  # observability dashboards; Jenkins-specific dashboards (Hetzner plugin,
-  # future EC2 plugin) sit in their own folder so future-me knows what's
-  # in scope when changing each addon. Each provider points at its own
-  # subdirectory so the chart's init container groups downloaded JSON by
-  # owner. The General folder stays empty.
+  # Folder layout split by owner: Platform team owns the LGTM and
+  # Karpenter observability dashboards (one folder each, see
+  # `Platform / LGTM` and `Platform / Karpenter` below); Jenkins-
+  # specific dashboards (Hetzner plugin, future EC2 plugin) sit in
+  # their own folder so future-me knows what's in scope when
+  # changing each addon. Each provider points at its own subdirectory
+  # so the chart's init container groups downloaded JSON by owner.
+  # The General folder stays empty.
+  #
+  # Legacy: a single combined `LGTM + Karpenter` folder existed in
+  # earlier deployments (created by hand before the providers were
+  # split). It was removed via the Grafana folders API on 2026-05-09;
+  # nothing in this file or under templates/ recreates it.
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1
