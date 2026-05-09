@@ -87,3 +87,15 @@ tempo-distributed:
 
   minio:
     enabled: false
+
+  # Self-monitoring via ServiceMonitors so Tempo's own components
+  # (distributor, ingester, querier, query-frontend, compactor) get
+  # scraped by the cluster Alloy and pushed back into Mimir. Required
+  # for any future Tempo operational dashboard (the official Tempo
+  # mixin queries `tempo_*` series; without this nothing populates).
+  # Alloy DS already runs `prometheus.operator.servicemonitors "all"`
+  # cluster-wide, so just asking the chart to publish ServiceMonitors
+  # is sufficient.
+  metaMonitoring:
+    serviceMonitor:
+      enabled: true
