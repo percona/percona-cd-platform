@@ -4,7 +4,7 @@ The page name is historical. The fleet does not get scraped any more: each
 Jenkins master ships its own metrics and logs over outbound 443 to the
 in-cluster `alloy-gateway`. Pull was retired in
 [ADR 0013](adr/0013-push-from-masters-with-nginx-bearer.md); the
-end-to-end pipeline was canaried on `ps3.cd` on 2026-05-08.
+end-to-end pipeline was canaried on `ps3.cd` on 2026-05-08, and rolled out to all 10 masters via `Percona-Lab/jenkins-pipelines` PR #4037 (commit 83adb97) on 2026-05-10.
 
 ## Why push, not pull
 
@@ -49,12 +49,21 @@ has no inbound path from masters except those three ALB hostnames.
 
 Bearer in the `Authorization` header. One token, shared across the fleet,
 stored in AWS Secrets Manager at
-`percona-ci-platform/alloy-gateway/bearer` (one-time `openssl rand -hex
-32`, KMS-encrypted by the account default key).
+`percona-ci-platform/alloy-gateway/bearer`. The `SecretString` value is
+JSON `{"bearer_token":"..."}` (not plain string); every consumer
+(master-side fetcher, `scripts/verify-observability.sh`, ESO `dataFrom:
+extract`) JSON-parses `.bearer_token` before use.
 
-- **Master side**: cloud-init pulls the token to `/etc/alloy/gateway-token`
-  (mode 0400) using the master's own instance profile. The IAM policy
-  attached for this is scoped to
+- **Master side**: systemd `alloy.service` invokes
+  `ExecStartPre=+/usr/local/bin/alloy-fetch-token` -- the `+` prefix runs
+  the fetcher as root because `/etc/alloy/` is `0750 root:alloy` while
+  alloy itself runs `User=alloy`. The fetcher reads the JSON
+  `SecretString`, extracts `.bearer_token`, and writes it to
+  `/etc/alloy/gateway-token` (mode 0440, owner `root:alloy`) atomically
+  (write to `.tmp`, then `mv -f`). It re-runs on every alloy start, so
+  rotation is a `systemctl restart alloy` away -- no cloud-init re-run.
+  The IAM policy `AlloyGatewayBearerRead` (attached to every
+  `jenkins-<inst>-master` role) is scoped to
   `secretsmanager:GetSecretValue` on the bearer ARN only,
   `arn:aws:secretsmanager:us-east-1:119175775298:secret:percona-ci-platform/alloy-gateway/bearer-*`.
 - **Cluster side**: External Secrets Operator syncs the same secret into
@@ -133,34 +142,46 @@ with HTTP 403 before the request ever reached `doIndex()`. v11 changes
 moves the endpoint outside Jenkins' core authorization gate entirely.
 The trust boundary is the loopback bind, not Jenkins ACLs.
 
-## Canary verification (ps3.cd, 2026-05-08)
+## Fleet verification (10/10 masters, 2026-05-10)
 
-End-to-end push pipeline live. Verified against Mimir / Loki via
-Grafana datasources:
+End-to-end push pipeline live on every master. `Percona-Lab/jenkins-pipelines`
+PR #4037 (commit 83adb97) codified `alloy.service` + `amazon-ssm-agent` + the
+scoped `AlloyGatewayBearerRead` IAM policy on every `jenkins-<inst>-master`
+role via CFN (9 masters) and Terraform (`pxb.cd`).
 
-- `hetzner_api_rate_limit_remaining{master="ps3.cd"} = 3599` — metrics
-  path: master `prometheus.scrape "hetzner_local"` → ALB → NGINX bearer
-  → in-Pod Alloy → Mimir distributor → ingester → S3.
-- `{master="ps3.cd"}` returns Jenkins SLF4J lines from
-  `/var/log/jenkins/jenkins.log` — log path: master `loki.source.file
-  "jenkins"` → ALB → NGINX bearer → in-Pod Alloy → Loki distributor →
-  ingester → S3.
+Verified against Mimir / Loki via `scripts/check-master-ingest.sh`: each
+master pushes ~180 datapoints per 3 hours on `hetzner_api_rate_limit_remaining`
+(one sample per 60s scrape), 10/10 series present, fail counter 0 across the
+fleet, log volume tracking each master's actual Jenkins activity.
 
-The two stack-isolation work-items behind the canary are tracked in the
-follow-up ADRs (forthcoming): the `master` label fix that disambiguates
-EC2 from in-cluster Jenkins masters, and the memberlist `cluster_label`
-isolation between Mimir / Loki / Tempo gossip rings (see
-`resources/addons/{mimir,loki,tempo}/values.yaml`).
+### Auth model (push pipeline)
+
+Bearer secret value at `percona-ci-platform/alloy-gateway/bearer` is JSON
+`{"bearer_token":"..."}` (not plain string); every consumer must JSON-parse
+before use. The master-side `/usr/local/bin/alloy-fetch-token` runs via
+systemd `ExecStartPre=+/usr/local/bin/alloy-fetch-token` -- the `+` prefix
+elevates to root because `/etc/alloy/` is `0750 root:alloy` while alloy
+itself runs `User=alloy`. The fetcher re-runs on every alloy start, so
+secret rotation is a `systemctl restart alloy` away.
+
+### Rotation forcing pattern
+
+When a CFN change-set updates the `LaunchTemplate` version without forcing
+SpotFleet replacement (e.g., userData-only diff), `aws ec2 terminate-instances`
+on the active master triggers SpotFleet to re-launch on the new template.
+The EIP follows automatically -- DNS stays stable. PXB Terraform uses the
+legacy `aws_spot_fleet_request.launch_specification`, where the userData
+hash change auto-forces replacement on `tofu apply` (no `terraform taint`
+needed).
 
 ## Phase pointers
 
-- **Phase A.2** — fleet rollout to the other 8 EC2 masters (`pmm`,
-  `ps80`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud`). Same
-  `config.alloy`, same instance-profile policy, same bearer; per-master
-  TF/CFN deltas only.
-- **Phase B** — activate `v103.percona.11` on the masters still pinned
-  to `v103.percona.9` / `.10`. Pin-only on busy masters, force-restart
-  on idle, same release procedure as previous Hetzner-plugin rolls.
+- **Phase A** — fleet rollout complete (PR #4037, 2026-05-10). See above.
+- **Phase B** — activate `v103.percona.11` on any masters still pinned to
+  `v103.percona.9` / `.10`. Post-rollout instances re-installed the plugin
+  at boot, so this only affects masters that have not rotated since the
+  plugin pin landed. Spot-check via `jenkins hetzner --all` plugin-version
+  probe.
 - **Phase C** — extend the push model to workers. The hetzner cloud
   plugin's per-template metrics, EC2 plugin once instrumented
   (PS-10996 successor), and PMM agents share the same gateway under

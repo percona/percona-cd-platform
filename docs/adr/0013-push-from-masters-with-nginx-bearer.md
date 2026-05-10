@@ -263,3 +263,39 @@ this ADR is now corrected; the canary config uses the corrected path.
 
 The Loki and Tempo push URLs (`/loki/api/v1/push` and `/v1/traces`) are
 unchanged.
+
+### 2026-05-10 — Fleet rollout closed
+
+`Percona-Lab/jenkins-pipelines` PR #4037 (squash commit 83adb97) codifies
+the master-side install across all 10 masters:
+
+- IAM: `AmazonSSMManagedInstanceCore` managed policy plus inline
+  `AlloyGatewayBearerRead` (scoped to the bearer ARN) on every
+  `jenkins-<inst>-master` role.
+- userData: each master's bootstrap pipes through
+  `scripts/install-master-observability.sh` (pinned to commit `08df5f4e`
+  in the same repo), which installs `amazon-ssm-agent` + Grafana Alloy,
+  writes `/etc/alloy/config.alloy`, and enables the unit.
+- Bearer fetcher: `/usr/local/bin/alloy-fetch-token` invoked by
+  systemd `ExecStartPre=+/usr/local/bin/alloy-fetch-token`. The `+` prefix
+  elevates the fetcher to root because `/etc/alloy/` is `0750 root:alloy`
+  while alloy itself runs `User=alloy`. The fetcher reads the AWS Secrets
+  Manager value (`SecretString` is JSON `{"bearer_token":"..."}`,
+  not plain text), JSON-parses `.bearer_token`, and writes
+  `/etc/alloy/gateway-token` atomically (write to `.tmp`, then `mv -f`).
+  It re-runs on every alloy start, so rotation is a `systemctl restart alloy`
+  away.
+- Rotation forcing: when a CFN change-set updates a master's
+  `LaunchTemplate` version without SpotFleet auto-replacement (e.g.,
+  userData-only diff), `aws ec2 terminate-instances` on the active
+  master triggers SpotFleet to re-launch under the new userData. The EIP
+  follows automatically. PXB Terraform uses the legacy
+  `aws_spot_fleet_request.launch_specification`, where userData hash
+  changes auto-force replacement on `tofu apply` (no `terraform taint`).
+  Verified on `cloud.cd` and `pxb.cd` during the 2026-05-10 rollout.
+
+Verification: `scripts/check-master-ingest.sh` (added in PR #67) reports
+per-master Mimir series count, sample freshness, distinct metric-name
+cardinality, and Loki log-line counts. Fleet steady state at rollout
+close: 180 datapoints / 3h / master on `hetzner_api_rate_limit_remaining`
+(uniform 60s scrape), 10/10 series present, 0 failed remote-write samples.

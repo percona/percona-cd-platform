@@ -119,7 +119,11 @@ validates `Authorization: Bearer <token>`, strips the header, and
 proxies to Alloy's loopback receivers. The token is a single shared
 value at AWS Secrets Manager
 `percona-ci-platform/alloy-gateway/bearer`, synced into the cluster by
-External Secrets Operator. The second layer, the **ALB CIDR allowlist**
+External Secrets Operator. The `SecretString` value is JSON
+`{"bearer_token":"..."}` (not a plain string) — every consumer
+(master-side `/usr/local/bin/alloy-fetch-token`, ESO
+`dataFrom: extract`, `scripts/verify-observability.sh`) JSON-parses
+`.bearer_token` before use. The second layer, the **ALB CIDR allowlist**
 (`alb.ingress.kubernetes.io/inbound-cidrs`), is also valued: it is
 empty by default in `resources/addons/alloy-gateway/values.yaml` and is
 slated to populate from a cluster-secret annotation (the 9 EC2 master

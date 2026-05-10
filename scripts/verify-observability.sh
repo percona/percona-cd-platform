@@ -2,6 +2,11 @@
 # verify-observability.sh - end-to-end health check of the LGTM push pipeline
 # for a Jenkins master that runs the master-side Alloy systemd unit.
 #
+# All 10 masters now run the master-side Alloy unit (`Percona-Lab/jenkins-pipelines`
+# PR #4037, commit 83adb97, merged 2026-05-10). For fleet-wide ingest spot-checks
+# without SSH, use `scripts/check-master-ingest.sh` instead; this script remains
+# the deepest per-master walk including the SSH-dependent master-side stages.
+#
 # Usage:
 #   scripts/verify-observability.sh                    # checks ps3.cd
 #   scripts/verify-observability.sh cloud              # checks cloud.cd
