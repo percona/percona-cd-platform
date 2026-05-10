@@ -127,6 +127,17 @@ sync-all:
 verify-karpenter *ARGS:
     AWS_PROFILE={{aws_profile}} scripts/verify-karpenter.sh {{ARGS}}
 
+# ---------- observability verification ----------
+# Per-master deep walk of the LGTM push pipeline (SSH-dependent stages included).
+# Default master ps3; override: `just verify-obs cloud`. Pass extra args after.
+verify-obs INST="ps3" *ARGS="":
+    AWS_PROFILE={{aws_profile}} scripts/verify-observability.sh {{INST}} {{ARGS}}
+
+# Fleet-wide ingest spot-check via in-cluster query-frontends (no SSH).
+# `just check-ingest` defaults to a 1h window; widen with `just check-ingest 24h`.
+check-ingest LOOKBACK="1h":
+    AWS_PROFILE={{aws_profile}} scripts/check-master-ingest.sh --lookback {{LOOKBACK}}
+
 # ---------- ArgoCD UI port-forward (browser) ----------
 argocd-ui:
     @echo "Open https://localhost:8443 (admin / from initial-admin-secret)"
