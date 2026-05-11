@@ -21,7 +21,7 @@ external-dns:
   # Bootstrap-tier pin + toleration. Pairs with the Stage 2b
   # CriticalAddonsOnly:NoSchedule taint.
   nodeSelector:
-    node-role: system
+    workload.percona.com/tier: bootstrap
   tolerations:
     - key: CriticalAddonsOnly
       operator: Equal

@@ -6,7 +6,7 @@
 
 kube-state-metrics:
   nodeSelector:
-    node-role: system
+    workload.percona.com/tier: bootstrap
   # Bootstrap-tier toleration paired with Stage 2b CriticalAddonsOnly taint.
   tolerations:
     - key: CriticalAddonsOnly

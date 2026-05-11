@@ -8,7 +8,7 @@ external-secrets:
   replicaCount: 2
   priorityClassName: platform-system-critical
   nodeSelector:
-    node-role: system
+    workload.percona.com/tier: bootstrap
   # Bootstrap-tier toleration paired with the Stage 2b
   # `CriticalAddonsOnly:NoSchedule` taint. Inert until the taint lands.
   tolerations: &bootstrap_tolerations
@@ -24,7 +24,7 @@ external-secrets:
     replicaCount: 2
     priorityClassName: platform-system-critical
     nodeSelector:
-      node-role: system
+      workload.percona.com/tier: bootstrap
     tolerations: *bootstrap_tolerations
     podDisruptionBudget:
       enabled: true
@@ -34,7 +34,7 @@ external-secrets:
     replicaCount: 2
     priorityClassName: platform-system-critical
     nodeSelector:
-      node-role: system
+      workload.percona.com/tier: bootstrap
     tolerations: *bootstrap_tolerations
     podDisruptionBudget:
       enabled: true

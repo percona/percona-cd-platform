@@ -47,7 +47,7 @@ resource "aws_eks_addon" "coredns" {
 
   # CoreDNS pods land on the system NG only — multi-AZ on-demand, no spot interrupts.
   configuration_values = jsonencode({
-    nodeSelector = { "node-role" = "system" }
+    nodeSelector = { "workload.percona.com/tier" = "bootstrap" }
     replicaCount = 2
   })
 
@@ -73,7 +73,7 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   # EBS-CSI controller pins to the system NG; the node DaemonSet is unrestricted.
   configuration_values = jsonencode({
     controller = {
-      nodeSelector = { "node-role" = "system" }
+      nodeSelector = { "workload.percona.com/tier" = "bootstrap" }
       replicaCount = 2
     }
   })
