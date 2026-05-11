@@ -39,7 +39,7 @@ tempo-distributed:
       maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -87,7 +87,7 @@ tempo-distributed:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 200m, memory: 1Gi }
-      limits:   { memory: 2Gi }
+      limits: { memory: 2Gi }
     # Chart default is zoneAwareReplication.enabled=false (labelled
     # EXPERIMENTAL upstream). Our Tempo bucket has effectively no
     # historical trace data (master-side trace push still gated), so the
@@ -107,7 +107,7 @@ tempo-distributed:
       maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -123,7 +123,7 @@ tempo-distributed:
       maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -146,7 +146,7 @@ tempo-distributed:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
 
   # metricsGenerator emits service-graph + span metrics; defer until we
   # have a real trace volume. Enabling later is a values-file edit.

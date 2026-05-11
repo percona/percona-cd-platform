@@ -86,7 +86,7 @@ loki:
     maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -117,7 +117,7 @@ loki:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 500m, memory: 2Gi }
-      limits:   { memory: 4Gi }
+      limits: { memory: 4Gi }
     persistence:
       enabled: true
       size: 50Gi
@@ -129,7 +129,7 @@ loki:
     maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -144,7 +144,7 @@ loki:
     maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -159,7 +159,7 @@ loki:
     maxUnavailable: 1
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -182,7 +182,7 @@ loki:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
     persistence:
       enabled: true
       size: 30Gi
@@ -203,7 +203,7 @@ loki:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
 
   ruler:
     enabled: true
@@ -222,7 +222,7 @@ loki:
       karpenter.sh/do-not-disrupt: "true"
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits:   { memory: 1Gi }
+      limits: { memory: 1Gi }
 
   # rollout_operator coordinates zone-by-zone restarts of zone-aware
   # ingester StatefulSets so the ring keeps quorum during rolling updates.

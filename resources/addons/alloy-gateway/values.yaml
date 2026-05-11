@@ -135,7 +135,7 @@ alloy:
     # own requests are already set further below.
     resources:
       requests: { cpu: 100m, memory: 256Mi }
-      limits:   { memory: 512Mi }
+      limits: { memory: 512Mi }
 
     # Mount the nginx config template (rendered from
     # templates/configmap-nginx-auth.yaml) plus the writable scratch
