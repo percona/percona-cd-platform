@@ -42,12 +42,17 @@ authentik:
     # if Authentik is down, every internal app's auth path is down.
     priorityClassName: platform-system-critical
 
-    # Pin to the prometheus-system NG. AZ us-east-1a, on-demand, tainted
-    # `workload=prometheus`. Authentik shares the NG with Grafana for
-    # now; gets its own NG when HA replicas land (PR follow-up).
+    # Pin to the prometheus_system MNG (us-east-1a, on-demand). Tier
+    # taxonomy uses the canonical `workload.percona.com/tier=obs-state`
+    # key; tolerate both the new and legacy `workload=prometheus` taints
+    # during the one-release rename window.
     nodeSelector:
-      workload: prometheus
+      workload.percona.com/tier: obs-state
     tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: obs-state
+        effect: NoSchedule
       - key: workload
         operator: Equal
         value: prometheus
@@ -131,8 +136,12 @@ authentik:
         storageClass: gp3-monitoring-1a-retain
         size: 8Gi
       nodeSelector:
-        workload: prometheus
+        workload.percona.com/tier: obs-state
       tolerations:
+        - key: workload.percona.com/tier
+          operator: Equal
+          value: obs-state
+          effect: NoSchedule
         - key: workload
           operator: Equal
           value: prometheus
@@ -151,8 +160,12 @@ authentik:
       persistence:
         enabled: false
       nodeSelector:
-        workload: prometheus
+        workload.percona.com/tier: obs-state
       tolerations:
+        - key: workload.percona.com/tier
+          operator: Equal
+          value: obs-state
+          effect: NoSchedule
         - key: workload
           operator: Equal
           value: prometheus

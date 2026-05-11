@@ -18,8 +18,12 @@ storage:
   # pre-binds the PVC to the copied volume. Leave commented for fresh PVC.
   # preExistingVolumeID: vol-xxxxxxxxxxxxxxxxx
 
+# Tier taxonomy: pin to the jenkins_system MNG. Canonical key is
+# `workload.percona.com/tier=jenkins-master`; legacy `workload=jenkins`
+# stays on the MNG alongside the new key during the one-release rename
+# window (terraform/eks.tf keeps both taints).
 nodeAffinity:
-  workload: jenkins
+  tier: jenkins-master
   zone: us-east-1a
 
 resources:
