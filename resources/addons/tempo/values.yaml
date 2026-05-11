@@ -40,20 +40,10 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
-    topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/component: distributor
-    affinity:
-      nodeAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            preference:
-              matchExpressions:
-                - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
+    # Tempo chart renders topologySpreadConstraints and affinity via `tpl`,
+    # so both must be YAML *strings* (block-scalar `|`), not dicts/lists.
+    # Chart default already provides soft hostname + zone anti-affinity
+    # which is good enough; just preserve the chart-supplied shape.
     config:
       receivers:
         otlp:
@@ -121,13 +111,8 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
-    topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/component: querier
+    # topologySpreadConstraints/affinity kept at chart defaults; see
+    # distributor comment.
 
   queryFrontend:
     replicas: 2
@@ -137,13 +122,6 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
-    topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/component: query-frontend
 
   compactor:
     replicas: 1
