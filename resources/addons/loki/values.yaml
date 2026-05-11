@@ -66,50 +66,171 @@ loki:
     ingester:
       autoforget_unhealthy: true
 
-  # Distributed-mode replicas. WAL PVCs use cluster-default `gp3` (multi-AZ,
-  # Delete). Ingester chunk flush is ~5min, so WAL is short-lived.
+  # Distributed-mode replicas. Stateful tier (ingester/compactor/indexGateway/
+  # ruler) pinned to the `lgtm-stateful` Karpenter pool via nodeSelector +
+  # toleration; stateless edges (distributor/querier/QF/QS) stay on the
+  # `default` Karpenter pool with hostname topologySpread.
   #
-  # Robustness: stateful (ingester, indexGateway, compactor) -> stateful-high.
-  # Stateless edges -> default. PDBs at minAvailable = replicas - 1.
+  # The `maxUnavailable: N` key on each tier becomes a chart-rendered PDB
+  # (chart key, not the standard `podDisruptionBudget:` block) -- equivalent
+  # semantics. WAL PVCs use cluster-default `gp3` (multi-AZ, Delete);
+  # ingester chunk flush is ~5min so WAL is short-lived. Chart default
+  # ships `zoneAwareReplication.enabled=true` on ingester; combined with
+  # the new pool's per-AZ presence (NodePool requires all 3 zones) and
+  # the chart's own hard hostname podAntiAffinity (rendered when zone-
+  # aware is on), three ingester replicas land one-per-host across the
+  # cluster.
   distributor:
     replicas: 3
     priorityClassName: platform-default
     maxUnavailable: 1
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: distributor
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
+
   ingester:
     replicas: 3
     priorityClassName: platform-stateful-high
     maxUnavailable: 1
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits:   { memory: 4Gi }
     persistence:
       enabled: true
       size: 50Gi
       storageClass: gp3
+
   querier:
     replicas: 2
     priorityClassName: platform-default
     maxUnavailable: 1
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: querier
+
   queryFrontend:
     replicas: 2
     priorityClassName: platform-default
     maxUnavailable: 1
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: query-frontend
+
   queryScheduler:
     replicas: 2
     priorityClassName: platform-default
     maxUnavailable: 1
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: query-scheduler
+
   compactor:
     replicas: 1
     priorityClassName: platform-stateful-high
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
     persistence:
       enabled: true
       size: 30Gi
       storageClass: gp3
+
   indexGateway:
     replicas: 2
     priorityClassName: platform-stateful-high
     maxUnavailable: 1
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+
   ruler:
     enabled: true
-    replicas: 1
+    # Bump from 1 to 2 so a node drain doesn't drop alert evaluation.
+    replicas: 2
     priorityClassName: platform-default
+    maxUnavailable: 1
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits:   { memory: 1Gi }
+
+  # rollout_operator coordinates zone-by-zone restarts of zone-aware
+  # ingester StatefulSets so the ring keeps quorum during rolling updates.
+  # Chart default is `false`; enabled here because zoneAwareReplication
+  # is also on (chart default) and without the operator a rolling update
+  # restarts all zone STS pods simultaneously, breaking the RF=3 invariant.
+  rollout_operator:
+    enabled: true
 
   # Disable monolithic / simple-scalable / single-binary modes — distributed
   # is mutually exclusive with these.
@@ -134,10 +255,12 @@ loki:
   # double allocatedMemory for every ~10x increase in stored chunks.
   chunksCache:
     enabled: true
+    replicas: 2
     allocatedMemory: 256
     allocatedCPU: 100m
   resultsCache:
     enabled: true
+    replicas: 2
     allocatedMemory: 128
     allocatedCPU: 100m
 

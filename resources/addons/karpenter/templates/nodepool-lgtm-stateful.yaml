@@ -1,0 +1,84 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: lgtm-stateful
+spec:
+  template:
+    metadata:
+      labels:
+        # Tier taxonomy: tolerating pods opt in via the matching
+        # `workload.percona.com/tier=lgtm-stateful` toleration and
+        # nodeSelector. The taint below makes the pool exclusive.
+        workload.percona.com/tier: lgtm-stateful
+        workload.percona.com/managed-by: karpenter
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: kubernetes.io/os
+          operator: In
+          values: [linux]
+        # On-demand only -- stateful LGTM pods (Mimir/Loki/Tempo ingester
+        # WAL, store-gateway block cache, compactor scratch, alertmanager
+        # NFLog) cannot afford spot reclamation. The 2026-05-11 outage was
+        # the t3.medium system MNG burst-credit-starving with ingesters on
+        # board; this pool ensures every replacement is on-demand.
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [on-demand]
+        # Memory-leaning families. r-class is ~2x mem/$ vs m-class for
+        # Mimir/Loki ingester resident heap workloads. m7a/m7i kept as
+        # fallback when r-class capacity is constrained in a particular AZ.
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: [r7a, r7i, m7a, m7i]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: [large, xlarge, 2xlarge]
+        # Spread Karpenter across all three AZs so zone-aware ingester
+        # StatefulSets can each find a node in their target AZ.
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [us-east-1a, us-east-1b, us-east-1c]
+      taints:
+        - key: workload.percona.com/tier
+          value: lgtm-stateful
+          effect: NoSchedule
+      # Stateful nodes do not get recycled on a clock. Karpenter still
+      # consolidates when empty and replaces on unhealthy; voluntary
+      # disruption is bounded by disruption.budgets below.
+      expireAfter: Never
+      # Mimir ingester WAL flush + chunks flush + cleanup takes ~60s; allow
+      # 10m headroom before SIGKILL.
+      terminationGracePeriod: 10m
+
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+
+  limits:
+    cpu: "64"
+    memory: 256Gi
+
+  disruption:
+    # WhenEmpty (not WhenEmptyOrUnderutilized) -- never bin-pack a running
+    # ingester onto a smaller node to save dollars. The pool already runs
+    # on-demand at near-minimal size for resilience.
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+    budgets:
+      - nodes: "1"
+        reasons: [Empty]
+      # Block Karpenter's voluntary disruption for Drift/Underutilized;
+      # those reasons can pile on top of a rollout-operator coordinated
+      # zone restart and double-evict ingesters.
+      - nodes: "0"
+        reasons: [Drifted, Underutilized]
+
+  # Higher than default(10) -- tolerating pods land here when capacity is
+  # available; fall through to the default pool (which they could only
+  # reach by also dropping the lgtm-stateful toleration, which they won't)
+  # is therefore impossible. Belt-and-suspenders for hard pin.
+  weight: 50
