@@ -6,6 +6,12 @@ spec:
   template:
     metadata:
       labels:
+        # Tier taxonomy: every node carries the canonical
+        # `workload.percona.com/tier` label so consumers can pin via a
+        # single key. `node-role=workload` stays one release for backward
+        # compat with anything still selecting on it.
+        workload.percona.com/tier: general
+        workload.percona.com/managed-by: karpenter
         node-role: workload
     spec:
       requirements:

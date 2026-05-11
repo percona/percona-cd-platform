@@ -15,3 +15,16 @@ aws-load-balancer-controller:
   priorityClassName: platform-system-critical
   podDisruptionBudget:
     minAvailable: 1
+
+  # Bootstrap-tier pin + toleration. The CriticalAddonsOnly taint Stage 2b
+  # will add to the system MNG is AWS-canonical; the controller's own chart
+  # does not ship a default toleration for it. nodeSelector pins us to the
+  # bootstrap MNG so a Karpenter consolidation can never strand the
+  # controller on a spot node that's about to be reclaimed.
+  nodeSelector:
+    node-role: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

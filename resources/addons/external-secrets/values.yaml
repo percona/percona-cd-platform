@@ -7,6 +7,15 @@ external-secrets:
   # Robustness: HA all three components with PDBs and system-critical priority.
   replicaCount: 2
   priorityClassName: platform-system-critical
+  nodeSelector:
+    node-role: system
+  # Bootstrap-tier toleration paired with the Stage 2b
+  # `CriticalAddonsOnly:NoSchedule` taint. Inert until the taint lands.
+  tolerations: &bootstrap_tolerations
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
@@ -16,6 +25,7 @@ external-secrets:
     priorityClassName: platform-system-critical
     nodeSelector:
       node-role: system
+    tolerations: *bootstrap_tolerations
     podDisruptionBudget:
       enabled: true
       minAvailable: 1
@@ -25,6 +35,7 @@ external-secrets:
     priorityClassName: platform-system-critical
     nodeSelector:
       node-role: system
+    tolerations: *bootstrap_tolerations
     podDisruptionBudget:
       enabled: true
       minAvailable: 1

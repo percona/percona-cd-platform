@@ -7,6 +7,12 @@
 kube-state-metrics:
   nodeSelector:
     node-role: system
+  # Bootstrap-tier toleration paired with Stage 2b CriticalAddonsOnly taint.
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
   priorityClassName: platform-system-critical
   prometheus:
     monitor:
