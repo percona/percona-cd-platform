@@ -211,9 +211,10 @@ for spec in "mimir-push.cd.percona.com|/api/v1/metrics/write|application/x-proto
   fi
 done
 
+NOW_NS="$(date +%s)000000000"
+PROBE_LABEL="verify-${INST}-${NOW_NS}"
 if [ -n "$BEARER" ]; then
-  NOW_NS="$(date +%s)000000000"
-  PROBE_PAYLOAD="{\"streams\":[{\"stream\":{\"probe\":\"verify-${INST}-${NOW_NS}\"},\"values\":[[\"${NOW_NS}\",\"verify-observability probe\"]]}]}"
+  PROBE_PAYLOAD="{\"streams\":[{\"stream\":{\"probe\":\"${PROBE_LABEL}\"},\"values\":[[\"${NOW_NS}\",\"verify-observability probe\"]]}]}"
   AUTH=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" -X POST \
     -H "Authorization: Bearer ${BEARER}" -H "Content-Type: application/json" \
     -d "$PROBE_PAYLOAD" \
@@ -299,7 +300,36 @@ else
 fi
 
 pf loki svc/loki-query-frontend 23300 3100
-START=$(($(date +%s) - 3600))000000000
+
+# Probe round-trip: query for the bearer-pushed probe from Stage 3.
+# This is a deterministic end-to-end check (gateway -> distributor ->
+# ingester -> query-frontend) that does not depend on master activity.
+if [ -n "$BEARER" ]; then
+  sleep 2  # allow ingester to index
+  PROBE_START=$((NOW_NS - 60000000000))
+  PROBE_END=$((NOW_NS + 60000000000))
+  RES=$(curl -sS -m 12 -G \
+    --data-urlencode "query={probe=\"${PROBE_LABEL}\"}" \
+    --data-urlencode "start=${PROBE_START}" --data-urlencode "end=${PROBE_END}" \
+    --data-urlencode "limit=1" --data-urlencode "direction=BACKWARD" \
+    "http://localhost:23300/loki/api/v1/query_range" 2>/dev/null)
+  PROBE_LINE=$(echo "$RES" | jq -r '.data.result[0].values[0][1] // empty' 2>/dev/null)
+  if [ -n "$PROBE_LINE" ]; then
+    stage_pass "loki probe round-trip" "probe=${PROBE_LABEL} returned"
+  else
+    stage_fail "loki probe round-trip" "no streams for probe=${PROBE_LABEL}"
+  fi
+else
+  stage_skip "loki probe round-trip" "no bearer fetched"
+fi
+
+# Master-side coverage: any log line from this master in the last 24h.
+# A 1h window was too strict for low-volume masters (ps80 emits ~1-200
+# lines/hour at idle, mostly GitHub OAuth cookie warnings). The pipeline
+# is already validated by the probe round-trip above; this check only
+# confirms that the master-side Alloy systemd unit has reached Loki at
+# some point in the recent past.
+START=$(($(date +%s) - 86400))000000000
 END=$(date +%s)000000000
 RES=$(curl -sS -m 12 -G \
   --data-urlencode "query={master=\"${INST}.cd\"}" \
@@ -307,11 +337,14 @@ RES=$(curl -sS -m 12 -G \
   --data-urlencode "limit=1" --data-urlencode "direction=BACKWARD" \
   "http://localhost:23300/loki/api/v1/query_range" 2>/dev/null)
 LINE=$(echo "$RES" | jq -r '.data.result[0].values[0][1] // empty' 2>/dev/null)
+LAST_TS=$(echo "$RES" | jq -r '.data.result[0].values[0][0] // empty' 2>/dev/null)
 if [ -n "$LINE" ]; then
-  preview="${LINE:0:90}"
-  stage_pass "loki query master=${INST}.cd" "got 1+ line: ${preview}…"
+  ts_int=$(echo "$LAST_TS" | head -c10)
+  age=$(( $(date +%s) - ts_int ))
+  preview="${LINE:0:80}"
+  stage_pass "loki query master=${INST}.cd (24h)" "age=${age}s: ${preview}…"
 else
-  stage_fail "loki query master=${INST}.cd" "no streams returned"
+  stage_fail "loki query master=${INST}.cd (24h)" "no streams in last 24h"
 fi
 
 # Stage 7: Grafana frontend ---------------------------------------------------
