@@ -46,11 +46,11 @@ spec:
     spec:
       restartPolicy: OnFailure
       nodeSelector:
-        workload: prometheus
+        workload.percona.com/tier: obs-state
       tolerations:
-        - key: workload
+        - key: workload.percona.com/tier
           operator: Equal
-          value: prometheus
+          value: obs-state
           effect: NoSchedule
       containers:
         - name: upload-keypair

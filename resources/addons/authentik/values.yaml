@@ -42,20 +42,14 @@ authentik:
     # if Authentik is down, every internal app's auth path is down.
     priorityClassName: platform-system-critical
 
-    # Pin to the prometheus_system MNG (us-east-1a, on-demand). Tier
-    # taxonomy uses the canonical `workload.percona.com/tier=obs-state`
-    # key; tolerate both the new and legacy `workload=prometheus` taints
-    # during the one-release rename window.
+    # Pin to the prometheus_system MNG (us-east-1a, on-demand) via the
+    # canonical tier key.
     nodeSelector:
       workload.percona.com/tier: obs-state
     tolerations:
       - key: workload.percona.com/tier
         operator: Equal
         value: obs-state
-        effect: NoSchedule
-      - key: workload
-        operator: Equal
-        value: prometheus
         effect: NoSchedule
 
   authentik:
@@ -142,10 +136,6 @@ authentik:
           operator: Equal
           value: obs-state
           effect: NoSchedule
-        - key: workload
-          operator: Equal
-          value: prometheus
-          effect: NoSchedule
       priorityClassName: platform-stateful-high
 
   # Bundled Bitnami Redis — Authentik's task queue + cache. Single
@@ -165,9 +155,5 @@ authentik:
         - key: workload.percona.com/tier
           operator: Equal
           value: obs-state
-          effect: NoSchedule
-        - key: workload
-          operator: Equal
-          value: prometheus
           effect: NoSchedule
       priorityClassName: platform-stateful-high

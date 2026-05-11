@@ -11,7 +11,7 @@ karpenter:
       requests: { cpu: "200m", memory: "512Mi" }
       limits: { cpu: "1", memory: "1Gi" }
   nodeSelector:
-    node-role: system
+    workload.percona.com/tier: bootstrap
   # Bootstrap-tier toleration: paired with the `CriticalAddonsOnly:NoSchedule`
   # taint that Stage 2b will add to the system MNG. AWS-canonical key per
   # https://docs.aws.amazon.com/eks/latest/userguide/critical-workload.html.

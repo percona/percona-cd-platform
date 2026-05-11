@@ -22,7 +22,7 @@ aws-load-balancer-controller:
   # bootstrap MNG so a Karpenter consolidation can never strand the
   # controller on a spot node that's about to be reclaimed.
   nodeSelector:
-    node-role: system
+    workload.percona.com/tier: bootstrap
   tolerations:
     - key: CriticalAddonsOnly
       operator: Equal

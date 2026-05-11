@@ -54,18 +54,16 @@ module "eks" {
       desired_size   = local.ng.system.desired_size
       max_size       = local.ng.system.max_size
       # Tier taxonomy: `workload.percona.com/tier=bootstrap` is the
-      # canonical label; `node-role=system` stays one release for backward
-      # compat with anything still selecting on it. The CriticalAddonsOnly
-      # taint paired with this label makes the system MNG exclusive --
-      # bootstrap-tier addons (karpenter, external-secrets, AWS LB
-      # controller, ArgoCD, external-dns, kube-state-metrics) tolerate it
-      # explicitly; everything else gets routed to the `default` Karpenter
-      # NodePool. AWS-canonical key per
+      # canonical label. The CriticalAddonsOnly taint paired with this
+      # label makes the system MNG exclusive -- bootstrap-tier addons
+      # (karpenter, external-secrets, AWS LB controller, ArgoCD,
+      # external-dns, kube-state-metrics) tolerate it explicitly;
+      # everything else gets routed to the `default` Karpenter NodePool.
+      # AWS-canonical taint key per
       # https://docs.aws.amazon.com/eks/latest/userguide/critical-workload.html.
       labels = {
         "workload.percona.com/tier"       = "bootstrap"
         "workload.percona.com/managed-by" = "mng"
-        "node-role"                       = "system"
       }
       taints = {
         critical_addons_only = {
@@ -90,20 +88,18 @@ module "eks" {
       desired_size   = local.ng.prometheus_system.desired_size
       max_size       = local.ng.prometheus_system.max_size
       subnet_ids     = [module.vpc.private_subnets[0]] # var.monitoring_az pinned (us-east-1a)
-      # Tier taxonomy: `workload.percona.com/tier=obs-state` is the new
-      # canonical label; the legacy `workload=prometheus` + `node-role=stateful`
-      # pair stays one release for backward compat with Grafana/Authentik
-      # wrapper values. Both taints will coexist until the rename in Stage 4.
+      # Tier taxonomy: `workload.percona.com/tier=obs-state`. Legacy
+      # `workload=prometheus` / `node-role=stateful` keys + taint were
+      # dropped after consumers (Grafana, Authentik) migrated to the
+      # canonical tier key.
       labels = {
         "workload.percona.com/tier"       = "obs-state"
         "workload.percona.com/managed-by" = "mng"
-        "workload"                        = "prometheus"
-        "node-role"                       = "stateful"
       }
       taints = {
-        workload = {
-          key    = "workload"
-          value  = "prometheus"
+        tier = {
+          key    = "workload.percona.com/tier"
+          value  = "obs-state"
           effect = "NO_SCHEDULE"
         }
       }
@@ -121,20 +117,17 @@ module "eks" {
       desired_size   = local.ng.jenkins_system.desired_size
       max_size       = local.ng.jenkins_system.max_size
       subnet_ids     = [module.vpc.private_subnets[0]] # us-east-1a — EBS zonality
-      # Tier taxonomy: `workload.percona.com/tier=jenkins-master` is the new
-      # canonical label; the legacy `workload=jenkins` + `node-role=stateful`
-      # pair stays one release for backward compat with the Jenkins ps3-k8s
-      # wrapper. Both taints coexist until the rename in Stage 4.
+      # Tier taxonomy: `workload.percona.com/tier=jenkins-master`. Legacy
+      # `workload=jenkins` / `node-role=stateful` keys + taint were
+      # dropped after the Jenkins ps3-k8s wrapper migrated.
       labels = {
         "workload.percona.com/tier"       = "jenkins-master"
         "workload.percona.com/managed-by" = "mng"
-        "workload"                        = "jenkins"
-        "node-role"                       = "stateful"
       }
       taints = {
-        workload = {
-          key    = "workload"
-          value  = "jenkins"
+        tier = {
+          key    = "workload.percona.com/tier"
+          value  = "jenkins-master"
           effect = "NO_SCHEDULE"
         }
       }

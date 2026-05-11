@@ -176,7 +176,7 @@ resource "helm_release" "argocd" {
     # Pin every ArgoCD pod to the system NG so addon churn (Karpenter
     # scale-from-zero, spot-replacement) never evicts the GitOps engine.
     nodeSelector = {
-      "node-role" = "system"
+      "workload.percona.com/tier" = "bootstrap"
     }
     # Bootstrap-tier toleration paired with the Stage 2b
     # CriticalAddonsOnly:NoSchedule taint that will isolate the system

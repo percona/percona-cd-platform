@@ -47,21 +47,13 @@ grafana:
   podDisruptionBudget:
     minAvailable: 1
 
-  # Pin to the prometheus_system MNG. Tier taxonomy uses the canonical
-  # `workload.percona.com/tier=obs-state` key; tolerate both the new
-  # taint key and the legacy `workload=prometheus` key during the one-
-  # release migration window (terraform/eks.tf keeps both taints on the
-  # MNG until consumers are renamed).
+  # Pin to the prometheus_system MNG via the canonical tier key.
   nodeSelector:
     workload.percona.com/tier: obs-state
   tolerations:
     - key: workload.percona.com/tier
       operator: Equal
       value: obs-state
-      effect: NoSchedule
-    - key: workload
-      operator: Equal
-      value: prometheus
       effect: NoSchedule
 
   # Persistent dashboards / annotations / users.
