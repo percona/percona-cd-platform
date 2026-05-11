@@ -76,10 +76,21 @@ trap cleanup EXIT
 
 pf() {
   # pf <ns> <target> <local-port> <remote-port>
+  # Starts a kubectl port-forward in the background and waits up to 10s
+  # for the local port to accept connections. `sleep 2` (the previous wait)
+  # was unreliable: the very first port-forward in a script run often
+  # needs 3-5s to become reachable, and curl would silently return empty.
   local ns="$1" target="$2" lport="$3" rport="$4"
   kubectl -n "$ns" port-forward "$target" "${lport}:${rport}" >/dev/null 2>&1 &
   PF_PIDS+=("$!")
-  sleep 2
+  for _ in $(seq 1 20); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/${lport}") 2>/dev/null; then
+      exec 3<&- 3>&-
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
 }
 
 require() {
