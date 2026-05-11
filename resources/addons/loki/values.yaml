@@ -122,6 +122,21 @@ loki:
       enabled: true
       size: 50Gi
       storageClass: gp3
+    # Chart drops the top-level `ingester.nodeSelector` for zone-aware
+    # StatefulSets and reads `zoneAwareReplication.zone{A,B,C}.nodeSelector`
+    # instead. Loki uses a per-zone keys shape (not a `zones[]` list like
+    # Mimir/Tempo).
+    zoneAwareReplication:
+      enabled: true
+      zoneA:
+        nodeSelector:
+          workload.percona.com/tier: lgtm-stateful
+      zoneB:
+        nodeSelector:
+          workload.percona.com/tier: lgtm-stateful
+      zoneC:
+        nodeSelector:
+          workload.percona.com/tier: lgtm-stateful
 
   querier:
     replicas: 2

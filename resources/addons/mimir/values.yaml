@@ -174,6 +174,20 @@ mimir-distributed:
       # took out the ingester ring on 2026-05-11). Set the documented
       # production value to emit a hard hostname anti-affinity rule.
       topologyKey: kubernetes.io/hostname
+      # Per-zone overrides. The chart drops the top-level
+      # `ingester.nodeSelector` for zone-aware StatefulSets and reads
+      # `zones[].nodeSelector` instead. The YAML list has to be fully
+      # redefined per the chart docs (line 1083 of upstream values).
+      zones:
+        - name: zone-a
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-b
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-c
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
     podDisruptionBudget:
       maxUnavailable: 1
       minAvailable: null
@@ -216,6 +230,17 @@ mimir-distributed:
       limits: { memory: 2Gi }
     zoneAwareReplication:
       topologyKey: kubernetes.io/hostname
+      # Per-zone overrides (chart drops top-level nodeSelector in zone-aware mode).
+      zones:
+        - name: zone-a
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-b
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-c
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
     podDisruptionBudget:
       minAvailable: 1
       maxUnavailable: null  # clear chart default; K8s rejects both being set
@@ -301,6 +326,16 @@ mimir-distributed:
     zoneAwareReplication:
       enabled: true
       topologyKey: kubernetes.io/hostname
+      zones:
+        - name: zone-a
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-b
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-c
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
     podDisruptionBudget:
       maxUnavailable: 1
       minAvailable: null

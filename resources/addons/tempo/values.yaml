@@ -93,8 +93,21 @@ tempo-distributed:
     # historical trace data (master-side trace push still gated), so the
     # chart's data-migration warning is moot -- enable now to match the
     # Mimir/Loki shape and force one-ingester-per-AZ placement.
+    #
+    # Per-zone nodeSelector override required because the chart drops the
+    # top-level ingester.nodeSelector for zone-aware StatefulSets.
     zoneAwareReplication:
       enabled: true
+      zones:
+        - name: zone-a
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-b
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
+        - name: zone-c
+          nodeSelector:
+            workload.percona.com/tier: lgtm-stateful
     persistence:
       enabled: true
       size: 30Gi
