@@ -452,7 +452,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\"",
+          "expr": "{master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | line_format \"[{{.master}}] {{ __line__ }}\"",
           "refId": "A"
         }
       ]
