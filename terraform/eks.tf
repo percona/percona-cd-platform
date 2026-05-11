@@ -53,17 +53,26 @@ module "eks" {
       min_size       = local.ng.system.min_size
       desired_size   = local.ng.system.desired_size
       max_size       = local.ng.system.max_size
-      # Tier taxonomy: `workload.percona.com/tier=bootstrap` is the new
-      # canonical label per the cluster-wide resilience plan; `node-role`
-      # stays one release for backward compat while consumer wrappers
-      # migrate. The `CriticalAddonsOnly:NoSchedule` taint that will pair
-      # with this label is deferred to a follow-up PR once every bootstrap-
-      # tier addon (karpenter, external-secrets, AWS LB controller, ArgoCD,
-      # external-dns, kube-state-metrics) carries the matching toleration.
+      # Tier taxonomy: `workload.percona.com/tier=bootstrap` is the
+      # canonical label; `node-role=system` stays one release for backward
+      # compat with anything still selecting on it. The CriticalAddonsOnly
+      # taint paired with this label makes the system MNG exclusive --
+      # bootstrap-tier addons (karpenter, external-secrets, AWS LB
+      # controller, ArgoCD, external-dns, kube-state-metrics) tolerate it
+      # explicitly; everything else gets routed to the `default` Karpenter
+      # NodePool. AWS-canonical key per
+      # https://docs.aws.amazon.com/eks/latest/userguide/critical-workload.html.
       labels = {
         "workload.percona.com/tier"       = "bootstrap"
         "workload.percona.com/managed-by" = "mng"
         "node-role"                       = "system"
+      }
+      taints = {
+        critical_addons_only = {
+          key    = "CriticalAddonsOnly"
+          value  = "true"
+          effect = "NO_SCHEDULE"
+        }
       }
 
       # Hardening #10 — IMDSv2 required, hop-limit 1.
