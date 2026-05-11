@@ -111,8 +111,6 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
-    # topologySpreadConstraints/affinity kept at chart defaults; see
-    # distributor comment.
 
   queryFrontend:
     replicas: 2
