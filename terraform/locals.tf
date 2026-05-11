@@ -45,10 +45,18 @@ locals {
   # NodeGroup sizing knobs surfaced as locals so they're easy to find.
   ng = {
     system = {
-      instance_types = ["t3.medium"]
-      min_size       = 2
-      desired_size   = 2
-      max_size       = 3
+      # m6a.large (non-burstable) replaces t3.medium after the 2026-05-11
+      # outage: kubelet timed out responding to API-server health checks on
+      # both AZ-b and AZ-c t3.medium instances because CPUCreditBalance had
+      # been pinned at 0 for hours while CPU ran 21-88% (above the 40%
+      # t3.medium baseline). Standard credit mode then throttled the
+      # instance below kubelet's needs. m6a.large gives 2 vCPU / 8 GiB at a
+      # fixed ~$0.0864/hr with no credit dynamics. Sizing 3 across AZs so
+      # one-AZ failure leaves quorum for argocd / karpenter / external-secrets.
+      instance_types = ["m6a.large"]
+      min_size       = 3
+      desired_size   = 3
+      max_size       = 4
     }
     prometheus_system = {
       instance_types = ["m6a.large"]
