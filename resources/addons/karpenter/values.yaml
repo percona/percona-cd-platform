@@ -12,6 +12,16 @@ karpenter:
       limits: { cpu: "1", memory: "1Gi" }
   nodeSelector:
     node-role: system
+  # Bootstrap-tier toleration: paired with the `CriticalAddonsOnly:NoSchedule`
+  # taint that Stage 2b will add to the system MNG. AWS-canonical key per
+  # https://docs.aws.amazon.com/eks/latest/userguide/critical-workload.html.
+  # Inert until the taint is in place (NoSchedule semantics) -- safe to ship
+  # ahead of Stage 2b.
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
 
   # Robustness: Karpenter is the autoscaler. Without it, no new node
   # provisioning. system-critical priority + PDB so it never gets fully evicted.

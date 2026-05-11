@@ -17,3 +17,13 @@ external-dns:
   priorityClassName: platform-system-critical
   podDisruptionBudget:
     minAvailable: 1
+
+  # Bootstrap-tier pin + toleration. Pairs with the Stage 2b
+  # CriticalAddonsOnly:NoSchedule taint.
+  nodeSelector:
+    node-role: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule

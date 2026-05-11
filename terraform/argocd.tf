@@ -178,6 +178,18 @@ resource "helm_release" "argocd" {
     nodeSelector = {
       "node-role" = "system"
     }
+    # Bootstrap-tier toleration paired with the Stage 2b
+    # CriticalAddonsOnly:NoSchedule taint that will isolate the system
+    # MNG. Inert until the taint lands (NoSchedule semantics) -- safe to
+    # ship now.
+    tolerations = [
+      {
+        key      = "CriticalAddonsOnly"
+        operator = "Equal"
+        value    = "true"
+        effect   = "NoSchedule"
+      }
+    ]
   })]
 
   # coredns + kube-proxy must be running before any pod can resolve cluster
