@@ -45,6 +45,31 @@ spec:
     httpPutResponseHopLimit: 1
     httpTokens: required
 
+  # Kubelet reservations + eviction thresholds. Critical for memory-bound
+  # Mimir/Loki ingester nodes -- the chart default (memory.available 100Mi,
+  # no system reserves) leaves no headroom for the kubelet and DaemonSets
+  # when an ingester sits at its memory limit. Used absolute byte values
+  # on memory.available (not %) because % drifts with instance size.
+  kubelet:
+    systemReserved:
+      cpu: 250m
+      memory: 512Mi
+      ephemeral-storage: 2Gi
+    kubeReserved:
+      cpu: 250m
+      memory: 768Mi
+      ephemeral-storage: 2Gi
+    evictionHard:
+      memory.available: "500Mi"
+      nodefs.available: "10%"
+    evictionSoft:
+      memory.available: "1Gi"
+    evictionSoftGracePeriod:
+      memory.available: "30s"
+    imageGCHighThresholdPercent: 85
+    imageGCLowThresholdPercent: 80
+    maxPods: 35
+
   # Tags propagated onto every Karpenter-launched EC2 instance AND its EBS
   # volumes. iit-billing-tag + PerconaKeep are MANDATORY — without them, the
   # percona-dev-admin cleanup Lambdas reap nodes after 10 min and volumes

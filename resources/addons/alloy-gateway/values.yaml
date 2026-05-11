@@ -109,6 +109,33 @@ alloy:
     priorityClassName: platform-default
     podDisruptionBudget:
       minAvailable: 1
+    # Hostname topology-spread + soft anti-affinity so the two replicas
+    # don't co-locate on one node. Chart default has neither, which means
+    # losing one node could 1-minute-blackhole the entire external push
+    # surface until reschedule.
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: alloy
+            app.kubernetes.io/instance: alloy-gateway
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: alloy-gateway
+    # Inner Alloy container -- the chart leaves this unset, so requests
+    # default to {} and Karpenter has zero scheduling signal. Sidecar's
+    # own requests are already set further below.
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 512Mi }
 
     # Mount the nginx config template (rendered from
     # templates/configmap-nginx-auth.yaml) plus the writable scratch

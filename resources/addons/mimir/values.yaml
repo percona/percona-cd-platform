@@ -112,31 +112,110 @@ mimir-distributed:
   # alertmanager) get platform-stateful-high so Karpenter consolidation
   # never preempts them. Stateless edges get platform-default. PDBs sized
   # at minAvailable = replicas - 1 across the board.
+  # Stateless tier -- stays on the Karpenter `default` NodePool (spot+on-demand
+  # mix). Add topologySpreadConstraints so the replicas don't co-locate on one
+  # host (chart default is empty), plus a soft nodeAffinity nudge toward
+  # on-demand (queriers/distributors retry, so spot is acceptable -- this is
+  # preference, not a pin).
   distributor:
     replicas: 3
     priorityClassName: platform-default
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { memory: 2Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: distributor
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
     podDisruptionBudget:
       minAvailable: 2
       maxUnavailable: null  # clear chart default; K8s rejects both being set
+
+  # Stateful tier -- pinned to the `lgtm-stateful` Karpenter NodePool via
+  # nodeSelector + toleration. Annotated with karpenter.sh/do-not-disrupt
+  # so Karpenter never voluntarily evicts a running ingester for
+  # consolidation; the new pool's disruption.budgets also cap involuntary
+  # disruption to one node at a time.
+  #
+  # Per-zone PDB uses maxUnavailable:1 -- when zoneAwareReplication is on,
+  # the chart renders one PDB per zone-aware StatefulSet (each has 1 replica),
+  # so minAvailable:2 was effectively blocking all voluntary evictions of
+  # any zone forever. maxUnavailable:1 lets the rollout-operator restart
+  # one zone at a time, which is the actual HA story.
   ingester:
     replicas: 3
     priorityClassName: platform-stateful-high
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: "1", memory: 4Gi }
+      limits: { memory: 8Gi }
+    zoneAwareReplication:
+      # Chart default is `enabled: true, topologyKey: null` -- the null
+      # topologyKey means NO podAntiAffinity rule is generated, so three
+      # zone-aware replicas could co-locate on one node (which is what
+      # took out the ingester ring on 2026-05-11). Set the documented
+      # production value to emit a hard hostname anti-affinity rule.
+      topologyKey: kubernetes.io/hostname
     podDisruptionBudget:
-      minAvailable: 2
-      maxUnavailable: null  # clear chart default; K8s rejects both being set
+      maxUnavailable: 1
+      minAvailable: null
     persistentVolume:
       enabled: true
       size: 50Gi
       storageClass: gp3
+
   querier:
     replicas: 2
     priorityClassName: platform-default
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: querier
     podDisruptionBudget:
       minAvailable: 1
       maxUnavailable: null  # clear chart default; K8s rejects both being set
+
   store_gateway:
     replicas: 2
     priorityClassName: platform-stateful-high
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { memory: 2Gi }
+    zoneAwareReplication:
+      topologyKey: kubernetes.io/hostname
     podDisruptionBudget:
       minAvailable: 1
       maxUnavailable: null  # clear chart default; K8s rejects both being set
@@ -144,41 +223,121 @@ mimir-distributed:
       enabled: true
       size: 30Gi
       storageClass: gp3
+
   compactor:
     replicas: 1
     priorityClassName: platform-stateful-high
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { memory: 2Gi }
     persistentVolume:
       enabled: true
       size: 30Gi
       storageClass: gp3
+
   query_frontend:
     replicas: 2
     priorityClassName: platform-default
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: query-frontend
     podDisruptionBudget:
       minAvailable: 1
       maxUnavailable: null  # clear chart default; K8s rejects both being set
+
   query_scheduler:
     enabled: true
     replicas: 2
     priorityClassName: platform-default
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: query-scheduler
     podDisruptionBudget:
       minAvailable: 1
       maxUnavailable: null  # clear chart default; K8s rejects both being set
+
   alertmanager:
     enabled: true
     replicas: 3
     priorityClassName: platform-stateful-high
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+    # Chart default is zoneAwareReplication.enabled=false for alertmanager.
+    # Enable to match ingester/store-gateway HA shape: 3 replicas, one
+    # per zone, rollout-operator coordinates restarts.
+    zoneAwareReplication:
+      enabled: true
+      topologyKey: kubernetes.io/hostname
     podDisruptionBudget:
-      minAvailable: 2
-      maxUnavailable: null  # clear chart default; K8s rejects both being set
+      maxUnavailable: 1
+      minAvailable: null
     persistentVolume:
       enabled: true
       size: 5Gi
       storageClass: gp3
+
   ruler:
     enabled: true
-    replicas: 1
+    # Bump from 1 to 2 -- the ruler evaluates recording + alerting rules,
+    # and a single-replica outage during a node drain drops alert delivery
+    # until reschedule. PDB maxUnavailable:1 lets one go at a time.
+    replicas: 2
     priorityClassName: platform-default
+    nodeSelector:
+      workload.percona.com/tier: lgtm-stateful
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: lgtm-stateful
+        effect: NoSchedule
+    podAnnotations:
+      karpenter.sh/do-not-disrupt: "true"
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+    podDisruptionBudget:
+      maxUnavailable: 1
+      minAvailable: null
+
+  # rollout-operator is chart-default enabled in mimir-distributed v6.x;
+  # made explicit here for clarity. It coordinates zone-by-zone restarts
+  # of zone-aware ingester/store-gateway/alertmanager so the ring keeps
+  # quorum during rolling updates.
+  rollout_operator:
+    enabled: true
 
   # MinIO + memcached defaults — disable bundled MinIO (we use S3); keep
   # the chart's bundled memcached caches.
