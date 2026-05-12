@@ -19,3 +19,14 @@ kube-state-metrics:
       enabled: true
       interval: 30s
       honorLabels: true
+  # Expose node labels (instance-type, topology zone/region, arch, os,
+  # karpenter.sh/nodepool, karpenter.sh/capacity-type) as Prometheus labels
+  # on `kube_node_labels`. Required by the forked Karpenter Overview
+  # dashboard: Karpenter v1.x narrowed the per-node `karpenter_nodes_*`
+  # series to nodes WITHOUT a NodeClaim, leaving the inventory pies
+  # (instance type / capacity / zone / etc.) without a per-node source.
+  # `kube_node_labels` is the cleanest substitute and is also useful for
+  # any future Karpenter-managed-fleet dashboard. Default KSM omits
+  # node labels to keep cardinality low; with ~23 nodes here that's fine.
+  metricLabelsAllowlist:
+    - "nodes=[*]"

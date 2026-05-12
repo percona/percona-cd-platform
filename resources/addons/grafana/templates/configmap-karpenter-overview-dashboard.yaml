@@ -1,0 +1,34 @@
+{{/*
+Karpenter / Overview dashboard, forked from grafana.com gnetId 22171 r5.
+
+Karpenter v1.x narrowed the per-node `karpenter_nodes_*` series to nodes
+WITHOUT a Karpenter NodeClaim, so the upstream community dashboard rendered
+the EKS managed-NG bucket instead of the Karpenter-managed fleet (12 panels
++ 8 variables affected). This fork rewrites those queries to use
+aggregate `karpenter_nodepools_*` and KSM `kube_node_labels` /
+`kube_node_status_allocatable`. See
+resources/addons/kube-state-metrics/values.yaml for the
+`metricLabelsAllowlist=nodes=[*]` flag the inventory pies depend on.
+
+Provisioned via the sidecar pattern (label `grafana_dashboard: "1"` +
+folder annotation), same shape as configmap-hetzner-dashboard.yaml.
+The gnetId 22171 entry has been removed from the chart values.
+
+Datasource UID `mimir` is hardcoded in every panel of the JSON
+(unlike gnetId-fetched dashboards, ConfigMap-provisioned ones do
+not pick up the chart's `datasource:` mapping at import time).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-karpenter-overview
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "Platform / Karpenter"
+data:
+  karpenter-overview.json: |-
+{{ .Files.Get "dashboards/karpenter-overview.json" | indent 4 }}

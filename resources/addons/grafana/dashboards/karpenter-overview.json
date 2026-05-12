@@ -1,0 +1,1874 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": []
+  },
+  "description": "Forked from grafana.com gnetId 22171 r5 (kubernetes-autoscaling-mixin Karpenter Overview). Karpenter v1.x narrowed `karpenter_nodes_*` per-node series to nodes WITHOUT a NodeClaim, so the upstream dashboard was rendering the EKS managed-NG nodes instead of the Karpenter-managed fleet. This fork rewrites the affected panels and variables to use aggregate `karpenter_nodepools_*` and KSM `kube_node_labels` (requires kube-state-metrics metricLabelsAllowlist=nodes=[*]). Source of truth for this dashboard is now the in-repo JSON; the gnetId 22171 entry has been removed from the grafana chart values.",
+  "editable": true,
+  "links": [
+    {
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "kubernetes",
+        "autoscaling",
+        "kubernetes-autoscaling-mixin"
+      ],
+      "targetBlank": true,
+      "title": "Kubernetes / Autoscaling",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Cluster Summary",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total CPU allocatable and requested across all Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 0
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "exemplar": false,
+          "expr": "sum(kube_node_status_allocatable{cluster=\"$cluster\",resource=\"cpu\"}\n  * on (node) group_left() (kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"}))",
+          "legendFormat": "Allocatable"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "exemplar": false,
+          "expr": "sum(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"cpu\"})",
+          "legendFormat": "Requested"
+        }
+      ],
+      "title": "Cluster CPU Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The percentage of node pool usage relative to limits.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 0
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "exemplar": false,
+          "expr": "sum(kube_node_status_allocatable{cluster=\"$cluster\",resource=\"memory\"}\n  * on (node) group_left() (kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"}))",
+          "legendFormat": "Allocatable"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "exemplar": false,
+          "expr": "sum(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"memory\"})",
+          "legendFormat": "Requested"
+        }
+      ],
+      "title": "Cluster Memory Utilization",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 4,
+      "title": "Node Pool Summary",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total number of Karpenter node pools.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 0,
+        "y": 7
+      },
+      "id": 5,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count(\n  count(\n    karpenter_nodepools_limit{\n      cluster=\"$cluster\",\njob=~\"$job\"\n\n    }\n  ) by (nodepool)\n)\n",
+          "instant": false
+        }
+      ],
+      "title": "Node Pools",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total number of Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 4,
+        "y": 7
+      },
+      "id": 6,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"nodes\"})",
+          "instant": false
+        }
+      ],
+      "title": "Nodes",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total CPU usage across all node pools.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 8,
+        "y": 7
+      },
+      "id": 7,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"cpu\"\n  }\n)\n",
+          "instant": false
+        }
+      ],
+      "title": "Node Pool CPU Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total memory usage across all node pools.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 12,
+        "y": 7
+      },
+      "id": 8,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"memory\"\n  }\n)\n",
+          "instant": false
+        }
+      ],
+      "title": "Node Pool Memory Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total CPU limits across all node pools.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 16,
+        "y": 7
+      },
+      "id": 9,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"cpu\"\n  }\n)\n",
+          "instant": false
+        }
+      ],
+      "title": "Node Pool CPU Limits",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total memory limits across all node pools.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 20,
+        "y": 7
+      },
+      "id": 10,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"memory\"\n  }\n)\n",
+          "instant": false
+        }
+      ],
+      "title": "Node Pool Memory Limits",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The percentage of node pool usage relative to limits.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 0
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Mean",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "exemplar": false,
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n\n  }\n) by (nodepool, resource_type)\n/\nsum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n\n  }\n) by (nodepool, resource_type) * 100\n",
+          "legendFormat": "{{ nodepool }} / {{ resource_type }}"
+        }
+      ],
+      "title": "Node Pool Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by node pool.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "id": 12,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum by (nodepool)(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"nodes\"})",
+          "instant": true,
+          "legendFormat": "{{ nodepool }}"
+        }
+      ],
+      "title": "Nodes by Node Pool",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by instance type.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "id": 13,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_node_kubernetes_io_instance_type)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ instance_type }}"
+        }
+      ],
+      "title": "Nodes by Instance Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by capacity type.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "id": 14,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_karpenter_sh_capacity_type)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ capacity_type }}"
+        }
+      ],
+      "title": "Nodes by Capacity Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by region.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 23
+      },
+      "id": 15,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_topology_kubernetes_io_region)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ region }}"
+        }
+      ],
+      "title": "Nodes by Region",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by zone.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 23
+      },
+      "id": 16,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_topology_kubernetes_io_zone)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ zone }}"
+        }
+      ],
+      "title": "Nodes by Zone",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by architecture.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 23
+      },
+      "id": 17,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_kubernetes_io_arch)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ arch }}"
+        }
+      ],
+      "title": "Nodes by Arch",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of nodes by operating system.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 23
+      },
+      "id": 18,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "count by (label_kubernetes_io_os)(kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "instant": true,
+          "legendFormat": "{{ os }}"
+        }
+      ],
+      "title": "Nodes by OS",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 19,
+      "title": "Pod Summary",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total CPU requests for all pods on Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 29
+      },
+      "id": 20,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"cpu\"})",
+          "instant": false
+        }
+      ],
+      "title": "Pod CPU Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total memory requests for all pods on Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 29
+      },
+      "id": 21,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(karpenter_nodepools_usage{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"memory\"})",
+          "instant": false
+        }
+      ],
+      "title": "Pod Memory Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total CPU limits for all pods on Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 29
+      },
+      "id": 22,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(karpenter_nodepools_limit{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"cpu\"})",
+          "instant": false
+        }
+      ],
+      "title": "Pod CPU Limits",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The total memory limits for all pods on Karpenter nodes.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 29
+      },
+      "id": 23,
+      "options": {
+        "graphMode": "area",
+        "percentChangeColorMode": "standard",
+        "showPercentChange": false
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(karpenter_nodepools_limit{cluster=\"$cluster\",job=~\"$job\",nodepool=~\"$nodepool\",resource_type=\"memory\"})",
+          "instant": false
+        }
+      ],
+      "title": "Pod Memory Limits",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of pods by node pool.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      },
+      "id": 24,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n    karpenter_pods_state{\n      cluster=\"$cluster\",\njob=~\"$job\"\n,\n      nodepool=~\"$nodepool\"\n    }\n) by (nodepool)\n",
+          "instant": true,
+          "legendFormat": "{{ nodepool }}"
+        }
+      ],
+      "title": "Pods by Node Pool",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of pods by instance type.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "id": 25,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n    karpenter_pods_state{\n      cluster=\"$cluster\",\njob=~\"$job\"\n,\n      nodepool=~\"$nodepool\"\n    }\n) by (instance_type)\n",
+          "instant": true,
+          "legendFormat": "{{ instance_type }}"
+        }
+      ],
+      "title": "Pods by Instance Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "The distribution of pods by capacity type.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "id": 26,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n    karpenter_pods_state{\n      cluster=\"$cluster\",\njob=~\"$job\"\n,\n      nodepool=~\"$nodepool\"\n    }\n) by (capacity_type)\n",
+          "instant": true,
+          "legendFormat": "{{ capacity_type }}"
+        }
+      ],
+      "title": "Pods by Capacity Type",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 27,
+      "title": "Node Pools",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Summary of all Karpenter node pools with resource usage and limits.",
+      "fieldConfig": {
+        "defaults": {
+          "links": [],
+          "thresholds": {
+            "steps": []
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Allocated"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Limit"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage Usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Storage Limit"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 28,
+      "options": {
+        "footer": {
+          "enablePagination": true
+        },
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Node Pool"
+          }
+        ]
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"cpu\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodes_allocatable{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"cpu\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"cpu\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"memory\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodes_allocatable{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"memory\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"memory\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"nodes\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"nodes\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"pods\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"pods\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_usage{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"ephemeral_storage\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum(\n  karpenter_nodepools_limit{\n    cluster=\"$cluster\",\njob=~\"$job\"\n,\nnodepool=~\"$nodepool\"\n,\n    resource_type=\"ephemeral_storage\"\n  }\n) by (job, namespace, nodepool)\n",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "title": "Node Pools",
+      "transformations": [
+        {
+          "id": "merge"
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true
+            },
+            "indexByName": {
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7,
+              "Value #G": 8,
+              "Value #H": 9,
+              "Value #I": 10,
+              "Value #J": 11,
+              "Value #K": 12,
+              "Value #L": 13,
+              "namespace": 0,
+              "nodepool": 1
+            },
+            "renameByName": {
+              "Value #A": "CPU Usage",
+              "Value #B": "CPU Allocated",
+              "Value #C": "CPU Limit",
+              "Value #D": "Memory Usage",
+              "Value #E": "Memory Allocated",
+              "Value #F": "Memory Limit",
+              "Value #G": "Nodes Count",
+              "Value #H": "Nodes Limit",
+              "Value #I": "Max Pods Count",
+              "Value #J": "Max Pods Limit",
+              "Value #K": "Storage Usage",
+              "Value #L": "Storage Limit",
+              "namespace": "Namespace",
+              "nodepool": "Node Pool"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
+      "id": 29,
+      "title": "Nodes",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Summary of all Karpenter nodes with CPU and memory utilization.",
+      "fieldConfig": {
+        "defaults": {
+          "links": [],
+          "thresholds": {
+            "steps": []
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU Utilization"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "percentage",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 33
+                    },
+                    {
+                      "color": "red",
+                      "value": 66
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Utilization"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "percentage",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 33
+                    },
+                    {
+                      "color": "red",
+                      "value": 66
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Instance Memory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decmbytes"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "id": 30,
+      "options": {
+        "footer": {
+          "enablePagination": true
+        },
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "CPU Utilization"
+          }
+        ]
+      },
+      "pluginVersion": "v11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "(\n  sum by (node) (kube_pod_container_resource_requests{cluster=\"$cluster\",resource=\"cpu\"})\n  /\n  sum by (node) (kube_node_status_allocatable{cluster=\"$cluster\",resource=\"cpu\"})\n) * 100\n* on (node) group_left(\n    label_karpenter_sh_nodepool,\n    label_node_kubernetes_io_instance_type,\n    label_topology_kubernetes_io_region,\n    label_topology_kubernetes_io_zone,\n    label_kubernetes_io_os,\n    label_karpenter_sh_capacity_type,\n    label_kubernetes_io_arch\n  ) (kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "(\n  sum by (node) (kube_pod_container_resource_requests{cluster=\"$cluster\",resource=\"memory\"})\n  /\n  sum by (node) (kube_node_status_allocatable{cluster=\"$cluster\",resource=\"memory\"})\n) * 100\n* on (node) group_left(\n    label_karpenter_sh_nodepool,\n    label_node_kubernetes_io_instance_type,\n    label_topology_kubernetes_io_region,\n    label_topology_kubernetes_io_zone,\n    label_kubernetes_io_os,\n    label_karpenter_sh_capacity_type,\n    label_kubernetes_io_arch\n  ) (kube_node_labels{cluster=\"$cluster\",label_karpenter_sh_nodepool=~\"$nodepool\"})",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "title": "Nodes",
+      "transformations": [
+        {
+          "id": "merge"
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true
+            },
+            "indexByName": {
+              "Value #A": 6,
+              "Value #B": 7,
+              "instance_cpu": 4,
+              "instance_memory": 5,
+              "instance_type": 3,
+              "namespace": 0,
+              "node_name": 1,
+              "nodepool": 2
+            },
+            "renameByName": {
+              "Value #A": "CPU Utilization",
+              "Value #B": "Memory Utilization",
+              "arch": "Architecture",
+              "capacity_type": "Capacity Type",
+              "instance_cpu": "Instance CPU",
+              "instance_memory": "Instance Memory",
+              "instance_network_bandwidth": "Instance Network Bandwidth",
+              "instance_type": "Instance Type",
+              "namespace": "Namespace",
+              "node_name": "Node Name",
+              "nodepool": "Node Pool",
+              "os": "OS",
+              "region": "Region",
+              "zone": "Zone"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "kubernetes",
+    "autoscaling",
+    "kubernetes-autoscaling-mixin",
+    "karpenter"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "default",
+          "value": "default"
+        },
+        "label": "Data source",
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "hide": 2,
+        "label": "Cluster",
+        "name": "cluster",
+        "query": "label_values(kube_pod_info{job=~\"kube-state-metrics\"}, cluster)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "label": "Job",
+        "name": "job",
+        "query": "label_values(karpenter_nodepools_usage{cluster=\"$cluster\"}, job)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(karpenter_nodepools_usage{cluster=\"$cluster\"}, job)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Region",
+        "multi": true,
+        "name": "region",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_topology_kubernetes_io_region)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_topology_kubernetes_io_region)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Zone",
+        "multi": true,
+        "name": "zone",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_topology_kubernetes_io_zone)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_topology_kubernetes_io_zone)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Architecture",
+        "multi": true,
+        "name": "arch",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_kubernetes_io_arch)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_kubernetes_io_arch)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Operating System",
+        "multi": true,
+        "name": "os",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_kubernetes_io_os)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_kubernetes_io_os)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Instance Type",
+        "multi": true,
+        "name": "instance_type",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_node_kubernetes_io_instance_type)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_node_kubernetes_io_instance_type)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Capacity Type",
+        "multi": true,
+        "name": "capacity_type",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_karpenter_sh_capacity_type)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_karpenter_sh_capacity_type)"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "includeAll": true,
+        "label": "Node Pool",
+        "multi": true,
+        "name": "nodepool",
+        "query": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_karpenter_sh_nodepool)",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query",
+        "definition": "label_values(kube_node_labels{cluster=\"$cluster\"}, label_karpenter_sh_nodepool)"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "utc",
+  "title": "Kubernetes / Autoscaling / Karpenter / Overview (forked)",
+  "uid": "karpenter-overview-fork"
+}
