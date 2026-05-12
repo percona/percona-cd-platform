@@ -103,6 +103,22 @@ mimir-distributed:
         # accommodates the ~5K mimir-mixin recording series plus future
         # KSM / Karpenter / Loki cardinality growth.
         max_global_series_per_user: 1500000
+        # Per-series label-name cap. Default is 30, which Karpenter v1.x and
+        # KSM with `metricLabelsAllowlist=nodes=[*]` both exceed:
+        # - `karpenter_nodes_*` for Karpenter-managed nodes ships 33 labels
+        #   (v1 added the instance_* metadata block: instance_cpu,
+        #   instance_memory, instance_family, instance_size, instance_gpu_*,
+        #   instance_network_bandwidth, etc.), and the distributor rejects
+        #   each series with err-mimir-max-label-names-per-series. The series
+        #   for EKS managed-NG nodes (fewer labels) slip through, which is
+        #   why the upstream Karpenter Overview dashboard was rendering only
+        #   the managed-NG bucket.
+        # - `kube_node_labels` from KSM ships ~36 labels per node once node
+        #   labels are exposed (instance type, topology, every karpenter.sh/
+        #   and karpenter.k8s.aws/ label, plus failure_domain_beta_*).
+        # 60 gives ~2x headroom over the current ~36 worst case so future
+        # node label growth doesn't silently re-break dashboards.
+        max_label_names_per_series: 60
 
   # Distributed-mode replicas. WAL PVCs use the cluster-default `gp3`
   # StorageClass (multi-AZ, Delete) — losing an ingester WAL costs ≤2h of
