@@ -785,6 +785,114 @@
           }
         ]
       }
+    },
+    {
+      "id": 104,
+      "title": "Plugin version per master",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Live Hetzner plugin version reported by each master via hetzner_plugin_info. Use this to confirm a fleet rollout has activated (busy masters retain the prior in-memory version until JVM restart).",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 300
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "hetzner_plugin_info{master=~\"$master\"}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "exported_master": true
+            },
+            "renameByName": {
+              "master": "Master",
+              "plugin_version": "Plugin version",
+              "jenkins_baseline": "Jenkins baseline",
+              "fork": "Fork"
+            },
+            "indexByName": {
+              "master": 0,
+              "plugin_version": 1,
+              "jenkins_baseline": 2,
+              "fork": 3
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Master"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Plugin version"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": "^103\\.percona\\.14$",
+                      "result": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "103.percona.14"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "refresh": "1m",
