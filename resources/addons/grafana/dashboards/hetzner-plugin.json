@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Hetzner Cloud Jenkins plugin (v103.percona.9+): circuit breakers, provisioning latency, rate-limit headroom, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. PS-10997 Phase 3 MVP.",
+  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -116,7 +116,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Successful provisions / total provision attempts, last 5 minutes. Returns NaN if no attempts in window.",
+      "description": "Successful provisions / total provision attempts, last 5 minutes. Shows 'no attempts' (not red) when the fleet is idle.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -144,7 +144,8 @@
                 "value": 0.95
               }
             ]
-          }
+          },
+          "noValue": "no attempts"
         }
       },
       "options": {
@@ -165,8 +166,8 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum(rate(hetzner_provision_attempts_total{master=~\"$master\",outcome=\"success\"}[5m])) / clamp_min(sum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m])), 1e-9)",
-          "refId": "A"
+          "refId": "A",
+          "expr": "sum(rate(hetzner_provision_attempts_total{master=~\"$master\",outcome=\"success\"}[5m]))\n/\nsum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m]))\nunless sum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m])) == 0"
         }
       ]
     },
@@ -286,7 +287,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "In-flight provisions (gauge) overlaid with orphan-server reap rate (5m). A growing gap suggests provision attempts are leaking.",
+      "description": "In-flight provisions (left axis, count) overlaid with orphan-server reap rate (right axis, events/sec). A growing gap suggests provision attempts are leaking.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -300,7 +301,49 @@
             "lineInterpolation": "smooth",
             "fillOpacity": 10
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "ops"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "reap rate (events/sec)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "pending"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -340,7 +383,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Increase over the last hour: CRW death canary, uncaught provision exceptions, ghost nodes removed, DC failovers. Any non-zero value warrants a glance at the logs panel below.",
+      "description": "Increase over the last hour. CRW underflow + Uncaught are structural-fault canaries: any non-zero value indicates a code-level bug. Ghost nodes + DC failovers are routine events; small numbers are normal. Empty (no series) renders as 0.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -366,7 +409,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "0"
         }
       },
       "options": {
@@ -388,36 +432,36 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum(increase(hetzner_provision_underflow_total{master=~\"$master\"}[1h])) or on() vector(0)",
-          "legendFormat": "CRW underflow",
-          "refId": "A"
+          "refId": "A",
+          "expr": "sum(increase(hetzner_provision_underflow_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "CRW underflow"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum(increase(hetzner_provision_uncaught_exceptions_total{master=~\"$master\"}[1h])) or on() vector(0)",
-          "legendFormat": "Uncaught",
-          "refId": "B"
+          "refId": "B",
+          "expr": "sum(increase(hetzner_provision_uncaught_exceptions_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Uncaught"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum(increase(hetzner_ghost_nodes_removed_total{master=~\"$master\"}[1h])) or on() vector(0)",
-          "legendFormat": "Ghost nodes",
-          "refId": "C"
+          "refId": "C",
+          "expr": "sum(increase(hetzner_ghost_nodes_removed_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Ghost nodes"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum(increase(hetzner_dc_failover_total{master=~\"$master\"}[1h])) or on() vector(0)",
-          "legendFormat": "DC failovers",
-          "refId": "D"
+          "refId": "D",
+          "expr": "sum(increase(hetzner_dc_failover_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "DC failovers"
         }
       ]
     },
@@ -465,7 +509,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "WARN/ERROR/INFO message rate parsed via logfmt. Unparseable lines are dropped; non-zero ERROR rate is the leading indicator most operators want.",
+      "description": "Message rate by Java JUL level, parsed from line-start before the colon. SLF4J output via the Jenkins SimpleFormatter renders as `<date>\\t<class> <method>\\n<LEVEL>: <message>`, so the level is anchored at the start of the second line.",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -498,9 +542,249 @@
           },
           "refId": "A",
           "legendFormat": "{{level}}",
-          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | regexp `\\t(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE)\\t` [5m]))"
+          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | regexp `(?m)^(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE):\\s` [5m]))"
         }
       ]
+    },
+    {
+      "id": 100,
+      "title": "API request rate by status class",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Hetzner API request rate split by HTTP status class (2xx/4xx/5xx/network). Leading indicator before the rate-limit gauge moves during a Hetzner-side incident.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (master, status_class) (rate(hetzner_api_requests_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "{{master}} {{status_class}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 101,
+      "title": "API latency p95 / p99 by method",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per-method Hetzner API latency. Tells you whether boot-time slowness is Hetzner-side (this panel) vs launcher-side (panel 3 'provision latency') vs token-throttle (panel 4 'rate-limit headroom').",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (method, le) (rate(hetzner_api_request_duration_seconds_bucket{master=~\"$master\"}[5m])))",
+          "legendFormat": "{{method}} p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (method, le) (rate(hetzner_api_request_duration_seconds_bucket{master=~\"$master\"}[5m])))",
+          "legendFormat": "{{method}} p99"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "id": 102,
+      "title": "Provision skipped + leaked",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Why provisions are NOT happening (skipped by reason) and whether the plugin had to declare a server leaked (provisioned but never reached the launcher). Answers 'builds are queueing but nothing spawns'.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 200
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (reason) (rate(hetzner_provision_skipped_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "skipped: {{reason}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (master, template) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "leaked: {{master}} {{template}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          }
+        }
+      }
+    },
+    {
+      "id": 103,
+      "title": "Capacity: running / pending vs cap",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per-master running and pending Hetzner workers with the configured cap as a dashed reference. Makes 'capacity exhausted' vs 'provisioning leaking' obvious at a glance.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 200
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\"})",
+          "legendFormat": "{{master}} running"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (master) (hetzner_provisioning_pending{master=~\"$master\"})",
+          "legendFormat": "{{master}} pending"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "sum by (master) (hetzner_instance_cap{master=~\"$master\"})",
+          "legendFormat": "{{master}} cap"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*cap$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "refresh": "1m",
@@ -545,6 +829,38 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "definition": "label_values(hetzner_dc_circuit_breaker_state, location)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Location (DC)",
+        "multi": true,
+        "name": "location",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(hetzner_dc_circuit_breaker_state, location)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -556,6 +872,6 @@
   "timezone": "",
   "title": "Hetzner Cloud Plugin",
   "uid": "hetzner-plugin",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
