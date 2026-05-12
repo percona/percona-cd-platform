@@ -496,7 +496,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | line_format \"[{{.master}}] {{ __line__ }}\"",
+          "expr": "{master=~\"$master\"} |~ \"(c\\\\.d\\\\.j\\\\.p|cloud\\\\.dnation\\\\.jenkins\\\\.plugins)\\\\.hetzner\" | line_format \"[{{.master}}] {{ __line__ }}\"",
           "refId": "A"
         }
       ]
@@ -509,7 +509,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Message rate by Java JUL level, parsed from line-start before the colon. SLF4J output via the Jenkins SimpleFormatter renders as `<date>\\t<class> <method>\\n<LEVEL>: <message>`, so the level is anchored at the start of the second line.",
+      "description": "Message rate by JUL level. Jenkins logs in single-line tab-delimited format: `<date>+<tz> [id=N]\\t<LEVEL>\\t<class>#<method>: <msg>`. Header lines abbreviate the package to `c.d.j.p.hetzner.X`; stack traces keep the full FQCN. Filter matches both forms.",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -542,7 +542,7 @@
           },
           "refId": "A",
           "legendFormat": "{{level}}",
-          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |= \"cloud.dnation.jenkins.plugins.hetzner\" | regexp `(?m)^(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE):\\s` [5m]))"
+          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |~ \"(c\\\\.d\\\\.j\\\\.p|cloud\\\\.dnation\\\\.jenkins\\\\.plugins)\\\\.hetzner\" |~ \"\\t(SEVERE|WARNING|INFO|CONFIG|FINE)\\t\" | regexp `\\t(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE)\\t` [5m]))"
         }
       ]
     },
