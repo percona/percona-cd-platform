@@ -26,7 +26,28 @@ just tf-plan           # TF plan
 just tf-apply          # TF apply
 ```
 
-State bucket + lock are pre-created — see [`docs/runbooks/bootstrap-state.md`](docs/runbooks/bootstrap-state.md).
+State bucket + lock are pre-created, see [`docs/runbooks/bootstrap-state.md`](docs/runbooks/bootstrap-state.md).
+
+## Compute topology
+
+Five tiers, each with a single canonical `workload.percona.com/tier` label and
+(where exclusive) a matching taint. Workloads opt in via `nodeSelector` +
+`tolerations`. `general` is untainted and is the safe fallthrough.
+
+| Tier | Capacity | Notes |
+|---|---|---|
+| `bootstrap` | EKS MNG, `m6a.large` × 3 multi-AZ on-demand | ArgoCD, Karpenter itself, AWS LB controller, external-secrets. Taint `CriticalAddonsOnly=true:NoSchedule` (AWS-canonical key the chart defaults already tolerate). |
+| `lgtm-stateful` | Karpenter NodePool, on-demand `r7a/r7i/m7a/m7i × large/xlarge/2xlarge` multi-AZ | Mimir/Loki/Tempo ingesters, store-gateway, compactor, alertmanager. Configured to behave like an MNG (no spot, no consolidation under load, no AMI-drift recycling, every pod carries `karpenter.sh/do-not-disrupt`) while keeping multi-AZ and instance-family flex. |
+| `obs-state` | EKS MNG `prometheus_system`, `m6a.large` × 1 us-east-1a | kube-state-metrics, prometheus-operator-CRDs, single-AZ supports. |
+| `jenkins-master` | EKS MNG `jenkins_system`, `m6a.xlarge` × 1 us-east-1a | In-cluster Jenkins master PoC (`jenkins-ps3-k8s`). |
+| `general` | Karpenter NodePool `default`, spot + on-demand `c7/m7/r7-i/a` | Stateless LGTM components, Grafana, alloy-gateway, Authentik web tier, anything without an explicit tier. |
+
+Both EKS MNGs and Karpenter NodePools are in use. MNGs handle bootstrap and
+the single-AZ pinned stateful workloads; Karpenter covers everything that
+benefits from multi-AZ + instance-family flex (LGTM stateful, all stateless).
+The 2026-05-11 LGTM outage drove the stateful split, see
+[`docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md)
+for the full reasoning.
 
 ## Documentation
 
