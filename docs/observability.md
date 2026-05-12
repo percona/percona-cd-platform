@@ -26,20 +26,16 @@ this page is the operator's tour.
                                           ▼                          ▼                                   ▼
    ┌───────────────────────────────────  Mimir (distributed)         Loki (distributed)                Tempo (distributed)
    │                                     ────────────────────        ────────────────────              ────────────────────
-   │ kube-prometheus-stack:              distributor x3              distributor x3                   distributor x3
-   │   prometheus-operator               ingester x3 ─► S3           ingester x3 ─► S3                ingester x3 ─► S3
-   │   prometheus (agent, 24h WAL) ──────────────remoteWrite──────►  query-frontend x2                query-frontend x2
-   │   alertmanager x3 (HA)              query-frontend x2           querier x2                       querier x2
-   │   node-exporter (DS)                querier x2                  compactor x1                     compactor x1
-   │   kube-state-metrics                store-gateway x2            index-gateway x2
-   │                                     compactor x1                ruler x1
-   │                                     ruler x1
-   │                                     alertmanager x3
+   │ in-cluster scrape + rules           distributor x3              distributor x3                   distributor x3
+   │ (ADR 0016, kps retired):            ingester x3 ─► S3           ingester x3 ─► S3                ingester x3 ─► S3
+   │   prometheus-operator-crds          query-frontend x2           query-frontend x2                query-frontend x2
+   │   kube-state-metrics                querier x2                  querier x2                       querier x2
+   │   prometheus-node-exporter (DS)     store-gateway x2            index-gateway x2                 compactor x1
+   │   alloy (DaemonSet) ─── SM scrape   compactor x1                compactor x1
+   │     pod logs   ─► Loki distrib.     ruler x1 ◄── PrometheusRule ruler x1
+   │     OTLP traces ─► Tempo distrib.   alertmanager x3
+   │     metrics    ─► Mimir distrib.
    ▼
-   alloy (DaemonSet)
-   ────────────────────
-   pod logs ─► Loki distributor (in-cluster)
-   OTLP traces ─► Tempo distributor (in-cluster)
 
 
    ┌───────────────────────────────────  Grafana (standalone, HA x2)  ──┐
@@ -60,12 +56,15 @@ this page is the operator's tour.
 | 2 | external-secrets (with ClusterSecretStore) | `resources/addons/external-secrets/` |
 | 3 | karpenter | `resources/addons/karpenter/` |
 | 4 | mimir, loki, tempo | `resources/addons/{mimir,loki,tempo}/` |
-| 5 | kube-prometheus-stack (Prom agent + AM HA), alloy DaemonSet | `resources/addons/kube-prometheus-stack/`, `alloy/` |
+| 5 | prometheus-operator-crds, kube-state-metrics, prometheus-node-exporter, alloy DaemonSet | `resources/addons/{prometheus-operator-crds,kube-state-metrics,prometheus-node-exporter,alloy}/` |
 | 6 | grafana, alloy-gateway | `resources/addons/grafana/`, `alloy-gateway/` |
 
-Order matters: Mimir/Loki/Tempo must be running before Prometheus
-remoteWrite or Alloy can ship anything. Grafana ships last so all
-datasources are up at first reconcile.
+Order matters: Mimir/Loki/Tempo must be running before Alloy can ship
+anything. Grafana ships last so all datasources are up at first
+reconcile. Alloy's scrape config consumes ServiceMonitor / PodMonitor
+CRDs from `prometheus-operator-crds` (no operator pod -- CRDs only).
+Alerting rules are evaluated by Mimir's ruler against `PrometheusRule`
+CRDs from the same chart. See [ADR 0016](adr/0016-lgtm-only-metrics-stack.md).
 
 ## Object storage
 
@@ -91,8 +90,12 @@ CMK only — no cross-component access.
 Mimir  → http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus
 Loki   → http://loki-query-frontend.loki.svc.cluster.local:3100
 Tempo  → http://tempo-query-frontend.tempo.svc.cluster.local:3100
-Prom   → http://prometheus-operated.monitoring.svc.cluster.local:9090   (transitional)
 ```
+
+Mimir is the only metrics datasource (default). The previous in-cluster
+`prometheus-operated` Service is gone with kps retirement (ADR 0016);
+Alloy DaemonSet scrapes ServiceMonitors and pushes to Mimir, so all
+queries hit the long-term store.
 
 X-Scope-OrgID for Mimir is hardcoded to `percona-ci` (single-tenant); set
 by Grafana datasource secureJsonData and by Prometheus remoteWrite headers.
@@ -172,7 +175,7 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 - Mimir ingester memory: bump if `cortex_ingester_memory_series` exceeds 2 M / replica
 - Loki ingester memory: bump if `loki_ingester_memory_streams` exceeds 200k / replica
 - Tempo ingester memory: bump if `tempo_ingester_blocks_flushed_total` rate spikes
-- Prometheus WAL: bump PVC if `prometheus_remote_storage_samples_pending` accumulates
+- Alloy queue: bump if `prometheus_remote_write_wal_samples_pending` (Alloy DS) accumulates
 
 ## Restore + cutover runbooks
 
@@ -182,6 +185,11 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 ## Related decisions
 
 - [ADR 0010 — distributed LGTM](adr/0010-distributed-lgtm.md) (this stack)
-- [ADR 0006 — kube-prometheus-stack-only](adr/0006-kube-prometheus-stack-over-mimir.md) (superseded)
+- [ADR 0016 — LGTM-only metrics stack](adr/0016-lgtm-only-metrics-stack.md) (kps retirement; standalone CRDs + KSM + node-exporter)
+- [ADR 0013 — push from masters with nginx bearer](adr/0013-push-from-masters-with-nginx-bearer.md) (external push via alloy-gateway)
+- [ADR 0014 — memberlist cluster_label isolation](adr/0014-memberlist-cluster-label-isolation.md)
+- [ADR 0015 — LGTM bucket Object Lock removed](adr/0015-lgtm-bucket-object-lock-removed.md)
+- [ADR 0017 — cluster tier taxonomy + LGTM pinning](adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md)
+- [ADR 0006 — kube-prometheus-stack-only](adr/0006-kube-prometheus-stack-over-mimir.md) (superseded by 0010 + 0016)
 - [ADR 0008 — managed NG for stateful workloads](adr/0008-managed-ng-for-stateful-system-workloads.md)
 - [ADR 0009 — scrape vs remote_write for Jenkins fleet](adr/0009-scrape-vs-remote-write-for-jenkins-fleet.md)

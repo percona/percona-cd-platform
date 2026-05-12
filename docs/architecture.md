@@ -79,7 +79,7 @@ Tier taxonomy from [ADR 0017](adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md
 - [`karpenter.md`](karpenter.md) — NodePool tuning, spot fallback, tier-taint exclusion
 - [`observability.md`](observability.md) — LGTM stack values, AZ pinning, master-side Alloy push pipeline (ADR 0013)
 - [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) — Probe / additionalScrapeConfigs / bearer-token / Option A→B migration
-- [`lgtm-evaluation.md`](lgtm-evaluation.md) — historical evaluation (LGTM is adopted; see [ADR 0010](adr/0010-distributed-lgtm.md) and [ADR 0016](adr/0016-lgtm-only-metrics-stack.md) for the current architecture)
+- [ADR 0010](adr/0010-distributed-lgtm.md), [ADR 0016](adr/0016-lgtm-only-metrics-stack.md) — distributed LGTM stack, kube-prometheus-stack retirement
 - [`lessons-from-poc.md`](lessons-from-poc.md) — verbatim lift from the prior PoC
 
 ## Runbooks
