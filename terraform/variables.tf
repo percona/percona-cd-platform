@@ -89,6 +89,11 @@ variable "access_entries" {
     type              = optional(string, "STANDARD")
   }))
   default = {}
+
+  validation {
+    condition     = length(var.access_entries) > 0
+    error_message = "Set at least one access_entry; enable_cluster_creator_admin_permissions=false leaves no admin path otherwise (docs/eks-hardening.md #1)."
+  }
 }
 
 variable "api_public_access_cidrs" {

@@ -38,12 +38,16 @@
 
 ## NodeGroups
 
-| NG | Capacity | AZ | Taint | Hosts |
-|---|---|---|---|---|
-| `system` | on-demand (`t3.medium × 2`) | multi-AZ | none | kube-system DaemonSets, Karpenter controller, ArgoCD, LB Controller, EDNS, EBS-CSI |
-| `prometheus-system` | on-demand (`m6a.large × 1`) | us-east-1a | `workload=prometheus:NoSchedule` | kube-prometheus-stack pods |
-| `jenkins-system` | on-demand (`m6a.xlarge × N`) | us-east-1a | `workload=jenkins:NoSchedule` | Jenkins master StatefulSets |
-| Karpenter NodePool `default` | spot + on-demand fallback | multi-AZ | (excludes both stateful taints) | Everything else (jenkins-proxy NGINX Deployments, future workloads) |
+Tier taxonomy from [ADR 0017](adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md). Every node carries `workload.percona.com/tier=<tier>`; consumers select via that key.
+
+| NG | Capacity | AZ | Tier label | Taint | Hosts |
+|---|---|---|---|---|---|
+| `system` | on-demand (`m6a.large × 3`) | multi-AZ | `bootstrap` | `CriticalAddonsOnly=true:NoSchedule` | bootstrap-tier addons (Karpenter controller, ArgoCD, AWS LB Controller, external-dns, external-secrets, kube-state-metrics) -- explicit tolerations required |
+| `prometheus_system` | on-demand (`m6a.large × 1`) | us-east-1a | `obs-state` | `workload.percona.com/tier=obs-state:NoSchedule` | LGTM stateful pods (Mimir ingester/store-gateway, Loki ingester, Tempo ingester, Grafana) -- single-AZ for EBS zonality |
+| `jenkins_system` | on-demand (`m6a.xlarge × N`) | us-east-1a | `jenkins-master` | `workload.percona.com/tier=jenkins-master:NoSchedule` | Jenkins master StatefulSets (`ps3-k8s` today, more after migration) |
+| Karpenter NodePool `default` | spot + on-demand fallback | multi-AZ | (Karpenter-provisioned) | `NotIn` the two stateful tier taints | Everything else: jenkins-proxy NGINX Deployments, Alloy agents, ArgoCD ApplicationSet workloads |
+
+`m6a.large × 3` for `system` replaced the original `t3.medium × 2` after a 2026-05-11 control-plane outage: kubelet timed out responding to API-server health checks on t3.medium nodes when CPUCreditBalance hit zero. m6a.large is non-burstable (fixed price, no credit dynamics). See `terraform/locals.tf` `ng.system` comment for the full incident note.
 
 ## Storage
 
@@ -62,7 +66,7 @@
 | 1 | `aws-load-balancer-controller` | Ingresses need it |
 | 2 | `external-dns` | Needs LB Controller to publish ALB endpoints |
 | 3 | `karpenter` | After LB controller |
-| 4 | `kube-prometheus-stack` | Last — everything it scrapes is up |
+| 4 | LGTM stack (mimir, loki, tempo, grafana, alloy + prometheus-operator-crds, kube-state-metrics, prometheus-node-exporter) | Last -- everything they scrape / receive pushes from is up. See [ADR 0016](adr/0016-lgtm-only-metrics-stack.md) for the kube-prometheus-stack retirement. |
 
 `cert-manager` is intentionally not in v1 — see `docs/adr/0007-cert-manager-deferred.md`.
 
@@ -72,10 +76,10 @@
 - [`tls-strategy.md`](tls-strategy.md) — ACM wildcard + per-Ingress ssl-policy
 - [`pod-identity.md`](pod-identity.md) — five associations + agent addon
 - [`argocd-bootstrap.md`](argocd-bootstrap.md) — GitOps Bridge mechanics
-- [`karpenter.md`](karpenter.md) — NodePool tuning, spot fallback, taint exclusion
-- [`observability.md`](observability.md) — kube-prometheus-stack values, AZ pinning, remote-write upgrade path
+- [`karpenter.md`](karpenter.md) — NodePool tuning, spot fallback, tier-taint exclusion
+- [`observability.md`](observability.md) — LGTM stack values, AZ pinning, master-side Alloy push pipeline (ADR 0013)
 - [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) — Probe / additionalScrapeConfigs / bearer-token / Option A→B migration
-- [`lgtm-evaluation.md`](lgtm-evaluation.md) — why LGTM is deferred
+- [`lgtm-evaluation.md`](lgtm-evaluation.md) — historical evaluation (LGTM is adopted; see [ADR 0010](adr/0010-distributed-lgtm.md) and [ADR 0016](adr/0016-lgtm-only-metrics-stack.md) for the current architecture)
 - [`lessons-from-poc.md`](lessons-from-poc.md) — verbatim lift from the prior PoC
 
 ## Runbooks

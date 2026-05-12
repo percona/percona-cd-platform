@@ -20,11 +20,12 @@ repos:
       - id: terraform_validate
         args: [--hook-config=--retry-once-with-cleanup=true]
 
-  - repo: https://github.com/terraform-linters/tflint
-    rev: v0.62.0
-    hooks:
-      - id: tflint
-        args: [--recursive]
+  # tflint intentionally omitted -- the terraform plugin bundled with
+  # tflint <=0.62.0 doesn't parse OpenTofu 1.8+ early-eval syntax
+  # (`module.source = local.modules.<name>.source`), which we use as the
+  # single source of truth for module pins (versions.tf, decision D11).
+  # CI also skips tflint for the same reason (.github/workflows/ci.yml).
+  # Re-add when upstream ships an early-eval-aware ruleset.
 
   - repo: https://github.com/aquasecurity/trivy
     rev: v0.70.0

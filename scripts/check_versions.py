@@ -109,6 +109,7 @@ def main() -> int:
     rows.append(Pin("OpenTofu", "1.11.6", latest, stable[0][1] if stable else "?", status("1.11.6", latest)))
 
     extra_tools = [
+        ("hashicorp/random provider", "hashicorp/terraform-provider-random", "v", "3.8.1"),
         ("tflint", "terraform-linters/tflint", "v", "0.55.1"),
         ("actionlint", "rhysd/actionlint", "v", "TBD"),
         ("zizmor", "woodruffw/zizmor", "v", "TBD"),
