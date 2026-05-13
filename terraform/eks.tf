@@ -1,5 +1,7 @@
-# EKS control plane + three managed node groups (system, prometheus_system, jenkins_system).
+# EKS control plane + two managed node groups (system, prometheus_system).
 # Karpenter handles workload nodes; managed NGs host stateful + bootstrap pods only.
+# jenkins_system NG was removed 2026-05-13: no Jenkins master pod ever claimed
+# its taint, so the m6a.xlarge was running only DaemonSets at ~$126/mo.
 #
 # Hardening baked in (see docs/eks-hardening.md):
 #   1. authentication_mode = "API" + enable_cluster_creator_admin_permissions = false
@@ -110,33 +112,6 @@ module "eks" {
       }
     }
 
-    jenkins_system = {
-      instance_types = local.ng.jenkins_system.instance_types
-      capacity_type  = "ON_DEMAND"
-      min_size       = local.ng.jenkins_system.min_size
-      desired_size   = local.ng.jenkins_system.desired_size
-      max_size       = local.ng.jenkins_system.max_size
-      subnet_ids     = [module.vpc.private_subnets[0]] # us-east-1a — EBS zonality
-      # Tier taxonomy: `workload.percona.com/tier=jenkins-master`. Legacy
-      # `workload=jenkins` / `node-role=stateful` keys + taint were
-      # dropped after the Jenkins ps3-k8s wrapper migrated.
-      labels = {
-        "workload.percona.com/tier"       = "jenkins-master"
-        "workload.percona.com/managed-by" = "mng"
-      }
-      taints = {
-        tier = {
-          key    = "workload.percona.com/tier"
-          value  = "jenkins-master"
-          effect = "NO_SCHEDULE"
-        }
-      }
-      metadata_options = {
-        http_tokens                 = "required"
-        http_put_response_hop_limit = 1
-        http_endpoint               = "enabled"
-      }
-    }
   }
 
   # Karpenter discovers the SGs to attach to its launched nodes via the

@@ -64,11 +64,5 @@ locals {
       desired_size   = 1
       max_size       = 2
     }
-    jenkins_system = {
-      instance_types = ["m6a.xlarge"]
-      min_size       = 1
-      desired_size   = 1
-      max_size       = 5
-    }
   }
 }
