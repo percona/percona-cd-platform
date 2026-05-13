@@ -134,7 +134,7 @@ mimir-distributed:
   # on-demand (queriers/distributors retry, so spot is acceptable -- this is
   # preference, not a pin).
   distributor:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-default
     resources:
       requests: { cpu: 500m, memory: 1Gi }
@@ -213,7 +213,7 @@ mimir-distributed:
       storageClass: gp3
 
   querier:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     resources:
       requests: { cpu: 200m, memory: 512Mi }
@@ -286,7 +286,7 @@ mimir-distributed:
       storageClass: gp3
 
   query_frontend:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     resources:
       requests: { cpu: 200m, memory: 512Mi }
@@ -304,7 +304,7 @@ mimir-distributed:
 
   query_scheduler:
     enabled: true
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     resources:
       requests: { cpu: 200m, memory: 512Mi }
@@ -362,10 +362,9 @@ mimir-distributed:
 
   ruler:
     enabled: true
-    # Bump from 1 to 2 -- the ruler evaluates recording + alerting rules,
-    # and a single-replica outage during a node drain drops alert delivery
-    # until reschedule. PDB maxUnavailable:1 lets one go at a time.
-    replicas: 2
+    # Single-replica is acceptable for an internal CI obs stack; brief alert
+    # delivery gaps during pod restart are tolerated.
+    replicas: 1
     priorityClassName: platform-default
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful

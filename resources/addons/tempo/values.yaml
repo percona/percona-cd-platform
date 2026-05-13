@@ -33,7 +33,7 @@ tempo-distributed:
   # querier, queryFrontend) stay on the `default` Karpenter pool with
   # hostname topologySpread.
   distributor:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-default
     podDisruptionBudget:
       maxUnavailable: 1
@@ -104,7 +104,7 @@ tempo-distributed:
       storageClass: gp3
 
   querier:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     podDisruptionBudget:
       maxUnavailable: 1
@@ -113,7 +113,7 @@ tempo-distributed:
       limits: { memory: 1Gi }
 
   queryFrontend:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     podDisruptionBudget:
       maxUnavailable: 1

@@ -81,7 +81,7 @@ loki:
   # aware is on), three ingester replicas land one-per-host across the
   # cluster.
   distributor:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-default
     maxUnavailable: 1
     resources:
@@ -139,7 +139,7 @@ loki:
           workload.percona.com/tier: lgtm-stateful
 
   querier:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     maxUnavailable: 1
     resources:
@@ -154,7 +154,7 @@ loki:
             app.kubernetes.io/component: querier
 
   queryFrontend:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     maxUnavailable: 1
     resources:
@@ -169,7 +169,7 @@ loki:
             app.kubernetes.io/component: query-frontend
 
   queryScheduler:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-default
     maxUnavailable: 1
     resources:
@@ -204,7 +204,7 @@ loki:
       storageClass: gp3
 
   indexGateway:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-stateful-high
     maxUnavailable: 1
     nodeSelector:
@@ -222,8 +222,8 @@ loki:
 
   ruler:
     enabled: true
-    # Bump from 1 to 2 so a node drain doesn't drop alert evaluation.
-    replicas: 2
+    # Single-replica is acceptable for an internal CI obs stack.
+    replicas: 1
     priorityClassName: platform-default
     maxUnavailable: 1
     nodeSelector:
@@ -270,12 +270,12 @@ loki:
   # double allocatedMemory for every ~10x increase in stored chunks.
   chunksCache:
     enabled: true
-    replicas: 2
+    replicas: 1
     allocatedMemory: 256
     allocatedCPU: 100m
   resultsCache:
     enabled: true
-    replicas: 2
+    replicas: 1
     allocatedMemory: 128
     allocatedCPU: 100m
 
