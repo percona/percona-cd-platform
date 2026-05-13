@@ -1,41 +1,43 @@
 # Observability
 
-The platform's observability layer is a full distributed LGTM stack
+The platform's observability layer is a distributed LGTM stack
 (Loki + Grafana + Tempo + Mimir) plus the Prometheus operator's
 ServiceMonitor/PodMonitor reconciler and a HA Alertmanager. The
-authoritative design rationale is [ADR 0010](adr/0010-distributed-lgtm.md);
-this page is the operator's tour.
+original design rationale is [ADR 0010](adr/0010-distributed-lgtm.md);
+the 2026-05-13 collapse to single-AZ, single-replica stateful is in
+[ADR 0018](adr/0018-lgtm-single-az-collapse.md). This page is the
+operator's tour.
 
 ## Topology
 
 ```
-                                                                              external pushers (Jenkins masters,
-                                                                              Hetzner cloud plugin, future agents)
-                                                                                            │
-                                                                                            ▼
-                                                                                     ALB (jenkins-cd)
-                                                                              ┌─── mimir-push.cd.percona.com
-                                                                              │      loki-push.cd.percona.com
-                                                                              │      tempo-push.cd.percona.com
-                                                                              ▼
-                                          ┌───────────────────────────  alloy-gateway (Deployment x2)  ──┐
-                                          │   nginx bearer sidecar :9009/:3100/:4318 (strips auth header)│
-                                          │   alloy receivers loopback :19009/:13100/:14318              │
-                                          │     /api/v1/metrics/write   /loki/api/v1/push   /v1/traces   │
-                                          │                                                              │
-                                          ▼                          ▼                                   ▼
-   ┌───────────────────────────────────  Mimir (distributed)         Loki (distributed)                Tempo (distributed)
-   │                                     ────────────────────        ────────────────────              ────────────────────
-   │ kube-prometheus-stack:              distributor x3              distributor x3                   distributor x3
-   │   prometheus-operator               ingester x3 ─► S3           ingester x3 ─► S3                ingester x3 ─► S3
-   │   prometheus (agent, 24h WAL) ──────────────remoteWrite──────►  query-frontend x2                query-frontend x2
-   │   alertmanager x3 (HA)              query-frontend x2           querier x2                       querier x2
-   │   node-exporter (DS)                querier x2                  compactor x1                     compactor x1
-   │   kube-state-metrics                store-gateway x2            index-gateway x2
-   │                                     compactor x1                ruler x1
-   │                                     ruler x1
-   │                                     alertmanager x3
-   ▼
+                                                                          external pushers (Jenkins masters,
+                                                                          Hetzner cloud plugin, future agents)
+                                                                                        │
+                                                                                        ▼
+                                                                                 ALB (jenkins-cd)
+                                                                          ┌─── mimir-push.cd.percona.com
+                                                                          │      loki-push.cd.percona.com
+                                                                          │      tempo-push.cd.percona.com
+                                                                          ▼
+                                      ┌───────────────────────────  alloy-gateway (Deployment x2)  ──┐
+                                      │   nginx bearer sidecar :9009/:3100/:4318 (strips auth header)│
+                                      │   alloy receivers loopback :19009/:13100/:14318              │
+                                      │     /api/v1/metrics/write   /loki/api/v1/push   /v1/traces   │
+                                      │                                                              │
+                                      ▼                          ▼                                   ▼
+   ┌───────────────────────────────  Mimir (distributed)         Loki (distributed)                Tempo (distributed)
+   │                                 ────────────────────        ────────────────────              ────────────────────
+   │ kube-prometheus-stack:          distributor x1              distributor x1                   distributor x1
+   │   prometheus-operator           ingester    x1 ─► S3        ingester    x1 ─► S3             ingester    x1 ─► S3
+   │   prometheus (agent, 24h WAL) ──────────remoteWrite──────►  query-frontend x1                query-frontend x1
+   │   alertmanager x3 (HA)          query-frontend x1           querier        x1                querier        x1
+   │   node-exporter (DS)            querier         x1          compactor      x1                compactor      x1
+   │   kube-state-metrics            store-gateway   x1          index-gateway  x1
+   │                                 compactor       x1          ruler          x1
+   │                                 ruler           x1
+   │                                 alertmanager    x1
+   ▼                                 (all stateful pinned to us-east-1a; rollout_operator disabled)
    alloy (DaemonSet)
    ────────────────────
    pod logs ─► Loki distributor (in-cluster)
@@ -50,6 +52,31 @@ this page is the operator's tour.
    │
    └────────────────────────────────────────────────────────────────────┘
 ```
+
+## Storage model
+
+EBS is treated as a regenerable WAL. **S3 is the source of truth** for
+all three stacks:
+
+| Component | EBS role | EBS size | S3 bucket | Recovery from EBS loss |
+|---|---|---:|---|---|
+| Mimir ingester | WAL (~2h flush window) | 50 GiB | `*-mimir-blocks` | Ingest pause until pod restart; sub-block window may be lost |
+| Mimir store-gateway | block-list cache | 30 GiB | `*-mimir-blocks` | Cache rebuild on restart (slow first query) |
+| Mimir compactor | scratch | 30 GiB | `*-mimir-blocks` | Scratch rebuild on restart |
+| Mimir alertmanager | silences + NFLog | 5 GiB | n/a (in-cluster) | Silences reset; notification log replays |
+| Loki ingester | WAL (~5min flush window) | 50 GiB | `*-loki-chunks` | Ingest pause; sub-flush window may be lost |
+| Loki compactor | scratch | 30 GiB | `*-loki-chunks` | Scratch rebuild on restart |
+| Tempo ingester | WAL (~30s flush window) | 30 GiB | `*-tempo-traces` | Ingest pause; sub-flush window may be lost |
+
+PVC lifecycle is handled by the StatefulSet:
+`persistentVolumeClaimRetentionPolicy: {whenDeleted: Delete, whenScaled: Delete}`
+on every stateful component. The gp3 StorageClass has
+`reclaimPolicy: Delete`, so EBS volumes are released automatically when
+the PVC is deleted. **No manual PVC sweep is required** for routine
+scale-downs or topology changes after 2026-05-13.
+
+If a sweep is ever needed (legacy orphans, chart-default leftovers), see
+the [LGTM orphan PVC sweep runbook](runbooks/lgtm-orphan-pvc-sweep.md).
 
 ## Sync waves
 

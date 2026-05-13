@@ -127,6 +127,12 @@ loki:
       enabled: true
       size: 50Gi
       storageClass: gp3
+      # Auto-GC the PVC when the STS is scaled or deleted. Prevents the
+      # orphan-PVC class of leak from the 2026-05-13 zone-aware -> flat
+      # collapse (ADR 0018). Chunks live in S3; the WAL is replayable.
+      enableStatefulSetAutoDeletePVC: true
+      whenDeleted: Delete
+      whenScaled: Delete
     # Single-AZ, single-replica: zone-aware StatefulSets collapsed to one
     # flat ingester in us-east-1a. Durable chunks live in S3; WAL only
     # buffers the last ~5min of in-flight log lines.
@@ -197,6 +203,10 @@ loki:
       enabled: true
       size: 30Gi
       storageClass: gp3
+      # Compactor scratch is regenerable from S3 chunks.
+      enableStatefulSetAutoDeletePVC: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   indexGateway:
     replicas: 1

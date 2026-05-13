@@ -44,10 +44,11 @@ Five tiers, each with a single canonical `workload.percona.com/tier` label and
 
 Both EKS MNGs and Karpenter NodePools are in use. MNGs handle bootstrap and
 the single-AZ pinned stateful workloads; Karpenter covers everything that
-benefits from multi-AZ + instance-family flex (LGTM stateful, all stateless).
-The 2026-05-11 LGTM outage drove the stateful split, see
-[`docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md)
-for the full reasoning.
+benefits from instance-family flex. The 2026-05-11 LGTM outage drove the
+stateful split (see [`ADR 0017`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md));
+the 2026-05-13 single-AZ + single-replica collapse for the LGTM stateful tier
+(durability lives in S3, not EBS) is in
+[`ADR 0018`](docs/adr/0018-lgtm-single-az-collapse.md).
 
 ## Documentation
 

@@ -87,6 +87,13 @@ tempo-distributed:
       enabled: true
       size: 30Gi
       storageClass: gp3
+    # Auto-GC the PVC when the STS is scaled or deleted. Prevents the
+    # orphan-PVC class of leak from the 2026-05-13 zone-aware -> flat
+    # collapse (ADR 0018). Traces live in S3; WAL is replayable.
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   querier:
     replicas: 1
