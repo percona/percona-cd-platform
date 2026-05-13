@@ -7,10 +7,11 @@
 #      for ECR-pull object reads + Helm chart downloads). Interface endpoints
 #      (ECR, STS, Secrets Manager) are paid; revisit when NAT-GW bill warrants.
 #
-# Robustness (H-2): one NAT-GW per AZ so an AZ outage doesn't kill cluster
-# egress. The S3 gateway endpoint already removes the bulk of egress traffic
-# (ECR pulls), so the per-NAT-GW cost is dominated by ~$32/mo idle charge per
-# extra gateway, not data transfer.
+# Single-AZ collapse (2026-05): one NAT-GW in 1a only. Cluster workloads
+# all live in 1a now (Karpenter NodePools + LGTM single-AZ + prometheus_system
+# pinned). The S3 gateway endpoint absorbs the bulk of egress (ECR pulls);
+# remaining NAT traffic is negligible (~0.4 MB / 30d observed across the
+# three NATs before collapse). Saves ~$64/mo idle.
 
 module "vpc" {
   source  = local.modules.vpc.source
@@ -24,8 +25,8 @@ module "vpc" {
   public_subnets  = ["10.220.96.0/24", "10.220.97.0/24", "10.220.98.0/24"]
 
   enable_nat_gateway     = true
-  single_nat_gateway     = false # one NAT-GW per AZ — survives single-AZ outage
-  one_nat_gateway_per_az = true
+  single_nat_gateway     = true # single shared NAT in 1a (single-AZ collapse)
+  one_nat_gateway_per_az = false
   enable_dns_hostnames   = true
   enable_dns_support     = true
 
