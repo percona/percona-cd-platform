@@ -171,3 +171,8 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          # PruneLast keeps the old zone-a/b/c StatefulSets alive until
+          # the new single-replica STS is Healthy; required for the
+          # LGTM zone-aware -> flat migration so PVCs aren't deleted
+          # before the new ingester finishes booting from S3.
+          - PruneLast=true

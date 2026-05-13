@@ -54,6 +54,11 @@ loki:
     extraMemberlistConfig:
       cluster_label: "loki-percona-ci"
       cluster_label_verification_disabled: false
+    # Single-AZ collapse: replication_factor 1 means each write lands on
+    # the single ingester only. Durable data flows to S3 chunks; WAL on
+    # EBS only buffers the last ~5min of in-flight log lines.
+    commonConfig:
+      replication_factor: 1
     # Auto-evict ring entries whose heartbeat is past the timeout. Without
     # this, ungraceful pod terminations leave UNHEALTHY entries pinned in
     # the ring forever, the lifecycler's readiness gate refuses to declare
@@ -103,7 +108,7 @@ loki:
                 - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
 
   ingester:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-stateful-high
     maxUnavailable: 1
     nodeSelector:
@@ -122,21 +127,11 @@ loki:
       enabled: true
       size: 50Gi
       storageClass: gp3
-    # Chart drops the top-level `ingester.nodeSelector` for zone-aware
-    # StatefulSets and reads `zoneAwareReplication.zone{A,B,C}.nodeSelector`
-    # instead. Loki uses a per-zone keys shape (not a `zones[]` list like
-    # Mimir/Tempo).
+    # Single-AZ, single-replica: zone-aware StatefulSets collapsed to one
+    # flat ingester in us-east-1a. Durable chunks live in S3; WAL only
+    # buffers the last ~5min of in-flight log lines.
     zoneAwareReplication:
-      enabled: true
-      zoneA:
-        nodeSelector:
-          workload.percona.com/tier: lgtm-stateful
-      zoneB:
-        nodeSelector:
-          workload.percona.com/tier: lgtm-stateful
-      zoneC:
-        nodeSelector:
-          workload.percona.com/tier: lgtm-stateful
+      enabled: false
 
   querier:
     replicas: 1
@@ -239,13 +234,10 @@ loki:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
 
-  # rollout_operator coordinates zone-by-zone restarts of zone-aware
-  # ingester StatefulSets so the ring keeps quorum during rolling updates.
-  # Chart default is `false`; enabled here because zoneAwareReplication
-  # is also on (chart default) and without the operator a rolling update
-  # restarts all zone STS pods simultaneously, breaking the RF=3 invariant.
+  # rollout_operator is unused after the single-AZ collapse (no zone-aware
+  # StatefulSets left to coordinate). Disable to drop the resource overhead.
   rollout_operator:
-    enabled: true
+    enabled: false
 
   # Disable monolithic / simple-scalable / single-binary modes — distributed
   # is mutually exclusive with these.

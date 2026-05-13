@@ -62,10 +62,11 @@ tempo-distributed:
           endpoint: 0.0.0.0:9411
 
   ingester:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-stateful-high
     podDisruptionBudget:
-      maxUnavailable: 1
+      minAvailable: 0
+      maxUnavailable: null
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful
     tolerations:
@@ -78,26 +79,10 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 1Gi }
       limits: { memory: 2Gi }
-    # Chart default is zoneAwareReplication.enabled=false (labelled
-    # EXPERIMENTAL upstream). Our Tempo bucket has effectively no
-    # historical trace data (master-side trace push still gated), so the
-    # chart's data-migration warning is moot -- enable now to match the
-    # Mimir/Loki shape and force one-ingester-per-AZ placement.
-    #
-    # Per-zone nodeSelector override required because the chart drops the
-    # top-level ingester.nodeSelector for zone-aware StatefulSets.
+    # Single-AZ, single-replica. Tempo bucket has minimal trace data
+    # so the chart's data-migration warning is moot.
     zoneAwareReplication:
-      enabled: true
-      zones:
-        - name: zone-a
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-b
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-c
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
+      enabled: false
     persistence:
       enabled: true
       size: 30Gi

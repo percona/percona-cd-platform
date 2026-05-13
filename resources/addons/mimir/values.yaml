@@ -37,6 +37,11 @@ mimir-distributed:
       # ingest storage (-ingest-storage.enabled) is not enabled".
       ingester:
         push_grpc_method_enabled: true
+        ring:
+          # Single-AZ collapse: one ingester, no replication. Durable data
+          # lives in S3 (mimir-blocks bucket); ingester WAL on EBS in 1a
+          # only buffers the last ~2h of in-flight samples.
+          replication_factor: 1
       common:
         storage:
           backend: s3
@@ -154,7 +159,7 @@ mimir-distributed:
               matchExpressions:
                 - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
     podDisruptionBudget:
-      minAvailable: 2
+      minAvailable: 0
       maxUnavailable: null  # clear chart default; K8s rejects both being set
 
   # Stateful tier -- pinned to the `lgtm-stateful` Karpenter NodePool via
@@ -169,7 +174,7 @@ mimir-distributed:
   # any zone forever. maxUnavailable:1 lets the rollout-operator restart
   # one zone at a time, which is the actual HA story.
   ingester:
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-stateful-high
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful
@@ -183,30 +188,14 @@ mimir-distributed:
     resources:
       requests: { cpu: "1", memory: 4Gi }
       limits: { memory: 8Gi }
+    # Single-AZ, single-replica: zone-aware StatefulSets collapsed to a
+    # flat single ingester in us-east-1a. Durable blocks live in S3;
+    # the WAL on EBS only buffers the last ~2h of in-flight samples.
     zoneAwareReplication:
-      # Chart default is `enabled: true, topologyKey: null` -- the null
-      # topologyKey means NO podAntiAffinity rule is generated, so three
-      # zone-aware replicas could co-locate on one node (which is what
-      # took out the ingester ring on 2026-05-11). Set the documented
-      # production value to emit a hard hostname anti-affinity rule.
-      topologyKey: kubernetes.io/hostname
-      # Per-zone overrides. The chart drops the top-level
-      # `ingester.nodeSelector` for zone-aware StatefulSets and reads
-      # `zones[].nodeSelector` instead. The YAML list has to be fully
-      # redefined per the chart docs (line 1083 of upstream values).
-      zones:
-        - name: zone-a
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-b
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-c
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
+      enabled: false
     podDisruptionBudget:
-      maxUnavailable: 1
-      minAvailable: null
+      minAvailable: 0
+      maxUnavailable: null
     persistentVolume:
       enabled: true
       size: 50Gi
@@ -230,7 +219,7 @@ mimir-distributed:
       maxUnavailable: null  # clear chart default; K8s rejects both being set
 
   store_gateway:
-    replicas: 2
+    replicas: 1
     priorityClassName: platform-stateful-high
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful
@@ -245,21 +234,10 @@ mimir-distributed:
       requests: { cpu: 500m, memory: 1Gi }
       limits: { memory: 2Gi }
     zoneAwareReplication:
-      topologyKey: kubernetes.io/hostname
-      # Per-zone overrides (chart drops top-level nodeSelector in zone-aware mode).
-      zones:
-        - name: zone-a
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-b
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-c
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
+      enabled: false
     podDisruptionBudget:
-      minAvailable: 1
-      maxUnavailable: null  # clear chart default; K8s rejects both being set
+      minAvailable: 0
+      maxUnavailable: null
     persistentVolume:
       enabled: true
       size: 30Gi
@@ -322,7 +300,7 @@ mimir-distributed:
 
   alertmanager:
     enabled: true
-    replicas: 3
+    replicas: 1
     priorityClassName: platform-stateful-high
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful
@@ -336,25 +314,11 @@ mimir-distributed:
     resources:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
-    # Chart default is zoneAwareReplication.enabled=false for alertmanager.
-    # Enable to match ingester/store-gateway HA shape: 3 replicas, one
-    # per zone, rollout-operator coordinates restarts.
     zoneAwareReplication:
-      enabled: true
-      topologyKey: kubernetes.io/hostname
-      zones:
-        - name: zone-a
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-b
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
-        - name: zone-c
-          nodeSelector:
-            workload.percona.com/tier: lgtm-stateful
+      enabled: false
     podDisruptionBudget:
-      maxUnavailable: 1
-      minAvailable: null
+      minAvailable: 0
+      maxUnavailable: null
     persistentVolume:
       enabled: true
       size: 5Gi
@@ -379,15 +343,13 @@ mimir-distributed:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
     podDisruptionBudget:
-      maxUnavailable: 1
-      minAvailable: null
+      minAvailable: 0
+      maxUnavailable: null
 
-  # rollout-operator is chart-default enabled in mimir-distributed v6.x;
-  # made explicit here for clarity. It coordinates zone-by-zone restarts
-  # of zone-aware ingester/store-gateway/alertmanager so the ring keeps
-  # quorum during rolling updates.
+  # rollout-operator is unused after the single-AZ collapse (no zone-aware
+  # StatefulSets left to coordinate). Disable to save the resource overhead.
   rollout_operator:
-    enabled: true
+    enabled: false
 
   # MinIO + memcached defaults — disable bundled MinIO (we use S3); keep
   # the chart's bundled memcached caches.
