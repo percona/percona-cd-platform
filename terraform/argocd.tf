@@ -217,11 +217,10 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
     }
     annotations = {
       # Cluster identity
-      cluster_name      = module.eks.cluster_name
-      aws_account_id    = data.aws_caller_identity.current.account_id
-      aws_region        = var.aws_region
-      oidc_provider_arn = module.eks.oidc_provider_arn
-      route53_zone_id   = local.route53_zone_id
+      cluster_name    = module.eks.cluster_name
+      aws_account_id  = data.aws_caller_identity.current.account_id
+      aws_region      = var.aws_region
+      route53_zone_id = local.route53_zone_id
 
       # VPC ID — consumed by the AWS LBC chart (`vpcId` arg) so the controller
       # skips the IMDS query path. Required because the system NG launch

@@ -48,6 +48,12 @@ module "eks" {
   # Managed addons land in eks-addons.tf (kept separate for clearer Pod Identity wiring).
   addons = {}
 
+  # All workloads authenticate to AWS via Pod Identity (see pod-identity.tf),
+  # not IRSA. Disabling enable_irsa removes the OIDC provider that nothing
+  # consumes; the provider itself was already deleted out-of-band, so this
+  # is a state-only change.
+  enable_irsa = false
+
   eks_managed_node_groups = {
     system = {
       instance_types = local.ng.system.instance_types
@@ -55,6 +61,10 @@ module "eks" {
       min_size       = local.ng.system.min_size
       desired_size   = local.ng.system.desired_size
       max_size       = local.ng.system.max_size
+      # Pin the AMI release so unrelated tofu applies don't trigger a rolling
+      # drain. Bump explicitly when an upgrade is intentional.
+      ami_release_version            = "1.35.4-20260505"
+      use_latest_ami_release_version = false
       # Tier taxonomy: `workload.percona.com/tier=bootstrap` is the
       # canonical label. The CriticalAddonsOnly taint paired with this
       # label makes the system MNG exclusive -- bootstrap-tier addons
@@ -90,6 +100,11 @@ module "eks" {
       desired_size   = local.ng.prometheus_system.desired_size
       max_size       = local.ng.prometheus_system.max_size
       subnet_ids     = [module.vpc.private_subnets[0]] # var.monitoring_az pinned (us-east-1a)
+      # Pin the AMI release; Authentik PG / Grafana PDBs block evictions during
+      # a rolling drain, so version bumps need to be explicit and paired with
+      # the workaround in docs/runbooks/mng-label-taint-changes.md.
+      ami_release_version            = "1.35.4-20260423"
+      use_latest_ami_release_version = false
       # Tier taxonomy: `workload.percona.com/tier=obs-state`. Legacy
       # `workload=prometheus` / `node-role=stateful` keys + taint were
       # dropped after consumers (Grafana, Authentik) migrated to the

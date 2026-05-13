@@ -21,11 +21,6 @@ output "cluster_version" {
   value       = module.eks.cluster_version
 }
 
-output "oidc_provider_arn" {
-  description = "OIDC provider ARN — used by IRSA fallbacks; Pod Identity does not need it."
-  value       = module.eks.oidc_provider_arn
-}
-
 output "cluster_security_group_id" {
   description = "Security group attached to the cluster ENIs."
   value       = module.eks.cluster_security_group_id
