@@ -33,6 +33,13 @@ spec:
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: [large, xlarge, 2xlarge, 4xlarge]
+        # Single-AZ topology. EBS is per-AZ; cross-AZ NAT egress costs add
+        # up if pods scatter. Stateful tier sits on lgtm-stateful in 1a
+        # already; pin stateless tier here too so consolidation can fully
+        # reclaim 1b/1c.
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [us-east-1a]
 
       nodeClassRef:
         group: karpenter.k8s.aws

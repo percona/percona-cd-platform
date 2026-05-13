@@ -36,11 +36,12 @@ spec:
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: [large, xlarge, 2xlarge]
-        # Spread Karpenter across all three AZs so zone-aware ingester
-        # StatefulSets can each find a node in their target AZ.
+        # Single-AZ topology (us-east-1a). LGTM stack collapsed from
+        # 3-AZ HA in 2026-05; ingester WAL data lives in EBS which is
+        # per-AZ, and S3 is the durable source of truth for blocks.
         - key: topology.kubernetes.io/zone
           operator: In
-          values: [us-east-1a, us-east-1b, us-east-1c]
+          values: [us-east-1a]
       taints:
         - key: workload.percona.com/tier
           value: lgtm-stateful
