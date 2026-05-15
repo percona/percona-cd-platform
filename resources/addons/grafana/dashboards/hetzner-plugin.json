@@ -329,13 +329,13 @@
     },
     {
       "id": 203,
-      "title": "Node provisioning history per master",
+      "title": "Running workers per master over time",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Provisioning rate per master over the dashboard time range, sum over all outcomes. Peaks show when each master burst-provisioned; flat-zero lines mean no provisioning activity. Useful for spotting asymmetric load across the fleet and correlating with capacity / rate-limit panels.",
+      "description": "Hetzner worker node count per master over the dashboard time range. Each line is a master; the y-value is the live count of running servers at that instant. Lines rise when workers spawn, fall when reaped. v103.percona.16+ refreshes the gauge every minute regardless of provisioning activity; pre-.16 masters can show stale flat lines (see panel 200 status). Pairs with panel 200 (instant view) and panel 201 (per-master capacity table).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -349,7 +349,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (rate(hetzner_provision_attempts_total{master=~\"$master\",master=~\".+\\\\.cd\"}[5m]))",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\"})",
           "legendFormat": "{{master}}"
         }
       ],
@@ -371,7 +371,7 @@
           },
           "custom": {
             "drawStyle": "line",
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
             "fillOpacity": 10,
             "showPoints": "never",
@@ -379,10 +379,11 @@
               "mode": "none"
             },
             "axisPlacement": "auto",
-            "spanNulls": false
+            "spanNulls": true
           },
-          "unit": "ops",
-          "min": 0
+          "unit": "short",
+          "min": 0,
+          "decimals": 0
         }
       }
     },
