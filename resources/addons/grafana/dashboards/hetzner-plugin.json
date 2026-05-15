@@ -259,8 +259,8 @@
       "description": "How many configured Hetzner worker templates the fleet has per Hetzner datacenter (nbg1, fsn1, hel1, ash, hil, sin). Compare with the DC circuit breaker panel to spot DCs that are configured but consistently failing.",
       "gridPos": {
         "h": 8,
-        "w": 24,
-        "x": 0,
+        "w": 12,
+        "x": 12,
         "y": 8
       },
       "targets": [
@@ -324,6 +324,65 @@
             "fillOpacity": 80,
             "lineWidth": 1
           }
+        }
+      }
+    },
+    {
+      "id": 203,
+      "title": "Node provisioning history per master",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Provisioning rate per master over the dashboard time range, sum over all outcomes. Peaks show when each master burst-provisioned; flat-zero lines mean no provisioning activity. Useful for spotting asymmetric load across the fleet and correlating with capacity / rate-limit panels.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (master) (rate(hetzner_provision_attempts_total{master=~\"$master\",master=~\".+\\\\.cd\"}[5m]))",
+          "legendFormat": "{{master}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "spanNulls": false
+          },
+          "unit": "ops",
+          "min": 0
         }
       }
     },
