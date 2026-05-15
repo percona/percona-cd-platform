@@ -44,6 +44,15 @@ metadata:
     # sidecar reconcile (~60s), creating ~21 stale empty "Mimir" folders
     # per cycle. Use a flat label instead. See PR #62 follow-up cleanup.
     grafana_folder: "Mimir Mixin"
+    # mimir-reads.json is 261KiB on its own. With client-side `kubectl apply`
+    # the `last-applied-configuration` annotation balloons past Kubernetes'
+    # 256KiB per-resource annotation limit and the sync fails with
+    # `metadata.annotations: Too long: may not be more than 262144 bytes`.
+    # The App-level `ServerSideApply=true` syncOption only enables SSA for
+    # diff (ArgoCD v3.3.8 logs `serverSideApply:false, serverSideDiff:true`);
+    # the per-resource annotation forces SSA on apply too, sidestepping the
+    # legacy annotation entirely.
+    argocd.argoproj.io/sync-options: ServerSideApply=true
 data:
   {{ $base }}.json: |-
 {{ $.Files.Get $path | indent 4 }}
