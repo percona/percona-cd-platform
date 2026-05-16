@@ -24,6 +24,181 @@
   "liveNow": false,
   "panels": [
     {
+      "id": 210,
+      "title": "Stuck builds per master (24h+ threshold)",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Count of builds that crossed the 24h hang threshold in the last 24 hours. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Healthy fleet is all zeros. Increments fire ONCE per build crossing the threshold, deduped via in-plugin cache.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (master) (increase(hetzner_stuck_builds_total{threshold_hours=\"24\",master=~\"$master\",master=~\".+\\\\.cd\"}[24h]))",
+          "legendFormat": "{{master}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "displayMode": "lcd",
+        "orientation": "horizontal",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "min": 0,
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 211,
+      "title": "Oldest building build per master (age in seconds)",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "For each master, the elapsed age of the longest-running building build right now. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Green up to 12h, yellow up to 24h, red above. Cross-reference with `jenkins admin -i <master> incidents` for triage.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max by (master) (hetzner_oldest_build_age_seconds{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "legendFormat": "{{master}}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "master": "Master",
+              "Value": "Oldest age"
+            },
+            "indexByName": {
+              "master": 0,
+              "Value": 1
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Master"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Oldest age"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 43200
+                    },
+                    {
+                      "color": "red",
+                      "value": 86400
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "id": 200,
       "title": "Active workers per master",
       "type": "bargauge",
@@ -36,7 +211,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 8
       },
       "targets": [
         {
@@ -104,7 +279,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 8
       },
       "targets": [
         {
@@ -261,7 +436,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "targets": [
         {
@@ -340,7 +515,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "targets": [
         {
@@ -400,7 +575,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "fieldConfig": {
         "defaults": {
@@ -485,7 +660,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 24
       },
       "fieldConfig": {
         "defaults": {
@@ -548,7 +723,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 32
       },
       "fieldConfig": {
         "defaults": {
@@ -594,7 +769,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 32
       },
       "fieldConfig": {
         "defaults": {
@@ -663,7 +838,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 40
       },
       "fieldConfig": {
         "defaults": {
@@ -759,7 +934,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 40
       },
       "fieldConfig": {
         "defaults": {
@@ -849,7 +1024,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "options": {
         "showTime": true,
@@ -885,7 +1060,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 58
       },
       "fieldConfig": {
         "defaults": {
@@ -930,7 +1105,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 116
+        "y": 124
       },
       "targets": [
         {
@@ -978,7 +1153,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 116
+        "y": 124
       },
       "targets": [
         {
@@ -1033,7 +1208,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 216
+        "y": 224
       },
       "targets": [
         {
@@ -1087,7 +1262,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 216
+        "y": 224
       },
       "targets": [
         {
@@ -1170,7 +1345,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 316
+        "y": 324
       },
       "targets": [
         {
@@ -1232,7 +1407,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 320
+        "y": 328
       },
       "targets": [
         {
