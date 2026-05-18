@@ -132,6 +132,30 @@ When the new instance is up, `setup_aws` re-associates the master EIP
 (unchanged), EBS re-attaches (unchanged), Jenkins starts on `:8080`
 only. No openresty, no certbot.
 
+**Verify no openresty / certbot leftovers on the rebuilt instance:**
+
+```sh
+ssh ps3.cd.percona.com '
+  echo "--- packages (expect empty) ---";
+  rpm -qa | grep -iE "openresty|certbot" || echo "(none)";
+
+  echo "--- systemd units (expect empty) ---";
+  systemctl list-unit-files --no-legend | grep -iE "openresty|certbot|nginx" || echo "(none)";
+
+  echo "--- root-vol cert/config dirs (expect missing) ---";
+  for d in /etc/letsencrypt /etc/nginx /usr/local/openresty /etc/cron.d/sync-nginx-allow-list /etc/cron.daily/certbot /home/ec2-user/copy-nginx-allow-list.sh; do
+    [ -e "$d" ] && echo "FOUND $d (BAD)" || echo "ok absent $d";
+  done;
+
+  echo "--- listening ports (expect :8080 and :22 only) ---";
+  sudo ss -ltnp | awk "/LISTEN/ {print \$4}" | sort -u;
+'
+```
+
+Expected output: no openresty/certbot packages, no openresty/certbot/nginx units, all the listed root-vol paths absent, listeners on `:8080` and `:22` only (no `:80`, no `:443`). The `/mnt/<host>.cd.percona.com/ssl/` and `/mnt/ssl_backup/` paths on the EBS data volume **will** still exist; they get cleaned in step 5 below.
+
+If anything reports `FOUND` above on the root vol, the CF user-data did not run cleanly. Inspect `/var/log/cloud-init-output.log`; do not proceed to step 5 until the rebuild is clean.
+
 ### 5. One-time EBS cleanup (preserve JENKINS_HOME, remove SSL leftovers)
 
 The EBS data volume `/mnt/<host>.cd.percona.com/` persists across

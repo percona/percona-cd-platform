@@ -11,11 +11,11 @@ Migrating from `nogueiraanderson/` to `Percona-Lab/` once stable.
 
 | Path | Owner | What |
 |---|---|---|
-| `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap |
+| `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, per-master `origin-<host>` Route53 records (`origins.tf`) |
 | `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
-| `resources/addons/` | ArgoCD | Helm umbrella charts per addon |
+| `resources/addons/` | ArgoCD | Helm umbrella charts per addon (includes `jenkins-ingress`, the shared-ALB SSL termination for EC2 Jenkins masters, see [ADR 0019](docs/adr/0019-shared-alb-ssl-termination-for-jenkins-masters.md)) |
 | `image/` | Docker build | Jenkins 2.x + plugins |
-| `docs/` | Markdown | Architecture, runbooks, ADRs, lessons |
+| `docs/` | Markdown | Architecture, runbooks (including [`jenkins-ssl-cutover.md`](docs/runbooks/jenkins-ssl-cutover.md) for the per-master cutover), ADRs, lessons |
 | `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |
 
 ## Quickstart
