@@ -1,22 +1,48 @@
 # Per-host "origin" Route 53 records: origin-<host>.cd.percona.com points at
-# the existing EC2 Jenkins master's public DNS or IP. The in-cluster NGINX
-# proxy (Mode B in resources/jenkins/proxy/) `proxy_pass`'es to this name, so
-# the friendly `<host>.cd.percona.com` can flip from EC2 to the ALB without
-# losing reachability to the underlying VM during cutover.
+# the existing EC2 Jenkins master's private IP, reached over the per-master
+# VPC peering. The in-cluster NGINX proxy (resources/addons/jenkins-ingress)
+# `proxy_pass`'es to this name, so the friendly `<host>.cd.percona.com` can
+# flip from EC2 to the ALB without losing reachability to the underlying VM
+# during cutover.
 #
-# Targets are operationally sensitive (per-master, multi-region), so they
-# live in `terraform/local.auto.tfvars` (gitignored), not in this public
-# repo. Until populated, no origin records are created — operators roll
-# them out one host at a time as each Jenkins master is wired into the
-# proxy data path.
+# Target resolution precedence:
+#   1. `var.jenkins_origin_targets[<host>].target` — explicit operator
+#      override in gitignored `local.auto.tfvars`. Rare; used to pin a
+#      specific IP that overrides the discovery (debugging, parked master,
+#      manual cutover).
+#   2. `local.jenkins_discovered_origins[<host>]` — default. Live private IP
+#      from `data.aws_instances.<host>_master` in `peering-<host>.tf`, tag-
+#      filtered by `iit-billing-tag=jenkins-<host>` and `instance_state_names
+#      =["running"]`. Re-resolves on every `tofu apply` so SpotFleet
+#      replacements, AZ failovers and renumbers self-heal automatically.
+#
+# Edge case: during a SpotFleet replacement window where no instance is in
+# `running` state (~30-90s), both sources are null and apply will error.
+# Acceptable failure mode: we're not applying mid-rotation. If you need a
+# safety net for unattended apply, set var.jenkins_origin_targets[<host>] to
+# the last-known-good IP and it takes precedence.
 #
 # Mode A hosts (in-cluster StatefulSet, e.g. ps3-k8s) don't get an origin
 # record — the ALB targets the K8s Service directly.
 
 locals {
+  # Per-master live IP discoveries. One line per master; each refers to the
+  # tag-filtered `data.aws_instances.<host>_master` block declared in the
+  # corresponding `peering-<host>.tf`. The provider alias on the data source
+  # is statically pinned to the master's region (TF provider aliases cannot
+  # be dynamic), which is why this map enumerates hosts by name rather than
+  # iterating var.jenkins_hosts.
+  jenkins_discovered_origins = {
+    ps3 = try(data.aws_instances.ps3_master.private_ips[0], null)
+    # pxc = try(data.aws_instances.pxc_master.private_ips[0], null)  # when peered
+  }
+
   jenkins_origin_records = {
     for h, c in var.jenkins_hosts : h => c
-    if c.mode == "proxy" && contains(keys(var.jenkins_origin_targets), h)
+    if c.mode == "proxy" && (
+      contains(keys(var.jenkins_origin_targets), h)
+      || lookup(local.jenkins_discovered_origins, h, null) != null
+    )
   }
 }
 
@@ -25,7 +51,12 @@ resource "aws_route53_record" "origin" {
 
   zone_id = local.route53_zone_id
   name    = "origin-${each.key}.${var.route53_zone_name}"
-  type    = var.jenkins_origin_targets[each.key].type
+  type    = try(var.jenkins_origin_targets[each.key].type, "A")
   ttl     = 60
-  records = [var.jenkins_origin_targets[each.key].target]
+  records = [
+    coalesce(
+      try(var.jenkins_origin_targets[each.key].target, null),
+      lookup(local.jenkins_discovered_origins, each.key, null),
+    ),
+  ]
 }

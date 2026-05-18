@@ -26,6 +26,23 @@ data "aws_vpc" "ps3" {
   }
 }
 
+# Live private IP of the ps3 master, discovered by the same `iit-billing-tag`
+# tag CF stamps on the EC2 instance. Used by `origins.tf` to drive the
+# `origin-ps3.cd.percona.com` Route53 record. Discovery wins over the
+# fallback in `var.jenkins_origin_targets` so a SpotFleet replacement (new
+# ENI = new private IP) re-points the proxy automatically on the next
+# `tofu apply`. During the brief replacement window where no instance is
+# in `running` state, this returns an empty list and `origins.tf` falls
+# back to the tfvars literal — operator should keep one last-known-good
+# IP per master there as a safety net.
+data "aws_instances" "ps3_master" {
+  provider             = aws.eu-west-1
+  instance_state_names = ["running"]
+  instance_tags = {
+    "iit-billing-tag" = "jenkins-ps3"
+  }
+}
+
 # The CF stack jenkins-ps3 creates two route tables: a default (unused) and
 # a custom one with the IGW route + S3 endpoint. Pick the one with subnets
 # associated (it routes the master's traffic).
