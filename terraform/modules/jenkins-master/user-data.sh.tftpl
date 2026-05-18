@@ -1,0 +1,213 @@
+#!/bin/bash
+# Rendered via templatefile(). eks_observability matches live ps3
+# (PS-10945). legacy_openresty / legacy_nginx12 are stubs that error
+# until implemented for non-ps3 masters.
+
+JENKINS_HOST=${jenkins_host}
+JENKINS_SHORT=${jenkins_short}
+JENKINS_EIP=${eip_allocation_id}
+JENKINS_VOLUME_ID=${data_volume_id}
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
+
+set -o xtrace
+set -o errexit
+
+setup_aws() {
+%{ if eip_allocation_id != "" ~}
+    aws ec2 associate-address \
+        --region $INSTANCE_REGION \
+        --instance-id $INSTANCE_ID \
+        --allocation-id $JENKINS_EIP \
+        --allow-reassociation
+%{ else ~}
+    # No managed EIP. SpotFleet picks a random public IP via
+    # MapPublicIpOnLaunch=true. SSH is via paws+SSM; HTTPS via the ALB.
+%{ endif ~}
+
+    SPOT_REQUEST=$(
+        aws ec2 describe-instances \
+            --region $INSTANCE_REGION \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[].Instances[].SpotInstanceRequestId' \
+            --output text
+    )
+
+    VOLUMES=$(
+        aws ec2 describe-instances \
+            --region $INSTANCE_REGION \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[].Instances[].BlockDeviceMappings[].Ebs.VolumeId' \
+            --output text
+    )
+
+    aws ec2 create-tags \
+        --resources $INSTANCE_ID $SPOT_REQUEST $VOLUMES \
+        --region $INSTANCE_REGION \
+        --tags Key=Name,Value=$JENKINS_SHORT \
+               Key=iit-billing-tag,Value=$JENKINS_SHORT
+}
+
+install_software() {
+    until yum makecache; do
+        sleep 1
+        echo try again
+    done
+
+    yum -y install yum-utils wget cronie rsync bc
+    wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+    sed -i 's/^repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/jenkins.repo
+    grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
+    rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2026.key
+    yum -y install java-17-amazon-corretto
+    yum -y update --security
+    yum -y install jenkins-${jenkins_package_version} git dnf-automatic aws-cli xfsprogs
+
+    sed -i 's/upgrade_type = default/upgrade_type = security/' /etc/dnf/automatic.conf
+    sed -i 's/apply_updates = no/apply_updates = yes/'         /etc/dnf/automatic.conf
+    echo "exclude=java-17-amazon-corretto* jenkins*" >> /etc/dnf/automatic.conf
+    systemctl enable --now dnf-automatic.timer
+}
+
+volume_state() {
+    aws ec2 describe-volumes \
+        --volume-id $JENKINS_VOLUME_ID \
+        --region $INSTANCE_REGION \
+        --query 'Volumes[].State' \
+        --output text
+}
+
+mount_data_partition() {
+    aws ec2 detach-volume \
+        --region $INSTANCE_REGION \
+        --volume-id $JENKINS_VOLUME_ID \
+        || :
+    while true; do
+        [ "x$(volume_state)" = "xavailable" ] && break || sleep 1
+    done
+
+    aws ec2 attach-volume \
+        --region $INSTANCE_REGION \
+        --device /dev/xvdj \
+        --instance-id $INSTANCE_ID \
+        --volume-id $JENKINS_VOLUME_ID
+    while true; do
+        [ "x$(volume_state)" = "xin-use" ] && break || sleep 1
+    done
+    while true; do
+        [ -e /dev/xvdj ] && break || sleep 1
+    done
+
+    mkfs.xfs -L DATA /dev/xvdj || :
+    echo "/dev/xvdj /mnt xfs defaults,noatime,nofail 0 0" | tee -a /etc/fstab
+    mount /mnt
+}
+
+start_jenkins() {
+    sysctl net.ipv4.tcp_fin_timeout=15
+    sysctl net.ipv4.tcp_tw_reuse=1
+    sysctl net.ipv6.conf.all.disable_ipv6=1
+    sysctl net.ipv6.conf.default.disable_ipv6=1
+    cat <<-EOF | tee /etc/security/limits.d/jenkins.conf
+		jenkins    soft    core      unlimited
+		jenkins    hard    core      unlimited
+		jenkins    soft    fsize     unlimited
+		jenkins    hard    fsize     unlimited
+		jenkins    soft    nofile    4096
+		jenkins    hard    nofile    8192
+		jenkins    soft    nproc     30654
+		jenkins    hard    nproc     30654
+	EOF
+
+    install -o jenkins -g jenkins -d /mnt/$JENKINS_HOST
+    install -o jenkins -g jenkins -d /mnt/$JENKINS_HOST/init.groovy.d
+    install -o jenkins -g jenkins -d /var/log/jenkins
+    chown -hR jenkins:jenkins /mnt/$JENKINS_HOST /var/log/jenkins
+
+    printf "127.0.0.1 $(hostname) $(hostname -A)\n10.30.6.220 vbox-01.ci.percona.com\n10.30.6.9 repo.ci.percona.com\n" \
+        | tee -a /etc/hosts
+    mkdir -p /etc/systemd/system/jenkins.service.d
+    cat <<-EOF | tee /etc/systemd/system/jenkins.service.d/override.conf
+		[Service]
+		TimeoutStartSec=600
+		# Directory where Jenkins stores its configuration and workspaces
+		Environment="JENKINS_HOME=/mnt/$JENKINS_HOST"
+		WorkingDirectory=/mnt/$JENKINS_HOST
+
+		# Location of the exploded WAR
+		Environment="JENKINS_WEBROOT=/var/cache/jenkins/war"
+
+		# Location of the Jenkins log.
+		Environment="JENKINS_LOG=/var/log/jenkins/jenkins.log"
+	EOF
+
+    cat <<-"EOF" | tee -a /etc/systemd/system/jenkins.service.d/override.conf
+
+		# Arguments for the Jenkins JVM
+		Environment="JAVA_OPTS=-Djava.awt.headless=true -Xms3072m -Xmx4096m -Xss4m -server -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600"
+	EOF
+
+    systemctl daemon-reload
+    systemctl enable jenkins
+    systemctl start --no-block jenkins
+
+    printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n" > /etc/cron.d/terminate-check
+}
+
+setup_ssh_keys() {
+    KEYS_LIST="${ssh_key_engineers}"
+    for KEY in $KEYS_LIST; do
+        RETRY="3"
+        while [ $RETRY != "0" ]; do
+            STATUS=$(curl -Is https://www.percona.com/get/engineer/KEY/$KEY.pub | head -n1 | awk '{print $2}')
+            if [[ $STATUS -eq 200 ]]; then
+                curl -s https://www.percona.com/get/engineer/KEY/$KEY.pub | tee -a /home/ec2-user/.ssh/authorized_keys
+                RETRY="0"
+            elif [[ $STATUS -eq 404 ]]; then
+                echo "Skipping key $KEY"
+                RETRY=0
+            else
+                echo "Got $STATUS, retrying"
+                RETRY=$(($RETRY-1))
+            fi
+        done
+    done
+}
+
+%{ if plugin_install_hook != "" ~}
+install_plugins_hook() {
+    # First-boot plugins.groovy pinning (pxc-style).
+    wget -O /mnt/$JENKINS_HOST/init.groovy.d/plugins.groovy ${plugin_install_hook}
+    chown jenkins:jenkins /mnt/$JENKINS_HOST/init.groovy.d/plugins.groovy
+}
+%{ endif ~}
+
+main() {
+    setup_aws
+    setup_ssh_keys
+    mount_data_partition
+    install_software
+%{ if plugin_install_hook != "" ~}
+    install_plugins_hook
+%{ endif ~}
+    start_jenkins
+%{ if master_profile == "eks_observability" ~}
+    # PS-10945: master on :8080 only. Wires master-side Alloy into the
+    # alloy-gateway in percona-ci-platform EKS. SHA-pinned to live ps3.
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/08df5f4e101e52d0e03a7e0062696ace909a86bc/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
+%{ endif ~}
+%{ if master_profile == "legacy_openresty" ~}
+    # Stub: needs ~400 lines of openresty + letsencrypt restored from the
+    # pre-PS-10945 CF templates before non-cutover masters can use it.
+    echo "ERROR: master_profile=legacy_openresty is not yet implemented." >&2
+    exit 1
+%{ endif ~}
+%{ if master_profile == "legacy_nginx12" ~}
+    # Stub for psmdb (nginx 1.12 via amazon-linux-extras).
+    echo "ERROR: master_profile=legacy_nginx12 is not yet implemented." >&2
+    exit 1
+%{ endif ~}
+}
+
+main
+exit 0
