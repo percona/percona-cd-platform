@@ -46,8 +46,9 @@ resources:
 hosts:
   - name: ps3
     upstream: origin-ps3.cd.percona.com
-    upstreamScheme: https
-    upstreamPort: 443
+    upstreamScheme: http
+    upstreamPort: 8080
+    # upstreamHostHeader unused for plain HTTP (no SNI); harmless to leave.
     upstreamHostHeader: ps3.cd.percona.com
 
 ingress:
