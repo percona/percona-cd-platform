@@ -41,6 +41,16 @@ Key choices:
 - **external-dns owns the public `<host>.cd.percona.com` Route53 records.** Per-master CloudFormation deletes its previous `AWS::Route53::RecordSet JDNSRecord` so external-dns (running `--policy=sync --registry=txt --txt-owner-id=percona-ci-platform`) can publish a fresh A-alias to the ALB. JHostName parameter stays in the CF template (still drives `JENKINS_HOST` in user-data).
 - **Master listens on `:8080` only at target state.** The ALB terminates TLS; the master no longer needs openresty. Per-master `update-stack` strips `setup_nginx` / `setup_letsencrypt` / `create_fake_ssl_cert` / `setup_dhparam` / `setup_nginx_allow_list` / `restore_real_cert_from_backup` from user-data, drops `openresty` and `certbot` from the yum install, and the same stack-update tightens `HTTPSecurityGroup` to allow `tcp/8080` only from the EKS VPC CIDR (`10.220.0.0/16`) over the peering. `:80`/`:443` close to `0.0.0.0/0`; SSH stays on the existing /32 allowlist (EC2 Instance Connect Endpoint is preferred for operator access).
 
+### Why an nginx pod, not direct ALB IP targets?
+
+A natural simplification is "skip the nginx pod, register the master's private IP directly as an ALB target." Three load-bearing reasons it doesn't work / isn't worth it:
+
+1. **ALB IP targets are same-region only.** The ALB lives in `us-east-1`; the 10 masters span 5 other regions. Cross-region peering does not change this constraint — `aws elbv2 register-targets` rejects an IP outside the ALB's region even when the route to it exists. The nginx pod gives the ALB a same-region target (it's in the EKS VPC) that then forwards cross-region over the peering.
+2. **Dynamic upstream re-resolution.** nginx uses `resolver` + a `$upstream` variable so it re-resolves `origin-<host>` DNS every 5s. When the master's IP changes (renumber, AZ failover, SpotFleet replacement with a fresh ENI), the proxy keeps working with zero infra change. An ALB target group needs explicit (re-)registration; the IP change becomes a coordination problem.
+3. **Resilience layer the ALB can't provide.** Custom 503 auto-refresh page during master outages, WebSocket upgrade headers for Jenkins console streaming, `proxy_next_upstream` retries inside the 5s connect timeout. ALB -> Jenkins direct would surface raw 502s during the 2-5 min spot rotation window and would lose console streams.
+
+Nice-to-have on top: with the nginx pod, N hosts collapse to **one** ALB target group (the nginx Service). Without it, each master would need its own ALB target group + per-master health-check config.
+
 The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutover.md`. ps3 was the first cut over; the same 7-step procedure runs verbatim for the remaining 9 masters.
 
 ## Alternatives considered and rejected
@@ -51,6 +61,7 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - **DNS-01 certbot via Route53.** Cheapest, no infrastructure change. Rejected because it leaves all 10 masters as pets each running their own SSL stack; doesn't progress the "Jenkins on the platform EKS" vision.
 - **Per-region EKS + ALB + IngressGroup.** Would need EKS in 5 regions (current platform is single-region `us-east-1`). Operating surface multiplies by 5; cost of running the additional clusters dwarfs the egress hairpin tax of routing through `us-east-1`.
 - **Shared `jenkins-cd` ALB (instead of dedicated `jenkins-masters`).** Cheapest variant of the chosen pattern; one fewer ALB. Rejected because per-master Ingress reconciliation, certificate fallback, and rule-rate-limit pressure should not share fate with the platform control plane.
+- **PrivateLink / cross-region VPC interface endpoints (drop the nginx pod).** Would put an NLB in front of each master :8080 in its own region, expose it as a VPC endpoint service, and consume it via an interface endpoint in the EKS VPC. Cross-region PrivateLink has been supported since 2022, and the interface endpoint ENIs *are* same-region as the ALB so the IP-target constraint goes away. Rejected because (a) per-master cost is ~$22/mo for the interface endpoint ENIs alone (one per AZ at $0.01/hr), before per-GB data processing on both sides; per-peering is free, (b) per-master resource count jumps from ~5 lines of peering routes to NLB + endpoint service + interface endpoint per AZ (~3-5 new resources), (c) the resilience layer (503 page, WebSocket upgrade, dynamic re-resolve) still has to come from *somewhere*, so the nginx pod doesn't actually go away unless we also accept ALB raw 5xx during outages.
 
 ## Consequences
 
@@ -60,6 +71,7 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - Spot rotation surfaces as a 503 + auto-refresh page on the proxy (5 min worst case), instead of raw connection-refused errors. EBS volume + EIP survive spot rotation untouched, so JENKINS_HOME and the public-facing hostname stay stable across replacement.
 - Per-master cutover is a 1-PR-per-side + 1-tfvars-edit + 1-runbook-walk pattern (percona-ci-platform `terraform/peering-<host>.tf` + `local.auto.tfvars` origin target; `Percona-Lab/jenkins-pipelines` single PR that renumbers CIDR if needed, strips openresty/certbot, tightens SG to `10.220.0.0/16:8080`, drops CF JDNSRecord). Blast radius is contained to one master at a time.
 - Long-standing `10.177.0.0/22` VPC collision is no longer an SSL blocker but DOES bite per-master peering: two collidors cannot both peer to EKS at the same time. ps3 was renumbered to `10.181.0.0/22` as part of this cutover; the next collidor to be wired in (`pxc`/`ps57`/`cloud`) needs a fresh /22. Per-master peerings stay clean as long as each master VPC's CIDR is unique against EKS (`10.220.0.0/16`) AND against any other already-peered master.
+- `jenkins_origin_targets` in `local.auto.tfvars` is currently a hand-edited per-master private IP. It SHOULD be a filtered data source (`data.aws_instances` tag-filtered by `iit-billing-tag=jenkins-<host>`) so the master's IP is auto-discovered, matching the pattern already used for VPC + route-table lookups in `peering-<host>.tf`. Trade-off: `tofu apply` becomes load-bearing for IP refresh (a SpotFleet replacement window with no running master would return zero results and need a `try(..., fallback)` wrapper). Refactor is a separate follow-up; the manual tfvars is unblocked for now.
 
 ## References
 
