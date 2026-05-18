@@ -3,8 +3,8 @@
 End state: an EC2 Jenkins master (`<host>.cd.percona.com`) is reached via
 the dedicated `jenkins-masters` ALB in this cluster, terminating TLS with
 the wildcard ACM cert. The master's openresty + certbot stack is gone;
-Jenkins listens on `:8080` only; master SG allows `:8080` only from this
-cluster's NAT egress EIP. (PS-10945)
+Jenkins listens on `:8080` only; master SG allows `:8080` only from the
+EKS VPC CIDR (`10.220.0.0/16`) over a cross-region VPC peering. (PS-10945)
 
 This runbook is generic: substitute `<host>` for each of the 10 active
 masters (`pmm`, `ps80`, `ps3`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`,
@@ -26,9 +26,15 @@ Out of scope:
 - Dedicated `jenkins-masters` ALB live (`k8s-jenkinsmasters-049b9e6405`).
 - Operator has `percona-dev-admin` AWS credentials.
 - Operator can `kubectl` against `percona-ci-platform`.
-- Operator can SSH to the master via the existing /32 ingress.
+- Operator can reach the master via EC2 Instance Connect Endpoint (`paws ec2 ssh <host>`); the per-master SSH /32 is being retired.
 - `<host>` is registered in `var.jenkins_hosts` and has its upstream
   Route53 record populated (see "Out of scope" above).
+- The master's VPC CIDR does not conflict with EKS VPC (`10.220.0.0/16`)
+  nor with any already-peered master VPC. Renumber first if it does
+  (the ps3 cutover renumbered `10.177.0.0/22` -> `10.181.0.0/22`).
+- `terraform/peering-<host>.tf` exists in this repo and `tofu apply` is
+  done; the peering is `active` (`aws ec2 describe-vpc-peering-connections
+  --filters Name=tag:Name,Values=percona-ci-platform-to-jenkins-<host>`).
 
 ## Per-host cutover sequence
 
@@ -54,10 +60,10 @@ the friendly degraded-state page).
 ### 2. Open `:8080` on the master SG
 
 Land the per-master SG PR in `Percona-Lab/jenkins-pipelines` that adds
-`tcp/8080` ingress to `HTTPSecurityGroup` from
-`54.156.234.228/32` (the percona-ci-platform NAT GW EIP). Keep `:443`
-and `:80` open in this PR so the current openresty path stays usable.
-ps3 example: PR #4087.
+`tcp/8080` ingress to `HTTPSecurityGroup` from `10.220.0.0/16`
+(the percona-ci-platform EKS VPC, reached via cross-region peering).
+Keep `:443` and `:80` open to `0.0.0.0/0` in this PR so the current
+openresty path stays usable during cutover.
 
 ```sh
 AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
@@ -207,11 +213,12 @@ dig +short ps3.cd.percona.com
 Open `https://ps3.cd.percona.com/login` in a browser. Production
 traffic now flows ALB -> nginx pod -> Jenkins :8080 on the master.
 
-### 7. SG cleanup (lock down master to NAT-only on :8080)
+### 7. SG cleanup (lock down master to peering-only on :8080)
 
 Final per-master PR removes `0.0.0.0/0` on `:443` and `:80` from
-`HTTPSecurityGroup`, leaving only `54.156.234.228/32 :8080` (and the
-unchanged SSH /32 allowlist on `SSHSecurityGroup`).
+`HTTPSecurityGroup`, leaving only `10.220.0.0/16 :8080` (the EKS VPC
+CIDR reached via the peering, see prerequisite above) and the unchanged
+SSH /32 allowlist on `SSHSecurityGroup`.
 
 ```sh
 AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \

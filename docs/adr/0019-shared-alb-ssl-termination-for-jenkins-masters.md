@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-05-18)
 **Related:** [ADR 0003](0003-acm-vs-cert-manager-for-alb.md) (ACM strategy this builds on), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (push-model pattern reused for the proxy nginx)
+**Amendment (2026-05-18, ps3 cutover):** path between the proxy pod and the master is cross-region VPC peering, not a public NAT hairpin. See "Decision" Mode B and "Consequences" sections, both updated below; `terraform/peering-<host>.tf` and the per-host CIDR notes capture the operational shape.
 
 ## Context
 
@@ -24,8 +25,9 @@ Architecture:
 Internet
   -> ALB (us-east-1, group.name=jenkins-masters, wildcard ACM via SNI)
   -> jenkins-ingress nginx Pod (resources/addons/jenkins-ingress/)
-  -> Internet -> origin-<host>.cd.percona.com (master EIP, terraform/origins.tf)
-  -> openresty (transitional) OR Jenkins :8080 direct (target state)
+  -> Cross-region VPC peering (terraform/peering-<host>.tf)
+  -> origin-<host>.cd.percona.com (private IP on master ENI, terraform/origins.tf)
+  -> Jenkins :8080 on the master (no openresty, no TLS)
 ```
 
 Key choices:
@@ -33,17 +35,18 @@ Key choices:
 - **Dedicated `jenkins-masters` ALB**, not the shared `jenkins-cd` ALB. Jenkins traffic gets its own load balancer so a master rule churn or proxy outage cannot cascade into the platform control-plane ingress. ALBC creates and owns the second ALB automatically.
 - **One Helm chart, N hosts.** `resources/addons/jenkins-ingress/values.yaml` declares each master as `{ name, upstream, upstreamScheme, upstreamPort, upstreamHostHeader }`. Rolling a master in or out of the proxy is a values.yaml edit; ArgoCD syncs the addon in seconds.
 - **IngressGroup pattern.** `alb.ingress.kubernetes.io/group.name: jenkins-masters` lets ALBC merge every per-host Ingress onto the same ALB with host-header routing. One ALB, N rules, well under the 100-rule/listener quota.
-- **`origin-<host>` upstream convention** (`terraform/origins.tf`, `var.jenkins_origin_targets` in gitignored `terraform/local.auto.tfvars`). The proxy connects to a stable per-master DNS name that resolves to the master's EIP, decoupled from the public `<host>.cd.percona.com` Route53 record. Cutting the public hostname over to the ALB does not loop nginx back into itself.
+- **`origin-<host>` upstream convention** (`terraform/origins.tf`, `var.jenkins_origin_targets` in gitignored `terraform/local.auto.tfvars`). The proxy connects to a stable per-master DNS name that resolves to the master's **private** IP on the master ENI, reached via the cross-region peering. Decoupled from the public `<host>.cd.percona.com` Route53 record so cutting the public hostname over to the ALB does not loop nginx back into itself.
+- **Cross-region VPC peering** (`terraform/peering-<host>.tf`) gives the proxy pod a private path to the master, avoiding the public-internet hairpin and the master-side `:8080` `0.0.0.0/0` SG hole. EKS VPC is `10.220.0.0/16`; each master VPC must use a non-overlapping CIDR (ps3 was renumbered `10.177.0.0/22` -> `10.181.0.0/22` for this; the `pxc`/`ps57`/`cloud` collidors stay on `10.177.0.0/22` until each is peered in turn, since peering a single collidor at a time is unambiguous).
 - **Runtime DNS resolution + connect-retry** in the nginx config. `resolver kube-dns.kube-system.svc.cluster.local valid=5s;` plus `$upstream` variable forces nginx to re-resolve on every request, so an EIP swap propagates within ~5s without a pod restart. `proxy_connect_timeout 5s` + `proxy_next_upstream` + `error_page 502 503 504 -> @backend_down` (auto-refresh 15s) turns a 2-5 min spot-rotation window into a friendly degraded-state HTML page instead of raw connection-refused errors.
 - **external-dns owns the public `<host>.cd.percona.com` Route53 records.** Per-master CloudFormation deletes its previous `AWS::Route53::RecordSet JDNSRecord` so external-dns (running `--policy=sync --registry=txt --txt-owner-id=percona-ci-platform`) can publish a fresh A-alias to the ALB. JHostName parameter stays in the CF template (still drives `JENKINS_HOST` in user-data).
-- **Master listens on `:8080` only at target state.** The shared ALB terminates TLS; the master no longer needs openresty. Per-master `update-stack` strips `setup_nginx` / `setup_letsencrypt` / `create_fake_ssl_cert` / `setup_dhparam` / `setup_nginx_allow_list` / `restore_real_cert_from_backup` from user-data, drops `openresty` and `certbot` from the yum install, and a follow-up SG PR closes `0.0.0.0/0 :443/:80` leaving only `tcp/8080` from the percona-ci-platform NAT egress EIP.
+- **Master listens on `:8080` only at target state.** The ALB terminates TLS; the master no longer needs openresty. Per-master `update-stack` strips `setup_nginx` / `setup_letsencrypt` / `create_fake_ssl_cert` / `setup_dhparam` / `setup_nginx_allow_list` / `restore_real_cert_from_backup` from user-data, drops `openresty` and `certbot` from the yum install, and the same stack-update tightens `HTTPSecurityGroup` to allow `tcp/8080` only from the EKS VPC CIDR (`10.220.0.0/16`) over the peering. `:80`/`:443` close to `0.0.0.0/0`; SSH stays on the existing /32 allowlist (EC2 Instance Connect Endpoint is preferred for operator access).
 
 The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutover.md`. ps3 was the first cut over; the same 7-step procedure runs verbatim for the remaining 9 masters.
 
 ## Alternatives considered and rejected
 
 - **VPC Lattice service network.** Lattice is regional in 2026 (https://aws.amazon.com/vpc/lattice/faqs/); a `us-east-1` service network cannot directly hold target groups in the 5 other regions where masters live. Per-region service networks plus cross-region endpoints multiply moving parts for no clear win over an in-cluster reverse proxy.
-- **TGW peering + IP targets.** Cleanest L3 model on paper, but the 4-way `10.177.0.0/22` VPC collision blocks it until those VPCs renumber. EBS-anchored VPC renumber is a separate ~30-45 min outage per master.
+- **TGW peering + IP targets.** TGW is a fleet-wide cross-region hub-and-spoke alternative to per-master peering. Rejected for now because (a) the 10 masters live in only 4 regions (eu-west-1, eu-central-1, us-east-2, us-west-1, us-west-2) and per-master peerings are ~30 LoC each, (b) TGW adds ~$36/mo per attachment plus data-transfer charges that compound vs the per-peering model, (c) the 4-way `10.177.0.0/22` VPC collision still has to be unwound either way. Revisit once 5+ peerings are live and the TF surface area passes the per-master pattern.
 - **CloudFront + public origins + shared ACM.** Viable and simpler than Lattice. Rejected because (a) CloudFront's caching semantics for Jenkins web/API traffic add complexity for negligible benefit, (b) Egress from CloudFront to AWS origins is free but request fan-out cost grows with build-artifact downloads, (c) Operating two parallel ingress planes (CloudFront for Jenkins, ALB for platform) doubles the failure-injection surface.
 - **DNS-01 certbot via Route53.** Cheapest, no infrastructure change. Rejected because it leaves all 10 masters as pets each running their own SSL stack; doesn't progress the "Jenkins on the platform EKS" vision.
 - **Per-region EKS + ALB + IngressGroup.** Would need EKS in 5 regions (current platform is single-region `us-east-1`). Operating surface multiplies by 5; cost of running the additional clusters dwarfs the egress hairpin tax of routing through `us-east-1`.
@@ -55,8 +58,8 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - Hairpin latency: EU clients hitting an EU master traverse `us-east-1`. ~80 ms added per request. Mitigation if user pain is real: per-region EKS+ALB, separate ADR.
 - Egress doubling: ALL traffic via ALB doubles egress cost vs direct master. Keep large artifact downloads on direct master URLs (separate `<host>-artifacts.cd.percona.com` -> master) once the cutover is proven, separate cleanup.
 - Spot rotation surfaces as a 503 + auto-refresh page on the proxy (5 min worst case), instead of raw connection-refused errors. EBS volume + EIP survive spot rotation untouched, so JENKINS_HOME and the public-facing hostname stay stable across replacement.
-- Per-master cutover is a 3-PR + 1-tfvars-edit + 1-runbook-walk pattern (`Percona-Lab/jenkins-pipelines` SG-PR + strip-openresty PR + remove-CF-DNS PR; `terraform/local.auto.tfvars` origin target). Blast radius is contained to one master at a time.
-- Long-standing `10.177.0.0/22` VPC collision is now an SSL non-issue: the proxy hops over the public internet to each master EIP, so private CIDR overlap stays irrelevant. The collision remains a blocker for any future TGW plan but is no longer a blocker for centralised TLS.
+- Per-master cutover is a 1-PR-per-side + 1-tfvars-edit + 1-runbook-walk pattern (percona-ci-platform `terraform/peering-<host>.tf` + `local.auto.tfvars` origin target; `Percona-Lab/jenkins-pipelines` single PR that renumbers CIDR if needed, strips openresty/certbot, tightens SG to `10.220.0.0/16:8080`, drops CF JDNSRecord). Blast radius is contained to one master at a time.
+- Long-standing `10.177.0.0/22` VPC collision is no longer an SSL blocker but DOES bite per-master peering: two collidors cannot both peer to EKS at the same time. ps3 was renumbered to `10.181.0.0/22` as part of this cutover; the next collidor to be wired in (`pxc`/`ps57`/`cloud`) needs a fresh /22. Per-master peerings stay clean as long as each master VPC's CIDR is unique against EKS (`10.220.0.0/16`) AND against any other already-peered master.
 
 ## References
 
