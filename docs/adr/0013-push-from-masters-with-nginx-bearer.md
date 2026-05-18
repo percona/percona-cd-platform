@@ -299,3 +299,32 @@ per-master Mimir series count, sample freshness, distinct metric-name
 cardinality, and Loki log-line counts. Fleet steady state at rollout
 close: 180 datapoints / 3h / master on `hetzner_api_rate_limit_remaining`
 (uniform 60s scrape), 10/10 series present, 0 failed remote-write samples.
+
+### 2026-05-18 — Plugin-side label hygiene (amendment A4)
+
+Codex review of `hetzner-cloud-plugin` v103.percona.17 (commit
+`b163d64`) flagged a subtle interaction between this ADR and plugin-side
+metrics. Three new metrics emitted by `HungBuildDetector`
+(`hetzner_stuck_builds_total`, `hetzner_oldest_build_age_seconds`,
+`hetzner_jenkins_real_busy_executors`) included a `master` label
+derived from `Jenkins.get().getRootUrl()`, falling back to `""` if
+the URL couldn't be parsed. Alloy's `external_labels` /
+`prometheus.remote_write` relabel rules only fill **missing** labels;
+they do NOT overwrite an existing empty label. Result: a master whose
+URL parser returned `""` would emit series with `master=""` that
+dashboards filtering `master=~".+\.cd"` silently dropped.
+
+**Rule (A4):** Plugin-side code MUST NOT emit a `master` label on any
+metric that flows through this push pipeline. The master label is the
+exclusive responsibility of the master-side Alloy `external_labels`
+block (set to `master="<inst>.cd"` per the relabel config in
+`Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh`).
+
+This applies to:
+- All metrics declared in `HetznerMetricProvider.java`
+- Any new metrics added in future plugin releases
+
+`hetzner-cloud-plugin` v103.percona.18 (commit `c9a6369`) drops the
+in-plugin `master` label from the three v17 metrics; canary verified on
+`ps3.cd` 2026-05-18 (Mimir returns the series with `master="ps3.cd"`
+correctly applied by Alloy).
