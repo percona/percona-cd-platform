@@ -95,7 +95,7 @@ pin UNHEALTHY entries in the ring forever. This is a separate concern from
 Object Lock, but the canary surfaced both failure modes in the same hour
 and the fix lands in the same change set.
 
-Shipped in commit `7df2f57` of `nogueiraanderson/percona-ci-platform`.
+Shipped in commit `7df2f57` of `Percona/percona-cd-platform`.
 
 ## Consequences
 
@@ -131,7 +131,7 @@ Shipped in commit `7df2f57` of `nogueiraanderson/percona-ci-platform`.
 
 ## Tracking
 
-- Implementation commit: `7df2f57` (`nogueiraanderson/percona-ci-platform`).
+- Implementation commit: `7df2f57` (`Percona/percona-cd-platform`).
 - Buckets affected: `<cluster>-mimir-blocks`, `<cluster>-loki-chunks`,
   `<cluster>-tempo-traces` in `us-east-1`.
 - Surfaced by: ps3.cd Alloy canary, 2026-05-08 (see

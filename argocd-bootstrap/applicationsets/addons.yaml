@@ -12,7 +12,7 @@ spec:
                 matchLabels:
                   enabled: 'true'
           - git:
-              repoURL: https://github.com/nogueiraanderson/percona-ci-platform
+              repoURL: https://github.com/Percona/percona-cd-platform
               revision: HEAD
               directories:
                 - path: resources/addons/*
@@ -22,7 +22,7 @@ spec:
     spec:
       project: platform
       source:
-        repoURL: https://github.com/nogueiraanderson/percona-ci-platform
+        repoURL: https://github.com/Percona/percona-cd-platform
         targetRevision: HEAD
         path: '{{ path }}'
         helm:

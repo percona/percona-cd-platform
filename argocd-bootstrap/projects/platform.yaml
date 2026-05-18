@@ -6,10 +6,9 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  description: Platform addons + Jenkins masters for percona-ci-platform.
+  description: Platform addons + Jenkins masters for percona-ci-platform cluster.
   sourceRepos:
-    - https://github.com/nogueiraanderson/percona-ci-platform
-    - https://github.com/Percona-Lab/percona-ci-platform
+    - https://github.com/Percona/percona-cd-platform
     - https://argoproj.github.io/argo-helm
     - https://aws.github.io/eks-charts
     - https://kubernetes-sigs.github.io/external-dns/

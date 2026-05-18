@@ -76,7 +76,7 @@ memberlist:
   cluster_label_verification_disabled: false
 ```
 
-Shipped in commit `002bd6f` of `nogueiraanderson/percona-ci-platform`.
+Shipped in commit `002bd6f` of `Percona/percona-cd-platform`.
 
 ## Consequences
 
@@ -106,7 +106,7 @@ Shipped in commit `002bd6f` of `nogueiraanderson/percona-ci-platform`.
 
 ## Tracking
 
-- Implementation commit: `002bd6f` (`nogueiraanderson/percona-ci-platform`).
+- Implementation commit: `002bd6f` (`Percona/percona-cd-platform`).
 - Verification: `kubectl exec mimir-distributor-0 -- wget -qO-
   http://127.0.0.1:8080/memberlist | grep '^Cluster label'` shows
   `Cluster label: mimir-percona-ci`. Equivalent check on

@@ -1,6 +1,6 @@
-# percona-ci-platform — Claude Code project instructions
+# percona-cd-platform — Claude Code project instructions
 
-OpenTofu + ArgoCD platform repo. EKS in `us-east-1`, GitOps-bootstrapped. Public, owned by `nogueiraanderson` (will move to `Percona-Lab/`).
+OpenTofu + ArgoCD platform repo. EKS in `us-east-1`, GitOps-bootstrapped. Public, lives at `Percona/percona-cd-platform` (HD-30965, 2026-05-18). The provisioned cluster keeps its name `percona-ci-platform` and the LGTM S3 buckets keep `percona-ci-platform-*` prefixes — those names don't track the repo move.
 
 Full architecture: see [`README.md`](README.md). Authoritative plan: private at `~/.claude/plans/spicy-prancing-nebula.md`.
 

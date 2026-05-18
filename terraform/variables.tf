@@ -275,6 +275,6 @@ variable "tags" {
     "iit-billing-tag" = "percona-ci-platform"
     "PerconaKeep"     = "True"
     "managed-by"      = "opentofu"
-    "repo"            = "github.com/nogueiraanderson/percona-ci-platform"
+    "repo"            = "github.com/Percona/percona-cd-platform"
   }
 }
