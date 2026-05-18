@@ -30,13 +30,28 @@ data:
       keepalive_timeout 65;
       client_max_body_size 500m;
 
+      # Runtime DNS resolution for upstreams. Without this nginx caches the
+      # upstream IP at worker start and never picks up an EIP/origin-* change
+      # (so a spot rotation that moves the EIP elsewhere would lock the pod
+      # on the dead IP until restart). Use the cluster CoreDNS Service IP via
+      # its FQDN; valid=5s keeps the cache short so re-resolution happens
+      # within a few seconds of a record change.
+      resolver kube-dns.kube-system.svc.cluster.local valid=5s ipv6=off;
+      resolver_timeout 5s;
+
       proxy_http_version 1.1;
       proxy_request_buffering off;
       proxy_buffering off;
+      proxy_connect_timeout 5s;
+      proxy_send_timeout 30s;
       proxy_read_timeout 3600s;
-      proxy_send_timeout 3600s;
+      proxy_next_upstream error timeout http_502 http_503 http_504;
+      proxy_next_upstream_tries 3;
+      proxy_next_upstream_timeout 15s;
 
-      # Shared healthz for the ALB target-group health check.
+      # Shared healthz for the ALB target-group health check. Always 200,
+      # decoupled from upstream master state, so master outages don't mark
+      # the proxy pods unhealthy and remove them from the ALB.
       server {
         listen 8081;
         location = /-/healthy { return 200 "ok\n"; }
@@ -51,8 +66,24 @@ data:
         # Bypass upstream for ALB health probes.
         location = /-/healthy { return 200 "ok\n"; }
 
+        # Friendly degraded-state page served when the upstream master is
+        # unreachable (spot rotation, reboot, EIP swap mid-flight). Auto-
+        # refreshes every 15s so users land on Jenkins as soon as the master
+        # is back without manual F5.
+        error_page 502 503 504 = @backend_down;
+        location @backend_down {
+          default_type text/html;
+          return 503 '<!doctype html><html><head><meta charset="utf-8"><title>{{ .name }} is restarting</title><meta http-equiv="refresh" content="15"><style>body{font-family:system-ui,sans-serif;max-width:40em;margin:4em auto;color:#333}h1{color:#c00}code{background:#f4f4f4;padding:.1em .3em;border-radius:3px}</style></head><body><h1>Jenkins is restarting</h1><p>The <code>{{ .name }}.cd.percona.com</code> master is briefly unreachable, typically a spot-instance rotation or planned reboot (~1-5 min). This page auto-refreshes every 15s.</p></body></html>';
+        }
+
+        # Use a variable for proxy_pass so nginx re-resolves the upstream on
+        # each request via the `resolver` directive above (nginx only does
+        # runtime DNS when the upstream is a variable; literal hostnames are
+        # resolved once at startup and cached forever).
+        set $upstream "{{ .upstreamScheme }}://{{ .upstream }}:{{ .upstreamPort }}";
+
         location / {
-          proxy_pass {{ .upstreamScheme }}://{{ .upstream }}:{{ .upstreamPort }};
+          proxy_pass $upstream;
           proxy_set_header Host {{ $hostHeader }};
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
