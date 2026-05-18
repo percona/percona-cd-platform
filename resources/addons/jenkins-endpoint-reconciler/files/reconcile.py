@@ -87,23 +87,21 @@ def reconcile(host: dict) -> None:
         ),
     }
 
+    # Always replace; skip the read-and-compare. The kubernetes python
+    # client deserialises EndpointSlice via a typed model whose `endpoints`
+    # field rejects None — but the API server omits the field entirely
+    # when the slice has no endpoints, so reads of an empty slice raise
+    # `ValueError: Invalid value for endpoints, must not be None` before
+    # we can even check it. Replace is idempotent and the resourceVersion
+    # bump is irrelevant for a 1/min job.
     api = client.DiscoveryV1Api()
     try:
-        existing = api.read_namespaced_endpoint_slice(name, TARGET_NAMESPACE)
-        current = (
-            existing.endpoints[0].addresses[0]
-            if existing.endpoints and existing.endpoints[0].addresses
-            else None
-        )
-        if current == ip:
-            log.info("%s: no change (ip=%s)", name, ip or "EMPTY")
-            return
         api.replace_namespaced_endpoint_slice(name, TARGET_NAMESPACE, body)
-        log.info("%s: %s -> %s", name, current or "EMPTY", ip or "EMPTY")
+        log.info("%s: write -> %s", name, ip or "EMPTY")
     except client.exceptions.ApiException as e:
         if e.status == 404:
             api.create_namespaced_endpoint_slice(TARGET_NAMESPACE, body)
-            log.info("%s: CREATE -> %s", name, ip or "EMPTY")
+            log.info("%s: create -> %s", name, ip or "EMPTY")
         else:
             raise
 
