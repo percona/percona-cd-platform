@@ -9,6 +9,45 @@ provider "aws" {
   }
 }
 
+# Aliased providers for the Jenkins master regions. Used by peerings.tf to
+# create cross-region VPC peering accepters and ps3-side route table entries
+# in each master's own region. Only the regions hosting a Jenkins master
+# need an alias; us-east-1 is covered by the default provider above.
+provider "aws" {
+  alias   = "eu-west-1"
+  region  = "eu-west-1"
+  profile = var.aws_profile != "" ? var.aws_profile : null
+  default_tags { tags = local.tags }
+}
+
+provider "aws" {
+  alias   = "us-east-2"
+  region  = "us-east-2"
+  profile = var.aws_profile != "" ? var.aws_profile : null
+  default_tags { tags = local.tags }
+}
+
+provider "aws" {
+  alias   = "us-west-1"
+  region  = "us-west-1"
+  profile = var.aws_profile != "" ? var.aws_profile : null
+  default_tags { tags = local.tags }
+}
+
+provider "aws" {
+  alias   = "us-west-2"
+  region  = "us-west-2"
+  profile = var.aws_profile != "" ? var.aws_profile : null
+  default_tags { tags = local.tags }
+}
+
+provider "aws" {
+  alias   = "eu-central-1"
+  region  = "eu-central-1"
+  profile = var.aws_profile != "" ? var.aws_profile : null
+  default_tags { tags = local.tags }
+}
+
 # Kubernetes + Helm providers configure once the EKS cluster exists.
 # Until then they will fail-fast on apply, which is the intended order.
 provider "kubernetes" {

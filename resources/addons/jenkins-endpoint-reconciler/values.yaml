@@ -1,0 +1,45 @@
+# jenkins-endpoint-reconciler — values.yaml
+
+# CronJob schedule. K8s minimum granularity is 1 minute; that's also our
+# upper bound on staleness for the EndpointSlice → master IP mapping.
+# SpotFleet replacements take 2-5 min so 1-min is comfortably below that.
+schedule: "* * * * *"
+
+# Container image. python:3.13-slim + pip install boto3+kubernetes at
+# startup is ~10s for a ~2s reconcile step — acceptable for a 1/min
+# CronJob, and avoids a separate image build/push pipeline. If we ever
+# need sub-minute reconcile, switch to a Deployment with a sleep loop
+# and a pre-built image.
+image:
+  repository: python
+  tag: 3.13-slim
+  pullPolicy: IfNotPresent
+
+# Service account name. Bound to a Pod Identity association in
+# terraform/pod-identity.tf, which trusts an IAM role with ec2:DescribeInstances.
+serviceAccount:
+  name: jenkins-endpoint-reconciler
+
+# Namespace where Services and EndpointSlices are written. Must match the
+# jenkins-ingress addon's namespace so the proxy can consume them via
+# kube-dns at `jenkins-<host>.<targetNamespace>.svc.cluster.local`. The
+# reconciler itself runs in its own namespace (the path.basename of this
+# chart) and writes cross-namespace via a Role in the target namespace.
+targetNamespace: jenkins-ingress
+
+# Hosts to reconcile. One Service + EndpointSlice per entry, named
+# `jenkins-<name>` in targetNamespace. Add an entry per master as each
+# is wired into the proxy (a peering-<host>.tf must already exist).
+hosts:
+  - name: ps3
+    region: eu-west-1
+    tag: jenkins-ps3
+    port: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  # Forbid: a long-running reconcile (e.g. AWS API throttling) should not
+  # be racing a fresh one. Each tick is idempotent anyway.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  # If a tick is missed because the controller is offline, don't spam
+  # catch-up runs once it comes back.
+  startingDeadlineSeconds: 120
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # Hard upper bound on the run; well above the ~10s pip + ~2s reconcile
+      # but below the next tick.
+      activeDeadlineSeconds: 45
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          annotations:
+            # Rolls the Job's Pod template whenever the script or values
+            # change so the next tick picks up the new config.
+            checksum/script: {{ include (print $.Template.BasePath "/configmap-script.yaml") . | sha256sum }}
+            checksum/hosts: {{ .Values.hosts | toYaml | sha256sum }}
+        spec:
+          serviceAccountName: {{ .Values.serviceAccount.name }}
+          restartPolicy: Never
+          # Reconciler does not need to run on any privileged tier; the
+          # `general` Karpenter NodePool (spot + on-demand) is the default
+          # landing zone via no tolerations.
+          containers:
+            - name: reconciler
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  pip install --quiet --no-cache-dir 'boto3==1.36.*' 'kubernetes==31.*'
+                  exec python /scripts/reconcile.py
+              env:
+                - name: HOSTS_JSON
+                  value: {{ .Values.hosts | toJson | quote }}
+                - name: TARGET_NAMESPACE
+                  value: {{ .Values.targetNamespace | quote }}
+                # boto3 needs a default AWS_REGION for client initialization
+                # even though every ec2.Client() call passes region_name
+                # explicitly. Source-of-truth via the addons ApplicationSet
+                # valuesObject (terraform/argocd.tf cluster-secret); falls
+                # back to us-east-1 (this cluster's home region) when the
+                # value isn't projected (e.g. local `helm template`).
+                - name: AWS_REGION
+                  value: {{ (.Values.aws | default dict).region | default "us-east-1" | quote }}
+              resources: {{ toYaml .Values.resources | nindent 16 }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false  # pip writes to site-packages
+                runAsNonRoot: true
+                runAsUser: 65532
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: {{ .Release.Name }}-script
+                defaultMode: 0555

@@ -248,3 +248,40 @@ module "pod_identity_tempo" {
 
   tags = local.tags
 }
+
+# ---------------------------------------------------------------------------
+# jenkins-endpoint-reconciler — CronJob in the cluster that reconciles
+# EC2 Jenkins master IPs into K8s EndpointSlices (resources/addons/
+# jenkins-endpoint-reconciler/). Replaces the Terraform-driven origin-<host>
+# Route53 records: discovery happens continuously in the cluster, not on
+# `tofu apply`. See ADR 0019 amendment (PS-10945).
+# ---------------------------------------------------------------------------
+
+module "pod_identity_jenkins_endpoint_reconciler" {
+  source  = local.modules.pod_identity.source
+  version = local.modules.pod_identity.version
+
+  # IAM-side short name kept under the 38-char `name_prefix` cap on
+  # aws_iam_role; the K8s-side namespace + SA keep their descriptive
+  # `jenkins-endpoint-reconciler` names since Pod Identity binds on
+  # (cluster, namespace, sa), not on the IAM role label.
+  name = "${local.cluster_name}-jenkins-discovery"
+  additional_policy_arns = {
+    describe_ec2 = aws_iam_policy.jenkins_endpoint_reconciler.arn
+  }
+
+  associations = {
+    main = {
+      cluster_name = module.eks.cluster_name
+      # Namespace matches the ApplicationSet path basename — i.e. the
+      # addon dir `resources/addons/jenkins-endpoint-reconciler/`. The
+      # reconciler writes EndpointSlices into the `jenkins-ingress`
+      # namespace via a Role in that target namespace, separate from
+      # this Pod Identity association.
+      namespace       = "jenkins-endpoint-reconciler"
+      service_account = "jenkins-endpoint-reconciler"
+    }
+  }
+
+  tags = local.tags
+}

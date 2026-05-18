@@ -1,0 +1,15 @@
+apiVersion: v2
+name: jenkins-endpoint-reconciler
+description: |
+  Reconciles EC2 Jenkins master IPs into K8s EndpointSlices for the
+  jenkins-ingress proxy. See ADR 0019 for context (PS-10945).
+
+  For each host in .Values.hosts, runs ec2:DescribeInstances tag-filtered
+  by `iit-billing-tag=jenkins-<host>` + `instance-state-name=running` in
+  the host's region, then patches an EndpointSlice in the target namespace.
+  nginx in jenkins-ingress proxies to the matching ClusterIP Service, so
+  SpotFleet replacements / AZ failovers re-target automatically without
+  any Route53 or Terraform involvement.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
