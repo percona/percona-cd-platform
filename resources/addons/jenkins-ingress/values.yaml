@@ -1,6 +1,6 @@
-# Shared-ALB SSL termination for Jenkins masters (PS-10945).
+# Dedicated-ALB SSL termination for Jenkins masters (PS-10945).
 #
-# Architecture: Internet -> ALB (jenkins-cd group, ACM wildcard) ->
+# Architecture: Internet -> ALB (jenkins-masters group, ACM wildcard) ->
 # nginx Pod (this chart) -> AWS EC2 public DNS of the master's EIP.
 # Pods are in the percona-ci-platform VPC, so they satisfy the ALB
 # `target-type: ip` constraint; the upstream traverses the public internet
@@ -51,7 +51,11 @@ hosts:
     upstreamHostHeader: ps3.cd.percona.com
 
 ingress:
-  # Shared ALB group; ALBC merges all Ingresses on this group onto one ALB.
+  # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`
+  # (which serves grafana/argo/auth/alloy-gateway); Jenkins traffic gets its
+  # own ALB so a master rule churn / proxy outage cannot affect the platform
+  # control-plane ingress. ALBC creates and owns the second ALB
+  # automatically the first time an Ingress on this group reconciles.
   # ACM wildcard *.cd.percona.com is discovered automatically via SNI.
-  groupName: jenkins-cd
+  groupName: jenkins-masters
   sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
