@@ -44,9 +44,11 @@ spec:
                 - |
                   set -eu
                   # Pod runs as uid 65532 (nonroot) with HOME=/ which is not
-                  # writable. Install deps to /tmp and put that on PYTHONPATH
-                  # so we don't need to either chmod / nor relax runAsNonRoot.
-                  pip install --quiet --no-cache-dir --target /tmp/pip \
+                  # writable. Install deps to /tmp/pip and put that on
+                  # PYTHONPATH so we don't need to relax runAsNonRoot. uv
+                  # is faster + the project standard (~/.claude/CLAUDE.md).
+                  export UV_CACHE_DIR=/tmp/uv-cache
+                  uv pip install --no-cache --target /tmp/pip \
                     'boto3==1.36.*' 'kubernetes==31.*'
                   export PYTHONPATH=/tmp/pip
                   exec python /scripts/reconcile.py

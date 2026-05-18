@@ -5,14 +5,15 @@
 # SpotFleet replacements take 2-5 min so 1-min is comfortably below that.
 schedule: "* * * * *"
 
-# Container image. python:3.13-slim + pip install boto3+kubernetes at
-# startup is ~10s for a ~2s reconcile step — acceptable for a 1/min
-# CronJob, and avoids a separate image build/push pipeline. If we ever
+# Container image. The astral-sh/uv image ships uv + a CPython 3.13
+# already on the path; ~2-3s `uv pip install` for boto3 + kubernetes at
+# startup (vs ~10s for plain pip), plus uv is the project standard
+# (~/.claude/CLAUDE.md, "Use `uv`, NEVER `pip install`"). If we ever
 # need sub-minute reconcile, switch to a Deployment with a sleep loop
-# and a pre-built image.
+# and a pre-built image with deps baked in.
 image:
-  repository: python
-  tag: 3.13-slim
+  repository: ghcr.io/astral-sh/uv
+  tag: python3.13-bookworm-slim
   pullPolicy: IfNotPresent
 
 # Service account name. Bound to a Pod Identity association in
