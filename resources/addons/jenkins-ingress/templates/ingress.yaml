@@ -1,0 +1,36 @@
+{{/*
+One Ingress per host. All share `alb.ingress.kubernetes.io/group.name:
+jenkins-cd`, so ALBC collapses them onto the same shared ALB. ACM wildcard
+*.cd.percona.com is discovered by ALBC via SNI -- no per-Ingress
+certificate-arn annotation needed.
+*/}}
+{{- range .Values.hosts }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $.Release.Name }}-{{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    alb.ingress.kubernetes.io/group.name: {{ $.Values.ingress.groupName }}
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: {{ $.Values.ingress.sslPolicy }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /-/healthy
+    alb.ingress.kubernetes.io/healthcheck-port: '8081'
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .name }}.cd.percona.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Release.Name }}
+                port:
+                  number: 80
+---
+{{- end }}
