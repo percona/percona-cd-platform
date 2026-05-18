@@ -45,7 +45,13 @@ resources:
 # `upstreamHostHeader` is sent as both the Host header and the TLS SNI.
 hosts:
   - name: ps3
-    upstream: origin-ps3.cd.percona.com
+    # K8s Service backed by an EndpointSlice that the jenkins-endpoint-reconciler
+    # CronJob keeps in sync with the live ps3 master private IP via the VPC
+    # peering. SpotFleet replacements / AZ failovers re-target automatically
+    # without any Route53 or `tofu apply`. nginx resolves this name via kube-
+    # dns (still using the runtime resolver + $upstream pattern so a Service
+    # ClusterIP change picks up within the 5s TTL).
+    upstream: jenkins-ps3.jenkins-ingress.svc.cluster.local
     upstreamScheme: http
     upstreamPort: 8080
     # upstreamHostHeader unused for plain HTTP (no SNI); harmless to leave.
