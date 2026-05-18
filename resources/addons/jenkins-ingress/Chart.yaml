@@ -1,0 +1,5 @@
+apiVersion: v2
+name: jenkins-ingress
+version: 0.1.0
+description: NGINX reverse proxy fronting the shared jenkins-cd ALB for Jenkins masters (PS-10945 SSL centralisation).
+type: application
