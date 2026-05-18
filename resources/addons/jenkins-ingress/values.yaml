@@ -1,16 +1,28 @@
 # Shared-ALB SSL termination for Jenkins masters (PS-10945).
 #
 # Architecture: Internet -> ALB (jenkins-cd group, ACM wildcard) ->
-# nginx Pod (this chart) -> public DNS of the EC2 master's openresty/Jenkins.
+# nginx Pod (this chart) -> AWS EC2 public DNS of the master's EIP.
 # Pods are in the percona-ci-platform VPC, so they satisfy the ALB
 # `target-type: ip` constraint; the upstream traverses the public internet
-# back to the master. Acceptable because masters are already public-facing.
+# back to the master via its stable EIP DNS name. Acceptable because
+# masters are already public-facing.
 #
-# Phase 1 (spike): one host -- `ps3-spike.cd.percona.com` -> existing
-# openresty on `ps3.cd.percona.com:443`. Zero production impact.
-# Phase 4 (cutover): add `ps3.cd.percona.com` to the hosts list and delete
-# the master's CF-owned Route53 record so external-dns publishes the ALB
-# DNS as the A-alias for `ps3.cd.percona.com`.
+# `upstream` must NOT be the same DNS name as the Ingress host -- cutting
+# the public hostname over to the ALB would make nginx resolve its
+# upstream to the ALB itself and loop. Use the `origin-<host>` convention
+# (matches `terraform/origins.tf`): a separate Route53 A-record pointing
+# at the master's EIP. `upstreamHostHeader` is the Host header + SNI sent
+# to the upstream so the master's openresty matches its virtual host and
+# cert.
+#
+# Deploy gating: `origin-ps3.cd.percona.com -> 52.210.70.55` must exist
+# in Route53 before sync. Either populate `var.jenkins_origin_targets.ps3`
+# in `terraform/local.auto.tfvars` (origins.tf will create it) or `aws
+# route53 change-resource-record-sets` it by hand.
+#
+# Phase 1 (proxy via openresty): upstream still HTTPS:443. After PR 2 in
+# Percona-Lab/jenkins-pipelines strips openresty and the master SG opens
+# :8080 to the EKS NAT egress IPs, switch to scheme=http, port=8080.
 
 image:
   repository: nginx
@@ -28,14 +40,15 @@ resources:
     memory: 256Mi
 
 # One entry per host on the shared ALB. `name` is the left label of the
-# `cd.percona.com` host. `upstream` is the FQDN the proxy connects to;
-# defaults to <name>.cd.percona.com but can be overridden (spike uses a
-# different upstream than the host).
+# `cd.percona.com` host. `upstream` is the FQDN the proxy connects to
+# (must differ from `<name>.cd.percona.com` to avoid resolution loops).
+# `upstreamHostHeader` is sent as both the Host header and the TLS SNI.
 hosts:
-  - name: ps3-spike
-    upstream: ps3.cd.percona.com
+  - name: ps3
+    upstream: origin-ps3.cd.percona.com
     upstreamScheme: https
     upstreamPort: 443
+    upstreamHostHeader: ps3.cd.percona.com
 
 ingress:
   # Shared ALB group; ALBC merges all Ingresses on this group onto one ALB.

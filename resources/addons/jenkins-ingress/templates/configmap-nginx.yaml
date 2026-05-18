@@ -2,9 +2,10 @@
 NGINX reverse-proxy config. One server block per host in .Values.hosts.
 
 Each server listens on :80 (ALB terminates TLS upstream; pod-internal traffic
-is HTTP). Host header is rewritten to the upstream FQDN so the master's
-openresty/Jenkins resolves the virtual host correctly. WebSocket upgrade
-headers + 3600s read timeout cover Jenkins build console streaming.
+is HTTP). Host header + SNI are rewritten to `upstreamHostHeader` (defaults
+to upstream) so the master's openresty/Jenkins matches the right vhost +
+cert. WebSocket upgrade headers + 3600s read timeout cover Jenkins build
+console streaming.
 
 Health probe at /-/healthy returns 200 without traversing the upstream so
 ALB target-group health stays decoupled from the master's reachability.
@@ -42,18 +43,17 @@ data:
       }
 
       {{- range .Values.hosts }}
+      {{- $hostHeader := default .upstream .upstreamHostHeader }}
       server {
         listen 80;
         server_name {{ .name }}.cd.percona.com;
 
-        # Bypass upstream for ALB health probes; upstream openresty already
-        # has its own healthz path conventions and we don't want a master
-        # blip to flap the entire shared ALB.
+        # Bypass upstream for ALB health probes.
         location = /-/healthy { return 200 "ok\n"; }
 
         location / {
           proxy_pass {{ .upstreamScheme }}://{{ .upstream }}:{{ .upstreamPort }};
-          proxy_set_header Host {{ .upstream }};
+          proxy_set_header Host {{ $hostHeader }};
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto https;
@@ -63,7 +63,7 @@ data:
 
           {{- if eq .upstreamScheme "https" }}
           proxy_ssl_server_name on;
-          proxy_ssl_name {{ .upstream }};
+          proxy_ssl_name {{ $hostHeader }};
           proxy_ssl_verify off;
           {{- end }}
         }
