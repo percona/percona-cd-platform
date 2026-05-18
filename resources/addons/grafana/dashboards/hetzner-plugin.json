@@ -764,7 +764,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Hetzner API requests remaining in the current rate-limit window (per token, 3600 max). Y axis anchored to 3000 so real fluctuations are visible. Crossing 500 turns the line yellow; crossing 200 turns it red.",
+      "description": "One line per Jenkins master = one independent Hetzner API token bucket (3600 req/hr per token, rolling 1h window). Each master has its own token, so red on one line does NOT affect the others. Green >=500 (healthy). Yellow 200-500 (provision storm forming, ~3-9 min headroom). Red <200 (near exhaustion; at 0 the plugin self-suppresses provisions for 60s on that master). Every API call counts, including rejected resource_unavailable create_server (e.g. CAX stockout).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -773,7 +773,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "min": 3000,
+          "min": 0,
           "max": 3600,
           "custom": {
             "drawStyle": "line",
