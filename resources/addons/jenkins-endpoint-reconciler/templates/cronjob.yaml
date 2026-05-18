@@ -43,7 +43,12 @@ spec:
               args:
                 - |
                   set -eu
-                  pip install --quiet --no-cache-dir 'boto3==1.36.*' 'kubernetes==31.*'
+                  # Pod runs as uid 65532 (nonroot) with HOME=/ which is not
+                  # writable. Install deps to /tmp and put that on PYTHONPATH
+                  # so we don't need to either chmod / nor relax runAsNonRoot.
+                  pip install --quiet --no-cache-dir --target /tmp/pip \
+                    'boto3==1.36.*' 'kubernetes==31.*'
+                  export PYTHONPATH=/tmp/pip
                   exec python /scripts/reconcile.py
               env:
                 - name: HOSTS_JSON
