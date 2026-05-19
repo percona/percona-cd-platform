@@ -584,8 +584,15 @@ resource "aws_spot_fleet_request" "master" {
 
   launch_template_config {
     launch_template_specification {
-      id      = aws_launch_template.master.id
-      version = aws_launch_template.master.latest_version
+      id = aws_launch_template.master.id
+      # $Latest symbolic version: SpotFleet always picks up the freshest
+      # LT version on the next replacement. Previously this was set to
+      # `aws_launch_template.master.latest_version` which TF resolved to
+      # a literal number at plan time, then `ignore_changes` below
+      # blocked updates -- so SpotFleet stayed pinned to the v at last
+      # apply and userdata edits never landed (PS-11173 Phase 3 surfaced
+      # this when LT bumped 99 -> 101 but SpotFleet still referenced 99).
+      version = "$Latest"
     }
 
     dynamic "overrides" {
@@ -598,12 +605,12 @@ resource "aws_spot_fleet_request" "master" {
   }
 
   lifecycle {
-    # ignore_changes covers two cases:
-    # - launch_template_config: set-typed block; LT itself pins user_data via
-    #   its own ignore_changes, so don't replan inner blocks here either.
-    # - load_balancers / target_group_arns: optional+computed attributes the
-    #   AWS provider re-evaluates as "known after apply" on import, which
-    #   would otherwise force replacement of the live SpotFleet.
-    ignore_changes = [launch_template_config, load_balancers, target_group_arns]
+    # load_balancers / target_group_arns are optional+computed attributes
+    # the AWS provider re-evaluates as "known after apply" on import,
+    # which would otherwise force replacement of the live SpotFleet.
+    # `launch_template_config` is NOT in the ignore list because we now
+    # use $Latest (constant); the only diffs would be deliberate operator
+    # changes to instance-type overrides etc., which should apply.
+    ignore_changes = [load_balancers, target_group_arns]
   }
 }
