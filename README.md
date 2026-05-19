@@ -5,7 +5,7 @@ EKS 1.35) and bootstraps the addon stack via GitOps. Hosts Percona's CI/CD
 infrastructure: Jenkins masters, observability (LGTM), shared ALB SSL
 termination for `*.cd.percona.com`.
 
-Lives at `Percona/percona-cd-platform` (HD-30965, 2026-05-18). The EKS cluster
+Lives at `Percona/percona-cd-platform`. The EKS cluster
 keeps its provisioned name `percona-ci-platform` and the LGTM S3 bucket prefixes
 keep `percona-ci-platform-*` — renaming those is out of scope here.
 
