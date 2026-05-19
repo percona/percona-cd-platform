@@ -54,7 +54,7 @@ install_software() {
         echo try again
     done
 
-    yum -y install yum-utils wget cronie rsync bc
+    yum -y install yum-utils wget cronie rsync bc jq
     wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
     sed -i 's/^repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/jenkins.repo
     grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
@@ -151,7 +151,53 @@ start_jenkins() {
     systemctl enable jenkins
     systemctl start --no-block jenkins
 
+%{ if master_profile == "eks_observability" ~}
+    # PS-11173 Phase 3: graceful spot-interrupt drain. Replaces the
+    # immediate `systemctl stop jenkins` with a quietDown + busyExecutors
+    # poll + safeExit flow that uses up to ~85s of the AWS 120s warning.
+    # Admin token is fetched per-run from AWS Secrets Manager via the
+    # AdminApiTokenRead IAM grant; no token on disk.
+    install -m 0755 /dev/stdin /usr/local/bin/jenkins-graceful-stop.sh <<'GRACEFUL'
+#!/bin/bash
+# PS-11173 Phase 3: gracefully drain Jenkins on AWS spot interrupt.
+# Triggered by /etc/cron.d/terminate-check at 30s cadence; if the spot
+# instance-action metadata appears, this script runs.
+set -u
+INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
+TOKEN=$(aws secretsmanager get-secret-value \
+    --region "$INSTANCE_REGION" \
+    --secret-id ps3.cd/jenkins/admin-api-token \
+    --query SecretString --output text) || {
+    echo "graceful-stop: SM fetch failed; falling back to systemctl stop" >&2
+    systemctl stop jenkins
+    cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log || true
+    umount /mnt || true
+    exit 0
+}
+USER="api-admin"
+BASE="http://127.0.0.1:8080"
+curl -fsS -u "$USER:$TOKEN" -X POST \
+    "$BASE/quietDown?reason=EC2%20Spot%20interruption" || true
+deadline=$(( $(date +%s) + 85 ))
+while [ "$(date +%s)" -lt "$deadline" ]; do
+    busy=$(curl -fsS -u "$USER:$TOKEN" "$BASE/computer/api/json?tree=busyExecutors" \
+           | jq -r '.busyExecutors // 0') || busy=0
+    [ "$busy" -le 0 ] && break
+    echo "graceful-stop: busyExecutors=$busy (deadline in $((deadline - $(date +%s)))s)" >&2
+    sleep 3
+done
+curl -fsS -u "$USER:$TOKEN" -X POST "$BASE/safeExit" || true
+sleep 5
+cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log || true
+umount /mnt || true
+GRACEFUL
+
+    # 30s polling cadence (minute boundary + offset 30s). On spot-action
+    # match, hand off to the graceful script instead of `systemctl stop`.
+    printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n" > /etc/cron.d/terminate-check
+%{ else ~}
     printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n" > /etc/cron.d/terminate-check
+%{ endif ~}
 }
 
 setup_ssh_keys() {

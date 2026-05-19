@@ -38,6 +38,12 @@ module "ps3" {
       name = "AlloyGatewayBearerRead"
       json = data.aws_iam_policy_document.ps3_alloy_bearer_read.json
     },
+    {
+      # PS-11173 Phase 3: lets the userdata graceful spot-interrupt drain
+      # script fetch the api-admin Jenkins token at boot.
+      name = "AdminApiTokenRead"
+      json = data.aws_iam_policy_document.ps3_admin_token_read.json
+    },
   ]
 
   # :8080 from EKS VPC over cross-region peering for jenkins-ingress nginx.
@@ -66,6 +72,19 @@ data "aws_iam_policy_document" "ps3_alloy_bearer_read" {
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = ["arn:aws:secretsmanager:us-east-1:${data.aws_caller_identity.current.account_id}:secret:percona-ci-platform/alloy-gateway/bearer-*"]
+  }
+}
+
+# PS-11173 Phase 3: secret holds the Jenkins admin API token consumed by
+# the userdata graceful spot-interrupt drain script. Lives in eu-west-1
+# alongside the ps3 master so the userdata's $INSTANCE_REGION lookup just
+# works without a region override.
+data "aws_iam_policy_document" "ps3_admin_token_read" {
+  statement {
+    sid       = "AdminApiTokenRead"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:eu-west-1:${data.aws_caller_identity.current.account_id}:secret:ps3.cd/jenkins/admin-api-token-*"]
   }
 }
 
