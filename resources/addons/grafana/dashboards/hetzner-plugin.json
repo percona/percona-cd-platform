@@ -1251,13 +1251,13 @@
     },
     {
       "id": 103,
-      "title": "Capacity: running / pending vs cap",
+      "title": "Capacity utilization per master (%)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Per-master running and pending Hetzner workers with the configured cap as a dashed reference. Makes 'capacity exhausted' vs 'provisioning leaking' obvious at a glance.",
+      "description": "Per-master Hetzner capacity utilization = running workers / configured cap, as a percentage. One line per master. Green <70%, yellow 70-90%, red >=90% (at the ceiling; new provision requests will be rejected). Pairs with panel 201 (instant snapshot table) and panel 5 (pending vs orphan reap for leak detection). Raw running counts over time live in panel 203.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -1271,26 +1271,8 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\"})",
-          "legendFormat": "{{master}} running"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "B",
-          "expr": "sum by (master) (hetzner_provisioning_pending{master=~\"$master\"})",
-          "legendFormat": "{{master}} pending"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "C",
-          "expr": "sum by (master) (hetzner_instance_cap{master=~\"$master\"})",
-          "legendFormat": "{{master}} cap"
+          "expr": "100 * sum by (master) (hetzner_running_servers{master=~\"$master\"}) / clamp_min(sum by (master) (hetzner_instance_cap{master=~\"$master\"}), 1)",
+          "legendFormat": "{{master}}"
         }
       ],
       "options": {
@@ -1304,32 +1286,36 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*cap$"
-            },
-            "properties": [
+            "fillOpacity": 0,
+            "lineWidth": 2
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    10,
-                    10
-                  ]
-                }
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
               }
             ]
           }
-        ]
+        },
+        "overrides": []
       }
     },
     {
