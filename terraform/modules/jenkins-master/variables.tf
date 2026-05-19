@@ -68,9 +68,9 @@ variable "ebs_size" {
 }
 
 variable "ebs_type" {
-  description = "EBS volume type. gp2 for most; pmm/ps80 use gp3; psmdb uses gp2 with 300 GiB."
+  description = "EBS volume type. Defaults to gp3 (3000 IOPS / 125 MB/s baseline, online modify from gp2 supported)."
   type        = string
-  default     = "gp2"
+  default     = "gp3"
 }
 
 variable "spot_price" {

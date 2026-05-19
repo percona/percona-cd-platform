@@ -563,11 +563,13 @@ resource "aws_launch_template" "master" {
 
   user_data = base64encode(local.user_data_rendered)
 
-  lifecycle {
-    # Avoid byte-for-byte mismatch with CF-baked user_data forcing a SpotFleet
-    # rotation during import. Lift after Phase 3 soak; reconciler absorbs ~4min.
-    ignore_changes = [user_data]
-  }
+  # PS-11173 Phase 0: ignore_changes = [user_data] lifted now that the CF
+  # stack jenkins-ps3 is gone (deleted 2026-05-19 via update-stack with
+  # DeletionPolicy: Retain on all 24 resources, then plain delete-stack).
+  # Future userdata edits (e.g. Phase 3 graceful spot-interrupt drain)
+  # now flow through Terraform and produce a launch-template version bump
+  # without instance churn; the SpotFleet picks up the new LT version on
+  # the next replacement cycle.
 }
 
 resource "aws_spot_fleet_request" "master" {
