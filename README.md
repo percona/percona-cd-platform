@@ -1,13 +1,13 @@
 # percona-cd-platform
 
-Public OpenTofu + ArgoCD platform repo. Provisions an EKS cluster (`us-east-1`,
-EKS 1.35) and bootstraps the addon stack via GitOps. Hosts Percona's CI/CD
-infrastructure: Jenkins masters, observability (LGTM), shared ALB SSL
-termination for `*.cd.percona.com`.
+Public OpenTofu + ArgoCD platform repo.
 
-Lives at `Percona/percona-cd-platform`. The EKS cluster
-keeps its provisioned name `percona-ci-platform` and the LGTM S3 bucket prefixes
-keep `percona-ci-platform-*` — renaming those is out of scope here.
+Provisions an EKS cluster in `us-east-1` (EKS 1.35) and bootstraps the addon
+stack via GitOps. Hosts Percona CI/CD: Jenkins masters, observability
+(LGTM), shared ALB SSL termination for `*.cd.percona.com`.
+
+The cluster keeps its provisioned name `percona-ci-platform` and the LGTM S3
+bucket prefixes keep `percona-ci-platform-*`; renaming those is out of scope.
 
 ## Repo layout
 
@@ -44,12 +44,12 @@ Five tiers, each with a single canonical `workload.percona.com/tier` label and
 | `jenkins-master` | EKS MNG `jenkins_system`, `m6a.xlarge` × 1 us-east-1a | In-cluster Jenkins master PoC (`jenkins-ps3-k8s`). |
 | `general` | Karpenter NodePool `default`, spot + on-demand `c7/m7/r7-i/a` | Stateless LGTM components, Grafana, alloy-gateway, Authentik web tier, anything without an explicit tier. |
 
-Both EKS MNGs and Karpenter NodePools are in use. MNGs handle bootstrap and
-the single-AZ pinned stateful workloads; Karpenter covers everything that
-benefits from multi-AZ + instance-family flex (LGTM stateful, all stateless).
-The 2026-05-11 LGTM outage drove the stateful split, see
-[`docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md)
-for the full reasoning.
+MNGs handle bootstrap and single-AZ pinned stateful workloads. Karpenter
+covers everything that benefits from multi-AZ + instance-family flex (LGTM
+stateful, all stateless).
+
+The 2026-05-11 LGTM outage drove the stateful split. Full reasoning in
+[`docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md).
 
 ## Documentation
 
@@ -73,11 +73,14 @@ for the full reasoning.
 Pinned versions: [`terraform/versions.tf`](terraform/versions.tf). Run
 [`scripts/check_versions.py`](scripts/check_versions.py) before changing pins.
 
+Operational helpers (readiness audits, ingest probes, Karpenter validation,
+LGTM-cutover walks) are indexed in [`scripts/README.md`](scripts/README.md).
+
 ## Contributing
 
 - `just ci` must pass before PR.
 - Pre-commit hooks mirror CI ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)).
-- ADRs in [`docs/adr/`](docs/adr/) — propose architecture changes there first.
+- ADRs in [`docs/adr/`](docs/adr/); propose architecture changes there first.
 - Commit format: `type(scope): subject`. No AI footers.
 
 ## License

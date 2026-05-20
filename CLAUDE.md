@@ -40,9 +40,25 @@ Verify with `scripts/check_versions.py` before any pin bump.
 
 ## End-to-end verification
 
-`scripts/verify-observability.sh [<inst>]` walks the whole LGTM push pipeline (master Hetzner-plugin endpoint, master-side Alloy systemd, ALB + bearer, alloy-gateway pods, Mimir distributor + canary query, Loki distributor + ring + canary query, Grafana). Read-only, exits nonzero on any failure. Default master `ps3`. Pass `--skip-master` to omit SSH-dependent stages.
+Full script catalog: [`scripts/README.md`](scripts/README.md).
 
-For fleet-wide ingest spot-checks from the cluster side (no SSH required), use `scripts/check-master-ingest.sh` -- it port-forwards `mimir-query-frontend` + `loki-query-frontend` and reports per-master series count, sample freshness, metric-name cardinality, and Loki log-line counts. Exits nonzero if any expected master is missing from Mimir.
+`scripts/verify-observability.sh [<inst>]`
+Walks the whole LGTM push pipeline per master (Hetzner-plugin endpoint,
+master-side Alloy systemd, ALB + bearer, alloy-gateway pods, Mimir + Loki
+distributors + canary queries, Grafana). Default master `ps3`,
+`--skip-master` for cluster-side only.
+
+`scripts/check-master-ingest.sh`
+Fleet-wide ingest spot-check from the cluster side (no SSH). Port-forwards
+`mimir-query-frontend` + `loki-query-frontend`. Reports per-master series
+count, sample freshness, metric cardinality, Loki line count. Exits non-zero
+if any expected master is missing from Mimir.
+
+`scripts/check-master-spot-readiness.sh [<inst>]`
+Spot-interrupt readiness audit (SpotFleet + Capacity Rebalancing, cron +
+graceful-stop.sh with flock, rehydrate flag, Secrets Manager + api-admin
+auth probe). Use before declaring a master ready to absorb a spot interrupt
+(PS-11173).
 
 ## Related repos
 
