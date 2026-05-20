@@ -219,10 +219,10 @@ if ssm_run 'systemctl is-active crond; systemctl is-enabled crond'; then
 fi
 
 if ssm_run 'test -f /etc/cron.d/terminate-check && cat /etc/cron.d/terminate-check'; then
-  if echo "$SSM_STDOUT" | grep -q 'spot/instance-action'; then
-    ok "/etc/cron.d/terminate-check" "spot-action watcher installed"
+  if echo "$SSM_STDOUT" | grep -q '/usr/local/bin/jenkins-graceful-stop.sh'; then
+    ok "/etc/cron.d/terminate-check" "calls jenkins-graceful-stop.sh"
   else
-    bad "/etc/cron.d/terminate-check" "content does not reference spot/instance-action"
+    bad "/etc/cron.d/terminate-check" "content does not reference jenkins-graceful-stop.sh"
   fi
 else
   bad "/etc/cron.d/terminate-check" "file missing"
@@ -241,12 +241,17 @@ fi
 # 5. graceful-stop.sh --------------------------------------------------------
 section "graceful-stop.sh"
 
-if ssm_run 'test -x /usr/local/bin/jenkins-graceful-stop.sh && head -15 /usr/local/bin/jenkins-graceful-stop.sh'; then
+if ssm_run 'test -x /usr/local/bin/jenkins-graceful-stop.sh && cat /usr/local/bin/jenkins-graceful-stop.sh'; then
   ok "jenkins-graceful-stop.sh exists + executable"
-  if echo "$SSM_STDOUT" | grep -q 'flock'; then
+  if echo "$SSM_STDOUT" | grep -q '^flock\b\|^[[:space:]]*flock\b\|^exec 9>'; then
     ok "graceful-stop has flock guard" "no concurrent-drain pile-ups"
   else
     bad "graceful-stop missing flock guard" "concurrent cron firings will race after safeExit"
+  fi
+  if echo "$SSM_STDOUT" | grep -q 'X-aws-ec2-metadata-token'; then
+    ok "graceful-stop uses IMDSv2" "tokens negotiated before metadata reads"
+  else
+    bad "graceful-stop uses IMDSv1" "LT requires IMDSv2; script will fail on token-required IMDS"
   fi
 else
   bad "jenkins-graceful-stop.sh" "missing or not executable"
