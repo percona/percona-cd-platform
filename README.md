@@ -16,8 +16,9 @@ parameterized in `terraform/`.
 |---|---|---|
 | `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, per-master DNS records |
 | `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
-| `resources/` | ArgoCD | Helm-based workloads. `addons/` is one umbrella per cluster addon (observability stack, ingress, identity, Karpenter, etc.); `jenkins/` is the in-cluster Jenkins master chart with per-instance overlays. |
-| `image/` | Docker | Jenkins image (war + plugins) |
+| `resources/addons/` | ArgoCD | One Helm umbrella per cluster addon (observability stack, ingress, identity, Karpenter, etc.). Also hosts a first-party `jenkins-endpoint-reconciler` (Python CronJob; polls EC2 for each master's IP, writes the matching K8s EndpointSlice). |
+| `resources/jenkins/` | ArgoCD | In-cluster Jenkins master chart with per-instance overlays under `instances/`. |
+| `image/` | Docker | Jenkins master image: WAR, Percona-patched plugins (ec2, hetzner-cloud), `init.groovy.d` scripts. |
 | `docs/` | Markdown | Architecture, runbooks, ADRs |
 | `scripts/` | Bash + Python | Operational helpers; see [`scripts/README.md`](scripts/README.md) |
 | `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |
