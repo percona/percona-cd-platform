@@ -1,6 +1,6 @@
 # percona-cd-platform — Claude Code project instructions
 
-OpenTofu + ArgoCD platform repo. EKS in `us-east-1`, GitOps-bootstrapped. Public, lives at `Percona/percona-cd-platform` (HD-30965, 2026-05-18). The provisioned cluster keeps its name `percona-ci-platform` and the LGTM S3 buckets keep `percona-ci-platform-*` prefixes — those names don't track the repo move.
+OpenTofu + ArgoCD platform repo. EKS in `us-east-1`, GitOps-bootstrapped. Public, lives at `Percona/percona-cd-platform` (moved 2026-05-18). The provisioned cluster keeps its name `percona-ci-platform` and the LGTM S3 buckets keep `percona-ci-platform-*` prefixes; those names don't track the repo move.
 
 Full architecture: see [`README.md`](README.md). Authoritative plan: private at `~/.claude/plans/spicy-prancing-nebula.md`.
 
@@ -57,15 +57,14 @@ if any expected master is missing from Mimir.
 `scripts/check-master-spot-readiness.sh [<inst>]`
 Spot-interrupt readiness audit (SpotFleet + Capacity Rebalancing, cron +
 graceful-stop.sh with flock, rehydrate flag, Secrets Manager + api-admin
-auth probe). Use before declaring a master ready to absorb a spot interrupt
-(PS-11173).
+auth probe). Use before declaring a master ready to absorb a spot interrupt.
 
 ## Related repos
 
 | Repo | Purpose |
 |---|---|
 | `Percona-Lab/jenkins-pipelines` | Jenkins pipeline code, cloud.groovy, job definitions (master + hetzner branches) |
-| `nogueiraanderson/hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.11`, DC breakers, type fallback, `/hetzner-prometheus` `UnprotectedRootAction` for PS-10997 push model) |
+| `nogueiraanderson/hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.11`, DC breakers, type fallback, `/hetzner-prometheus` `UnprotectedRootAction` for the push model) |
 | `nogueiraanderson/ec2-plugin` | Patched EC2 plugin (`v5.24.percona.2` — IRSA classloader fix, NPE guards) |
 
 ## Skill loading reminders

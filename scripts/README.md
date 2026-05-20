@@ -17,7 +17,7 @@ Spot-interrupt readiness audit for a Jenkins master.
 - JVM has the rehydrate flag (eks_observability profile)
 - Secrets Manager fetch + api-admin auth probe from loopback
 
-Exits non-zero if anything is missing. PS-11173.
+Exits non-zero if anything is missing.
 
 [`check-master-ingest.sh`](check-master-ingest.sh)
 Per-master Mimir + Loki ingest probe via in-cluster query-frontends.

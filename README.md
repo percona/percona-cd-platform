@@ -15,7 +15,7 @@ bucket prefixes keep `percona-ci-platform-*`; renaming those is out of scope.
 |---|---|---|
 | `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, per-master `origin-<host>` Route53 records (`origins.tf`) |
 | `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
-| `resources/addons/` | ArgoCD | Helm umbrella charts per addon (includes `jenkins-ingress`, the shared-ALB SSL termination for EC2 Jenkins masters, see [ADR 0019](docs/adr/0019-shared-alb-ssl-termination-for-jenkins-masters.md)) |
+| `resources/addons/` | ArgoCD | Helm umbrella charts per addon (includes `jenkins-ingress`, the shared-ALB SSL termination for EC2 Jenkins masters; see [the ADR](docs/adr/0019-shared-alb-ssl-termination-for-jenkins-masters.md)) |
 | `image/` | Docker build | Jenkins 2.x + plugins |
 | `docs/` | Markdown | Architecture, runbooks (including [`jenkins-ssl-cutover.md`](docs/runbooks/jenkins-ssl-cutover.md) for the per-master cutover), ADRs, lessons |
 | `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |
@@ -49,7 +49,7 @@ covers everything that benefits from multi-AZ + instance-family flex (LGTM
 stateful, all stateless).
 
 The 2026-05-11 LGTM outage drove the stateful split. Full reasoning in
-[`docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md`](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md).
+the [cluster tier taxonomy ADR](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md).
 
 ## Documentation
 
