@@ -51,12 +51,9 @@ resource "aws_internet_gateway" "this" {
 resource "aws_subnet" "this" {
   for_each = local.subnet_indices
 
-  vpc_id            = aws_vpc.this.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 2, each.value) # /24 inside /22
-  availability_zone = data.aws_availability_zones.available.names[each.value]
-  # trivy:ignore:AVD-AWS-0164: master gets a random public IP for outbound
-  # (no NAT GW in this VPC); inbound is SG-restricted to the peered EKS
-  # VPC CIDR only. Adding NAT just to flip this flag is not justified.
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 2, each.value) # /24 inside /22
+  availability_zone       = data.aws_availability_zones.available.names[each.value]
   map_public_ip_on_launch = true
 
   tags = merge(local.base_tags, {
@@ -128,10 +125,6 @@ resource "aws_security_group" "ssh" {
     cidr_blocks = var.ssh_allowed_cidrs
   }
 
-  # trivy:ignore:AVD-AWS-0104: master needs unrestricted outbound for yum,
-  # GitHub, Hetzner API, Docker registries, AWS endpoints; allowlisting
-  # those is high-maintenance for low benefit since any compromise with
-  # local exec on the master already has access to the instance role.
   egress {
     from_port   = 0
     to_port     = 0
@@ -171,7 +164,6 @@ resource "aws_security_group" "http" {
     }
   }
 
-  # trivy:ignore:AVD-AWS-0104: see rationale on the SSH SG egress block.
   egress {
     from_port   = 0
     to_port     = 0

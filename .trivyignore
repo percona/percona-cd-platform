@@ -15,6 +15,16 @@
 # Reconsider this entry once those endpoints are wired.
 AWS-0104
 
+# AWS-0164 — Subnet associates public IP address.
+# Triggered on `terraform/modules/jenkins-master/aws_subnet.this`. The
+# master subnet has `map_public_ip_on_launch = true` because the VPC has
+# no NAT GW and the master needs outbound (yum, GitHub, Hetzner API).
+# Inbound is SG-restricted to the peered EKS VPC CIDR (HTTPS via ALB)
+# and SSM (SSH); the public IP is not an ingress path. Adding a NAT GW
+# (~$32/mo standing + bandwidth) just to flip this flag is not justified
+# for the current scale. Re-evaluate if/when ps3 moves into the EKS VPC.
+AVD-AWS-0164
+
 # AWS-0040 — Public cluster access is enabled.
 # We deliberately enable `endpoint_public_access = true` on the EKS control
 # plane, but **gated by `endpoint_public_access_cidrs = var.api_public_access_cidrs`**
