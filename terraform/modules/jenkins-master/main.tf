@@ -51,9 +51,12 @@ resource "aws_internet_gateway" "this" {
 resource "aws_subnet" "this" {
   for_each = local.subnet_indices
 
-  vpc_id                  = aws_vpc.this.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 2, each.value) # /24 inside /22
-  availability_zone       = data.aws_availability_zones.available.names[each.value]
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 2, each.value) # /24 inside /22
+  availability_zone = data.aws_availability_zones.available.names[each.value]
+  # trivy:ignore:AVD-AWS-0164: master gets a random public IP for outbound
+  # (no NAT GW in this VPC); inbound is SG-restricted to the peered EKS
+  # VPC CIDR only. Adding NAT just to flip this flag is not justified.
   map_public_ip_on_launch = true
 
   tags = merge(local.base_tags, {
@@ -125,6 +128,10 @@ resource "aws_security_group" "ssh" {
     cidr_blocks = var.ssh_allowed_cidrs
   }
 
+  # trivy:ignore:AVD-AWS-0104: master needs unrestricted outbound for yum,
+  # GitHub, Hetzner API, Docker registries, AWS endpoints; allowlisting
+  # those is high-maintenance for low benefit since any compromise with
+  # local exec on the master already has access to the instance role.
   egress {
     from_port   = 0
     to_port     = 0
@@ -164,6 +171,7 @@ resource "aws_security_group" "http" {
     }
   }
 
+  # trivy:ignore:AVD-AWS-0104: see rationale on the SSH SG egress block.
   egress {
     from_port   = 0
     to_port     = 0
@@ -426,7 +434,13 @@ resource "aws_ebs_volume" "data" {
   availability_zone = data.aws_availability_zones.available.names[var.az_index]
   size              = var.ebs_size
   type              = var.ebs_type
-  encrypted         = false
+  # New masters create an encrypted volume from the start. Existing
+  # volumes are NOT re-encrypted: lifecycle.ignore_changes covers
+  # `encrypted` and `kms_key_id` so the AWS provider does not force
+  # replace the live ps3 data volume. Encrypting the existing volume
+  # is a separate ops procedure: snapshot -> CopySnapshot with KMS ->
+  # create encrypted volume from copy -> detach old -> attach new.
+  encrypted = true
 
   tags = merge(local.base_tags, {
     Name = "${var.short_name} DATA, do not remove"
@@ -436,7 +450,7 @@ resource "aws_ebs_volume" "data" {
     # prevent_destroy is the load-bearing safety; final_snapshot is omitted
     # because the AWS provider issues an empty ModifyVolume otherwise.
     prevent_destroy = true
-    ignore_changes  = [snapshot_id, iops, throughput]
+    ignore_changes  = [snapshot_id, iops, throughput, encrypted, kms_key_id]
   }
 }
 
@@ -454,7 +468,11 @@ resource "aws_route53_record" "master" {
 resource "aws_sqs_queue" "termination" {
   count = var.create_termination_queue ? 1 : 0
   name  = "${var.short_name}-termination"
-  tags  = local.base_tags
+  # Encrypt with the SQS-managed key. The queue carries spot-lifecycle
+  # event metadata (instance IDs, interrupt timestamps), not credentials,
+  # but encrypting is a one-line hardening with no operational cost.
+  sqs_managed_sse_enabled = true
+  tags                    = local.base_tags
 }
 
 data "aws_iam_policy_document" "termination_queue" {
@@ -543,7 +561,14 @@ resource "aws_launch_template" "master" {
   }
 
   metadata_options {
-    http_tokens = "optional" # IMDSv1 + IMDSv2, matches CF
+    # IMDSv2 required + hop_limit=1 closes the SSRF-to-instance-role
+    # path. All curls in user-data.sh.tftpl and jenkins-graceful-stop.sh
+    # negotiate an IMDSv2 token (PUT /latest/api/token) before reading
+    # any metadata path. install-master-observability.sh uses the AWS
+    # CLI which already speaks IMDSv2 via SDK.
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    http_endpoint               = "enabled"
   }
 
   tag_specifications {

@@ -7,8 +7,13 @@ JENKINS_HOST=${jenkins_host}
 JENKINS_SHORT=${jenkins_short}
 JENKINS_EIP=${eip_allocation_id}
 JENKINS_VOLUME_ID=${data_volume_id}
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
+
+# IMDSv2: the launch template sets http_tokens=required, so every direct
+# IMDS call below negotiates a session token first. Token TTL=6h covers
+# the boot path; nothing here reuses the token outside this script.
+IMDS_TOKEN=$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+INSTANCE_ID=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+INSTANCE_REGION=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
 
 set -o xtrace
 set -o errexit
@@ -164,16 +169,27 @@ start_jenkins() {
     # AdminApiTokenRead IAM grant; no token on disk.
     install -m 0755 /dev/stdin /usr/local/bin/jenkins-graceful-stop.sh <<'GRACEFUL'
 #!/bin/bash
-# PS-11173 Phase 3: gracefully drain Jenkins on AWS spot interrupt.
-# Triggered by /etc/cron.d/terminate-check at 30s cadence; if the spot
-# instance-action metadata appears, this script runs.
+# Gracefully drain Jenkins on AWS spot interrupt. Triggered by
+# /etc/cron.d/terminate-check at 30s cadence; the script self-checks
+# the spot/instance-action IMDS endpoint and exits silently when
+# there's no interrupt pending.
 set -u
+
+# IMDSv2: the launch template requires session tokens. 60s TTL is plenty
+# for one drain pass.
+IMDS_TOKEN=$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") || exit 0
+
+# Self-check: is there an active spot interrupt? Non-200 means no
+# (404 in the normal case; we exit 0 so cron stays quiet).
+SPOT_CODE=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" -o /dev/null -w "%%{http_code}" "http://169.254.169.254/latest/meta-data/spot/instance-action" || echo 000)
+[ "$SPOT_CODE" = "200" ] || exit 0
+
 # flock prevents the every-30s cron from piling up duplicate drains
-# while a previous run is still polling busyExecutors (see PS-11173 FIS
-# round 2 trace where 3 concurrent runs raced after safeExit).
+# while a previous run is still polling busyExecutors.
 exec 9>/run/jenkins-graceful-stop.lock
 flock -n 9 || { echo "graceful-stop: another drain is already running, skipping" >&2; exit 0; }
-INSTANCE_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
+
+INSTANCE_REGION=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
 TOKEN=$(aws secretsmanager get-secret-value \
     --region "$INSTANCE_REGION" \
     --secret-id ps3.cd/jenkins/admin-api-token \
@@ -202,9 +218,10 @@ cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log || true
 umount /mnt || true
 GRACEFUL
 
-    # 30s polling cadence (minute boundary + offset 30s). On spot-action
-    # match, hand off to the graceful script.
-    printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n" > /etc/cron.d/terminate-check
+    # 30s polling cadence (minute boundary + offset 30s). The script
+    # self-checks the spot-action IMDS endpoint and exits 0 when no
+    # interrupt is pending; flock inside the script gates concurrency.
+    printf "* * * * * root /usr/local/bin/jenkins-graceful-stop.sh\n* * * * * root sleep 30; /usr/local/bin/jenkins-graceful-stop.sh\n" > /etc/cron.d/terminate-check
 %{ endif ~}
 
     # cronie ships disabled on AL2023; the terminate-check cron only
