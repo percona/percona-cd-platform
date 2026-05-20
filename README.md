@@ -16,7 +16,7 @@ parameterized in `terraform/`.
 |---|---|---|
 | `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, per-master DNS records |
 | `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
-| `resources/addons/` | ArgoCD | Helm umbrella charts per addon (observability stack, jenkins-ingress for shared-ALB SSL, etc.) |
+| `resources/` | ArgoCD | Helm-based workloads. `addons/` is one umbrella per cluster addon (observability stack, ingress, identity, Karpenter, etc.); `jenkins/` is the in-cluster Jenkins master chart with per-instance overlays. |
 | `image/` | Docker | Jenkins image (war + plugins) |
 | `docs/` | Markdown | Architecture, runbooks, ADRs |
 | `scripts/` | Bash + Python | Operational helpers; see [`scripts/README.md`](scripts/README.md) |
