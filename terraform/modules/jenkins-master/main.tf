@@ -582,6 +582,30 @@ resource "aws_spot_fleet_request" "master" {
   terminate_instances_with_expiration = false
   fleet_type                          = "maintain"
 
+  # PS-11173 Phase 5: launch a replacement on EC2 Spot rebalance
+  # recommendation. AWS issues rebalance recommendations minutes to
+  # hours before the 2-min interruption notice; on receipt the fleet
+  # launches a new instance proactively. We use `launch` (not
+  # `launch-before-terminate`) for two reasons:
+  #   1. The hashicorp/aws provider's aws_spot_fleet_request resource
+  #      does not surface `termination_delay`, which AWS requires when
+  #      using `launch-before-terminate` (the field is supported on
+  #      the newer aws_ec2_fleet resource but not the legacy SpotFleet
+  #      one we use here).
+  #   2. Phase 3 graceful-stop.sh already handles the 2-min interrupt
+  #      window, so we only need the proactive replacement signal, not
+  #      AWS-managed termination of the old instance.
+  # Old instance keeps running until the regular spot interruption
+  # notice (or manual termination); Phase 3 drains it cleanly. Brief
+  # double-spot cost during the overlap is acceptable for the canary.
+  # Revisit `launch-before-terminate` when ps3 migrates to
+  # aws_ec2_fleet (AWS-recommended successor to SpotFleet).
+  spot_maintenance_strategies {
+    capacity_rebalance {
+      replacement_strategy = "launch"
+    }
+  }
+
   launch_template_config {
     launch_template_specification {
       id = aws_launch_template.master.id
