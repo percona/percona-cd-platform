@@ -47,6 +47,15 @@ triggers a real Jenkins build.
 Version drift check for pinned tools, charts, AWS CLI. Run before bumping
 `terraform/versions.tf` or addon chart pins.
 
+## Master-side install
+
+[`install-master-observability.sh`](install-master-observability.sh)
+Bootstrapped on each EC2 Jenkins master from the TF user-data (SHA-pinned).
+Installs amazon-ssm-agent + Grafana Alloy with an `ExecStartPre` that
+fetches the alloy-gateway bearer token from AWS Secrets Manager. Idempotent.
+Not invoked locally; lives here so platform changes to the gateway and the
+master-side installer land in one diff.
+
 ## Conventions
 
 - **Exit codes:** `0` all green, `1` at least one FAIL, `2` precondition missing.

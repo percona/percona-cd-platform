@@ -259,9 +259,14 @@ main() {
 %{ endif ~}
     start_jenkins
 %{ if master_profile == "eks_observability" ~}
-    # PS-10945: master on :8080 only. Wires master-side Alloy into the
-    # alloy-gateway in percona-ci-platform EKS. SHA-pinned to live ps3.
-    curl -fsSL --retry 5 https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/08df5f4e101e52d0e03a7e0062696ace909a86bc/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
+    # Wires master-side Alloy into the alloy-gateway. The script is now
+    # vendored in this repo at scripts/install-master-observability.sh;
+    # SHA-pinned so a script edit + a userdata edit land in one diff
+    # and the boot path is reproducible. CFN-managed masters still
+    # fetch the same content from a thin pass-through at
+    # Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh
+    # until they migrate to TF.
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/6f5346eadc4bfa44e6d86d73ceb62ce7efbb7b79/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
 %{ endif ~}
 %{ if master_profile == "legacy_openresty" ~}
     # Stub: needs ~400 lines of openresty + letsencrypt restored from the
