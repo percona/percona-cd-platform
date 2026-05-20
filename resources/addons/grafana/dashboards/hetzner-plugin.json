@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility.",
+  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility. v3 (2026-05-18) adds panel 50 'Provisioning outcomes by class' so bootstrap_other / rate_limited / dc_unavailable are visible alongside the success-rate gauge. v4 (2026-05-20) adds an Arch variable (All / amd64 / arm64) wired through the template-labelled panels, a per-arch summary row of six stat panels at the top, and a server_type breakdown on the per-location worker chart. Arch split uses the regex on 'template' label (cpx* -> x64, cax* -> aarch64) since the cloud-only gauges (running_servers, instance_cap) cannot be split without a plugin change.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -23,6 +23,398 @@
   "links": [],
   "liveNow": false,
   "panels": [
+    {
+      "id": 300,
+      "title": "Provisions/min (amd64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Successful AMD64 provisions per minute, 5-minute sliding window. Filters by template name containing 'x64' (cpx* server types).",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(hetzner_provision_attempts_total{outcome=\"success\",template=~\".*x64.*\",master=~\"$master\"}[5m])) * 60",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 301,
+      "title": "Provisions/min (arm64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Successful ARM64 provisions per minute, 5-minute sliding window. Filters by template name containing 'aarch64' (cax* server types).",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(hetzner_provision_attempts_total{outcome=\"success\",template=~\".*aarch64.*\",master=~\"$master\"}[5m])) * 60",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 302,
+      "title": "Success rate (amd64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "AMD64 provisioning success rate, 5-minute window. Empty (no activity) renders as 0 (the 'noValue' default); red below 90%, yellow 90-95%, green at or above 95%.",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.9
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(hetzner_provision_attempts_total{template=~\".*x64.*\",master=~\"$master\",outcome=\"success\"}[5m])) / sum(rate(hetzner_provision_attempts_total{template=~\".*x64.*\",master=~\"$master\"}[5m])) unless sum(rate(hetzner_provision_attempts_total{template=~\".*x64.*\",master=~\"$master\"}[5m])) == 0",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 303,
+      "title": "Success rate (arm64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "ARM64 provisioning success rate, 5-minute window. Same colouring as the amd64 panel.",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.9
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "unit": "percentunit",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(hetzner_provision_attempts_total{template=~\".*aarch64.*\",master=~\"$master\",outcome=\"success\"}[5m])) / sum(rate(hetzner_provision_attempts_total{template=~\".*aarch64.*\",master=~\"$master\"}[5m])) unless sum(rate(hetzner_provision_attempts_total{template=~\".*aarch64.*\",master=~\"$master\"}[5m])) == 0",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 304,
+      "title": "Stuck builds (amd64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "AMD64 builds active for more than 24 hours. Non-zero means a build is hung on an amd64 worker.",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(hetzner_stuck_builds_total{threshold_hours=\"24\",template=~\".*x64.*\",master=~\"$master\"})",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 305,
+      "title": "Stuck builds (arm64)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "ARM64 builds active for more than 24 hours.",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(hetzner_stuck_builds_total{threshold_hours=\"24\",template=~\".*aarch64.*\",master=~\"$master\"})",
+          "instant": true,
+          "legendFormat": ""
+        }
+      ]
+    },
     {
       "id": 210,
       "title": "Stuck builds per master (24h+ threshold)",
@@ -36,7 +428,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 5
       },
       "targets": [
         {
@@ -45,7 +437,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (increase(hetzner_stuck_builds_total{threshold_hours=\"24\",master=~\"$master\",master=~\".+\\\\.cd\"}[24h]))",
+          "expr": "sum by (master) (increase(hetzner_stuck_builds_total{threshold_hours=\"24\",master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"}[24h]))",
           "legendFormat": "{{master}}",
           "instant": true
         }
@@ -103,7 +495,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 5
       },
       "targets": [
         {
@@ -112,7 +504,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "max by (master) (hetzner_oldest_build_age_seconds{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "expr": "max by (master) (hetzner_oldest_build_age_seconds{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
           "legendFormat": "{{master}}",
           "instant": true,
           "format": "table"
@@ -211,7 +603,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 13
       },
       "targets": [
         {
@@ -279,7 +671,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 13
       },
       "targets": [
         {
@@ -436,7 +828,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 21
       },
       "targets": [
         {
@@ -445,8 +837,8 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "count by (location) (hetzner_template_info{master=~\"$master\",master=~\".+\\\\.cd\"})",
-          "legendFormat": "{{location}}",
+          "expr": "count by (location, server_type) (hetzner_template_info{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "legendFormat": "{{location}} {{server_type}}",
           "instant": true,
           "format": "table"
         }
@@ -515,7 +907,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 21
       },
       "targets": [
         {
@@ -575,7 +967,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -660,7 +1052,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 29
       },
       "fieldConfig": {
         "defaults": {
@@ -706,7 +1098,160 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum(rate(hetzner_provision_attempts_total{master=~\"$master\",outcome=\"success\"}[5m]))\n/\nsum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m]))\nunless sum(rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m])) == 0"
+          "expr": "sum(rate(hetzner_provision_attempts_total{master=~\"$master\",outcome=\"success\",template=~\"$arch\"}[5m]))\n/\nsum(rate(hetzner_provision_attempts_total{master=~\"$master\",template=~\"$arch\"}[5m]))\nunless sum(rate(hetzner_provision_attempts_total{master=~\"$master\",template=~\"$arch\"}[5m])) == 0"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "title": "Provisioning outcomes by class (5m)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per-class breakdown of hetzner_provision_attempts_total over the last 5 minutes. Reads alongside the success-rate gauge: the gauge says 'how many fail', this panel says 'why'. Key classes when triaging: bootstrap_other (Hetzner control-plane stall, see status.hetzner.com), bootstrap_io (master to agent SSH/network), rate_limited / unclassified_throttle (per-token API throttle), dc_unavailable / failover_incompatible (DC stockout or template mismatch), precheck_failure / config_error (template config error before any API call), cap_reached_under_lock (instance cap), failure (uncategorized; should stay near zero).",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "stepBefore",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "barAlignment": 0,
+            "lineWidth": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bootstrap_other"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bootstrap_io"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rate_limited"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unclassified_throttle"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "super-light-yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dc_unavailable"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(hetzner_provision_attempts_total{master=~\"$master\",template=~\"$arch\"}[5m]))",
+          "legendFormat": "{{outcome}}"
         }
       ]
     },
@@ -723,7 +1268,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 45
       },
       "fieldConfig": {
         "defaults": {
@@ -750,7 +1295,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "histogram_quantile(0.95, sum by (template, le) (rate(hetzner_provision_duration_seconds_bucket{master=~\"$master\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (template, le) (rate(hetzner_provision_duration_seconds_bucket{master=~\"$master\",template=~\"$arch\"}[5m])))",
           "legendFormat": "{{template}}",
           "refId": "A"
         }
@@ -769,7 +1314,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 45
       },
       "fieldConfig": {
         "defaults": {
@@ -838,7 +1383,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 53
       },
       "fieldConfig": {
         "defaults": {
@@ -934,7 +1479,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 53
       },
       "fieldConfig": {
         "defaults": {
@@ -1024,7 +1569,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 61
       },
       "options": {
         "showTime": true,
@@ -1060,7 +1605,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 71
       },
       "fieldConfig": {
         "defaults": {
@@ -1105,7 +1650,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 71
       },
       "targets": [
         {
@@ -1153,7 +1698,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 71
       },
       "targets": [
         {
@@ -1208,7 +1753,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 74
+        "y": 79
       },
       "targets": [
         {
@@ -1226,7 +1771,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum by (master, template) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\"}[5m]))",
+          "expr": "sum by (master, template) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\",template=~\"$arch\"}[5m]))",
           "legendFormat": "leaked: {{master}} {{template}}"
         }
       ],
@@ -1262,7 +1807,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 74
+        "y": 79
       },
       "targets": [
         {
@@ -1331,7 +1876,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 87
       },
       "targets": [
         {
@@ -1393,7 +1938,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 91
       },
       "targets": [
         {
@@ -1532,6 +2077,39 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "name": "arch",
+        "label": "Arch",
+        "type": "custom",
+        "description": "Filter panels by worker architecture. Regex-valued: All=.*, amd64=.*x64.*, arm64=.*aarch64.* (matches the Hetzner template-name convention where every Jenkins template name embeds an arch token).",
+        "query": "All : .*,amd64 : .*x64.*,arm64 : .*aarch64.*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": ".*"
+          },
+          {
+            "selected": false,
+            "text": "amd64",
+            "value": ".*x64.*"
+          },
+          {
+            "selected": false,
+            "text": "arm64",
+            "value": ".*aarch64.*"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
       }
     ]
   },
