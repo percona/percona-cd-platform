@@ -62,14 +62,12 @@ The stateful split was driven by a real outage; full reasoning in
 
 Everything else is indexed in [`docs/README.md`](docs/README.md).
 
-Pinned versions live in [`terraform/versions.tf`](terraform/versions.tf).
-Run [`scripts/check_versions.py`](scripts/check_versions.py) before bumping pins.
-
 ## Contributing
 
 - `just ci` must pass before PR.
 - Pre-commit hooks mirror CI ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)).
 - Propose architecture changes in [`docs/adr/`](docs/adr/) first.
+- Pinned versions live in [`terraform/versions.tf`](terraform/versions.tf); run [`scripts/check_versions.py`](scripts/check_versions.py) before bumping pins.
 - Commit format: `type(scope): subject`. No AI footers.
 
 ## License
