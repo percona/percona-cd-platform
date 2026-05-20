@@ -268,17 +268,6 @@ main() {
     # until they migrate to TF.
     curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/6f5346eadc4bfa44e6d86d73ceb62ce7efbb7b79/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
 %{ endif ~}
-%{ if master_profile == "legacy_openresty" ~}
-    # Stub: needs ~400 lines of openresty + letsencrypt restored from the
-    # pre-PS-10945 CF templates before non-cutover masters can use it.
-    echo "ERROR: master_profile=legacy_openresty is not yet implemented." >&2
-    exit 1
-%{ endif ~}
-%{ if master_profile == "legacy_nginx12" ~}
-    # Stub for psmdb (nginx 1.12 via amazon-linux-extras).
-    echo "ERROR: master_profile=legacy_nginx12 is not yet implemented." >&2
-    exit 1
-%{ endif ~}
 }
 
 main

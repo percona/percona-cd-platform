@@ -39,11 +39,11 @@ variable "ssh_key_engineers" {
 }
 
 variable "master_profile" {
-  description = "User-data profile: \"eks_observability\" (PS-10945 path) or the stubs \"legacy_openresty\" / \"legacy_nginx12\" (error until implemented)."
+  description = "User-data profile selector. Only \"eks_observability\" is supported; the slot exists so future variants (in-cluster master, alternate observability path) can be gated cleanly."
   type        = string
   validation {
-    condition     = contains(["eks_observability", "legacy_openresty", "legacy_nginx12"], var.master_profile)
-    error_message = "master_profile must be one of: eks_observability, legacy_openresty, legacy_nginx12."
+    condition     = contains(["eks_observability"], var.master_profile)
+    error_message = "master_profile must be \"eks_observability\"."
   }
 }
 
