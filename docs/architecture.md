@@ -13,79 +13,144 @@
                 │                                │
                 ▼                                ▼
         StatefulSet jenkins-<host>      Deployment jenkins-proxy-<host>
-        (NodePool jenkins-system,                  │
-         AZ us-east-1a, gp3 PVC)                   ▼
-                                          origin-<host>.cd.percona.com
-                                                   │
-                                                   ▼
-                                          EC2 Jenkins master (other region)
+        (tier lgtm-stateful*,                       │
+         AZ us-east-1a, gp3 PVC)                    ▼
+                                          K8s Service jenkins-<host>
+                                                    │
+                                                    ▼
+                                          EndpointSlice IP (filled by
+                                          jenkins-endpoint-reconciler
+                                          CronJob, every minute)
+                                                    │
+                                                    ▼
+                                          EC2 Jenkins master in
+                                          another region (peered VPC)
 ```
 
-## Day-one host scope
+*`jenkins-system` tier was retired 2026-05-13 (no master ever claimed it).
+The in-cluster `ps3-k8s` master currently targets the `jenkins-master`
+tier label; with the dedicated MNG gone it relies on Karpenter
+provisioning a matching node. Pending design review.
 
-| Host(s) | Role | Why |
+## Host scope
+
+| Host(s) | Role | Notes |
 |---|---|---|
-| `ps3-k8s.cd.percona.com` | Mode A (in-cluster StatefulSet) | First in-cluster Jenkins master. Seeded as a full replica of the production EC2 ps3 (cross-region EBS snapshot copy of `JENKINS_HOME`). See `runbooks/migrate-ps3-to-eks.md`. |
-| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 origin) | Friendly DNS flips to ALB, traffic still ends up at the existing EC2 master via `origin-<host>.cd.percona.com`. |
-| `ps3.cd.percona.com` | **Untouched** — stays on its current direct EC2 path | Production traffic keeps flowing during validation of `ps3-k8s`. Cutover happens later as a Route 53 flip; until then, ps3 is intentionally outside this platform's `var.jenkins_hosts` map. |
-| `grafana.cd.percona.com`, `argocd.cd.percona.com` | In-cluster Service behind the same ALB | Platform-managed UIs. |
+| `pmm`, `ps80`, `ps3`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 origin) | Friendly DNS points at the ALB; the proxy `proxy_pass`es to `origin-<host>.cd.percona.com`, which resolves to the EC2 master. The `jenkins-endpoint-reconciler` CronJob keeps each per-host K8s Service's EndpointSlice in sync with the live EC2 master IP (re-runs every minute, survives SpotFleet replacement). |
+| `ps3-k8s.cd.percona.com` | Mode A (in-cluster StatefulSet) | First in-cluster Jenkins master. Seeded as a full replica of the production EC2 `ps3` via cross-region EBS snapshot copy of `JENKINS_HOME`. See [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md). |
+| `grafana.cd.percona.com`, `argocd.cd.percona.com` | In-cluster Service behind the same ALB | Platform UIs. |
+
+The `ps3` EC2 master is fully Terraform-managed by this repo (the legacy
+CFN stack was deleted; the platform owns the SpotFleet, IAM, EBS, userdata,
+and resilience plumbing). It is still served via the Mode B proxy until
+`ps3-k8s` is validated and the friendly DNS flips.
 
 ## Ownership boundary
 
-- **Terraform / OpenTofu** owns AWS-side state up to "ArgoCD healthy."
+- **OpenTofu** owns AWS-side state up to "ArgoCD healthy."
 - **ArgoCD** owns everything in-cluster from there. App-of-Apps + ApplicationSets reconcile from `resources/`.
-- **The cluster Secret** (`argocd.argoproj.io/secret-type: cluster`) carries TF outputs (cluster name, OIDC, role ARNs, ACM ARN, Karpenter SQS) as annotations. ApplicationSets read those annotations as Helm `valuesObject`.
+- The cluster Secret (`argocd.argoproj.io/secret-type: cluster`) carries TF outputs (cluster name, OIDC, role ARNs, ACM ARN, Karpenter SQS) as annotations. ApplicationSets read those annotations as Helm `valuesObject`.
 
-## NodeGroups
+## Compute topology
 
-| NG | Capacity | AZ | Taint | Hosts |
+Four tiers, each tagged with `workload.percona.com/tier` and (where
+exclusive) a matching taint. Two MNGs + two Karpenter NodePools.
+
+| Tier | Capacity | AZ | Taint | Hosts |
 |---|---|---|---|---|
-| `system` | on-demand (`t3.medium × 2`) | multi-AZ | none | kube-system DaemonSets, Karpenter controller, ArgoCD, LB Controller, EDNS, EBS-CSI |
-| `prometheus-system` | on-demand (`m6a.large × 1`) | us-east-1a | `workload=prometheus:NoSchedule` | kube-prometheus-stack pods |
-| `jenkins-system` | on-demand (`m6a.xlarge × N`) | us-east-1a | `workload=jenkins:NoSchedule` | Jenkins master StatefulSets |
-| Karpenter NodePool `default` | spot + on-demand fallback | multi-AZ | (excludes both stateful taints) | Everything else (jenkins-proxy NGINX Deployments, future workloads) |
+| `bootstrap` | EKS MNG `system`, on-demand, `m6a.large × 3` | multi-AZ | `CriticalAddonsOnly=true:NoSchedule` | ArgoCD, Karpenter, AWS LB controller, external-secrets, external-dns, kube-state-metrics |
+| `obs-state` | EKS MNG `prometheus_system`, on-demand, `m6a.large × 1` | us-east-1a | `workload.percona.com/tier=obs-state:NoSchedule` | Authentik Postgres, Grafana, prometheus-operator CRDs |
+| `lgtm-stateful` | Karpenter NodePool, on-demand, `r7a/r7i/m7a/m7i × large/xlarge/2xlarge` | us-east-1a | `workload.percona.com/tier=lgtm-stateful:NoSchedule` | Mimir, Loki, Tempo ingesters; store-gateway; compactor; alertmanager. Pinned single-AZ for EBS-per-pod zonality. |
+| `general` | Karpenter NodePool `default`, spot + on-demand, `c7/m7/r7-i/a × large…4xlarge` | us-east-1a | none (untainted fallthrough) | Stateless LGTM components, Grafana web, Authentik web, alloy-gateway, jenkins-proxy NGINX, jenkins-endpoint-reconciler |
+
+Karpenter pools are single-AZ because the workloads need EBS volumes that
+follow the pod. Multi-AZ HA there requires EFS (not provisioned).
 
 ## Storage
 
 | StorageClass | Default | AZ | Reclaim | Used by |
 |---|---|---|---|---|
-| `gp3` | yes | multi-AZ | Delete | Generic workloads |
-| `gp3-monitoring-1a-retain` | no | us-east-1a | Retain | Prometheus, Alertmanager, Grafana |
-| `gp3-jenkins-1a-retain` | no | us-east-1a | Retain | Jenkins master JENKINS_HOME PVCs |
+| `gp3` | yes | multi-AZ | Delete | Generic stateless workloads needing scratch volumes |
+| `gp3-monitoring-1a-retain` | no | us-east-1a | Retain | Grafana data, Authentik Postgres |
+| `gp3-jenkins-1a-retain` | no | us-east-1a | Retain | In-cluster Jenkins master `JENKINS_HOME` |
 
-## Sync waves (ArgoCD)
+LGTM long-term data lives in S3 (Mimir blocks, Loki chunks, Tempo
+traces). Ingester ring + WAL use ephemeral EBS via `gp3`.
 
-| Wave | Addon | Reason |
-|---|---|---|
-| 0 | `storageclass-gp3` | Required before any PVC binds |
-| 0 | `external-secrets` | Token + secret sync for everything downstream |
-| 1 | `aws-load-balancer-controller` | Ingresses need it |
-| 2 | `external-dns` | Needs LB Controller to publish ALB endpoints |
-| 3 | `karpenter` | After LB controller |
-| 4 | `kube-prometheus-stack` | Last — everything it scrapes is up |
+## ArgoCD Applications
 
-`cert-manager` is intentionally not in v1 — see `docs/adr/0007-cert-manager-deferred.md`.
+App-of-Apps (`argocd-bootstrap/root`) fans out to ApplicationSets that
+reconcile from `resources/addons/` (one app per addon) and
+`resources/jenkins/master/instances/` (one app per in-cluster master).
+
+Live apps grouped by purpose:
+
+- **Bootstrap:** `external-secrets`, `aws-load-balancer-controller`, `external-dns`, `karpenter`, `storageclass-gp3`, `priorityclasses`, `prometheus-operator-crds`
+- **Identity:** `authentik`
+- **Observability:** `mimir`, `loki`, `tempo`, `grafana`, `alloy`, `alloy-gateway`, `prometheus-node-exporter`, `kube-state-metrics`
+- **Jenkins:** `jenkins-ingress` (shared-ALB SSL), `jenkins-endpoint-reconciler` (EC2 → EndpointSlice IP sync), `jenkins-ps3-k8s` (first in-cluster master)
+
+CRDs are installed via standalone Helm releases (`prometheus-operator-crds`,
+the Karpenter CRD chart, the alloy operator CRDs). The umbrella charts that
+depend on them apply after. `cert-manager` is intentionally out of scope, see
+[`adr/0007-cert-manager-deferred.md`](adr/0007-cert-manager-deferred.md).
+
+## EC2 master resilience
+
+The EC2 Jenkins masters are spot instances. The platform layers four
+mechanisms so a spot recycle does not lose in-flight pipelines or
+strand workers:
+
+1. **Capacity Rebalancing on the SpotFleet** — AWS launches a replacement
+   on a rebalance recommendation (minutes to hours of advance warning),
+   not just on the 2-minute interruption notice.
+2. **Graceful spot-interrupt drain in the userdata** — a 30-second cron
+   detects `spot/instance-action` IMDS metadata and runs
+   `/usr/local/bin/jenkins-graceful-stop.sh`: quietDown, busyExecutors
+   poll up to 85 s, safeExit, copy log, umount. `flock` prevents
+   concurrent runs.
+3. **MAX_SURVIVABILITY pipeline durability** — `init.groovy.d` sets the
+   global default at every JVM start, so an abrupt JVM stop can be
+   resumed at the same step.
+4. **Hetzner worker rehydrate (PS-11173 Phase 4b)** — the Percona-patched
+   Hetzner plugin re-adopts surviving Hetzner VMs as Jenkins agents on
+   the next JVM start instead of letting `OrphanedNodesCleaner` reap
+   them. `ControllerListener.onOnline` defers the cleaner by 5 minutes
+   so the rehydrate path can claim VMs first. DC circuit-breaker state
+   is also persisted to disk so a restart does not stampede a still-sick
+   datacenter.
+
+The readiness audit `scripts/check-master-spot-readiness.sh` walks every
+moving piece (SpotFleet config, cron, graceful-stop.sh + flock, JVM args,
+Secrets Manager + api-admin auth probe). Run it before declaring a master
+ready to absorb an interrupt.
 
 ## Detailed docs
 
-- [`connectivity.md`](connectivity.md) — public path vs PrivateLink upgrade
-- [`tls-strategy.md`](tls-strategy.md) — ACM wildcard + per-Ingress ssl-policy
-- [`pod-identity.md`](pod-identity.md) — five associations + agent addon
-- [`argocd-bootstrap.md`](argocd-bootstrap.md) — GitOps Bridge mechanics
+- [`observability.md`](observability.md) — Mimir / Loki / Tempo / Grafana, push pipeline, cluster_label isolation
 - [`karpenter.md`](karpenter.md) — NodePool tuning, spot fallback, taint exclusion
-- [`observability.md`](observability.md) — kube-prometheus-stack values, AZ pinning, remote-write upgrade path
-- [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) — Probe / additionalScrapeConfigs / bearer-token / Option A→B migration
-- [`lgtm-evaluation.md`](lgtm-evaluation.md) — why LGTM is deferred
-- [`lessons-from-poc.md`](lessons-from-poc.md) — verbatim lift from the prior PoC
+- [`pod-identity.md`](pod-identity.md) — IAM associations + agent addon
+- [`argocd-bootstrap.md`](argocd-bootstrap.md) — GitOps Bridge + cluster-Secret annotations
+- [`authentication.md`](authentication.md) — Duo SAML → Authentik → OIDC
+- [`tls-strategy.md`](tls-strategy.md) — ACM wildcard + per-Ingress ssl-policy
+- [`connectivity.md`](connectivity.md) — public path vs PrivateLink upgrade
+- [`eks-hardening.md`](eks-hardening.md) — access entries, IMDSv2, KMS, log types
+- [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) — per-master scrape via the push model
 
 ## Runbooks
 
-- [`runbooks/bootstrap-state.md`](runbooks/bootstrap-state.md) — recreate the S3 state backend from scratch
+- [`runbooks/bootstrap-state.md`](runbooks/bootstrap-state.md) — recreate the S3 state backend
 - [`runbooks/eks-upgrade.md`](runbooks/eks-upgrade.md) — minor version bump procedure
+- [`runbooks/mng-label-taint-changes.md`](runbooks/mng-label-taint-changes.md) — apply MNG label/taint edits without a drain
 - [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md) — cross-region EBS snapshot lift
-- [`runbooks/restore-mimir.md`](runbooks/restore-mimir.md) — Mimir block restore from S3 versioning
-- [`runbooks/grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md) — flip SAML/Duo on once HD-30780 closes
+- [`runbooks/add-jenkins-host.md`](runbooks/add-jenkins-host.md) — bring a new Jenkins host onto the shared ALB
+- [`runbooks/jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md) — per-master SSL cutover
+- [`runbooks/disaster-recovery.md`](runbooks/disaster-recovery.md) — cluster recovery procedures
+- [`runbooks/restore-mimir.md`](runbooks/restore-mimir.md) — Mimir block restore from S3
+- [`runbooks/grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md) — Grafana SAML / Duo flip
+- [`runbooks/authentik-bootstrap.md`](runbooks/authentik-bootstrap.md) — Authentik first-time configuration
 
 ## ADRs
 
-Decision history lives in [`adr/`](adr/). Each architecture choice has a one-page record.
+Decision history lives in [`adr/`](adr/). Each architecture choice has a
+one-page record.
