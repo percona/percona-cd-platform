@@ -178,7 +178,6 @@
             ]
           },
           "unit": "percentunit",
-          "noValue": "0",
           "color": {
             "mode": "thresholds"
           }
@@ -246,7 +245,6 @@
             ]
           },
           "unit": "percentunit",
-          "noValue": "0",
           "color": {
             "mode": "thresholds"
           }
@@ -840,7 +838,7 @@
           "expr": "count by (location, server_type) (hetzner_template_info{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
           "legendFormat": "{{location}} {{server_type}}",
           "instant": true,
-          "format": "table"
+          "format": "time_series"
         }
       ],
       "transformations": [
@@ -877,7 +875,9 @@
         "groupWidth": 0.7,
         "barWidth": 0.97,
         "legend": {
-          "showLegend": false
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "right"
         }
       },
       "fieldConfig": {
