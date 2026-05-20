@@ -1,7 +1,7 @@
 #!/bin/bash
-# Rendered via templatefile(). eks_observability matches live ps3
-# (PS-10945). legacy_openresty / legacy_nginx12 are stubs that error
-# until implemented for non-ps3 masters.
+# Rendered via templatefile(). Only master_profile=eks_observability
+# is implemented; the gate exists so future variants can be added
+# cleanly. See modules/jenkins-master/variables.tf.
 
 JENKINS_HOST=${jenkins_host}
 JENKINS_SHORT=${jenkins_short}
@@ -145,16 +145,10 @@ start_jenkins() {
     cat <<-"EOF" | tee -a /etc/systemd/system/jenkins.service.d/override.conf
 
 		# Arguments for the Jenkins JVM. The -Dhetzner.rehydrate.* flags
-		# enable PS-11173 Phase 4b worker re-adoption on JVM restart so
-		# stranded Hetzner VMs from a crash are picked back up instead of
-		# reaped by OrphanedNodesCleaner during the 5-minute defer window.
+		# enable Hetzner worker re-adoption on JVM restart so stranded
+		# Hetzner VMs from a crash are picked back up instead of reaped
+		# by OrphanedNodesCleaner during the 5-minute defer window.
 		Environment="JAVA_OPTS=-Djava.awt.headless=true -Xms3072m -Xmx4096m -Xss4m -server -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600 -Dhetzner.rehydrate.enabled=true -Dhetzner.rehydrate.grace-period-minutes=5"
-	EOF
-%{ else ~}
-    cat <<-"EOF" | tee -a /etc/systemd/system/jenkins.service.d/override.conf
-
-		# Arguments for the Jenkins JVM
-		Environment="JAVA_OPTS=-Djava.awt.headless=true -Xms3072m -Xmx4096m -Xss4m -server -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600"
 	EOF
 %{ endif ~}
 
@@ -209,10 +203,8 @@ umount /mnt || true
 GRACEFUL
 
     # 30s polling cadence (minute boundary + offset 30s). On spot-action
-    # match, hand off to the graceful script instead of `systemctl stop`.
+    # match, hand off to the graceful script.
     printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && /usr/local/bin/jenkins-graceful-stop.sh || :'\n" > /etc/cron.d/terminate-check
-%{ else ~}
-    printf "* * * * * root bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n* * * * * root sleep 30; bash -c 'curl -s http://169.254.169.254/latest/meta-data/spot/instance-action | grep action && sh -c \"systemctl stop jenkins; cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log; umount /mnt\" || :'\n" > /etc/cron.d/terminate-check
 %{ endif ~}
 
     # cronie ships disabled on AL2023; the terminate-check cron only
