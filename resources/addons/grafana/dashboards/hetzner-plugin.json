@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility.",
+  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility. v3 (2026-05-18) adds panel 50 'Provisioning outcomes by class' so bootstrap_other / rate_limited / dc_unavailable are visible alongside the success-rate gauge.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -711,6 +711,159 @@
       ]
     },
     {
+      "id": 50,
+      "title": "Provisioning outcomes by class (5m)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per-class breakdown of hetzner_provision_attempts_total over the last 5 minutes. Reads alongside the success-rate gauge: the gauge says 'how many fail', this panel says 'why'. Key classes when triaging: bootstrap_other (Hetzner control-plane stall, see status.hetzner.com), bootstrap_io (master to agent SSH/network), rate_limited / unclassified_throttle (per-token API throttle), dc_unavailable / failover_incompatible (DC stockout or template mismatch), precheck_failure / config_error (template config error before any API call), cap_reached_under_lock (instance cap), failure (uncategorized; should stay near zero).",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "stepBefore",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "barAlignment": 0,
+            "lineWidth": 0
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bootstrap_other"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bootstrap_io"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rate_limited"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unclassified_throttle"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "super-light-yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dc_unavailable"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(hetzner_provision_attempts_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
       "id": 3,
       "title": "Provision latency p95 by template (5m)",
       "type": "timeseries",
@@ -723,7 +876,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 40
       },
       "fieldConfig": {
         "defaults": {
@@ -769,7 +922,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 32
+        "y": 40
       },
       "fieldConfig": {
         "defaults": {
@@ -838,7 +991,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "fieldConfig": {
         "defaults": {
@@ -934,7 +1087,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 48
       },
       "fieldConfig": {
         "defaults": {
@@ -1024,7 +1177,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 56
       },
       "options": {
         "showTime": true,
@@ -1060,7 +1213,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 66
       },
       "fieldConfig": {
         "defaults": {
