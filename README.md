@@ -73,6 +73,4 @@ Everything else is indexed in [`docs/README.md`](docs/README.md).
 
 ## License
 
-GNU Affero General Public License v3.0; see [`LICENSE`](LICENSE). This
-matches [`Percona-Lab/jenkins-pipelines`](https://github.com/Percona-Lab/jenkins-pipelines),
-which this repo consumes (master-side install script fetched in userdata).
+GNU Affero General Public License v3.0; see [`LICENSE`](LICENSE).
