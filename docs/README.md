@@ -17,6 +17,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 | Karpenter | [`karpenter.md`](karpenter.md) |
 | ArgoCD bootstrap | [`argocd-bootstrap.md`](argocd-bootstrap.md) |
 | Jenkins fleet scrape | [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) |
+| EC2 Jenkins master resilience (spot drain + worker rehydrate) | [`ec2-master-resilience.md`](ec2-master-resilience.md) |
 
 ## Identity, access, security
 

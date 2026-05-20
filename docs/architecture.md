@@ -125,6 +125,9 @@ moving piece (SpotFleet config, cron, graceful-stop.sh + flock, JVM args,
 Secrets Manager + api-admin auth probe). Run it before declaring a master
 ready to absorb an interrupt.
 
+Full deep-dive (including the cases where workers are still lost on
+reboot despite rehydrate) in [`ec2-master-resilience.md`](ec2-master-resilience.md).
+
 ## Detailed docs
 
 - [`observability.md`](observability.md) — Mimir / Loki / Tempo / Grafana, push pipeline, cluster_label isolation
