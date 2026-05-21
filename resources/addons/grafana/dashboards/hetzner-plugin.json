@@ -1618,7 +1618,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{master=~\"$master\"} |~ \"(c\\\\.d\\\\.j\\\\.p|cloud\\\\.dnation\\\\.jenkins\\\\.plugins)\\\\.hetzner\" | line_format \"[{{.master}}] {{ __line__ }}\"",
+          "expr": "{master=~\"$master\"} |~ \"c\\\\.d\\\\.j\\\\.p\\\\.h(\\\\.|etzner)|cloud\\\\.dnation\\\\.jenkins\\\\.plugins\\\\.hetzner\" | line_format \"[{{.master}}] {{ __line__ }}\"",
           "refId": "A"
         }
       ]
@@ -1664,7 +1664,7 @@
           },
           "refId": "A",
           "legendFormat": "{{level}}",
-          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |~ \"(c\\\\.d\\\\.j\\\\.p|cloud\\\\.dnation\\\\.jenkins\\\\.plugins)\\\\.hetzner\" |~ \"\\t(SEVERE|WARNING|INFO|CONFIG|FINE)\\t\" | regexp `\\t(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE)\\t` [5m]))"
+          "expr": "sum by (level) (count_over_time({master=~\"$master\"} |~ \"c\\\\.d\\\\.j\\\\.p\\\\.h(\\\\.|etzner)|cloud\\\\.dnation\\\\.jenkins\\\\.plugins\\\\.hetzner\" |~ \"\\t(SEVERE|WARNING|INFO|CONFIG|FINE)\\t\" | regexp `\\t(?P<level>SEVERE|WARNING|INFO|CONFIG|FINE)\\t` [5m]))"
         }
       ]
     },
