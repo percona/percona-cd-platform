@@ -2032,6 +2032,394 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 400,
+      "title": "API rate-limit headroom (%)",
+      "description": "Percentage of the per-master Hetzner API token quota remaining (hetzner_api_rate_limit_remaining / hetzner_api_rate_limit_limit * 100). Tokens are per-master (verified 2026-05-21 via SHA-256 fingerprints).",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 99,
+        "w": 12,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "100 * (hetzner_api_rate_limit_remaining{master=~\"$master\"} / hetzner_api_rate_limit_limit{master=~\"$master\"})",
+          "legendFormat": "{{master}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 401,
+      "title": "v25 legacy DC-health keys migrated (cumulative)",
+      "description": "Per-master count of pre-v25 location-only DC breaker keys that were cloned into per-arch breakers on first v25 load. Each master should tick this exactly N times where N = number of locations the master had OPEN/HALF_OPEN at upgrade time (typically 0-3 per arch). Stays flat once migration completes.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 99,
+        "w": 12,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum by (master) (hetzner_dc_health_legacy_keys_migrated_total{master=~\"$master\"})",
+          "legendFormat": "{{master}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 402,
+      "title": "DC circuit breaker transitions (5m rate, per location)",
+      "description": "Rate of CLOSED<->OPEN<->HALF_OPEN transitions per DC location. Sustained non-zero values indicate churn (cycling between failing and probing). The `arch` dim (v25+) is collapsed via `by (master, location, to)`.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 103,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none"
+            },
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum by (master, location, to) (rate(hetzner_dc_circuit_breaker_transitions_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "{{master}} {{location}} ->{{to}}"
+        }
+      ]
+    },
+    {
+      "id": 403,
+      "title": "Leaked Hetzner VMs per master (5m rate)",
+      "description": "Rate of provisioned VMs that the plugin could not adopt as Jenkins agents (per hetzner_provision_leaked_servers_total). Pre-PKG-1334 cloud.cd ran ~30/hr leaks; post-fix steady-state is ~1/hr. Sustained elevation is a PKG-1334-class regression detector (userdata blocking SSH, image arch mismatch, etc.).",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 103,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 15,
+            "stacking": {
+              "mode": "none"
+            },
+            "spanNulls": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "sum by (master) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\"}[5m]))",
+          "legendFormat": "{{master}}"
+        }
+      ]
+    },
+    {
+      "id": 404,
+      "title": "Per-arch DC breaker matrix (v25+ masters)",
+      "description": "Per-(master, location, arch) DC breaker state. State 0=CLOSED, 1=OPEN, 2=HALF_OPEN. Masters on v25+ emit the `arch` label (currently ps3 only); pre-v25 masters appear once per location without arch. Once the fleet completes v25 rollout, this matrix becomes the canonical view of which (DC, arch) pairs are deprioritized.",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 111,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "color-background"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "CLOSED",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "OPEN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "HALF_OPEN",
+                  "color": "yellow"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": false,
+              "cloud": true,
+              "job": true,
+              "instance": true,
+              "service": true,
+              "service_name": true,
+              "fleet": true
+            },
+            "renameByName": {
+              "Value": "state",
+              "master": "master",
+              "location": "location",
+              "arch": "arch"
+            },
+            "indexByName": {
+              "master": 0,
+              "location": 1,
+              "arch": 2,
+              "Value": 3
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_state{master=~\"$master\"})",
+          "legendFormat": "{{master}} {{location}} {{arch}}",
+          "instant": true,
+          "format": "table"
+        }
+      ]
     }
   ],
   "refresh": "1m",
