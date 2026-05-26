@@ -29,8 +29,9 @@ variable "ami_id" {
 }
 
 variable "spot_instance_types" {
-  description = "Instance types for the SpotFleet Overrides."
+  description = "Instance types for the SpotFleet Overrides. Only consulted when purchasing_option = \"spot\"; pass [] for on-demand masters."
   type        = list(string)
+  default     = []
 }
 
 variable "ssh_key_engineers" {
@@ -186,4 +187,20 @@ variable "tags" {
   description = "Per-master tag overrides merged on top of provider default_tags."
   type        = map(string)
   default     = {}
+}
+
+variable "purchasing_option" {
+  description = "Master purchasing model. \"spot\" uses the SpotFleet path (default; preserves ps3 behaviour). \"on-demand\" provisions a single aws_instance and skips the SpotFleet path, for masters where reclaim-immunity justifies the cost premium (ps80 first)."
+  type        = string
+  default     = "spot"
+  validation {
+    condition     = contains(["spot", "on-demand"], var.purchasing_option)
+    error_message = "purchasing_option must be \"spot\" or \"on-demand\"."
+  }
+}
+
+variable "on_demand_instance_type" {
+  description = "Instance type for the on-demand master. Only consulted when purchasing_option = \"on-demand\". Default sized for the observed master CPU footprint (p95 < 2% on 4 vCPU)."
+  type        = string
+  default     = "c7i-flex.large"
 }

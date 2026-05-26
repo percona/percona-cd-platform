@@ -386,13 +386,15 @@ resource "aws_iam_instance_profile" "master" {
 }
 
 resource "aws_iam_role" "spot_fleet" {
+  count              = var.purchasing_option == "spot" ? 1 : 0
   name               = "${var.short_name}-SpotFleet"
   assume_role_policy = data.aws_iam_policy_document.spot_fleet_assume.json
   tags               = local.base_tags
 }
 
 resource "aws_iam_role_policy_attachment" "spot_fleet_tagging" {
-  role       = aws_iam_role.spot_fleet.name
+  count      = var.purchasing_option == "spot" ? 1 : 0
+  role       = aws_iam_role.spot_fleet[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
 }
 
@@ -590,7 +592,8 @@ resource "aws_launch_template" "master" {
 }
 
 resource "aws_spot_fleet_request" "master" {
-  iam_fleet_role                      = aws_iam_role.spot_fleet.arn
+  count                               = var.purchasing_option == "spot" ? 1 : 0
+  iam_fleet_role                      = aws_iam_role.spot_fleet[0].arn
   target_capacity                     = 1
   spot_price                          = var.spot_price
   allocation_strategy                 = var.allocation_strategy
@@ -653,5 +656,35 @@ resource "aws_spot_fleet_request" "master" {
     # use $Latest (constant); the only diffs would be deliberate operator
     # changes to instance-type overrides etc., which should apply.
     ignore_changes = [load_balancers, target_group_arns]
+  }
+}
+
+# On-demand path. Reuses the same launch template (user-data, networking,
+# IAM, EBS attachment, EIP reassociation are identical). Single instance,
+# no autoscaling: master state lives on the persistent EBS data volume so
+# manual replacement is acceptable for the rare hardware-failure case.
+resource "aws_instance" "master" {
+  count             = var.purchasing_option == "on-demand" ? 1 : 0
+  availability_zone = data.aws_availability_zones.available.names[var.az_index]
+
+  launch_template {
+    id      = aws_launch_template.master.id
+    version = "$Latest"
+  }
+
+  # On-demand override of the launch template's instance_type. The LT's
+  # instance_type field is consumed by the SpotFleet path; here we pin
+  # the single instance to a stable size.
+  instance_type = var.on_demand_instance_type
+
+  tags = {
+    Name              = var.short_name
+    "iit-billing-tag" = var.short_name
+  }
+
+  lifecycle {
+    # AMI is owned by the launch template ($Latest); ignore drift here so
+    # an LT version bump (userdata edit) doesn't force instance replacement.
+    ignore_changes = [ami, user_data, user_data_base64]
   }
 }
