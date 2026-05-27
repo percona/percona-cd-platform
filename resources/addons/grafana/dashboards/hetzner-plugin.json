@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility. v3 (2026-05-18) adds panel 50 'Provisioning outcomes by class' so bootstrap_other / rate_limited / dc_unavailable are visible alongside the success-rate gauge. v4 (2026-05-20) adds an Arch variable (All / amd64 / arm64) wired through the template-labelled panels, a per-arch summary row of six stat panels at the top, and a server_type breakdown on the per-location worker chart. Arch split uses the regex on 'template' label (cpx* -> x64, cax* -> aarch64) since the cloud-only gauges (running_servers, instance_cap) cannot be split without a plugin change.",
+  "description": "Hetzner Cloud Jenkins plugin (v103.percona.13+): circuit breakers, provisioning latency, rate-limit headroom, API health, capacity vs cap, anomaly counters, and correlated SLF4J logs from /hetzner-prometheus and Loki. v2 (2026-05-12) fixes the idle-fleet success-rate gauge, the Loki level regex, the pending-vs-reap axis collision, the empty-stat label loss on anomaly counters, and adds API and capacity visibility. v3 (2026-05-18) adds panel 50 'Provisioning outcomes by class' so bootstrap_other / rate_limited / dc_unavailable are visible alongside the success-rate gauge. v4 (2026-05-20) adds an Arch variable (All / amd64 / arm64) wired through the template-labelled panels, a per-arch summary row of six stat panels at the top, and a server_type breakdown on the per-location worker chart. Arch split uses the native `arch` label (amd64/arm64) where the plugin emits it (running_servers, dc_circuit_breaker_state and the other DC-health series) and the 'template' regex (x64/aarch64) elsewhere; instance_cap/provisioning_pending have no arch label so capacity utilization stays fleet-wide. v5 (2026-05-27) wires the Arch selector through the native-arch panels (200/203 running, 1/402/404 DC breakers, 401 legacy keys, 5 reap, 403 leaked, 201 Running col), fixes the panel-1 breaker enum (was 1=HALF_OPEN/2=OPEN; source is 0=CLOSED/1=OPEN/2=HALF_OPEN), and keeps 103/201 utilization fleet-wide (cap has no arch).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -421,7 +421,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Count of builds that crossed the 24h hang threshold in the last 24 hours. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Healthy fleet is all zeros. Increments fire ONCE per build crossing the threshold, deduped via in-plugin cache.",
+      "description": "Count of builds that crossed the 24h hang threshold in the last 24 hours. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Healthy fleet is all zeros. Increments fire ONCE per build crossing the threshold, deduped via in-plugin cache. Includes template=\"unknown\" under every Arch selection so builds the plugin could not attribute to an arch are never hidden (the hardcoded amd64/arm64 tiles 304/305 cannot show unknown).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -435,7 +435,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (increase(hetzner_stuck_builds_total{threshold_hours=\"24\",master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"}[24h]))",
+          "expr": "sum by (master) (increase(hetzner_stuck_builds_total{threshold_hours=\"24\",master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch|unknown\"}[24h]))",
           "legendFormat": "{{master}}",
           "instant": true
         }
@@ -488,7 +488,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "For each master, the elapsed age of the longest-running building build right now. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Green up to 12h, yellow up to 24h, red above. Cross-reference with `jenkins admin -i <master> incidents` for triage.",
+      "description": "For each master, the elapsed age of the longest-running building build right now. Emitted by HungBuildDetector PeriodicWork (v103.percona.17+). Green up to 12h, yellow up to 24h, red above. Cross-reference with `jenkins admin -i <master> incidents` for triage. Includes template=\"unknown\" under every Arch selection so builds the plugin could not attribute to an arch are never hidden (the hardcoded amd64/arm64 tiles 304/305 cannot show unknown).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -502,7 +502,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "max by (master) (hetzner_oldest_build_age_seconds{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "expr": "max by (master) (hetzner_oldest_build_age_seconds{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch|unknown\"})",
           "legendFormat": "{{master}}",
           "instant": true,
           "format": "table"
@@ -610,7 +610,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
           "legendFormat": "{{master}}",
           "instant": true
         }
@@ -678,7 +678,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"}) or on (master) (0 * group by (master) (hetzner_plugin_info{master=~\"$master\"}))",
           "format": "table",
           "instant": true
         },
@@ -732,7 +732,7 @@
             },
             "renameByName": {
               "master": "Master",
-              "Value #A": "Running",
+              "Value #A": "Running (arch)",
               "Value #B": "Pending",
               "Value #C": "Cap",
               "Value #D": "Util %"
@@ -947,7 +947,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
           "legendFormat": "{{master}}"
         }
       ],
@@ -993,7 +993,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "0 = CLOSED (healthy), 1 = HALF_OPEN (probing), 2 = OPEN (skipping). One series per master/location.",
+      "description": "DC circuit-breaker state (source enum ordinals): 0 = CLOSED (healthy), 1 = OPEN (skipping the DC), 2 = HALF_OPEN (probing). One series per master/location/arch; responds to the Arch selector. Higher ordinal is not more severe, so colour is by value mapping (OPEN=red, HALF_OPEN=yellow), not a monotonic gradient.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -1017,12 +1017,12 @@
                   "color": "green"
                 },
                 "1": {
-                  "text": "HALF_OPEN",
-                  "color": "yellow"
-                },
-                "2": {
                   "text": "OPEN",
                   "color": "red"
+                },
+                "2": {
+                  "text": "HALF_OPEN",
+                  "color": "yellow"
                 }
               }
             }
@@ -1035,11 +1035,11 @@
                 "value": null
               },
               {
-                "color": "yellow",
+                "color": "red",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "yellow",
                 "value": 2
               }
             ]
@@ -1064,8 +1064,8 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "max by (master, location) (hetzner_dc_circuit_breaker_state{master=~\"$master\"})",
-          "legendFormat": "{{master}} {{location}}",
+          "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_state{master=~\"$master\",arch=~\"$arch\"})",
+          "legendFormat": "{{master}} {{location}} {{arch}}",
           "refId": "A"
         }
       ]
@@ -1483,7 +1483,7 @@
             "uid": "mimir"
           },
           "expr": "sum by (master) (hetzner_provisioning_pending{master=~\"$master\"})",
-          "legendFormat": "{{master}} pending",
+          "legendFormat": "{{master}} pending (fleet)",
           "refId": "A"
         },
         {
@@ -1491,8 +1491,8 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum by (master) (rate(hetzner_orphan_servers_reaped_total{master=~\"$master\"}[5m]))",
-          "legendFormat": "{{master}} reap/s",
+          "expr": "sum by (master) (rate(hetzner_orphan_servers_reaped_total{master=~\"$master\",arch=~\"$arch\"}[5m]))",
+          "legendFormat": "{{master}} reap/s (arch)",
           "refId": "B"
         }
       ]
@@ -1794,7 +1794,7 @@
           },
           "refId": "A",
           "expr": "sum by (reason) (rate(hetzner_provision_skipped_total{master=~\"$master\"}[5m]))",
-          "legendFormat": "skipped: {{reason}}"
+          "legendFormat": "skipped (fleet): {{reason}}"
         },
         {
           "datasource": {
@@ -1803,7 +1803,7 @@
           },
           "refId": "B",
           "expr": "sum by (master, template) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\",template=~\"$arch\"}[5m]))",
-          "legendFormat": "leaked: {{master}} {{template}}"
+          "legendFormat": "leaked (arch): {{master}} {{template}}"
         }
       ],
       "options": {
@@ -1833,7 +1833,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Per-master Hetzner capacity utilization = running workers / configured cap, as a percentage. One line per master. Green <70%, yellow 70-90%, red >=90% (at the ceiling; new provision requests will be rejected). Pairs with panel 201 (instant snapshot table) and panel 5 (pending vs orphan reap for leak detection). Raw running counts over time live in panel 203.",
+      "description": "Per-master Hetzner capacity utilization = running workers / configured cap, as a percentage. One line per master. Green <70%, yellow 70-90%, red >=90% (at the ceiling; new provision requests will be rejected). Pairs with panel 201 (instant snapshot table) and panel 5 (pending vs orphan reap for leak detection). Raw running counts over time live in panel 203. Fleet-wide by necessity: hetzner_instance_cap has no arch label, so a per-arch utilization (arch running / total cap) would be misleading; use the Arch selector on panels 200/203 for per-arch running counts.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -2165,7 +2165,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum by (master) (hetzner_dc_health_legacy_keys_migrated_total{master=~\"$master\"})",
+          "expr": "sum by (master) (hetzner_dc_health_legacy_keys_migrated_total{master=~\"$master\",arch=~\"$arch\"})",
           "legendFormat": "{{master}}",
           "instant": true
         }
@@ -2231,7 +2231,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum by (master, location, to) (rate(hetzner_dc_circuit_breaker_transitions_total{master=~\"$master\"}[5m]))",
+          "expr": "sum by (master, location, to) (rate(hetzner_dc_circuit_breaker_transitions_total{master=~\"$master\",arch=~\"$arch\"}[5m]))",
           "legendFormat": "{{master}} {{location}} ->{{to}}"
         }
       ]
@@ -2296,7 +2296,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "sum by (master) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\"}[5m]))",
+          "expr": "sum by (master) (rate(hetzner_provision_leaked_servers_total{master=~\"$master\",template=~\"$arch\"}[5m]))",
           "legendFormat": "{{master}}"
         }
       ]
@@ -2304,7 +2304,7 @@
     {
       "id": 404,
       "title": "Per-arch DC breaker matrix (v25+ masters)",
-      "description": "Per-(master, location, arch) DC breaker state. State 0=CLOSED, 1=OPEN, 2=HALF_OPEN. Masters on v25+ emit the `arch` label (currently ps3 only); pre-v25 masters appear once per location without arch. Once the fleet completes v25 rollout, this matrix becomes the canonical view of which (DC, arch) pairs are deprioritized.",
+      "description": "Per-(master, location, arch) DC breaker state. 0=CLOSED, 1=OPEN, 2=HALF_OPEN. The fleet now emits the `arch` label on every master that runs the breaker (9/9 provisioning masters); responds to the Arch selector. Canonical per-(DC, arch) deprioritization view.",
       "type": "table",
       "datasource": {
         "type": "prometheus",
@@ -2326,11 +2326,11 @@
                 "value": null
               },
               {
-                "color": "yellow",
+                "color": "red",
                 "value": 1
               },
               {
-                "color": "red",
+                "color": "yellow",
                 "value": 2
               }
             ]
@@ -2414,7 +2414,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_state{master=~\"$master\"})",
+          "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_state{master=~\"$master\",arch=~\"$arch\"})",
           "legendFormat": "{{master}} {{location}} {{arch}}",
           "instant": true,
           "format": "table"
@@ -2501,8 +2501,8 @@
         "name": "arch",
         "label": "Arch",
         "type": "custom",
-        "description": "Filter panels by worker architecture. Regex-valued: All=.*, amd64=.*x64.*, arm64=.*aarch64.* (matches the Hetzner template-name convention where every Jenkins template name embeds an arch token).",
-        "query": "All : .*,amd64 : .*x64.*,arm64 : .*aarch64.*",
+        "description": "Filter panels by worker architecture. Regex-valued so the same value matches the `template` label (cpx*->x64, cax*->aarch64) AND the native `arch` label (amd64/arm64): All=.*, amd64=(.*x64.*|.*amd64.*), arm64=(.*aarch64.*|.*arm64.*).",
+        "query": "All : .*,amd64 : (.*x64.*|.*amd64.*),arm64 : (.*aarch64.*|.*arm64.*)",
         "current": {
           "selected": true,
           "text": "All",
@@ -2517,12 +2517,12 @@
           {
             "selected": false,
             "text": "amd64",
-            "value": ".*x64.*"
+            "value": "(.*x64.*|.*amd64.*)"
           },
           {
             "selected": false,
             "text": "arm64",
-            "value": ".*aarch64.*"
+            "value": "(.*aarch64.*|.*arm64.*)"
           }
         ],
         "includeAll": false,
