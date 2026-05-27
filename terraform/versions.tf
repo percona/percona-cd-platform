@@ -95,6 +95,14 @@ locals {
       name = "alloy"
       ver  = "1.8.0"
     }
+    # CloudNativePG operator — declarative Postgres for the MTR test-history
+    # store (PS-10541, resources/addons/mtr). Chosen over Bitnami postgresql,
+    # frozen to bitnamilegacy after the Broadcom 2025 catalogue change.
+    cloudnative_pg = {
+      repo = "https://cloudnative-pg.github.io/charts"
+      name = "cloudnative-pg"
+      ver  = "0.28.2"
+    }
     # Jenkins controller chart — wraps the upstream jenkinsci/jenkins chart in
     # resources/jenkins/master/Chart.yaml. Per-instance values live in
     # resources/jenkins/master/instances/<host>/values.yaml; the
