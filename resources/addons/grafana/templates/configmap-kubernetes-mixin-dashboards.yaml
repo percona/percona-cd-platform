@@ -1,0 +1,41 @@
+{{/*
+kubernetes-mixin dashboards (Compute Resources Cluster/Namespace/Node/Pod/
+Workload, Networking, PV usage, Kubelet). Compiled from
+github.com/kubernetes-monitoring/kubernetes-mixin via jsonnet
+(`jsonnet -J vendor -m dashboards_out -e '(import "mixin.libsonnet").grafanaDashboards'`)
+into dashboards/kubernetes-mixin/. The Windows variants and the managed-
+control-plane dashboards (apiserver, scheduler, controller-manager, proxy)
+are intentionally not shipped: no Windows nodes, and EKS hides the control
+plane so those series are never scraped.
+
+These render usage data only because the cadvisor + kubelet scrapes were
+added to the Alloy DS (resources/addons/alloy/values.yaml) and the
+matching recording rules are synced to Mimir's ruler by
+templates/prometheusrule-kubernetes-mixin.yaml in the mimir addon. Without
+both, the CPU/memory panels read "No Data".
+
+One ConfigMap per JSON keeps each under the 1MiB ceiling; the
+`grafana_dashboard: "1"` label is what the chart sidecar discovers. The
+ServerSideApply annotation avoids the 256KiB last-applied annotation limit
+on the larger k8s-resources-* dashboards.
+*/}}
+{{- range $path, $_ := .Files.Glob "dashboards/kubernetes-mixin/*.json" }}
+{{- $base := trimSuffix ".json" (base $path) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-{{ $base }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+    mixin: kubernetes
+  annotations:
+    grafana_folder: "Kubernetes Mixin"
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+data:
+  {{ $base }}.json: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

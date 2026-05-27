@@ -1,0 +1,9 @@
+apiVersion: v2
+name: headlamp
+version: 1.0.0
+appVersion: "0.42.0"
+description: Headlamp — web Kubernetes UI (Lens replacement) with OIDC SSO via Authentik.
+dependencies:
+  - name: headlamp
+    version: 0.42.0
+    repository: https://kubernetes-sigs.github.io/headlamp/

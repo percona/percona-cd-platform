@@ -1,0 +1,83 @@
+# Headlamp — web Kubernetes UI (Lens replacement).
+#
+# Auth model: per-user OIDC passthrough. Headlamp runs the browser OIDC
+# round-trip against Authentik, then forwards the user's id_token as the
+# bearer to the kube-apiserver. Authorization is therefore the user's OWN
+# RBAC, not a shared ServiceAccount. This requires two companion pieces:
+#   1. Authentik OIDC client `headlamp` (resources/addons/authentik/
+#      templates/blueprint-headlamp.yaml).
+#   2. EKS external OIDC provider association so the apiserver trusts the
+#      Authentik issuer (terraform, aws_eks_identity_provider_config).
+# The per-user-group -> ClusterRole bindings live in templates/rbac.yaml.
+#
+# Because authz is per-user, the chart's default of binding the Headlamp
+# ServiceAccount to cluster-admin is DISABLED below (clusterRoleBinding.
+# create: false). The SA only needs its own token mounted so the backend
+# can reach the apiserver; every privileged call carries the user token.
+
+# Subchart values (chart `headlamp`, repository kubernetes-sigs.github.io/headlamp).
+headlamp:
+  replicaCount: 1
+
+  config:
+    inCluster: true
+    # Dedicated subdomain, served at root. A path-mounted baseURL needs
+    # extra probe/cookie handling; a subdomain avoids it (Headlamp gotcha).
+    baseURL: ""
+    oidc:
+      # OIDC env (OIDC_CLIENT_ID / _SECRET / _ISSUER_URL / _SCOPES /
+      # _CALLBACK_URL) is supplied by the ESO-synced `headlamp-oidc` Secret;
+      # see templates/external-secret-oidc.yaml. The chart `envFrom`s it.
+      secret:
+        create: false
+      externalSecret:
+        enabled: true
+        name: headlamp-oidc
+      # Authenticate to the apiserver with the id_token (the K8s OIDC
+      # authenticator validates id_tokens, not access_tokens).
+      useAccessToken: false
+
+  # SA gets a mounted token (backend needs apiserver reachability) but is
+  # NOT granted cluster-admin. Per-user id_tokens carry the real authz.
+  serviceAccount:
+    create: true
+  automountServiceAccountToken: true
+  clusterRoleBinding:
+    create: false
+
+  # The chart ships no requests/limits; set explicit, modest ones. Headlamp
+  # is a small Go backend + static React frontend.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/group.name: jenkins-cd
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: '443'
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      # Sticky sessions hold the backend constant through the OIDC round-trip.
+      alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=86400
+      alb.ingress.kubernetes.io/healthcheck-path: /
+      alb.ingress.kubernetes.io/success-codes: "200"
+    # Hostname is static for this addon (not secret); ACM wildcard on the
+    # shared `jenkins-cd` ALB already covers *.cd.percona.com.
+    hosts:
+      - host: headlamp.cd.percona.com
+        paths:
+          - path: /
+            type: Prefix

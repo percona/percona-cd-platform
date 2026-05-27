@@ -1,0 +1,42 @@
+{{/*
+Supplementary RBAC for the cadvisor + kubelet scrapes added to the Alloy
+config (values.yaml, prometheus.scrape "cadvisor" / "kubelet"). The grafana
+alloy chart's own ClusterRole covers pods/services/endpoints/CRDs but NOT
+the node proxy, so the SA cannot reach
+/api/v1/nodes/<node>/proxy/metrics[/cadvisor] without this. Binds the
+chart-created `alloy` ServiceAccount (release name) in this namespace.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alloy-kubelet-scrape
+  labels:
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: rbac
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - nodes/proxy
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs:
+      - /metrics
+      - /metrics/cadvisor
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alloy-kubelet-scrape
+  labels:
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alloy-kubelet-scrape
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: {{ .Release.Namespace }}
