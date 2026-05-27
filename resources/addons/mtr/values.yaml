@@ -6,6 +6,12 @@
 # Provisioned at the deploy gate (see plan); not committed to git.
 secretsManagerKey: percona-ci-platform/mtr/config
 
+# ECR account + region come from the addons ApplicationSet valuesObject
+# (terraform/argocd.tf); region falls back to us-east-1 for local helm template.
+aws:
+  accountId: ""
+  region: us-east-1
+
 postgres:
   clusterName: mtr-pg
   instances: 1
@@ -40,14 +46,10 @@ tier:
 ingest:
   schedule: "0 * * * *"
   image:
-    repository: ghcr.io/astral-sh/uv
-    tag: python3.13-bookworm-slim
+    # Built from images/mtr-ingest, pushed to ECR under the percona-cd/ namespace.
+    repository: percona-cd/mtr-ingest
+    tag: "0.1.0"
     pullPolicy: IfNotPresent
-  # PoC package installed at runtime from the PUBLIC GitHub source archive (no
-  # git binary needed in the image; uv builds the sdist). Flip to a tag or main
-  # once Percona-Lab/mysql-mtr-history-dashboard merges the ingest-pg branch.
-  poc:
-    tarballUrl: https://github.com/Percona-Lab/mysql-mtr-history-dashboard/archive/refs/heads/PS-10541-postgres-ingest.tar.gz
   jenkins:
     url: https://ps80.cd.percona.com
     job: percona-server-8.0-pipeline-parallel-mtr

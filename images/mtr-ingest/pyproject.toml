@@ -1,0 +1,32 @@
+[project]
+name = "mtr-history"
+version = "0.1.0"
+description = "MTR test history dashboard: Jenkins → per-build JSON → Prometheus → Grafana"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+]
+pg = [
+    "psycopg[binary]>=3.1",
+]
+
+[project.scripts]
+mtr-backfill = "mtr_history.backfill:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mtr_history"]
+
+[tool.pytest.ini_options]
+testpaths = ["mtr_history/tests"]
+addopts = "-v"

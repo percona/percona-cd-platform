@@ -13,9 +13,9 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      # Wide ceiling: the cold first run does a uv install + a larger backfill
-      # (each new build pulls ~19 JUnit XMLs); steady-state hourly ticks are
-      # tiny. concurrencyPolicy: Forbid prevents overlap, so a high cap is safe.
+      # Wide ceiling: the cold first run does a larger backfill (each new build
+      # pulls ~19 JUnit XMLs); steady-state hourly ticks are tiny.
+      # concurrencyPolicy: Forbid prevents overlap, so a high cap is safe.
       activeDeadlineSeconds: 1800
       ttlSecondsAfterFinished: 3600
       template:
@@ -32,18 +32,14 @@ spec:
             {{- toYaml .Values.tier.tolerations | nindent 12 }}
           containers:
             - name: ingest
-              image: "{{ .Values.ingest.image.repository }}:{{ .Values.ingest.image.tag }}"
+              # Built from images/mtr-ingest, pushed to ECR under percona-cd/.
+              # Account + region come from the addons ApplicationSet valuesObject.
+              image: "{{ .Values.aws.accountId }}.dkr.ecr.{{ .Values.aws.region | default "us-east-1" }}.amazonaws.com/{{ .Values.ingest.image.repository }}:{{ .Values.ingest.image.tag }}"
               imagePullPolicy: {{ .Values.ingest.image.pullPolicy }}
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -eu
-                  # Pod runs nonroot (uid 65532); HOME=/ is not writable. Install
-                  # to /tmp/pip on PYTHONPATH/PATH, mirroring jenkins-endpoint-reconciler.
-                  export UV_CACHE_DIR=/tmp/uv-cache HOME=/tmp
-                  uv pip install --no-cache --target /tmp/pip \
-                    'mtr-history[pg] @ {{ .Values.ingest.poc.tarballUrl }}'
-                  export PYTHONPATH=/tmp/pip PATH=/tmp/pip/bin:$PATH
                   mkdir -p /tmp/builds
                   echo "==> init-db (schema + grants, idempotent)"
                   mtr-backfill init-db
@@ -84,7 +80,7 @@ spec:
                 {{- toYaml .Values.ingest.resources | nindent 16 }}
               securityContext:
                 allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: false  # uv writes site-packages to /tmp/pip
+                readOnlyRootFilesystem: false  # mtr-backfill writes JSON under /tmp/builds
                 runAsNonRoot: true
                 runAsUser: 65532
                 capabilities:

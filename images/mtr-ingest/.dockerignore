@@ -1,0 +1,6 @@
+**/__pycache__
+**/*.pyc
+mtr_history/tests
+builds
+promtool
+.venv
