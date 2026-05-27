@@ -5,7 +5,7 @@
 
 resource "aws_ecr_repository" "mtr_ingest" {
   name                 = "percona-cd/mtr-ingest"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -19,7 +19,7 @@ resource "aws_ecr_repository" "mtr_ingest" {
 # jenkins-ingress proxy (ADR 0019). Standardised onto a built ECR image.
 resource "aws_ecr_repository" "jenkins_endpoint_reconciler" {
   name                 = "percona-cd/jenkins-endpoint-reconciler"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
