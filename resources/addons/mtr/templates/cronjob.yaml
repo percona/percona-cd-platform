@@ -3,6 +3,9 @@ kind: CronJob
 metadata:
   name: mtr-ingest
   namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    app.kubernetes.io/part-of: mtr
 spec:
   schedule: {{ .Values.ingest.schedule | quote }}
   # Forbid: a long fetch should not race the next tick. ingest-pg is idempotent.

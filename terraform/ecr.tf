@@ -10,8 +10,6 @@ resource "aws_ecr_repository" "mtr_ingest" {
   image_scanning_configuration {
     scan_on_push = true
   }
-
-  tags = var.tags
 }
 
 # jenkins-endpoint-reconciler image (images/jenkins-endpoint-reconciler): the
@@ -24,8 +22,6 @@ resource "aws_ecr_repository" "jenkins_endpoint_reconciler" {
   image_scanning_configuration {
     scan_on_push = true
   }
-
-  tags = var.tags
 }
 
 # Keep storage bounded; both images are small and rebuilt rarely.

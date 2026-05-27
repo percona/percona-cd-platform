@@ -22,7 +22,7 @@ Store MTR test history in **PostgreSQL**, query it through Grafana's **core (OSS
 - **Engine: CloudNativePG** (operator chart 0.28.2 / operator 1.29.1), not the Bitnami postgresql subchart. Bitnami's free catalogue was frozen to `bitnamilegacy` (no security patches) after the Broadcom 2025 change, so pinning a Bitnami chart pulls an unpatched image. CNPG is CNCF, actively maintained, ships official Postgres images, and is declarative (a `Cluster` CR with optional S3 PITR). It also gives the platform a maintained target to migrate Authentik's bundled Bitnami Postgres (ADR 0012) onto later.
 - **Single instance**, `obs-state` tier (single-AZ; EBS is per-AZ), `gp3-monitoring-1a-retain`. No HA or heavy backups: the data is fully rebuildable from Jenkins (the CronJob re-backfills), so a lost volume costs a re-ingest, not data.
 - **Schema** (`builds` + `test_results`, with `test_runs` and `test_flakiness` views). Test identity is `(suite, name, run_context)` with `worker`/`big` as attributes, matching the PoC's JUnit parser. A read-only `mtr_reader` CNPG managed role serves Grafana; the ingest CronJob writes as the app owner.
-- **Ingest**: an EKS CronJob (cloned from the `jenkins-endpoint-reconciler` pattern) runtime-installs the PoC package from its public source archive and runs `init-db` (idempotent schema + grants), `pg-skip-list`, `fetch-rest` (all build results), `ingest-pg` (UPSERT, one transaction per build). Idempotent: a re-ingest replaces a build's rows exactly. Jenkins REST auth and the role passwords come from AWS Secrets Manager via ESO (`percona-ci-platform/mtr/config`), since the cluster cannot read ps80's Jenkins credential store.
+- **Ingest**: an EKS CronJob runs a pinned ECR image (`percona-cd/mtr-ingest`, built from `images/mtr-ingest`) that runs `init-db` (idempotent schema + grants), `pg-skip-list`, `fetch-rest` (all build results), `ingest-pg` (UPSERT, one transaction per build). Idempotent: a re-ingest replaces a build's rows exactly. Jenkins REST auth and the role passwords come from AWS Secrets Manager via ESO (`percona-ci-platform/mtr/config`), since the cluster cannot read ps80's Jenkins credential store.
 - **Datasource**: a `postgres` datasource (`uid: mtr-postgres`) reading the CNPG `-r` service as `mtr_reader`. No plugin install and no license (core OSS); the "MySQL datasource needs a license" wall seen elsewhere was PMM / Amazon Managed Grafana, not `grafana/grafana` OSS.
 
 ## Consequences
@@ -31,11 +31,12 @@ Store MTR test history in **PostgreSQL**, query it through Grafana's **core (OSS
 - **ClickHouse is the documented scale-up.** Postgres is right to low tens of millions of rows (100 builds = ~1M rows, measured). If ingest expands to all products and all builds, migrate to ClickHouse; the column set is designed to map 1:1.
 - **Loki-reuse was rejected**: it would force `reject_old_samples` off on a shared production component and still answers the flaky/history queries poorly.
 - The Grafana **dashboard JSON port** (PromQL failure-matrix to SQL) is deferred to live-Grafana iteration at deploy. **Within-build retry capture** (the fail-then-pass Jenkins hides inside one build) is a follow-up needing an `attempt` column and a JUnit-parser change; v1 detects cross-build flapping via the `test_flakiness` view.
-- The CronJob installs from a mutable branch tarball until the PoC PR merges; pin to a tag/SHA (or build an image) afterward. `ingest-pg` exits non-zero on any per-build error so a partial tick is not reported green.
+- The ingest code is vendored into the platform (`images/mtr-ingest`, built to ECR), so the standalone PoC repo is retired. `ingest-pg` exits non-zero on any per-build error so a partial tick is not reported green; `pg-skip-list` is bounded by `--limit`.
 
-## Codex review (2026-05-27)
+## Validation
 
-A read-only codex review on the authored changes flagged, and this design addresses: the CRD-before-CR dry-run risk (SkipDryRunOnMissingResource), the mutable-tarball install (pin post-merge), silent partial ingest (`ingest-pg` now exits non-zero), and an unbounded `pg-skip-list` argv after a large backfill (bounded via `--limit`). Packaging (the wheel ships `sql/schema.sql` and the `mtr-backfill` console script) was verified by building the wheel.
+- The ingest path was proven against a real Postgres: 100 builds load to ~1M rows, idempotently (a second pass is a no-op), and the `test_flakiness` view surfaces cross-build flapping tests.
+- The `mtr-ingest` image builds, pushes to ECR, and runs `mtr-backfill --help` to completion on an amd64 cluster node (confirming the wheel ships `sql/schema.sql` and the console script, and that nodes can pull the image).
 
 ## Alternatives considered
 

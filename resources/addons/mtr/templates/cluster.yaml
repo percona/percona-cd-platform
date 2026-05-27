@@ -3,6 +3,9 @@ kind: Cluster
 metadata:
   name: {{ .Values.postgres.clusterName }}
   namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    app.kubernetes.io/part-of: mtr
   annotations:
     # The cloudnative-pg operator app installs the Cluster CRD separately. Skip
     # ArgoCD's dry-run on this resource until the CRD exists so the first sync
