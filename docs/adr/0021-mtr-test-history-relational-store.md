@@ -1,4 +1,4 @@
-# 0020 — MTR test-history on a relational store (CloudNativePG), not the LGTM time-series stack
+# 0021 — MTR test-history on a relational store (CloudNativePG), not the LGTM time-series stack
 
 **Status:** Accepted (2026-05-27), rollout pending (PS-10541)
 **Related:** [ADR 0016](0016-lgtm-only-metrics-stack.md) (LGTM-only metrics; this is the deliberate non-Mimir exception for relational data), [ADR 0010](0010-distributed-lgtm.md) (LGTM topology), [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) (stateful tier placement reused for the DB), [ADR 0012](0012-authentik-saml-oidc-bridge.md) (its bundled Bitnami Postgres shares the migration implication below)
