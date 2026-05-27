@@ -78,7 +78,7 @@ module "ps3_arm_fleet" {
   subnet_ids                   = module.ps3.subnet_ids
   worker_instance_profile_name = module.ps3.worker_instance_profile_name
   master_role_name             = module.ps3.master_iam_role_name
-  key_name                     = "jenkins-ps3"
+  key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   tickets                      = "PS-11179"
 }
