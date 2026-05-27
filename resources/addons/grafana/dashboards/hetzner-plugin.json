@@ -1617,6 +1617,60 @@
           "refId": "F",
           "expr": "sum(increase(hetzner_dc_health_stale_open_resets_total{master=~\"$master\"}[1h]))",
           "legendFormat": "Stale OPEN resets"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "G",
+          "expr": "sum(increase(hetzner_arch_validation_failures_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Arch validation failures"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "H",
+          "expr": "sum(increase(hetzner_provision_leak_destroy_failures_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Leak destroy failures"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "I",
+          "expr": "sum(increase(hetzner_template_errors_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Template errors"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "J",
+          "expr": "sum(increase(hetzner_template_suppressed_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Template suppressed"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "K",
+          "expr": "sum(increase(hetzner_orphan_cleanup_errors_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Orphan cleanup errors"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "L",
+          "expr": "sum(increase(hetzner_dc_health_save_failures_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "DC-health save failures"
         }
       ]
     },
@@ -2451,6 +2505,600 @@
           "legendFormat": "{{master}} {{location}} {{arch}}",
           "instant": true,
           "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 599,
+      "type": "row",
+      "title": "Coverage additions (2026-05-27)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 119,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 500,
+      "title": "Worker demand vs capacity per master",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Worker demand (busy executors on Hetzner workers) vs supply (running Hetzner servers) per master, over the dashboard time range. Demand at or above supply means workers are fully booked (scale-up pressure); supply well above demand means idle burn. The supply line responds to the Arch selector (native `arch` label, amd64/arm64); the demand line is fleet-wide because hetzner_jenkins_real_busy_executors carries no arch label, so narrowing Arch filters only the running line. Pairs with panel 203 (supply only) and panel 201 (per-master capacity table).",
+      "gridPos": {
+        "x": 0,
+        "y": 120,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (master) (hetzner_jenkins_real_busy_executors{master=~\"$master\",master=~\".+\\\\.cd\"})",
+          "legendFormat": "{{master}} busy"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
+          "legendFormat": "{{master}} running"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "spanNulls": true
+          },
+          "unit": "short",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* busy"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 501,
+      "title": "Template health",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per worker template (location, server_type): configured executor capacity alongside two health signals. Suppressed=1 means the template was pulled out of provisioning rotation; Errors is the consecutive provision-error count. Capacity comes from hetzner_template_executors and the location/server_type columns from hetzner_template_info (joined by template); the launcher-x64 templates appear under both their fallback server types (cpx22 and cpx32). The Suppressed and Errors columns are empty on a healthy fleet (those metrics are event-driven and emit only once a template trips) and light up red the moment a template is suppressed or starts erroring, so a server type silently dropping out of rotation becomes visible. Filtered by Arch via the template name (x64/aarch64).",
+      "gridPos": {
+        "x": 12,
+        "y": 120,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "group by (location, server_type, template) (hetzner_template_info{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "max by (template) (hetzner_template_executors{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "max by (template) (hetzner_template_suppressed_active{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "D",
+          "expr": "max by (template) (hetzner_template_consecutive_errors{master=~\"$master\",master=~\".+\\\\.cd\",template=~\"$arch\"})",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "template",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Value #A": true
+            },
+            "renameByName": {
+              "location": "Location",
+              "server_type": "Server type",
+              "template": "Template",
+              "Value #B": "Executors",
+              "Value #C": "Suppressed",
+              "Value #D": "Errors"
+            },
+            "indexByName": {
+              "location": 0,
+              "server_type": 1,
+              "template": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Location"
+              },
+              {
+                "field": "Server type"
+              },
+              {
+                "field": "Template"
+              }
+            ]
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "fields": [
+            "Executors"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Executors"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Suppressed"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "0"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "no",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "SUPPRESSED",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "noValue",
+                "value": "0"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 502,
+      "title": "DC breaker pressure (consecutive failures)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Leading indicator for the DC circuit breaker (panel 1 shows only the post-trip state). hetzner_dc_circuit_breaker_consecutive_failures increments on each failed provision and resets to 0 on the first success. The breaker opens at FAILURE_THRESHOLD = 2 consecutive failures (source: DcCircuitBreaker.java). One series per master/location/arch; responds to the Arch selector. Thresholds: green 0 (healthy), yellow 1 (one failure away from tripping), red >= 2 (at/over the trip count; breaker OPEN). The gauge can read above 2 while OPEN/HALF_OPEN probes keep failing.",
+      "gridPos": {
+        "x": 0,
+        "y": 128,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 20,
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_consecutive_failures{master=~\"$master\",arch=~\"$arch\"})",
+          "legendFormat": "{{master}} {{location}} {{arch}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 503,
+      "title": "Orphan cleanup latency p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "95th percentile of hetzner_orphan_cleanup_duration_seconds_bucket per master (the orphan reaper that destroys leaked Hetzner servers). Sibling to panel 3 (provision latency). No arch/template label on this metric, so it is master-scoped only. NOTE: orphan cleanup is low-frequency, so the [5m] rate window leaves most points NaN (sparse, dotted line). If the line is too gappy, widen the rate window to [30m] (same p95 values, continuous line).",
+      "gridPos": {
+        "x": 12,
+        "y": 128,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, master) (rate(hetzner_orphan_cleanup_duration_seconds_bucket{master=~\"$master\"}[5m])))",
+          "legendFormat": "{{master}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 504,
+      "title": "API + rehydrate anomalies (last 1h)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Increase over the last hour of API/lifecycle fault counters. Retries-exhausted = the plugin gave up after exhausting retries on a Hetzner call (API pressure or persistent fault). Token invalidated = a Hetzner API token was rejected/rotated (401). Rehydrate failures = a worker could not be re-adopted after a master restart. All are arch-agnostic and summed fleet-wide. Empty (no series) renders as 0; small numbers can be transient, sustained growth means a real API/credential/restart problem.",
+      "gridPos": {
+        "x": 0,
+        "y": 136,
+        "w": 24,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(increase(hetzner_api_retries_exhausted_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "API retries exhausted"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum(increase(hetzner_api_token_invalidated_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "API token invalidated"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "sum(increase(hetzner_rehydrate_failures_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Rehydrate failures"
         }
       ]
     }
