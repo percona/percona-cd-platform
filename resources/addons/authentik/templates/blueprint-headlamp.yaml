@@ -1,0 +1,81 @@
+{{/*
+Authentik blueprint, Headlamp OIDC client.
+
+Companion to blueprint-grafana.yaml / blueprint-argocd.yaml. Defines the
+OAuth2 provider Headlamp speaks to and the Application that surfaces it on
+Authentik's launchpad. The SAML source, group property mapping, and
+identification stage patches live in blueprint-grafana.yaml.
+
+Token contract (verified against Headlamp source, kubernetes-sigs/headlamp):
+  - Headlamp forwards the id_token (not the access_token) as the Bearer to
+    the kube-apiserver, so the apiserver authorizes on id_token claims. The
+    matching EKS external OIDC association is terraform/eks-oidc-headlamp.tf.
+  - aud: Headlamp's own verifier and the EKS apiserver both require the
+    token aud to equal the client_id `headlamp`. Authentik stamps aud with
+    the provider client_id, so both agree.
+  - groups: no separate `groups` scope mapping is needed (or available);
+    Authentik 2026.2.2 does not ship one. The default `profile` scope
+    mapping already emits `groups` (group.name per request.user.groups),
+    and include_claims_in_id_token: true puts it in the id_token, which is
+    what the apiserver reads (groups_claim: groups, groups_prefix: oidc:).
+    Group names are the DN-stripped CNs from blueprint-grafana.yaml's
+    duo-group-strip-dn mapping (e.g. `percona`, `grafana_cd_admins`).
+  - offline_access: unlike Grafana/ArgoCD, Headlamp will not silently renew
+    without a refresh_token, so offline_access is bound here AND requested
+    in the addon's OIDC_SCOPES. Without it the user re-logs in at id_token
+    expiry instead of refreshing.
+
+The redirect is the fixed Headlamp callback `/oidc-callback` on the
+dedicated subdomain (baseURL is empty, so no path segment). No localhost
+loopback entry: Headlamp is web-only, no CLI device flow.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprint-headlamp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- /* Required label for the chart's blueprint mount path. */}}
+    app.kubernetes.io/component: blueprint
+data:
+  headlamp-bridge.yaml: |
+    version: 1
+    metadata:
+      name: headlamp-bridge
+      labels:
+        blueprints.goauthentik.io/system: "true"
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        identifiers:
+          name: headlamp-provider
+        attrs:
+          client_id: headlamp
+          client_secret: !Env AUTHENTIK_OIDC_HEADLAMP_CLIENT_SECRET
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          include_claims_in_id_token: true
+          access_token_validity:  minutes=10
+          refresh_token_validity: days=30
+          redirect_uris:
+            - matching_mode: strict
+              url: https://headlamp.cd.percona.com/oidc-callback
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          # openid/email/profile match the working Grafana/ArgoCD providers
+          # (profile carries `groups`). offline_access is the Headlamp-only
+          # addition that enables refresh-token silent renewal.
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
+
+      - model: authentik_core.application
+        identifiers:
+          slug: headlamp
+        attrs:
+          name: Headlamp
+          provider: !Find [authentik_providers_oauth2.oauth2provider, [name, headlamp-provider]]
+          meta_launch_url: https://headlamp.cd.percona.com/
+          open_in_new_tab: false
+          policy_engine_mode: any
+          group: ""
