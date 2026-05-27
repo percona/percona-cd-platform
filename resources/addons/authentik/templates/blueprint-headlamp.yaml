@@ -13,6 +13,12 @@ Token contract (verified against Headlamp source, kubernetes-sigs/headlamp):
   - aud: Headlamp's own verifier and the EKS apiserver both require the
     token aud to equal the client_id `headlamp`. Authentik stamps aud with
     the provider client_id, so both agree.
+  - email_verified: k8s enforces `email_verified: true` whenever
+    username_claim=email; Authentik's built-in email mapping hardcodes it to
+    false, so the apiserver rejects every token ("oidc: email not verified")
+    and the user bounces to login. This provider binds a CUSTOM email mapping
+    (below) that emits true. Safe because emails come from trusted corporate
+    Duo/SAML SSO, not self-signup.
   - groups: no separate `groups` scope mapping is needed (or available);
     Authentik 2026.2.2 does not ship one. The default `profile` scope
     mapping already emits `groups` (group.name per request.user.groups),
@@ -50,6 +56,23 @@ data:
       labels:
         blueprints.goauthentik.io/system: "true"
     entries:
+      # Custom email scope. Authentik's built-in OpenID email mapping hardcodes
+      # email_verified=false, which the k8s OIDC authenticator rejects when
+      # username_claim=email ("oidc: email not verified"), so every token 401s
+      # at the apiserver and the user bounces to login. Emails come from trusted
+      # corporate Duo/SAML SSO (not self-signup), so asserting verified is safe.
+      - model: authentik_providers_oauth2.scopemapping
+        identifiers:
+          name: headlamp-email-verified
+        attrs:
+          scope_name: email
+          description: "OpenID email scope with email_verified=true (k8s OIDC)"
+          expression: |
+            return {
+                "email": request.user.email,
+                "email_verified": True,
+            }
+
       - model: authentik_providers_oauth2.oauth2provider
         identifiers:
           name: headlamp-provider
@@ -65,13 +88,14 @@ data:
             - matching_mode: strict
               url: https://headlamp.cd.percona.com/oidc-callback
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
-          # openid/email/profile match the working Grafana/ArgoCD providers
-          # (profile carries `groups`). offline_access is bound so a
-          # refresh_token is issued; the 24h access_token_validity above is
-          # the real fix for the post-login bounce (see the header note).
+          # openid/profile match the working Grafana/ArgoCD providers (profile
+          # carries `groups`). email is the CUSTOM mapping above
+          # (email_verified=true); the built-in email mapping sends false, which
+          # k8s rejects. offline_access is bound so a refresh_token is issued;
+          # the 24h access_token_validity above keeps the refresh path unused.
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [name, headlamp-email-verified]]
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
 
