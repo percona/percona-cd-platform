@@ -87,6 +87,11 @@ tempo-distributed:
       enabled: true
       size: 30Gi
       storageClass: gp3
+    # PVC auto-GC with the StatefulSet (traces live in S3; EBS only buffers in-flight).
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   querier:
     replicas: 1
