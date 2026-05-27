@@ -20,10 +20,15 @@ Token contract (verified against Headlamp source, kubernetes-sigs/headlamp):
     what the apiserver reads (groups_claim: groups, groups_prefix: oidc:).
     Group names are the DN-stripped CNs from blueprint-grafana.yaml's
     duo-group-strip-dn mapping (e.g. `percona`, `grafana_cd_admins`).
-  - offline_access: unlike Grafana/ArgoCD, Headlamp will not silently renew
-    without a refresh_token, so offline_access is bound here AND requested
-    in the addon's OIDC_SCOPES. Without it the user re-logs in at id_token
-    expiry instead of refreshing.
+  - token lifetime: access_token_validity is 24h to match Headlamp's
+    -session-ttl (86400s). Headlamp refreshes only within 10s of id_token
+    expiry and holds no single-flight lock, so on a short-lived token its
+    parallel API requests replay the SAME cached refresh token. Authentik
+    rotates and revokes refresh tokens on first use (replay detection), so
+    the losing requests get invalid_grant and the user is bounced back to
+    login. A session-length token keeps the refresh path out of normal use.
+    offline_access stays bound as a 24h-boundary fallback (silent re-login
+    from the live Authentik SSO session), not as the primary renewal path.
 
 The redirect is the fixed Headlamp callback `/oidc-callback` on the
 dedicated subdomain (baseURL is empty, so no path segment). No localhost
@@ -54,15 +59,16 @@ data:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           include_claims_in_id_token: true
-          access_token_validity:  minutes=10
+          access_token_validity:  hours=24
           refresh_token_validity: days=30
           redirect_uris:
             - matching_mode: strict
               url: https://headlamp.cd.percona.com/oidc-callback
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
           # openid/email/profile match the working Grafana/ArgoCD providers
-          # (profile carries `groups`). offline_access is the Headlamp-only
-          # addition that enables refresh-token silent renewal.
+          # (profile carries `groups`). offline_access is bound so a
+          # refresh_token is issued; the 24h access_token_validity above is
+          # the real fix for the post-login bounce (see the header note).
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
