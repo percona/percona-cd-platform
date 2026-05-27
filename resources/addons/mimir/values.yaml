@@ -200,6 +200,10 @@ mimir-distributed:
       enabled: true
       size: 50Gi
       storageClass: gp3
+      # PVC auto-GC with the StatefulSet (blocks live in S3; EBS is regenerable WAL).
+      enableRetentionPolicy: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   querier:
     replicas: 1
@@ -242,6 +246,9 @@ mimir-distributed:
       enabled: true
       size: 30Gi
       storageClass: gp3
+      enableRetentionPolicy: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   compactor:
     replicas: 1
@@ -262,6 +269,9 @@ mimir-distributed:
       enabled: true
       size: 30Gi
       storageClass: gp3
+      enableRetentionPolicy: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   query_frontend:
     replicas: 1
@@ -323,6 +333,9 @@ mimir-distributed:
       enabled: true
       size: 5Gi
       storageClass: gp3
+      enableRetentionPolicy: true
+      whenDeleted: Delete
+      whenScaled: Delete
 
   ruler:
     enabled: true
