@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import sys
 
 import boto3
@@ -36,9 +37,34 @@ HOSTS = json.loads(os.environ["HOSTS_JSON"])
 MANAGED_BY = "jenkins-endpoint-reconciler"
 
 
-def discover_master_ip(region: str, tag_value: str) -> str | None:
-    """Return the private IP of the single running master matching the tag,
-    or None if no running instance exists."""
+def _serves_jenkins(ip: str, port: int, timeout: float = 2.0) -> bool:
+    """True if a TCP connection to ip:port succeeds (Jenkins is listening)."""
+    try:
+        with socket.create_connection((ip, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def discover_master_ip(region: str, tag_value: str, port: int) -> tuple[str | None, bool]:
+    """Find the master's private IP for the tag. Returns (ip, write):
+
+      (ip,   True)   write this IP into the EndpointSlice.
+      (None, True)   no running instance -> write an empty slice (the master is
+                     down; the proxy 503 page is the correct steady state during
+                     a SpotFleet replacement).
+      (None, False)  ambiguous: more than one instance carries the tag and we
+                     cannot single out a serving master -> KEEP the existing
+                     EndpointSlice, do NOT overwrite. A worker that shares the
+                     master's iit-billing-tag, or a cancelled-spot-fleet ghost,
+                     must never be able to blackhole the master's ingress.
+
+    With >1 match, ips[0] is non-deterministic, so disambiguate by which instance
+    actually serves Jenkins on :port, breaking ties toward the newest launch (a
+    freshly replaced master over a lingering serving ghost). The health probe is
+    the primary signal, not launch time, because a worker can be newer than the
+    master.
+    """
     ec2 = boto3.client("ec2", region_name=region)
     resp = ec2.describe_instances(
         Filters=[
@@ -46,26 +72,42 @@ def discover_master_ip(region: str, tag_value: str) -> str | None:
             {"Name": "instance-state-name", "Values": ["running"]},
         ]
     )
-    ips = [
-        i["PrivateIpAddress"]
+    insts = [
+        (i["PrivateIpAddress"], i["LaunchTime"])
         for r in resp["Reservations"]
         for i in r["Instances"]
         if "PrivateIpAddress" in i
     ]
-    if len(ips) > 1:
-        log.warning(
-            "multiple running masters for tag=%s in %s: %s — picking first",
-            tag_value,
-            region,
-            ips,
+    if not insts:
+        return None, True
+    if len(insts) == 1:
+        return insts[0][0], True
+
+    live = [(ip, lt) for ip, lt in insts if _serves_jenkins(ip, port)]
+    if not live:
+        log.error(
+            "tag=%s in %s matched %d instances (%s) but none serve :%s; "
+            "leaving EndpointSlice unchanged",
+            tag_value, region, len(insts), [ip for ip, _ in insts], port,
         )
-    return ips[0] if ips else None
+        return None, False
+
+    live.sort(key=lambda t: t[1], reverse=True)  # newest first
+    chosen = live[0][0]
+    log.warning(
+        "tag=%s in %s matched %d instances; %d serve :%s; selected newest serving -> %s",
+        tag_value, region, len(insts), len(live), port, chosen,
+    )
+    return chosen, True
 
 
 def reconcile(host: dict) -> None:
     """Read or create the EndpointSlice for one host."""
     name = f"jenkins-{host['name']}"
-    ip = discover_master_ip(host["region"], host["tag"])
+    ip, write = discover_master_ip(host["region"], host["tag"], host["port"])
+    if not write:
+        log.info("%s: keep (ambiguous discovery; existing EndpointSlice left intact)", name)
+        return
 
     body = {
         "apiVersion": "discovery.k8s.io/v1",
