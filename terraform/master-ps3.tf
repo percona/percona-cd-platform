@@ -88,16 +88,6 @@ data "aws_iam_policy_document" "ps3_admin_token_read" {
   }
 }
 
-# Consumed by origins.tf's legacy Route53 record. Retire with origins.tf
-# once the K8s reconciler is the sole source of truth.
-data "aws_instances" "ps3_master" {
-  provider             = aws.eu-west-1
-  instance_state_names = ["running"]
-  instance_tags = {
-    "iit-billing-tag" = "jenkins-ps3"
-  }
-}
-
 # Cross-region VPC peering EKS (us-east-1) <-> ps3 (eu-west-1).
 # Folded in from the old peering-ps3.tf; state-mv keeps them in place.
 

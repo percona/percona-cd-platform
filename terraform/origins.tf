@@ -33,7 +33,7 @@ locals {
   # be dynamic), which is why this map enumerates hosts by name rather than
   # iterating var.jenkins_hosts.
   jenkins_discovered_origins = {
-    ps3 = try(data.aws_instances.ps3_master.private_ips[0], null)
+    # ps3 retired to the in-cluster jenkins-endpoint-reconciler (EndpointSlice); no origin record.
     # pxc = try(data.aws_instances.pxc_master.private_ips[0], null)  # when peered
   }
 
