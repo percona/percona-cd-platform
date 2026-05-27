@@ -18,67 +18,41 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      # Hard upper bound on the run; well above the ~10s pip + ~2s reconcile
-      # but below the next tick.
+      # Hard upper bound on the run; well above the ~2s reconcile.
       activeDeadlineSeconds: 45
       ttlSecondsAfterFinished: 600
       template:
         metadata:
           annotations:
-            # Rolls the Job's Pod template whenever the script or values
-            # change so the next tick picks up the new config.
-            checksum/script: {{ include (print $.Template.BasePath "/configmap-script.yaml") . | sha256sum }}
+            # Roll the Job's Pod template whenever the host list changes so the
+            # next tick picks it up; an image rebuild (tag bump) rolls it too.
             checksum/hosts: {{ .Values.hosts | toYaml | sha256sum }}
         spec:
           serviceAccountName: {{ .Values.serviceAccount.name }}
           restartPolicy: Never
-          # Reconciler does not need to run on any privileged tier; the
-          # `general` Karpenter NodePool (spot + on-demand) is the default
-          # landing zone via no tolerations.
+          # Reconciler does not need a privileged tier; the default (general)
+          # Karpenter NodePool is the landing zone via no tolerations.
           containers:
             - name: reconciler
-              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              # Built from images/jenkins-endpoint-reconciler (deps baked in),
+              # pushed to ECR under percona-cd/. Account + region come from the
+              # addons ApplicationSet valuesObject (terraform/argocd.tf).
+              image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
-              command: ["/bin/sh", "-c"]
-              args:
-                - |
-                  set -eu
-                  # Pod runs as uid 65532 (nonroot) with HOME=/ which is not
-                  # writable. Install deps to /tmp/pip and put that on
-                  # PYTHONPATH so we don't need to relax runAsNonRoot. uv
-                  # is faster + the project standard (~/.claude/CLAUDE.md).
-                  export UV_CACHE_DIR=/tmp/uv-cache
-                  uv pip install --no-cache --target /tmp/pip \
-                    'boto3==1.36.*' 'kubernetes==31.*'
-                  export PYTHONPATH=/tmp/pip
-                  exec python /scripts/reconcile.py
               env:
                 - name: HOSTS_JSON
                   value: {{ .Values.hosts | toJson | quote }}
                 - name: TARGET_NAMESPACE
                   value: {{ .Values.targetNamespace | quote }}
-                # boto3 needs a default AWS_REGION for client initialization
-                # even though every ec2.Client() call passes region_name
-                # explicitly. Source-of-truth via the addons ApplicationSet
-                # valuesObject (terraform/argocd.tf cluster-secret); falls
-                # back to us-east-1 (this cluster's home region) when the
-                # value isn't projected (e.g. local `helm template`).
+                # boto3 needs a default region for client initialization even
+                # though every ec2.Client() call passes region_name explicitly.
                 - name: AWS_REGION
                   value: {{ (.Values.aws | default dict).region | default "us-east-1" | quote }}
               resources: {{ toYaml .Values.resources | nindent 16 }}
               securityContext:
                 allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: false  # pip writes to site-packages
+                readOnlyRootFilesystem: false
                 runAsNonRoot: true
                 runAsUser: 65532
                 capabilities:
                   drop: ["ALL"]
-              volumeMounts:
-                - name: script
-                  mountPath: /scripts
-                  readOnly: true
-          volumes:
-            - name: script
-              configMap:
-                name: {{ .Release.Name }}-script
-                defaultMode: 0555

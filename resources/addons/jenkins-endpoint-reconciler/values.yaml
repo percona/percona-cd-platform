@@ -5,15 +5,13 @@
 # SpotFleet replacements take 2-5 min so 1-min is comfortably below that.
 schedule: "* * * * *"
 
-# Container image. The astral-sh/uv image ships uv + a CPython 3.13
-# already on the path; ~2-3s `uv pip install` for boto3 + kubernetes at
-# startup (vs ~10s for plain pip), plus uv is the project standard
-# (~/.claude/CLAUDE.md, "Use `uv`, NEVER `pip install`"). If we ever
-# need sub-minute reconcile, switch to a Deployment with a sleep loop
-# and a pre-built image with deps baked in.
+# Container image: built from images/jenkins-endpoint-reconciler (boto3 +
+# kubernetes baked in) and pushed to ECR under the percona-cd/ namespace.
+# Account + region come from the addons ApplicationSet valuesObject
+# (terraform/argocd.tf); both fall back for local helm template.
 image:
-  repository: ghcr.io/astral-sh/uv
-  tag: python3.13-bookworm-slim
+  repository: percona-cd/jenkins-endpoint-reconciler
+  tag: "0.1.0"
   pullPolicy: IfNotPresent
 
 # Service account name. Bound to a Pod Identity association in
