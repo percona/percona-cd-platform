@@ -1,0 +1,27 @@
+{{/*
+MTR test-history dashboards (PS-10541). Wraps the two in-repo dashboards in a
+ConfigMap labelled `grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports them (searchNamespace=ALL). The `grafana_folder` annotation lands
+them in an "MTR" folder. Both read the `mtr-postgres` datasource (bound in the
+values.yaml datasources block).
+
+- mtr-history.json: the original failure-matrix (failing tests x builds).
+- mtr-health.json:  overview stats, failures-per-build, failures-by-suite, and
+                    the flakiest-tests table (the sporadic-failure signal).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-mtr
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: mtr
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "MTR"
+data:
+  mtr-history.json: |-
+{{ .Files.Get "dashboards/mtr-history.json" | indent 4 }}
+  mtr-health.json: |-
+{{ .Files.Get "dashboards/mtr-health.json" | indent 4 }}
