@@ -3,6 +3,7 @@
 **Status:** Accepted (2026-05-11)
 **Amends:** [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) — the per-workload-taint pattern extends to LGTM stateful and the bootstrap tier.
 **Related:** [ADR 0011](0011-robustness-pass.md), [ADR 0014](0014-memberlist-cluster-label-isolation.md), [ADR 0015](0015-lgtm-bucket-object-lock-removed.md), [ADR 0016](0016-lgtm-only-metrics-stack.md).
+**Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) (the us-east-1{a,b,c} multi-AZ stateful pinning gave way to single-AZ).
 
 ## Context
 
