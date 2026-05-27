@@ -95,6 +95,14 @@ locals {
       name = "alloy"
       ver  = "1.8.0"
     }
+    # CloudNativePG operator — declarative Postgres for the MTR test-history
+    # store (PS-10541, resources/addons/mtr). Chosen over Bitnami postgresql,
+    # frozen to bitnamilegacy after the Broadcom 2025 catalogue change.
+    cloudnative_pg = {
+      repo = "https://cloudnative-pg.github.io/charts"
+      name = "cloudnative-pg"
+      ver  = "0.28.2"
+    }
     # Jenkins controller chart — wraps the upstream jenkinsci/jenkins chart in
     # resources/jenkins/master/Chart.yaml. Per-instance values live in
     # resources/jenkins/master/instances/<host>/values.yaml; the
@@ -103,6 +111,13 @@ locals {
       repo = "https://charts.jenkins.io"
       name = "jenkins"
       ver  = "5.9.18"
+    }
+    # Headlamp — web Kubernetes UI (Lens replacement), resources/addons/headlamp.
+    # CNCF Sandbox / kubernetes-sigs SIG-UI; chart version tracks appVersion.
+    headlamp = {
+      repo = "https://kubernetes-sigs.github.io/headlamp/"
+      name = "headlamp"
+      ver  = "0.42.0"
     }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }

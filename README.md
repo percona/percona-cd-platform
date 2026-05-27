@@ -18,7 +18,7 @@ parameterized in `terraform/`.
 | `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
 | `resources/addons/` | ArgoCD | One Helm umbrella per cluster addon (observability stack, ingress, identity, Karpenter, etc.). Also hosts a first-party `jenkins-endpoint-reconciler` (Python CronJob; polls EC2 for each master's IP, writes the matching K8s EndpointSlice). |
 | `resources/jenkins/` | ArgoCD | In-cluster Jenkins master chart with per-instance overlays under `instances/`. |
-| `image/` | Docker | Jenkins master image: WAR, Percona-patched plugins (ec2, hetzner-cloud), `init.groovy.d` scripts. |
+| `images/` | Docker | Custom image build contexts: `jenkins/` (master image: WAR, Percona-patched plugins, `init.groovy.d`), `mtr-ingest/`, `jenkins-endpoint-reconciler/`. |
 | `docs/` | Markdown | Architecture, runbooks, ADRs |
 | `scripts/` | Bash + Python | Operational helpers; see [`scripts/README.md`](scripts/README.md) |
 | `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |

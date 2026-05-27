@@ -1,0 +1,51 @@
+{{/*
+Per-user RBAC for Headlamp's OIDC passthrough.
+
+Headlamp forwards each user's Authentik id_token to the kube-apiserver, so
+access is governed by the user's own RBAC, keyed on the OIDC groups claim.
+These bindings map Authentik/Duo groups to cluster roles. The subject
+names carry the `oidc:` prefix set by the EKS external OIDC association
+(groupsPrefix: "oidc:" in terraform/aws_eks_identity_provider_config); keep
+the two in sync.
+
+Posture: read-only by default for all staff; mutate/exec gated to a
+privileged group. `view` excludes Secrets and exec; `edit` adds workload
+mutation plus pods/exec, pods/log, pods/portforward (the live-debug verbs).
+These bindings are inert until the EKS OIDC association exists, so they are
+safe to land ahead of the control-plane change.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-viewers
+  labels:
+    app.kubernetes.io/part-of: headlamp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    # All Percona staff (Duo `percona` group) get read-only.
+    name: oidc:percona
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-operators
+  labels:
+    app.kubernetes.io/part-of: headlamp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    # Privileged group: workload mutation + pods/exec + live logs. Reuses
+    # the existing admin group; split into a dedicated `k8s_cd_admins`
+    # group in Duo/Authentik if cluster-write should not track Grafana
+    # admin. For full cluster-admin, bind that group to `cluster-admin`
+    # instead (kept out of the default on purpose).
+    name: oidc:grafana_cd_admins

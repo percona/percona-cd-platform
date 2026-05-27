@@ -1,0 +1,51 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.postgres.clusterName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    app.kubernetes.io/part-of: mtr
+  annotations:
+    # The cloudnative-pg operator app installs the Cluster CRD separately. Skip
+    # ArgoCD's dry-run on this resource until the CRD exists so the first sync
+    # doesn't fail with "no matches for kind Cluster"; self-heal then applies it.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName }}
+  primaryUpdateStrategy: unsupervised
+  # No superuser secret: the app role (owner) is all the ingest CronJob needs;
+  # Grafana uses the managed read-only role below.
+  enableSuperuserAccess: false
+
+  storage:
+    size: {{ .Values.postgres.storage.size }}
+    storageClass: {{ .Values.postgres.storage.storageClass }}
+
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}
+
+  # Pin to the single-AZ obs-state tier (EBS is per-AZ), same as Authentik PG.
+  affinity:
+    nodeSelector:
+      {{- toYaml .Values.tier.nodeSelector | nindent 6 }}
+    tolerations:
+      {{- toYaml .Values.tier.tolerations | nindent 6 }}
+
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.owner }}
+
+  # Declarative read-only role for the Grafana datasource. CNPG sets its
+  # password from the basic-auth secret (synced by ESO). SELECT grants are
+  # applied by `mtr-backfill init-db` (schema.sql), run by the ingest CronJob.
+  managed:
+    roles:
+      - name: {{ .Values.postgres.readerRole }}
+        ensure: present
+        login: true
+        comment: "Read-only role for the Grafana MTR datasource (PS-10541)"
+        passwordSecret:
+          name: mtr-pg-reader

@@ -1,0 +1,109 @@
+{
+  "title": "MySQL MTR History",
+  "uid": "mtr-history",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 0,
+  "style": "dark",
+  "tags": ["mtr", "percona", "test-history"],
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": { "time_options": ["6h", "24h", "7d", "30d", "90d", "180d"] },
+  "templating": {
+    "list": [
+      {
+        "name": "platform_os", "label": "OS", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT platform_os FROM builds WHERE platform_os IS NOT NULL ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "platform_build", "label": "Build Type", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT platform_build FROM builds WHERE platform_build IS NOT NULL AND platform_os IN (${platform_os:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "arch", "label": "Arch", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT arch FROM builds WHERE arch IS NOT NULL AND platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "branch", "label": "Branch", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT COALESCE(branch,'(none)') FROM builds WHERE platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "fork", "label": "Fork", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT COALESCE(fork,'(none)') FROM builds WHERE platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "test_suite", "label": "Suite", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT t.suite FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE t.status='fail' AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "testname", "label": "Test", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT t.name FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE t.status='fail' AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND t.suite IN (${test_suite:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      }
+    ]
+  },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Failure matrix -- failing tests x builds",
+      "description": "Each row is a failing test in a build. Filter with the variables above; click Build/Test to open Jenkins. Time range filters on the build start time.",
+      "gridPos": { "h": 22, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT b.build_number AS \"Build\", t.suite AS \"Suite\", t.name AS \"Test\", t.worker AS \"Worker\", b.branch AS \"Branch\", t.failure_message AS \"Error\" FROM test_results t JOIN builds b ON b.build_id = t.build_id WHERE t.status = 'fail' AND $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote}) AND t.name IN (${testname:singlequote}) ORDER BY b.build_number DESC, t.suite, t.name"
+        }
+      ],
+      "options": { "showHeader": true, "footer": { "show": true, "reducer": ["count"], "fields": ["Test"] } },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Build" },
+            "properties": [
+              { "id": "custom.width", "value": 80 },
+              { "id": "links", "value": [ { "title": "Open build in Jenkins", "url": "https://ps80.cd.percona.com/job/percona-server-8.0-pipeline-parallel-mtr/${__data.fields.Build}/", "targetBlank": true } ] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Test" },
+            "properties": [
+              { "id": "links", "value": [ { "title": "Open testReport in Jenkins", "url": "https://ps80.cd.percona.com/job/percona-server-8.0-pipeline-parallel-mtr/${__data.fields.Build}/testReport/", "targetBlank": true } ] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Error" },
+            "properties": [ { "id": "custom.width", "value": 420 }, { "id": "custom.inspect", "value": true } ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: cloudnative-pg
+description: |
+  CloudNativePG operator — declarative PostgreSQL on Kubernetes (CNCF).
+  Installs the operator + CRDs (Cluster, Pooler, Backup, ScheduledBackup).
+  Consumed by the `mtr` addon (MTR test-history DB, PS-10541). Chosen over
+  the Bitnami postgresql subchart because Bitnami's free catalogue was frozen
+  to `bitnamilegacy` (no security patches) after the Broadcom 2025 changes.
+type: application
+version: 1.0.0
+appVersion: "1.29.1"
+dependencies:
+  - name: cloudnative-pg
+    version: 0.28.2
+    repository: https://cloudnative-pg.github.io/charts

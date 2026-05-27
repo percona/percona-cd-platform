@@ -1,0 +1,21 @@
+# CloudNativePG operator. Defaults suit a single-cluster install; we only pin
+# resources and keep CRD management on. The operator watches all namespaces;
+# the MTR Cluster lives in the `mtr` namespace (resources/addons/mtr).
+# Values are scoped under the dependency name (see Chart.yaml).
+cloudnative-pg:
+  crds:
+    create: true
+
+  # Lightweight controller; runs on the default (general) Karpenter NodePool.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      memory: 200Mi
+
+  # No PodMonitor: the PodMonitor CRD is not installed on this cluster (Alloy
+  # owns scrape via ServiceMonitor discovery, ADR 0016). Enable later if we
+  # wire CNPG metrics into Mimir.
+  monitoring:
+    podMonitorEnabled: false

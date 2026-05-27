@@ -103,6 +103,27 @@ def main() -> int:
     except Exception:
         rows.append(Pin("aws-load-balancer-controller chart", "3.2.2", "ERR", "?", "ERR"))
 
+    # Helm charts published via classic (index.yaml) repos. Pins mirror
+    # terraform/versions.tf local.charts; helm_chart_latest reads the repo
+    # index so a newer published chart shows as BUMP. (Karpenter is OCI and is
+    # checked via gh releases above, not an index.yaml repo.)
+    index_charts = [
+        ("mimir-distributed chart", "https://grafana.github.io/helm-charts", "mimir-distributed", "6.0.6"),
+        ("loki chart", "https://grafana.github.io/helm-charts", "loki", "7.0.0"),
+        ("tempo-distributed chart", "https://grafana.github.io/helm-charts", "tempo-distributed", "1.61.3"),
+        ("grafana chart", "https://grafana.github.io/helm-charts", "grafana", "10.5.15"),
+        ("alloy chart", "https://grafana.github.io/helm-charts", "alloy", "1.8.0"),
+        ("jenkins chart", "https://charts.jenkins.io", "jenkins", "5.9.18"),
+        ("cloudnative-pg chart", "https://cloudnative-pg.github.io/charts", "cloudnative-pg", "0.28.2"),
+        ("headlamp chart", "https://kubernetes-sigs.github.io/headlamp/", "headlamp", "0.42.0"),
+    ]
+    for name, repo, chart, pinned in index_charts:
+        try:
+            v, d = helm_chart_latest(repo, chart)
+            rows.append(Pin(name, pinned, v, d, status(pinned, v)))
+        except Exception as e:
+            rows.append(Pin(name, pinned, "ERR", "?", f"ERR:{type(e).__name__}"))
+
     rels = gh_releases("opentofu/opentofu", prefix="v", per_page=10)
     stable = [r for r in rels if all(t not in r[0] for t in ("alpha", "beta", "rc"))]
     latest = stable[0][0].lstrip("v") if stable else "?"

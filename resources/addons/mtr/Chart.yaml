@@ -1,0 +1,10 @@
+apiVersion: v2
+name: mtr
+description: |
+  MTR test-history database (CloudNativePG Cluster) + hourly ingest CronJob
+  (PS-10541). Replaces the standalone Hetzner Prometheus PoC with a relational
+  store the Grafana MTR dashboard queries via SQL. Requires the cloudnative-pg
+  addon (operator + CRDs) to be synced first.
+type: application
+version: 1.0.0
+appVersion: "0.1.0"

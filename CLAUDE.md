@@ -7,8 +7,8 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 ## Conventions (carried forward from PoC, hard-won)
 
 - **All changes via code.** No manual `kubectl annotate`, `kubectl patch`, or Script Console mutations. Drift between git and cluster breaks GitOps.
-- **Persistent groovy scripts** (`image/groovy/persistent/`) run every Jenkins startup after `cloud.groovy`. Alphabetical order matters — prefix with `e-` to run after `c-cloud.groovy`.
-- **One-time groovy scripts** (`image/groovy/one-time/`) self-delete after running, write `.clone-initialized` flag.
+- **Persistent groovy scripts** (`images/jenkins/groovy/persistent/`) run every Jenkins startup after `cloud.groovy`. Alphabetical order matters; prefix with `e-` to run after `c-cloud.groovy`.
+- **One-time groovy scripts** (`images/jenkins/groovy/one-time/`) self-delete after running, write `.clone-initialized` flag.
 - **`persistence.volumes`, not `extraVolumes`** for ConfigMap mounts. Init containers can't see `extraVolumes`.
 - **Docker image:** always `docker buildx build --platform linux/amd64 --push`. Build host (m3) is arm64, EKS nodes are amd64.
 - **Public repo:** no AWS account IDs / ARNs / secrets in `.tfvars` or values files. All sensitive bits flow via `var.account_id`, cluster-secret annotations, or AWS Secrets Manager → External Secrets Operator.

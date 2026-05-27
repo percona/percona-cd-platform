@@ -136,6 +136,25 @@ argocd-password:
     kubectl --context {{cluster}} -n argocd get secret argocd-initial-admin-secret \
         -o jsonpath='{.data.password}' | base64 -d && echo
 
+# ---------- container images (ECR, percona-cd/ namespace) ----------
+# Build + push a custom addon image. The account ID is resolved at runtime
+# (never committed); EKS nodes pull from this ECR via the node role.
+# Build context is images/<name>; the ECR repo (percona-cd/<name>) is managed
+# in terraform/ecr.tf. Usage:
+#   just build-image mtr-ingest 0.1.0
+#   just build-image jenkins-endpoint-reconciler 0.1.0
+build-image name tag="0.1.0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    account=$(aws sts get-caller-identity --profile {{aws_profile}} --query Account --output text)
+    registry="${account}.dkr.ecr.{{aws_region}}.amazonaws.com"
+    aws ecr get-login-password --region {{aws_region}} --profile {{aws_profile}} \
+      | docker login --username AWS --password-stdin "$registry"
+    docker buildx build --platform linux/amd64 \
+      -t "${registry}/percona-cd/{{name}}:{{tag}}" \
+      --push "images/{{name}}"
+    echo "pushed ${registry}/percona-cd/{{name}}:{{tag}}"
+
 # ---------- pre-commit ----------
 pre-commit-install:
     pre-commit install --install-hooks
