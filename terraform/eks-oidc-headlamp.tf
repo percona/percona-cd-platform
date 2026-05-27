@@ -39,6 +39,4 @@ resource "aws_eks_identity_provider_config" "authentik_headlamp" {
   }
 
   tags = local.tags
-
-  depends_on = [module.eks]
 }
