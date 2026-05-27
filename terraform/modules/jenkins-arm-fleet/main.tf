@@ -7,10 +7,13 @@
 # DesiredCapacity at runtime, hence ignore_changes = [desired_capacity].
 
 locals {
-  # iit-billing-tag = short_name keeps cleanup Lambdas from reaping workers
-  # (CLAUDE.md item #7). tickets is provenance-as-tag, not in resource names.
+  # iit-billing-tag MUST be the worker form ("<short_name>-worker"), never the
+  # bare master tag: the jenkins-endpoint-reconciler matches the master by exact
+  # iit-billing-tag=<short_name>, so a worker sharing it becomes a candidate for
+  # the master EndpointSlice and can blackhole the master's ingress (503). The
+  # worker form also matches the existing ec2-plugin workers and is cleanup-safe.
   fleet_tags = merge(
-    { "iit-billing-tag" = var.short_name },
+    { "iit-billing-tag" = "${var.short_name}-worker" },
     var.tags,
     var.tickets == "" ? {} : { tickets = var.tickets },
   )
