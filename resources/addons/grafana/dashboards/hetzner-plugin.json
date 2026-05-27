@@ -610,8 +610,8 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
-          "legendFormat": "{{master}}",
+          "expr": "sum by (master, arch) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
+          "legendFormat": "{{master}} {{arch}}",
           "instant": true
         }
       ],
@@ -947,8 +947,8 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (master) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
-          "legendFormat": "{{master}}"
+          "expr": "sum by (master, arch) (hetzner_running_servers{master=~\"$master\",master=~\".+\\\\.cd\",arch=~\"$arch\"})",
+          "legendFormat": "{{master}} {{arch}}"
         }
       ],
       "options": {
