@@ -83,6 +83,14 @@ resource "aws_launch_template" "this" {
 
   vpc_security_group_ids = [aws_security_group.this.id]
 
+  # IMDSv2 required (trivy AWS-0130). hop_limit 2 keeps IMDS reachable from
+  # the Docker build containers on the worker while still blocking IMDSv1.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   block_device_mappings {
     device_name = "/dev/xvda" # root
     ebs {
