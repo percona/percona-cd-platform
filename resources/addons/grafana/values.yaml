@@ -168,6 +168,13 @@ grafana:
       secretKeyRef:
         name: grafana-oidc
         key: client_secret
+    # Read-only password for the MTR Postgres datasource (PS-10541). Synced by
+    # templates/external-secret-mtr-reader.yaml; interpolated as
+    # `$MTR_PG_READER_PASSWORD` in the datasource secureJsonData below.
+    MTR_PG_READER_PASSWORD:
+      secretKeyRef:
+        name: mtr-pg-reader
+        key: password
 
   # Datasources auto-provisioned. URLs are in-cluster Service DNS.
   #
@@ -220,6 +227,7 @@ grafana:
         - { name: Tempo, orgId: 1 }
         - { name: "Prometheus (in-cluster scrape)", orgId: 1 }
         - { name: Prometheus, orgId: 1 }
+        - { name: "MTR Postgres", orgId: 1 }
       datasources:
         - name: Mimir
           uid: mimir
@@ -244,6 +252,22 @@ grafana:
           type: tempo
           access: proxy
           url: http://tempo-query-frontend.tempo.svc.cluster.local:3100
+        # MTR test-history relational store (PS-10541). Core OSS postgres
+        # datasource (no plugin/license). Reads via the CNPG `-r` service as
+        # the managed read-only role; password interpolated from the env var
+        # synced by templates/external-secret-mtr-reader.yaml.
+        - name: "MTR Postgres"
+          uid: mtr-postgres
+          type: postgres
+          access: proxy
+          url: mtr-pg-r.mtr.svc.cluster.local:5432
+          user: mtr_reader
+          jsonData:
+            database: mtr
+            sslmode: require
+            postgresVersion: 1700
+          secureJsonData:
+            password: $MTR_PG_READER_PASSWORD
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
   # grafana_dashboard label and auto-imports). kube-prometheus-stack

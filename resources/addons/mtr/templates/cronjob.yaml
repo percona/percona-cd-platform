@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mtr-ingest
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    app.kubernetes.io/part-of: mtr
+spec:
+  schedule: {{ .Values.ingest.schedule | quote }}
+  # Forbid: a long fetch should not race the next tick. ingest-pg is idempotent.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Wide ceiling: the cold first run does a larger backfill (each new build
+      # pulls ~19 JUnit XMLs); steady-state hourly ticks are tiny.
+      # concurrencyPolicy: Forbid prevents overlap, so a high cap is safe.
+      activeDeadlineSeconds: 1800
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          annotations:
+            # Roll the pod template when values change so the next tick picks it up.
+            checksum/config: {{ .Values | toYaml | sha256sum }}
+        spec:
+          serviceAccountName: mtr-ingest
+          restartPolicy: Never
+          nodeSelector:
+            {{- toYaml .Values.tier.nodeSelector | nindent 12 }}
+          tolerations:
+            {{- toYaml .Values.tier.tolerations | nindent 12 }}
+          containers:
+            - name: ingest
+              # Built from images/mtr-ingest, pushed to ECR under percona-cd/.
+              # Account + region come from the addons ApplicationSet valuesObject.
+              image: "{{ .Values.aws.accountId }}.dkr.ecr.{{ .Values.aws.region | default "us-east-1" }}.amazonaws.com/{{ .Values.ingest.image.repository }}:{{ .Values.ingest.image.tag }}"
+              imagePullPolicy: {{ .Values.ingest.image.pullPolicy }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mkdir -p /tmp/builds
+                  echo "==> init-db (schema + grants, idempotent)"
+                  mtr-backfill init-db
+                  echo "==> pg-skip-list (already-ingested builds)"
+                  SKIP=$(mtr-backfill pg-skip-list --base-url "$JENKINS_URL" --job "$JENKINS_JOB")
+                  echo "==> fetch-rest (new builds, all results)"
+                  mtr-backfill fetch-rest --base-url "$JENKINS_URL" --job "$JENKINS_JOB" \
+                    --limit {{ .Values.ingest.limit }} --result-filter "" \
+                    --skip-builds "$SKIP" --builds-dir /tmp/builds
+                  echo "==> ingest-pg (UPSERT into Postgres)"
+                  mtr-backfill ingest-pg --json-dir /tmp/builds
+              env:
+                - name: JENKINS_URL
+                  value: {{ .Values.ingest.jenkins.url | quote }}
+                - name: JENKINS_JOB
+                  value: {{ .Values.ingest.jenkins.job | quote }}
+                - name: PGHOST
+                  value: "{{ .Values.postgres.clusterName }}-rw.{{ .Release.Namespace }}.svc.cluster.local"
+                - name: PGPORT
+                  value: "5432"
+                # CNPG generates <clusterName>-app with the owner credentials.
+                - name: PGDATABASE
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.clusterName }}-app, key: dbname }
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.clusterName }}-app, key: username }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: {{ .Values.postgres.clusterName }}-app, key: password }
+                - name: JENKINS_USER
+                  valueFrom:
+                    secretKeyRef: { name: mtr-jenkins, key: JENKINS_USER }
+                - name: JENKINS_TOKEN
+                  valueFrom:
+                    secretKeyRef: { name: mtr-jenkins, key: JENKINS_TOKEN }
+              resources:
+                {{- toYaml .Values.ingest.resources | nindent 16 }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false  # mtr-backfill writes JSON under /tmp/builds
+                runAsNonRoot: true
+                runAsUser: 65532
+                capabilities:
+                  drop: ["ALL"]

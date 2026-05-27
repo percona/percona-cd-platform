@@ -1,0 +1,62 @@
+# MTR test-history DB + ingest (PS-10541). Namespace is `mtr` (the addons
+# ApplicationSet sets destination.namespace = path.basename).
+
+# AWS Secrets Manager JSON bundle (ESO ClusterSecretStore aws-secrets-manager).
+# Properties expected: PG_READER_PASSWORD, JENKINS_USER, JENKINS_TOKEN.
+# Provisioned at the deploy gate (see plan); not committed to git.
+secretsManagerKey: percona-ci-platform/mtr/config
+
+# ECR account + region come from the addons ApplicationSet valuesObject
+# (terraform/argocd.tf); region falls back to us-east-1 for local helm template.
+aws:
+  accountId: ""
+  region: us-east-1
+
+postgres:
+  clusterName: mtr-pg
+  instances: 1
+  # Official CloudNativePG operand image (NOT Bitnami). Catalog tags carry a
+  # flavor/distro suffix (operator 1.29 default is 18.3-system-trixie); a bare
+  # "17.2" is not a published tag. Pin a mature PG17 system image; bump the
+  # patch or move to an ImageCatalogRef later.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.6-system-trixie
+  storage:
+    size: 20Gi
+    storageClass: gp3-monitoring-1a-retain
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  database: mtr
+  owner: mtr            # app/owner role; CNPG generates the <clusterName>-app secret
+  readerRole: mtr_reader   # CNPG managed role; Grafana reads through it (must match schema.sql)
+
+# Single-AZ stateful tier (EBS is per-AZ), same placement as Authentik PG / Loki.
+tier:
+  nodeSelector:
+    workload.percona.com/tier: obs-state
+  tolerations:
+    - key: workload.percona.com/tier
+      operator: Equal
+      value: obs-state
+      effect: NoSchedule
+
+ingest:
+  schedule: "0 * * * *"
+  image:
+    # Built from images/mtr-ingest, pushed to ECR under the percona-cd/ namespace.
+    repository: percona-cd/mtr-ingest
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  jenkins:
+    url: https://ps80.cd.percona.com
+    job: percona-server-8.0-pipeline-parallel-mtr
+  limit: 50
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
