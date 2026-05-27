@@ -108,6 +108,129 @@ alloy:
           }
         }
 
+        // === Metrics: kubelet + cadvisor (kubernetes-mixin source data) ===
+        //
+        // kube-prometheus-stack used to create the kubelet Service +
+        // ServiceMonitor that fed cadvisor `container_*` and `kubelet_*`.
+        // After its removal (ADR 0016) nothing scraped them, so the
+        // kubernetes-mixin compute-resources dashboards + their recording
+        // rules (resources/addons/mimir/files/kubernetes-mixin-rules.yaml)
+        // had no usage data. These two scrapes restore that source via the
+        // apiserver node proxy (no per-node kubelet endpoint needed). RBAC
+        // for nodes/proxy is in templates/clusterrole-kubelet-scrape.yaml.
+        //
+        // cadvisor is the highest-cardinality source in the cluster, so a
+        // keep-list trims it to the series the mixin actually queries, and
+        // a drop removes the empty-image pod-level cgroup duplicates. The
+        // kubelet keep-list mirrors the kube-prometheus-stack default.
+        discovery.kubernetes "nodes" {
+          role = "node"
+        }
+
+        discovery.relabel "cadvisor" {
+          targets = discovery.kubernetes.nodes.targets
+          rule {
+            target_label = "__address__"
+            replacement  = "kubernetes.default.svc.cluster.local:443"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_node_name"]
+            regex         = "(.+)"
+            target_label  = "__metrics_path__"
+            replacement   = "/api/v1/nodes/${1}/proxy/metrics/cadvisor"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_node_name"]
+            target_label  = "node"
+          }
+          // job must match the mixin cadvisorSelector (job="cadvisor").
+          rule {
+            target_label = "job"
+            replacement  = "cadvisor"
+          }
+        }
+
+        prometheus.scrape "cadvisor" {
+          targets           = discovery.relabel.cadvisor.output
+          forward_to        = [prometheus.relabel.cadvisor_filter.receiver]
+          scheme            = "https"
+          bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+          honor_labels      = true
+          tls_config {
+            ca_file     = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+            server_name = "kubernetes"
+          }
+          clustering {
+            enabled = true
+          }
+        }
+
+        prometheus.relabel "cadvisor_filter" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          // Keep only the container_*/machine_* series the mixin uses.
+          rule {
+            source_labels = ["__name__"]
+            regex         = "container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes|container_memory_rss|container_memory_cache|container_memory_swap|container_network_receive_bytes_total|container_network_transmit_bytes_total|container_network_receive_packets_total|container_network_transmit_packets_total|container_network_receive_packets_dropped_total|container_network_transmit_packets_dropped_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total|container_fs_reads_total|container_fs_writes_total|machine_memory_bytes|machine_cpu_cores"
+            action        = "keep"
+          }
+          // Drop pod-level cgroup duplicates (cadvisor emits container_* with
+          // empty image for the pod sandbox); the mixin filters image!="".
+          rule {
+            source_labels = ["__name__", "image"]
+            separator     = ";"
+            regex         = "container_.*;"
+            action        = "drop"
+          }
+        }
+
+        discovery.relabel "kubelet" {
+          targets = discovery.kubernetes.nodes.targets
+          rule {
+            target_label = "__address__"
+            replacement  = "kubernetes.default.svc.cluster.local:443"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_node_name"]
+            regex         = "(.+)"
+            target_label  = "__metrics_path__"
+            replacement   = "/api/v1/nodes/${1}/proxy/metrics"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_node_name"]
+            target_label  = "node"
+          }
+          // job must match the mixin kubeletSelector (job="kubelet").
+          rule {
+            target_label = "job"
+            replacement  = "kubelet"
+          }
+        }
+
+        prometheus.scrape "kubelet" {
+          targets           = discovery.relabel.kubelet.output
+          forward_to        = [prometheus.relabel.kubelet_filter.receiver]
+          scheme            = "https"
+          bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+          honor_labels      = true
+          tls_config {
+            ca_file     = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+            server_name = "kubernetes"
+          }
+          clustering {
+            enabled = true
+          }
+        }
+
+        prometheus.relabel "kubelet_filter" {
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          // Keep the kubelet series the mixin's kubelet + PV dashboards use.
+          rule {
+            source_labels = ["__name__"]
+            regex         = "kubelet_node_name|kubelet_running_pods|kubelet_running_containers|kubelet_volume_stats_.*|kubelet_pod_worker_duration_seconds_.*|kubelet_pod_start_duration_seconds_.*|kubelet_pleg_relist_duration_seconds_.*|kubelet_runtime_operations_total|kubelet_runtime_operations_errors_total|kubelet_runtime_operations_duration_seconds_.*|storage_operation_duration_seconds_.*|kubelet_cgroup_manager_duration_seconds_.*|volume_manager_total_volumes|rest_client_requests_total|rest_client_request_duration_seconds_.*"
+            action        = "keep"
+          }
+        }
+
         // === Metrics: PrometheusRule -> Mimir ruler ===
         //
         // Watch every PrometheusRule cluster-wide and POST it to Mimir's
