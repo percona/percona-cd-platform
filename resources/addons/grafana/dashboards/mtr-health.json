@@ -1,0 +1,148 @@
+{
+  "title": "MTR Test Health",
+  "uid": "mtr-health",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 1,
+  "style": "dark",
+  "tags": ["mtr", "percona", "test-history"],
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": { "time_options": ["6h", "24h", "7d", "30d", "90d", "180d"] },
+  "templating": {
+    "list": [
+      {
+        "name": "platform_os", "label": "OS", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT platform_os FROM builds WHERE platform_os IS NOT NULL ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "platform_build", "label": "Build Type", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT platform_build FROM builds WHERE platform_build IS NOT NULL AND platform_os IN (${platform_os:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "arch", "label": "Arch", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT arch FROM builds WHERE arch IS NOT NULL AND platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "branch", "label": "Branch", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT COALESCE(branch,'(none)') FROM builds WHERE platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "fork", "label": "Fork", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT COALESCE(fork,'(none)') FROM builds WHERE platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "test_suite", "label": "Suite", "type": "query",
+        "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+        "query": "SELECT DISTINCT t.suite FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE t.status='fail' AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) ORDER BY 1",
+        "includeAll": true, "multi": true, "refresh": 2, "sort": 1,
+        "current": { "text": ["All"], "value": ["$__all"] }
+      },
+      {
+        "name": "min_flips", "label": "Min flips", "type": "custom",
+        "query": "1,2,3,5",
+        "includeAll": false, "multi": false,
+        "current": { "text": "1", "value": "1" }
+      }
+    ]
+  },
+  "annotations": { "list": [] },
+  "panels": [
+    { "id": 100, "type": "row", "title": "Overview", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 1, "type": "stat", "title": "Builds in range",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "SELECT count(*) AS builds FROM builds WHERE $__timeFilter(build_ts) AND platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) AND COALESCE(branch,'(none)') IN (${branch:singlequote}) AND COALESCE(fork,'(none)') IN (${fork:singlequote})" } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none", "textMode": "value" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Test failures",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "SELECT count(*) AS failures FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE t.status='fail' AND $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote})" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 50 } ] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Distinct failing tests",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "SELECT count(DISTINCT (t.suite, t.name)) AS distinct_failing FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE t.status='fail' AND $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote})" } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none", "textMode": "value" }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Flaky tests (>= min flips)",
+      "description": "Tests whose pass/fail status flipped at least 'Min flips' times across builds in range, on the same platform.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "WITH o AS (SELECT suite,name,run_context,platform_os,platform_build,arch,branch, lag(status) OVER (PARTITION BY suite,name,run_context,platform_os,platform_build,arch,branch ORDER BY build_ts) AS prev, status FROM test_runs WHERE status IN ('pass','fail') AND $__timeFilter(build_ts) AND platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) AND suite IN (${test_suite:singlequote})), f AS (SELECT suite,name,platform_os,arch,branch, count(*) FILTER (WHERE prev IS NOT NULL AND status<>prev) AS flips FROM o GROUP BY 1,2,3,4,5) SELECT count(*) AS flaky FROM f WHERE flips >= ${min_flips}" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" }
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Failures per build",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "time_series", "rawSql": "SELECT b.build_ts AS time, count(*) FILTER (WHERE t.status='fail') AS \"failures\" FROM builds b JOIN test_results t ON t.build_id=b.build_id WHERE $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote}) GROUP BY b.build_ts ORDER BY b.build_ts" } ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1 }, "color": { "mode": "fixed", "fixedColor": "red" } } }
+    },
+    {
+      "id": 10, "type": "table", "title": "Failures by suite",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "SELECT t.suite AS \"Suite\", count(*) FILTER (WHERE t.status='fail') AS \"Failures\" FROM test_results t JOIN builds b ON b.build_id=t.build_id WHERE $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote}) GROUP BY t.suite HAVING count(*) FILTER (WHERE t.status='fail') > 0 ORDER BY 2 DESC" } ],
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "Failures", "desc": true } ] },
+      "fieldConfig": { "defaults": {}, "overrides": [ { "matcher": { "id": "byName", "options": "Failures" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }, { "id": "color", "value": { "mode": "continuous-YlRd" } } ] } ] }
+    },
+    { "id": 200, "type": "row", "title": "Flaky tests (sporadic failures)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 } },
+    {
+      "id": 20, "type": "table", "title": "Flakiest tests -- pass/fail flips across builds",
+      "description": "A flip is a pass<->fail change between consecutive runs of the same test on the same platform. flips > 0 means the test fails sporadically (the PS-10541 signal). Click Test to open the latest build's Jenkins testReport.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "WITH o AS (SELECT suite,name,run_context,platform_os,platform_build,arch,branch,build_number,build_ts,status, lag(status) OVER (PARTITION BY suite,name,run_context,platform_os,platform_build,arch,branch ORDER BY build_ts) AS prev FROM test_runs WHERE status IN ('pass','fail') AND $__timeFilter(build_ts) AND platform_os IN (${platform_os:singlequote}) AND platform_build IN (${platform_build:singlequote}) AND arch IN (${arch:singlequote}) AND suite IN (${test_suite:singlequote})) SELECT suite AS \"Suite\", name AS \"Test\", platform_os AS \"OS\", arch AS \"Arch\", branch AS \"Branch\", count(*) AS \"Runs\", count(*) FILTER (WHERE status='fail') AS \"Fails\", count(*) FILTER (WHERE status='pass') AS \"Passes\", count(*) FILTER (WHERE prev IS NOT NULL AND status<>prev) AS \"Flips\", max(build_number) AS \"Last build\" FROM o GROUP BY suite,name,platform_os,arch,branch HAVING count(*) FILTER (WHERE prev IS NOT NULL AND status<>prev) >= ${min_flips} ORDER BY \"Flips\" DESC, \"Fails\" DESC LIMIT 200" } ],
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "Flips", "desc": true } ] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Flips" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } }, { "id": "color", "value": { "mode": "continuous-YlRd" } }, { "id": "custom.width", "value": 80 } ] },
+          { "matcher": { "id": "byName", "options": "Test" }, "properties": [ { "id": "links", "value": [ { "title": "Open testReport in Jenkins", "url": "https://ps80.cd.percona.com/job/percona-server-8.0-pipeline-parallel-mtr/${__data.fields[\"Last build\"]}/testReport/", "targetBlank": true } ] } ] }
+        ]
+      }
+    },
+    { "id": 300, "type": "row", "title": "Failure matrix", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 } },
+    {
+      "id": 30, "type": "table", "title": "Failing tests x builds",
+      "description": "Every failing test occurrence in range. Click Build/Test to open Jenkins.",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 25 },
+      "datasource": { "type": "postgres", "uid": "mtr-postgres" },
+      "targets": [ { "refId": "A", "datasource": { "type": "postgres", "uid": "mtr-postgres" }, "rawQuery": true, "format": "table", "rawSql": "SELECT b.build_number AS \"Build\", t.suite AS \"Suite\", t.name AS \"Test\", t.worker AS \"Worker\", b.branch AS \"Branch\", t.failure_message AS \"Error\" FROM test_results t JOIN builds b ON b.build_id = t.build_id WHERE t.status='fail' AND $__timeFilter(b.build_ts) AND b.platform_os IN (${platform_os:singlequote}) AND b.platform_build IN (${platform_build:singlequote}) AND b.arch IN (${arch:singlequote}) AND COALESCE(b.branch,'(none)') IN (${branch:singlequote}) AND COALESCE(b.fork,'(none)') IN (${fork:singlequote}) AND t.suite IN (${test_suite:singlequote}) ORDER BY b.build_number DESC, t.suite, t.name" } ],
+      "options": { "showHeader": true, "footer": { "show": true, "reducer": ["count"], "fields": ["Test"] } },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Build" }, "properties": [ { "id": "custom.width", "value": 80 }, { "id": "links", "value": [ { "title": "Open build in Jenkins", "url": "https://ps80.cd.percona.com/job/percona-server-8.0-pipeline-parallel-mtr/${__data.fields.Build}/", "targetBlank": true } ] } ] },
+          { "matcher": { "id": "byName", "options": "Test" }, "properties": [ { "id": "links", "value": [ { "title": "Open testReport in Jenkins", "url": "https://ps80.cd.percona.com/job/percona-server-8.0-pipeline-parallel-mtr/${__data.fields.Build}/testReport/", "targetBlank": true } ] } ] },
+          { "matcher": { "id": "byName", "options": "Error" }, "properties": [ { "id": "custom.width", "value": 420 }, { "id": "custom.inspect", "value": true } ] }
+        ]
+      }
+    }
+  ]
+}
