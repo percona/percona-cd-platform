@@ -15,10 +15,9 @@
 # to the upstream so the master's openresty matches its virtual host and
 # cert.
 #
-# Deploy gating: `origin-ps3.cd.percona.com -> 52.210.70.55` must exist
-# in Route53 before sync. Either populate `var.jenkins_origin_targets.ps3`
-# in `terraform/local.auto.tfvars` (origins.tf will create it) or `aws
-# route53 change-resource-record-sets` it by hand.
+# ps3 upstream discovery is handled by the jenkins-endpoint-reconciler
+# CronJob (it writes the EndpointSlice for the Service below), so no
+# `origin-ps3` Route53 record or `jenkins_origin_targets.ps3` is needed.
 #
 # Phase 1 (proxy via openresty): upstream still HTTPS:443. After PR 2 in
 # Percona-Lab/jenkins-pipelines strips openresty and the master SG opens
