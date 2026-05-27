@@ -112,6 +112,13 @@ locals {
       name = "jenkins"
       ver  = "5.9.18"
     }
+    # Headlamp — web Kubernetes UI (Lens replacement), resources/addons/headlamp.
+    # CNCF Sandbox / kubernetes-sigs SIG-UI; chart version tracks appVersion.
+    headlamp = {
+      repo = "https://kubernetes-sigs.github.io/headlamp/"
+      name = "headlamp"
+      ver  = "0.42.0"
+    }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }
   }

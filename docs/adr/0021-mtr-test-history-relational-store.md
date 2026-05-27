@@ -1,4 +1,4 @@
-# 0020 — MTR test-history on a relational store (CloudNativePG), not the LGTM time-series stack
+# 0021 — MTR test-history on a relational store (CloudNativePG), not the LGTM time-series stack
 
 **Status:** Accepted (2026-05-27), rollout pending (PS-10541)
 **Related:** [ADR 0016](0016-lgtm-only-metrics-stack.md) (LGTM-only metrics; this is the deliberate non-Mimir exception for relational data), [ADR 0010](0010-distributed-lgtm.md) (LGTM topology), [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) (stateful tier placement reused for the DB), [ADR 0012](0012-authentik-saml-oidc-bridge.md) (its bundled Bitnami Postgres shares the migration implication below)
@@ -37,6 +37,15 @@ Store MTR test history in **PostgreSQL**, query it through Grafana's **core (OSS
 
 - The ingest path was proven against a real Postgres: 100 builds load to ~1M rows, idempotently (a second pass is a no-op), and the `test_flakiness` view surfaces cross-build flapping tests.
 - The `mtr-ingest` image builds, pushes to ECR, and runs `mtr-backfill --help` to completion on an amd64 cluster node (confirming the wheel ships `sql/schema.sql` and the console script, and that nodes can pull the image).
+
+## Dashboards
+
+Two Grafana dashboards live in the `MTR` folder, both reading the `mtr-postgres` datasource, provisioned via sidecar ConfigMap (`resources/addons/grafana/dashboards/`):
+
+- **MySQL MTR History** (`mtr-history`): the faithful SQL port of the PoC failure matrix (failing tests x builds), with the seven cascading filters (OS, build type, arch, branch, fork, suite, test) and Jenkins testReport data links.
+- **MTR Test Health** (`mtr-health`): overview stats (builds, failures, distinct failing tests, flaky count), a failures-per-build trend, failures-by-suite, and the flakiest-tests table (pass/fail flips across builds, the sporadic-failure signal) with a min-flips control.
+
+Multi-value SQL filters use `IN (${var:singlequote})` with `includeAll` and no custom `allValue`, so "All" expands to every value. Each build carries one platform (the MTR job is parameterized per `DOCKER_OS`/`ARCH`/`CMAKE_BUILD_TYPE`, not a matrix), so arch and OS filters select distinct builds.
 
 ## Alternatives considered
 
