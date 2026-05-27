@@ -170,7 +170,7 @@ alloy:
           // Keep only the container_*/machine_* series the mixin uses.
           rule {
             source_labels = ["__name__"]
-            regex         = "container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes|container_memory_rss|container_memory_cache|container_memory_swap|container_network_receive_bytes_total|container_network_transmit_bytes_total|container_network_receive_packets_total|container_network_transmit_packets_total|container_network_receive_packets_dropped_total|container_network_transmit_packets_dropped_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total|container_fs_reads_total|container_fs_writes_total|machine_memory_bytes|machine_cpu_cores"
+            regex         = "container_(cpu|memory|network|fs)_.*|machine_(cpu_cores|memory_bytes)"
             action        = "keep"
           }
           // Drop pod-level cgroup duplicates (cadvisor emits container_* with
@@ -226,7 +226,7 @@ alloy:
           // Keep the kubelet series the mixin's kubelet + PV dashboards use.
           rule {
             source_labels = ["__name__"]
-            regex         = "kubelet_node_name|kubelet_running_pods|kubelet_running_containers|kubelet_volume_stats_.*|kubelet_pod_worker_duration_seconds_.*|kubelet_pod_start_duration_seconds_.*|kubelet_pleg_relist_duration_seconds_.*|kubelet_runtime_operations_total|kubelet_runtime_operations_errors_total|kubelet_runtime_operations_duration_seconds_.*|storage_operation_duration_seconds_.*|kubelet_cgroup_manager_duration_seconds_.*|volume_manager_total_volumes|rest_client_requests_total|rest_client_request_duration_seconds_.*"
+            regex         = "kubelet_(node_name|volume_stats_.*|running_.*|.*_duration_seconds.*|runtime_operations.*)|storage_operation_duration_seconds_.*|rest_client_.*"
             action        = "keep"
           }
         }
