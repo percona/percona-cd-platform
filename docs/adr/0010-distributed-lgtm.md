@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-05-06)
 **Supersedes:** [ADR 0006](0006-kube-prometheus-stack-over-mimir.md)
+**Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) (the multi-AZ ingester topology collapsed to single-AZ, single-replica).
 
 ## Context
 
