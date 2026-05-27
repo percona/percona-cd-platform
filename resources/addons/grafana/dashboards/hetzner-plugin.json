@@ -1141,7 +1141,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Per-class breakdown of hetzner_provision_attempts_total over the last 5 minutes. Reads alongside the success-rate gauge: the gauge says 'how many fail', this panel says 'why'. Key classes when triaging: bootstrap_other (Hetzner control-plane stall, see status.hetzner.com), bootstrap_io (master to agent SSH/network), rate_limited / unclassified_throttle (per-token API throttle), dc_unavailable / failover_incompatible (DC stockout or template mismatch), precheck_failure / config_error (template config error before any API call), cap_reached_under_lock (instance cap), failure (uncategorized; should stay near zero).",
+      "description": "Per-class breakdown of hetzner_provision_attempts_total over the last 5 minutes. Reads alongside the success-rate gauge: the gauge says 'how many fail', this panel says 'why'. Key classes when triaging: bootstrap_other (Hetzner control-plane stall, see status.hetzner.com), bootstrap_io (master to agent SSH/network), rate_limited / unclassified_throttle (per-token API throttle), dc_unavailable / failover_incompatible (DC stockout or template mismatch), precheck_failure / config_error (template config error before any API call), cap_reached_under_lock (instance cap), failure (uncategorized; should stay near zero). dc_breaker_open (v26+): provision attempt skipped because the (location, arch) DC breaker was OPEN; pairs with reason=no_healthy_dc on the skipped panel.",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -1253,6 +1253,21 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dc_breaker_open"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
                 }
               }
             ]
@@ -1505,7 +1520,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Increase over the last hour. CRW underflow + Uncaught are structural-fault canaries: any non-zero value indicates a code-level bug. Ghost nodes + DC failovers are routine events; small numbers are normal. Empty (no series) renders as 0.",
+      "description": "Increase over the last hour. CRW underflow + Uncaught are structural-fault canaries: any non-zero value indicates a code-level bug. Ghost nodes + DC failovers are routine events; small numbers are normal. Empty (no series) renders as 0. Stale HALF_OPEN/OPEN resets (v25/v26) re-arm a breaker probe lease whose holder died, or auto-reset a DC stuck OPEN past its TTL; small numbers are normal self-healing, sustained growth means breaker-lease churn.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -1584,6 +1599,24 @@
           "refId": "D",
           "expr": "sum(increase(hetzner_dc_failover_total{master=~\"$master\"}[1h]))",
           "legendFormat": "DC failovers"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "E",
+          "expr": "sum(increase(hetzner_dc_health_stale_half_open_resets_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Stale HALF_OPEN resets"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "F",
+          "expr": "sum(increase(hetzner_dc_health_stale_open_resets_total{master=~\"$master\"}[1h]))",
+          "legendFormat": "Stale OPEN resets"
         }
       ]
     },
