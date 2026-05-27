@@ -64,6 +64,25 @@ module "ps3" {
   ]
 }
 
+# PS-11179: ARM Graviton spot fleet for the ec2-fleet plugin -- the
+# docker-aarch64 fallback when Hetzner CAX capacity is unavailable.
+# capacity-optimized across m8g/m7g/m6g.2xlarge (SPS ~9 vs ~3 single-type).
+# Point ps3's EC2FleetCloud at module.ps3_arm_fleet.asg_name on the
+# docker-32gb-aarch64 label.
+module "ps3_arm_fleet" {
+  source    = "./modules/jenkins-arm-fleet"
+  providers = { aws = aws.eu-west-1 }
+
+  short_name                   = "jenkins-ps3"
+  vpc_id                       = module.ps3.vpc_id
+  subnet_ids                   = module.ps3.subnet_ids
+  worker_instance_profile_name = module.ps3.worker_instance_profile_name
+  master_role_name             = module.ps3.master_iam_role_name
+  key_name                     = "jenkins-ps3"
+  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  tickets                      = "PS-11179"
+}
+
 # Rendered in the root so the ARN uses this account's caller-identity, not
 # the eu-west-1 alias's. Secret lives in us-east-1 with the rest of alloy-gateway.
 data "aws_iam_policy_document" "ps3_alloy_bearer_read" {

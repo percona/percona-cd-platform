@@ -52,3 +52,13 @@ output "data_volume_id" {
   description = "JENKINS_HOME EBS volume ID."
   value       = aws_ebs_volume.data.id
 }
+
+output "subnet_ids" {
+  description = "Master VPC subnet IDs (one per AZ), for attaching the jenkins-arm-fleet module."
+  value       = [for s in aws_subnet.this : s.id]
+}
+
+output "worker_instance_profile_name" {
+  description = "Worker EC2 instance profile name, for the jenkins-arm-fleet module."
+  value       = aws_iam_instance_profile.worker.name
+}
