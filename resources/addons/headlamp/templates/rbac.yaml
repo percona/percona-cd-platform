@@ -8,11 +8,21 @@ names carry the `oidc:` prefix set by the EKS external OIDC association
 (groupsPrefix: "oidc:" in terraform/aws_eks_identity_provider_config); keep
 the two in sync.
 
-Posture: read-only by default for all staff; mutate/exec gated to a
-privileged group. `view` excludes Secrets and exec; `edit` adds workload
-mutation plus pods/exec, pods/log, pods/portforward (the live-debug verbs).
-These bindings are inert until the EKS OIDC association exists, so they are
-safe to land ahead of the control-plane change.
+Posture: read-only (namespaced) for all staff via `view`; full cluster
+control for the platform admin group via `cluster-admin`. Lens-equivalent
+visibility (Nodes, PVs, CRDs, metrics, storageclasses) needs cluster-scoped
+access, which the built-in `view`/`edit` roles intentionally exclude, so
+the admin group is bound to `cluster-admin` (read + write + delete + RBAC).
+This is a deliberate privilege grant via SSO group; anyone added to
+`grafana_cd_admins` in Duo/Authentik gains full cluster control via
+Headlamp. Split into a dedicated `k8s_cd_admins` group later if that
+linkage stops being acceptable.
+
+NOTE on roleRef immutability: a ClusterRoleBinding's roleRef cannot be
+mutated in-place; switching its role requires delete+recreate. If you
+re-aim a binding at a different ClusterRole, RENAME the binding too so
+ArgoCD treats it as a new resource (PruneLast keeps the old binding alive
+until the new one is in place, so there's no permission gap).
 */}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -27,25 +37,27 @@ roleRef:
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    # All Percona staff (Duo `percona` group) get read-only.
+    # All Percona staff (Duo `percona` group) get namespaced read-only.
     name: oidc:percona
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: headlamp-operators
+  # Renamed from `headlamp-operators` (which was bound to `edit`); roleRef
+  # is immutable, so the rename is what lets ArgoCD swap us onto cluster-admin
+  # without a delete-then-create gap.
+  name: headlamp-admins
   labels:
     app.kubernetes.io/part-of: headlamp
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: edit
+  name: cluster-admin
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    # Privileged group: workload mutation + pods/exec + live logs. Reuses
-    # the existing admin group; split into a dedicated `k8s_cd_admins`
-    # group in Duo/Authentik if cluster-write should not track Grafana
-    # admin. For full cluster-admin, bind that group to `cluster-admin`
-    # instead (kept out of the default on purpose).
+    # Platform admins: full cluster control via Headlamp (Nodes, PVs, CRDs,
+    # RBAC, delete). Reuses the existing Grafana admin group; split into a
+    # dedicated `k8s_cd_admins` group in Duo/Authentik if cluster-admin should
+    # not track Grafana admin.
     name: oidc:grafana_cd_admins
