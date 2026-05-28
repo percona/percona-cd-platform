@@ -80,6 +80,7 @@ module "ps3_arm_fleet" {
   master_role_name             = module.ps3.master_iam_role_name
   key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  max_size                     = 16
   tickets                      = "PS-11179"
 }
 
