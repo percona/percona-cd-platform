@@ -28,7 +28,7 @@ module "ps57_arm_fleet" {
   subnet_ids                   = data.aws_subnets.ps57.ids
   worker_instance_profile_name = "jenkins-ps57-worker"
   master_role_name             = "jenkins-ps57-master"
-  key_name                     = "jenkins-ps57"
+  key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"
