@@ -677,6 +677,13 @@ resource "aws_instance" "master" {
   # the single instance to a stable size.
   instance_type = var.on_demand_instance_type
 
+  # Trivy AWS-0131: root EBS encryption. Only affects the on-demand path
+  # (count gated on purchasing_option); SpotFleet path is unchanged. AMI
+  # default size/type inherit (volume_size/volume_type unset).
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name              = var.short_name
     "iit-billing-tag" = var.short_name
