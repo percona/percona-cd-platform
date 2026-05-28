@@ -95,7 +95,7 @@ loki:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: distributor
@@ -123,6 +123,11 @@ loki:
     resources:
       requests: { cpu: 500m, memory: 2Gi }
       limits: { memory: 4Gi }
+    # Chart default is 300s (5 min) with an upstream comment "must be
+    # increased" -- on a node drain the WAL has to flush in-flight lines
+    # and the ring lifecycler has to leave cleanly. 1200s matches Mimir's
+    # ingester default and Grafana's reference deployment.
+    terminationGracePeriodSeconds: 1200
     persistence:
       enabled: true
       size: 50Gi
@@ -147,7 +152,7 @@ loki:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: querier
@@ -162,7 +167,7 @@ loki:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: query-frontend
@@ -177,7 +182,7 @@ loki:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: query-scheduler

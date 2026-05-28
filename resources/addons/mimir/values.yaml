@@ -6,9 +6,10 @@
 # Pod Identity (terraform/pod-identity.tf) maps namespace=mimir + SA=mimir to
 # the IAM role with S3 + KMS access scoped to the bucket below.
 #
-# Alertmanager: Mimir's built-in 3-replica STS is the cluster's sole alert
-# router (LGTM-only, ADR 0016). PrometheusRule resources should set their
-# `spec.alerting` routes to
+# Alertmanager: Mimir's built-in single-replica STS (collapsed per ADR 0020,
+# was 3-replica zone-aware before the single-AZ collapse) is the cluster's
+# sole alert router (LGTM-only, ADR 0016). PrometheusRule resources should
+# set their `spec.alerting` routes to
 # `http://mimir-alertmanager.mimir.svc.cluster.local:8080`. Rules sync to
 # Mimir's ruler via the Alloy DS `mimir.rules.kubernetes` component
 # (resources/addons/alloy/values.yaml).
@@ -131,8 +132,14 @@ mimir-distributed:
   #
   # Robustness: stateful components (ingester, store-gateway, compactor,
   # alertmanager) get platform-stateful-high so Karpenter consolidation
-  # never preempts them. Stateless edges get platform-default. PDBs sized
-  # at minAvailable = replicas - 1 across the board.
+  # never preempts them. Stateless edges get platform-default. Every
+  # component runs at replicas:1 after the single-AZ collapse (ADR 0020),
+  # so PDBs are pinned at `minAvailable: 0` across the board -- any other
+  # value on a singleton denies all voluntary drains (Karpenter
+  # consolidation, MNG roll, kubectl drain). Stateful tier is additionally
+  # guarded by `karpenter.sh/do-not-disrupt` so Karpenter itself never
+  # evicts; the `minAvailable: 0` PDB lets EKS-initiated drains proceed
+  # (acceptable since durable data lives in S3).
   # Stateless tier -- stays on the Karpenter `default` NodePool (spot+on-demand
   # mix). Add topologySpreadConstraints so the replicas don't co-locate on one
   # host (chart default is empty), plus a soft nodeAffinity nudge toward
@@ -147,7 +154,7 @@ mimir-distributed:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: distributor
@@ -188,6 +195,10 @@ mimir-distributed:
     resources:
       requests: { cpu: "1", memory: 4Gi }
       limits: { memory: 8Gi }
+    # Pin the upstream chart default explicitly so a chart bump can't
+    # silently shorten WAL flush. 1200s matches Grafana's reference
+    # deployment for ingester graceful-shutdown (ring-leave + WAL flush).
+    terminationGracePeriodSeconds: 1200
     # Single-AZ, single-replica: zone-aware StatefulSets collapsed to a
     # flat single ingester in us-east-1a. Durable blocks live in S3;
     # the WAL on EBS only buffers the last ~2h of in-flight samples.
@@ -214,12 +225,12 @@ mimir-distributed:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: querier
     podDisruptionBudget:
-      minAvailable: 1
+      minAvailable: 0
       maxUnavailable: null  # clear chart default; K8s rejects both being set
 
   store_gateway:
@@ -282,12 +293,12 @@ mimir-distributed:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: query-frontend
     podDisruptionBudget:
-      minAvailable: 1
+      minAvailable: 0
       maxUnavailable: null  # clear chart default; K8s rejects both being set
 
   query_scheduler:
@@ -300,12 +311,12 @@ mimir-distributed:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/component: query-scheduler
     podDisruptionBudget:
-      minAvailable: 1
+      minAvailable: 0
       maxUnavailable: null  # clear chart default; K8s rejects both being set
 
   alertmanager:
