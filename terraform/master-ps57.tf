@@ -30,5 +30,6 @@ module "ps57_arm_fleet" {
   master_role_name             = "jenkins-ps57-master"
   key_name                     = "jenkins-ps57"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  max_size                     = 16
   tickets                      = "PS-11179"
 }
