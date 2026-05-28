@@ -56,8 +56,9 @@ spec:
       startupTaints: []
 
       # Roll every Karpenter node every 30 days for AMI freshness without
-      # forcing a manual cycle. Disruption budgets (default chart values)
-      # cap concurrent disruptions, so this won't drain the whole pool.
+      # forcing a manual cycle. The explicit `disruption.budgets` below
+      # cap concurrent disruptions so the 720h expire wave can never
+      # drain the whole pool.
       expireAfter: 720h
 
   limits:
@@ -72,6 +73,15 @@ spec:
     #   karpenter.sh/do-not-disrupt: "true"
     # and Karpenter will skip the node hosting it for any voluntary
     # disruption. Spot interruption from AWS still preempts.
+    #
+    # Cap concurrent voluntary disruptions at one node absolute. Karpenter
+    # default is `nodes: 10%` which on a small fleet rounds to a single
+    # node anyway; the explicit `1` documents intent and decouples the
+    # behaviour from cluster size. Stateless LGTM tier sits on this pool
+    # at replicas:1, so co-eviction during the 720h expire wave or a
+    # consolidation burst would briefly take the read/write path dark.
+    budgets:
+      - nodes: "1"
 
   # Single NodePool today, so weight is moot — kept for forward-compat
   # when an arm64 / GPU NodePool gets added.

@@ -79,6 +79,9 @@ tempo-distributed:
     resources:
       requests: { cpu: 200m, memory: 1Gi }
       limits: { memory: 2Gi }
+    # Chart default is 300s; raise to match Mimir/Loki ingester so
+    # WAL flush + ring lifecycler leave have headroom on node drain.
+    terminationGracePeriodSeconds: 1200
     # Single-AZ, single-replica. Tempo bucket has minimal trace data
     # so the chart's data-migration warning is moot.
     zoneAwareReplication:
