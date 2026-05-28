@@ -24,22 +24,24 @@ this page is the operator's tour.
                                           │     /api/v1/metrics/write   /loki/api/v1/push   /v1/traces   │
                                           │                                                              │
                                           ▼                          ▼                                   ▼
-   ┌───────────────────────────────────  Mimir (distributed)         Loki (distributed)                Tempo (distributed)
-   │                                     ────────────────────        ────────────────────              ────────────────────
-   │ kube-prometheus-stack:              distributor x3              distributor x3                   distributor x3
-   │   prometheus-operator               ingester x3 ─► S3           ingester x3 ─► S3                ingester x3 ─► S3
-   │   prometheus (agent, 24h WAL) ──────────────remoteWrite──────►  query-frontend x2                query-frontend x2
-   │   alertmanager x3 (HA)              query-frontend x2           querier x2                       querier x2
-   │   node-exporter (DS)                querier x2                  compactor x1                     compactor x1
-   │   kube-state-metrics                store-gateway x2            index-gateway x2
-   │                                     compactor x1                ruler x1
-   │                                     ruler x1
-   │                                     alertmanager x3
-   ▼
-   alloy (DaemonSet)
+                                         Mimir (distributed)         Loki (distributed)                Tempo (distributed)
+                                         ────────────────────        ────────────────────              ────────────────────
+                                         distributor x3              distributor x3                   distributor x3
+                                         ingester x3 ─► S3           ingester x3 ─► S3                ingester x3 ─► S3
+                                         query-frontend x2           query-frontend x2                query-frontend x2
+                                         querier x2                  querier x2                       querier x2
+                                         store-gateway x2            index-gateway x2                 compactor x1
+                                         compactor x1                compactor x1
+                                         ruler x1                    ruler x1
+                                         alertmanager x3
+                                          ▲
+                                          │  in-cluster distributor URLs
+                                          │
+   alloy (DaemonSet)   -- LGTM-only since ADR 0016 (no Prom agent, no kps Alertmanager)
    ────────────────────
-   pod logs ─► Loki distributor (in-cluster)
-   OTLP traces ─► Tempo distributor (in-cluster)
+   ServiceMonitor / PodMonitor scrape (incl. kube-state-metrics + prometheus-node-exporter) ─► Mimir
+   pod logs    ─► Loki distributor
+   OTLP traces ─► Tempo distributor
 
 
    ┌───────────────────────────────────  Grafana (standalone, HA x2)  ──┐
@@ -60,12 +62,11 @@ this page is the operator's tour.
 | 2 | external-secrets (with ClusterSecretStore) | `resources/addons/external-secrets/` |
 | 3 | karpenter | `resources/addons/karpenter/` |
 | 4 | mimir, loki, tempo | `resources/addons/{mimir,loki,tempo}/` |
-| 5 | kube-prometheus-stack (Prom agent + AM HA), alloy DaemonSet | `resources/addons/kube-prometheus-stack/`, `alloy/` |
+| 5 | alloy DaemonSet (scrape + logs + traces), kube-state-metrics, prometheus-node-exporter, prometheus-operator-crds | `resources/addons/alloy/`, `kube-state-metrics/`, `prometheus-node-exporter/`, `prometheus-operator-crds/` |
 | 6 | grafana, alloy-gateway | `resources/addons/grafana/`, `alloy-gateway/` |
 
-Order matters: Mimir/Loki/Tempo must be running before Prometheus
-remoteWrite or Alloy can ship anything. Grafana ships last so all
-datasources are up at first reconcile.
+Order matters: Mimir/Loki/Tempo must be running before Alloy can ship
+anything. Grafana ships last so all datasources are up at first reconcile.
 
 ## Object storage
 

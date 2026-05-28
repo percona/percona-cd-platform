@@ -270,9 +270,11 @@ grafana:
             password: $MTR_PG_READER_PASSWORD
 
   # Default dashboard providers (sidecar discovers ConfigMaps with the
-  # grafana_dashboard label and auto-imports). kube-prometheus-stack
-  # ships ~15 K8s dashboards via this path (forceDeployDashboards=true
-  # in resources/addons/kube-prometheus-stack/values.yaml).
+  # grafana_dashboard label and auto-imports). The kubernetes-mixin
+  # dashboards under `dashboards/kubernetes-mixin/` ship via this path,
+  # provisioned by templates/configmap-kubernetes-mixin-dashboards.yaml
+  # (kube-prometheus-stack used to bundle a similar set; replaced per
+  # ADR 0016).
   sidecar:
     dashboards:
       enabled: true
