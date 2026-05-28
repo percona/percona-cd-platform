@@ -525,6 +525,7 @@ locals {
     master_profile          = var.master_profile
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
+    init_groovy_hooks       = var.init_groovy_hooks
   })
 }
 
