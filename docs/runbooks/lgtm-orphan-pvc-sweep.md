@@ -31,7 +31,7 @@ The canonical stateful set after ADR 0020:
 mimir/storage-mimir-ingester-0           50 GiB
 mimir/storage-mimir-store-gateway-0      30 GiB
 mimir/storage-mimir-compactor-0          30 GiB
-mimir/storage-mimir-alertmanager-{0,1,2} 5 GiB each (3 AM replicas chart-default)
+mimir/storage-mimir-alertmanager-0       5 GiB  (single-replica per ADR 0020)
 loki/data-loki-ingester-0                50 GiB
 loki/data-loki-compactor-0               30 GiB
 tempo/data-tempo-ingester-0              30 GiB
@@ -40,11 +40,17 @@ tempo/data-tempo-ingester-0              30 GiB
 Anything else under `mimir/`, `loki/`, `tempo/` that does not have a
 running Pod is a sweep candidate. Specifically:
 
+- `storage-mimir-alertmanager-{1,2}` (legacy 3-replica zone-aware AM)
 - `*-zone-{a,b,c}-*` PVCs (legacy zone-aware StatefulSets)
 - `data-tempo-ingester-{1,2}` (legacy 3-replica Tempo)
 - `kafka-data-mimir-kafka-0` (chart-default Kafka StatefulSet when
   `kafka.enabled: false` is the active config)
 - Any `*-prepare-shutdown-*` or `*-flush-*` leftover from a manual drain
+
+For the active canonical PVC migration (relocating bound PVCs to a
+different AZ, e.g. the ADR 0023 sweep), use [`lgtm-az-migration.md`](lgtm-az-migration.md)
+instead. This runbook only covers orphans where the bound PVC has no
+owning Pod.
 
 ## Pre-flight (read-only)
 
