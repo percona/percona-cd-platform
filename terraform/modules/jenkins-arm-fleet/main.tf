@@ -161,10 +161,13 @@ resource "aws_autoscaling_group" "this" {
     }
   }
 
-  # The ec2-fleet plugin owns DesiredCapacity at runtime; min/max stay
-  # Terraform-managed guardrails, so they are deliberately NOT ignored.
+  # The ec2-fleet plugin owns DesiredCapacity AND sets protect_from_scale_in=true
+  # at runtime (so it, not the ASG's own scale-in, controls instance termination).
+  # Ignore both runtime-owned attributes or every apply fights the plugin
+  # (protect_from_scale_in true->false drift). min/max stay Terraform-managed
+  # guardrails, so they are deliberately NOT ignored.
   lifecycle {
-    ignore_changes = [desired_capacity]
+    ignore_changes = [desired_capacity, protect_from_scale_in]
   }
 
   dynamic "tag" {
