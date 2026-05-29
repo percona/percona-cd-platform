@@ -34,6 +34,10 @@ hosts:
     region: eu-west-1
     tag: jenkins-ps3
     port: 8080
+  - name: ps80
+    region: us-west-2
+    tag: jenkins-ps80
+    port: 8080
 
 resources:
   requests:
