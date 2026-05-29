@@ -72,8 +72,8 @@ module "ps3" {
   # htz.cloud.groovy). `jenkins iac deploy` stays the no-restart hot-reload
   # path between boots.
   init_groovy_files = {
-    for f in fileset("${path.module}/resources/jenkins-masters/ps3/init.groovy.d", "*.groovy") :
-    f => file("${path.module}/resources/jenkins-masters/ps3/init.groovy.d/${f}")
+    for f in fileset("${path.module}/../resources/jenkins-masters/ps3/init.groovy.d", "*.groovy") :
+    f => file("${path.module}/../resources/jenkins-masters/ps3/init.groovy.d/${f}")
   }
 }
 
