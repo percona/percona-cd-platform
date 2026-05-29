@@ -100,11 +100,17 @@ module "eks" {
       desired_size   = local.ng.prometheus_system.desired_size
       max_size       = local.ng.prometheus_system.max_size
       subnet_ids     = [module.vpc.private_subnets[0]] # var.monitoring_az pinned (us-east-1a)
-      # Pin the AMI release; Authentik PG / Grafana PDBs block evictions during
-      # a rolling drain, so version bumps need to be explicit and paired with
-      # the workaround in docs/runbooks/mng-label-taint-changes.md.
-      ami_release_version            = "1.35.4-20260423"
+      # Pin the AMI release; Authentik PG / Grafana / MTR-PG PDBs block evictions
+      # during a rolling drain, so version bumps must be explicit. With max_size=2
+      # the MNG rolling update surges a fresh node before draining the old (the
+      # landing spot for the evicted stateful singles), and force_update_version
+      # lets the drain proceed past the zero-disruption PDBs
+      # (mtr-pg-primary ALLOWED=0, single-replica authentik-postgresql, Grafana
+      # minAvailable=1 with both replicas co-located). See repo CLAUDE.md gotcha
+      # #14: AMI bumps are the case where rolling IS intended; pair with force.
+      ami_release_version            = "1.35.5-20260520"
       use_latest_ami_release_version = false
+      force_update_version           = true
       # Tier taxonomy: `workload.percona.com/tier=obs-state`. Legacy
       # `workload=prometheus` / `node-role=stateful` keys + taint were
       # dropped after consumers (Grafana, Authentik) migrated to the
