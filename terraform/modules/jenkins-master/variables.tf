@@ -184,7 +184,13 @@ variable "plugin_install_hook" {
 }
 
 variable "init_groovy_hooks" {
-  description = "init.groovy.d files fetched at boot, as a map of filename => pinned raw URL. Makes the master's wiring declarative and self-heals a fresh-volume rebuild (closes the bootstrap gap where only the carried-forward EBS held the files). `jenkins iac deploy` stays the no-restart hot-reload path for live edits between boots. Pin refs to commits/tags, never floating branches, so a boot cannot pull unreviewed HEAD. Empty skips."
+  description = "init.groovy.d files fetched at boot, as a map of filename => pinned raw URL. Makes the master's wiring declarative and self-heals a fresh-volume rebuild (closes the bootstrap gap where only the carried-forward EBS held the files). `jenkins iac deploy` stays the no-restart hot-reload path for live edits between boots. Pin refs to commits/tags, never floating branches, so a boot cannot pull unreviewed HEAD. Empty skips. Kept for masters not yet moved to `init_groovy_files`."
+  type        = map(string)
+  default     = {}
+}
+
+variable "init_groovy_files" {
+  description = "init.groovy.d files delivered via a module-created, per-master regional S3 bucket, as a map of filename => FILE CONTENT (the root passes file(...)). Supersedes init_groovy_hooks for masters where the repo is the source of truth: Terraform creates `<short_name>-init-config` (private, versioned), uploads each file as an s3 object keyed `init.groovy.d/<filename>`, grants the master role s3:GetObject + s3:ListBucket on it, and the boot path `aws s3 cp`s each file into /mnt/$JENKINS_HOST/init.groovy.d/. The upload runs with Terraform's AWS creds, not the master's. Co-located in the master's region so it transits the existing S3 gateway VPC endpoint (no NAT egress). A failed fetch warns but never blocks boot. `jenkins iac deploy` stays the no-restart hot-reload path for live edits between boots. Empty skips."
   type        = map(string)
   default     = {}
 }

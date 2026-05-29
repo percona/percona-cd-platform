@@ -16,23 +16,6 @@
 # Graviton ARM EC2 Fleet fallback (PS-11179). EIP/Route53 stay TRUE through
 # the cutover and flip to false at the Window-1 DNS step.
 
-locals {
-  # PS-11173/PS-11179: ps80's init.groovy.d wiring is fetched at boot from a
-  # pinned jenkins-pipelines ref, so a fresh-volume rebuild re-materializes the
-  # full posture (durability/MAX_SURVIVABILITY, hetznerArmHealth flag,
-  # EC2FleetCloud fallback, cloud/matrix) instead of relying on the
-  # carried-forward EBS volume. Pin to an immutable commit, never floating master.
-  #
-  # Pinned to the tip of jenkins-pipelines PR 4134 (PS-11179-ps80-fleet-codify).
-  # raw.githubusercontent.com serves any pushed commit, merged or not, so all 5
-  # files resolve at this SHA today (cloud, durability, hetznerArmHealth, matrix,
-  # ec2FleetCloud) -- durability.groovy is also already on master via PR 4129, and
-  # this commit branched from master so it carries it too. Re-pin to the 4134
-  # merge commit once it lands (cosmetic; same file contents).
-  ps80_init_groovy_ref  = "32769d75b33432bfb4385f365cad286f90b9a5ee"
-  ps80_init_groovy_base = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/${local.ps80_init_groovy_ref}/IaC/ps80.cd/init.groovy.d"
-}
-
 module "ps80" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.us-west-2 }
@@ -93,18 +76,17 @@ module "ps80" {
     "vadim.yalovets",
   ]
 
-  # PS-11173/PS-11179: declarative init.groovy.d wiring fetched at boot (refs
-  # in the locals above). Mirrors ps3's map; self-heals a fresh-volume rebuild.
-  # `jenkins iac deploy` stays the no-restart hot-reload path between boots.
-  init_groovy_hooks = {
-    "cloud.groovy"            = "${local.ps80_init_groovy_base}/cloud.groovy"
-    "matrix.groovy"           = "${local.ps80_init_groovy_base}/matrix.groovy"
-    "durability.groovy"       = "${local.ps80_init_groovy_base}/durability.groovy"
-    "hetznerArmHealth.groovy" = "${local.ps80_init_groovy_base}/hetznerArmHealth.groovy"
-    "ec2FleetCloud.groovy"    = "${local.ps80_init_groovy_base}/ec2FleetCloud.groovy"
-    # htz.cloud.groovy lives on the `hetzner` IaC branch (two-branch split);
-    # pin to a hetzner-branch commit before relying on it for fresh-volume DR.
-    "htz.cloud.groovy" = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/hetzner/IaC/ps80.cd/init.groovy.d/htz.cloud.groovy"
+  # PS-11173/PS-11179: declarative init.groovy.d wiring delivered via the
+  # module-created S3 bucket (jenkins-ps80-init-config). The repo is now the
+  # source of truth: each file under resources/jenkins-masters/ps80/init.groovy.d/
+  # is uploaded by Terraform and pulled at boot, self-healing a fresh-volume
+  # rebuild. Content was moved byte-identically off Percona-Lab/jenkins-pipelines
+  # (PR 4134 tip for cloud/matrix/durability/hetznerArmHealth/ec2FleetCloud, the
+  # hetzner branch for htz.cloud.groovy). `jenkins iac deploy` stays the
+  # no-restart hot-reload path between boots.
+  init_groovy_files = {
+    for f in fileset("${path.module}/resources/jenkins-masters/ps80/init.groovy.d", "*.groovy") :
+    f => file("${path.module}/resources/jenkins-masters/ps80/init.groovy.d/${f}")
   }
 }
 
