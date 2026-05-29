@@ -29,8 +29,9 @@ variable "ami_id" {
 }
 
 variable "spot_instance_types" {
-  description = "Instance types for the SpotFleet Overrides."
+  description = "Instance types for the SpotFleet Overrides. Only consulted when purchasing_option = \"spot\"; pass [] for on-demand masters."
   type        = list(string)
+  default     = []
 }
 
 variable "ssh_key_engineers" {
@@ -182,8 +183,36 @@ variable "plugin_install_hook" {
   default     = null
 }
 
+variable "init_groovy_hooks" {
+  description = "init.groovy.d files fetched at boot, as a map of filename => pinned raw URL. Makes the master's wiring declarative and self-heals a fresh-volume rebuild (closes the bootstrap gap where only the carried-forward EBS held the files). `jenkins iac deploy` stays the no-restart hot-reload path for live edits between boots. Pin refs to commits/tags, never floating branches, so a boot cannot pull unreviewed HEAD. Empty skips."
+  type        = map(string)
+  default     = {}
+}
+
 variable "tags" {
   description = "Per-master tag overrides merged on top of provider default_tags."
   type        = map(string)
   default     = {}
+}
+
+variable "purchasing_option" {
+  description = "Master purchasing model. \"spot\" uses the SpotFleet path (default; preserves ps3 behaviour). \"on-demand\" provisions a single aws_instance and skips the SpotFleet path, for masters where reclaim-immunity justifies the cost premium (ps80 first)."
+  type        = string
+  default     = "spot"
+  validation {
+    condition     = contains(["spot", "on-demand"], var.purchasing_option)
+    error_message = "purchasing_option must be \"spot\" or \"on-demand\"."
+  }
+}
+
+variable "on_demand_instance_type" {
+  description = "Instance type for the on-demand master. Only consulted when purchasing_option = \"on-demand\". Default sized for the observed master CPU footprint (p95 < 2% on 4 vCPU)."
+  type        = string
+  default     = "c7i-flex.large"
+}
+
+variable "launch_template_name" {
+  description = "Override the master launch template name. null derives `<SHORT>MasterTemplate` (preserves ps3). Set a distinct value where a same-named CFN launch template must coexist during a CFN->TF cutover (ps80's CFN JMasterTemplate is literally `PS80MasterTemplate`)."
+  type        = string
+  default     = null
 }

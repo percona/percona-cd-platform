@@ -39,8 +39,13 @@ output "worker_iam_role_arn" {
 }
 
 output "spot_fleet_request_id" {
-  description = "SpotFleet request ID maintaining the master."
-  value       = aws_spot_fleet_request.master.id
+  description = "SpotFleet request ID maintaining the master. null when purchasing_option = \"on-demand\"."
+  value       = var.purchasing_option == "spot" ? aws_spot_fleet_request.master[0].id : null
+}
+
+output "master_instance_id" {
+  description = "Master EC2 instance ID when purchasing_option = \"on-demand\". null otherwise."
+  value       = var.purchasing_option == "on-demand" ? aws_instance.master[0].id : null
 }
 
 output "termination_queue_arn" {

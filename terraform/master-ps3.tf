@@ -10,6 +10,20 @@
 # userdata's setup_aws() associates it; release is deferred until the
 # userdata is updated to drop EIP association (Phase 3 follow-up).
 
+locals {
+  # PS-11173/PS-11179: ps3's init.groovy.d wiring is fetched at boot from a
+  # pinned jenkins-pipelines ref, so a fresh-volume rebuild re-materializes the
+  # full posture (durability/MAX_SURVIVABILITY, hetznerArmHealth flag,
+  # EC2FleetCloud fallback, cloud/matrix) instead of relying on the
+  # carried-forward EBS volume. Pin to a commit, never floating master.
+  # TODO: set ps3_init_groovy_ref to the merge commit of jenkins-pipelines
+  # PR 4126 + PR 4129 once both land; until then durability.groovy and
+  # ec2FleetCloud.groovy are absent on master and the boot loop warns
+  # (without blocking) for those two.
+  ps3_init_groovy_ref  = "master"
+  ps3_init_groovy_base = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/${local.ps3_init_groovy_ref}/IaC/ps3.cd/init.groovy.d"
+}
+
 module "ps3" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.eu-west-1 }
@@ -62,6 +76,20 @@ module "ps3" {
     "talha.rizwan",
     "vadim.yalovets",
   ]
+
+  # PS-11173/PS-11179: declarative init.groovy.d wiring fetched at boot (refs
+  # in the locals above). Self-heals a fresh-volume rebuild; `jenkins iac
+  # deploy` stays the no-restart hot-reload path for live edits between boots.
+  init_groovy_hooks = {
+    "cloud.groovy"            = "${local.ps3_init_groovy_base}/cloud.groovy"
+    "matrix.groovy"           = "${local.ps3_init_groovy_base}/matrix.groovy"
+    "durability.groovy"       = "${local.ps3_init_groovy_base}/durability.groovy"
+    "hetznerArmHealth.groovy" = "${local.ps3_init_groovy_base}/hetznerArmHealth.groovy"
+    "ec2FleetCloud.groovy"    = "${local.ps3_init_groovy_base}/ec2FleetCloud.groovy"
+    # htz.cloud.groovy lives on the `hetzner` IaC branch (two-branch split);
+    # pin to a hetzner-branch commit before relying on it for fresh-volume DR.
+    "htz.cloud.groovy" = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/hetzner/IaC/ps3.cd/init.groovy.d/htz.cloud.groovy"
+  }
 }
 
 # PS-11179: ARM Graviton spot fleet for the ec2-fleet plugin -- the
