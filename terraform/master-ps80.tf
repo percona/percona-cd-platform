@@ -21,12 +21,15 @@ locals {
   # pinned jenkins-pipelines ref, so a fresh-volume rebuild re-materializes the
   # full posture (durability/MAX_SURVIVABILITY, hetznerArmHealth flag,
   # EC2FleetCloud fallback, cloud/matrix) instead of relying on the
-  # carried-forward EBS volume. Pin to a commit, never floating master.
-  # TODO: set ps80_init_groovy_ref to the merge commit of jenkins-pipelines
-  # PR 4129 (durability fan-out) + the ps80 ec2FleetCloud PR once both land;
-  # until then durability.groovy and ec2FleetCloud.groovy are absent on master
-  # and the boot loop warns (without blocking) for those two.
-  ps80_init_groovy_ref  = "master"
+  # carried-forward EBS volume. Pin to an immutable commit, never floating master.
+  #
+  # Pinned to the tip of jenkins-pipelines PR 4134 (PS-11179-ps80-fleet-codify).
+  # raw.githubusercontent.com serves any pushed commit, merged or not, so all 5
+  # files resolve at this SHA today (cloud, durability, hetznerArmHealth, matrix,
+  # ec2FleetCloud) -- durability.groovy is also already on master via PR 4129, and
+  # this commit branched from master so it carries it too. Re-pin to the 4134
+  # merge commit once it lands (cosmetic; same file contents).
+  ps80_init_groovy_ref  = "86fe876ec8bba1648b8a60d7dae14c2bdba606b9"
   ps80_init_groovy_base = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/${local.ps80_init_groovy_ref}/IaC/ps80.cd/init.groovy.d"
 }
 
