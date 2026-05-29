@@ -29,7 +29,7 @@ locals {
   # ec2FleetCloud) -- durability.groovy is also already on master via PR 4129, and
   # this commit branched from master so it carries it too. Re-pin to the 4134
   # merge commit once it lands (cosmetic; same file contents).
-  ps80_init_groovy_ref  = "86fe876ec8bba1648b8a60d7dae14c2bdba606b9"
+  ps80_init_groovy_ref  = "32769d75b33432bfb4385f365cad286f90b9a5ee"
   ps80_init_groovy_base = "https://raw.githubusercontent.com/Percona-Lab/jenkins-pipelines/${local.ps80_init_groovy_ref}/IaC/ps80.cd/init.groovy.d"
 }
 
