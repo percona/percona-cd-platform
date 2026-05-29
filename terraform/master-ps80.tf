@@ -40,11 +40,12 @@ module "ps80" {
   # order-independent of delete-stack). The instance references the LT by ID.
   launch_template_name = "PS80MasterTemplateTF"
 
-  # Window-1 DNS step (done 2026-05-29): ALB path smoke-tested (HTTP 200 +
-  # x-jenkins via --resolve), so create_route53_record flips to false and
-  # external-dns owns ps80.cd.percona.com -> ALB. create_eip stays true: the
-  # master keeps the EIP for egress (it is no longer the DNS target).
-  create_eip            = true
+  # EKS-fronted, so no public ingress need: DNS is external-dns -> ALB ->
+  # private IP over peering, admin is paws/SSM. The master is EIP-less like
+  # ps3: outbound (Hetzner + AWS APIs) rides the auto-assigned public IP from
+  # the public subnet's MapPublicIpOnLaunch=true + 0.0.0.0/0 -> IGW. Releasing
+  # the EIP needs the instance replaced so it picks up an auto-assigned IP.
+  create_eip            = false
   create_route53_record = false
 
   extra_master_managed_policies = [
@@ -85,8 +86,8 @@ module "ps80" {
   # hetzner branch for htz.cloud.groovy). `jenkins iac deploy` stays the
   # no-restart hot-reload path between boots.
   init_groovy_files = {
-    for f in fileset("${path.module}/resources/jenkins-masters/ps80/init.groovy.d", "*.groovy") :
-    f => file("${path.module}/resources/jenkins-masters/ps80/init.groovy.d/${f}")
+    for f in fileset("${path.module}/../resources/jenkins-masters/ps80/init.groovy.d", "*.groovy") :
+    f => file("${path.module}/../resources/jenkins-masters/ps80/init.groovy.d/${f}")
   }
 }
 
