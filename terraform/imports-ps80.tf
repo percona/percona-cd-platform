@@ -123,12 +123,8 @@ import {
   to = module.ps80.aws_eip.master[0]
 }
 
-# Route53 import ID format: <zone_id>_<name>_<type>.
-# Zone `cd.percona.com` => Z1H0AFAU7N8IMC.
-import {
-  id = "Z1H0AFAU7N8IMC_ps80.cd.percona.com_A"
-  to = module.ps80.aws_route53_record.master[0]
-}
+# Route53 A record (ps80.cd -> EIP) intentionally NOT imported/managed:
+# create_route53_record=false retires it so external-dns owns ps80.cd -> ALB.
 
 # ---------------------------------------------------------------------------
 # Data volume

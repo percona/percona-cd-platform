@@ -57,11 +57,12 @@ module "ps80" {
   # order-independent of delete-stack). The instance references the LT by ID.
   launch_template_name = "PS80MasterTemplateTF"
 
-  # EIP + Route53 record stay through the cutover so DNS does not flip while
-  # the master swaps. The Window-1 DNS step flips both to false once the ALB
-  # path is smoke-tested (external-dns then owns ps80.cd.percona.com -> ALB).
+  # Window-1 DNS step (done 2026-05-29): ALB path smoke-tested (HTTP 200 +
+  # x-jenkins via --resolve), so create_route53_record flips to false and
+  # external-dns owns ps80.cd.percona.com -> ALB. create_eip stays true: the
+  # master keeps the EIP for egress (it is no longer the DNS target).
   create_eip            = true
-  create_route53_record = true
+  create_route53_record = false
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
@@ -84,7 +85,6 @@ module "ps80" {
   ssh_key_engineers = [
     "anderson.nogueira",
     "alex.miroshnychenko",
-    "andrew.siemen",
     "eduardo.casarero",
     "evgeniy.patlan",
     "santiago.ruiz",
