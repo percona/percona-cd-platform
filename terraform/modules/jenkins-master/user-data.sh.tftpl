@@ -273,6 +273,23 @@ install_init_groovy_hooks() {
 }
 %{ endif ~}
 
+%{ if init_groovy_s3_bucket != "" ~}
+install_init_groovy_files() {
+    # Declarative init.groovy.d wiring pulled from the module-created S3
+    # bucket at boot. The repo is the source of truth (objects are uploaded
+    # by Terraform), so a fresh-volume rebuild re-materializes the master's
+    # full wiring set instead of relying on the carried-forward EBS data
+    # volume. Transits the S3 gateway VPC endpoint (same-region bucket). A
+    # failed fetch warns but never blocks boot. `jenkins iac deploy` remains
+    # the no-restart hot-reload path for live edits.
+%{ for fname in init_groovy_files ~}
+    aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/${fname}" "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" --region "$INSTANCE_REGION" \
+        && chown jenkins:jenkins "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" \
+        || echo "WARN: failed to fetch init.groovy.d/${fname} from s3://${init_groovy_s3_bucket}"
+%{ endfor ~}
+}
+%{ endif ~}
+
 main() {
     setup_aws
     setup_ssh_keys
@@ -283,6 +300,9 @@ main() {
 %{ endif ~}
 %{ if length(init_groovy_hooks) > 0 ~}
     install_init_groovy_hooks
+%{ endif ~}
+%{ if init_groovy_s3_bucket != "" ~}
+    install_init_groovy_files
 %{ endif ~}
     start_jenkins
 %{ if master_profile == "eks_observability" ~}

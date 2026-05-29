@@ -113,6 +113,49 @@ data "aws_iam_policy_document" "s3_endpoint" {
   }
 }
 
+# init.groovy.d delivery bucket (opt-in via var.init_groovy_files). One
+# private, versioned bucket per master, co-located in the master's region so
+# the boot-time `aws s3 cp` transits the existing S3 gateway VPC endpoint
+# (aws_vpc_endpoint.s3) rather than NAT egress. Terraform uploads the objects
+# with the operator's creds; the master role only gets read (see the
+# InitGroovyConfig statement on data.aws_iam_policy_document.master below).
+resource "aws_s3_bucket" "init_config" {
+  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  bucket = "${var.short_name}-init-config"
+
+  tags = local.base_tags
+}
+
+resource "aws_s3_bucket_versioning" "init_config" {
+  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  bucket = aws_s3_bucket.init_config[0].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "init_config" {
+  count                   = length(var.init_groovy_files) > 0 ? 1 : 0
+  bucket                  = aws_s3_bucket.init_config[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# etag = md5(content) so a content change re-uploads the object. Key mirrors
+# the on-disk layout the boot path writes to (init.groovy.d/<filename>).
+resource "aws_s3_object" "init_config" {
+  for_each = var.init_groovy_files
+
+  bucket  = aws_s3_bucket.init_config[0].id
+  key     = "init.groovy.d/${each.key}"
+  content = each.value
+  etag    = md5(each.value)
+
+  tags = local.base_tags
+}
+
 resource "aws_security_group" "ssh" {
   name        = "SSH"
   description = "SSH traffic in"
@@ -345,6 +388,24 @@ data "aws_iam_policy_document" "master_read_termination_sqs" {
   }
 }
 
+# Read-only access to the init.groovy.d delivery bucket. Only the boot-time
+# `aws s3 cp` consumes this; the upload is done by Terraform, not the master.
+data "aws_iam_policy_document" "master_init_config" {
+  count = length(var.init_groovy_files) > 0 ? 1 : 0
+  statement {
+    sid    = "InitGroovyConfig"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      aws_s3_bucket.init_config[0].arn,
+      "${aws_s3_bucket.init_config[0].arn}/*",
+    ]
+  }
+}
+
 resource "aws_iam_role_policy" "master_start_instances" {
   name   = "StartInstances"
   role   = aws_iam_role.master.id
@@ -368,6 +429,13 @@ resource "aws_iam_role_policy" "master_read_termination_sqs" {
   name   = "ReadTerminationSQS"
   role   = aws_iam_role.master.id
   policy = data.aws_iam_policy_document.master_read_termination_sqs[0].json
+}
+
+resource "aws_iam_role_policy" "master_init_config" {
+  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  name   = "InitGroovyConfig"
+  role   = aws_iam_role.master.id
+  policy = data.aws_iam_policy_document.master_init_config[0].json
 }
 
 resource "aws_iam_role_policy" "master_extras" {
@@ -526,6 +594,8 @@ locals {
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
     init_groovy_hooks       = var.init_groovy_hooks
+    init_groovy_s3_bucket   = length(var.init_groovy_files) > 0 ? aws_s3_bucket.init_config[0].id : ""
+    init_groovy_files       = keys(var.init_groovy_files)
   })
 }
 
