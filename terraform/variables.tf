@@ -150,10 +150,10 @@ variable "jenkins_hosts" {
     # `origin-<host>.cd.percona.com` keeps pointing at the EC2 master so
     # the proxy upstream stays reachable through cutover.
     pmm  = { mode = "proxy", upstream_origin = "origin-pmm.cd.percona.com" }
-    ps80 = { mode = "proxy", upstream_origin = "origin-ps80.cd.percona.com" }
-    # ps3 upstream is discovered by the in-cluster jenkins-endpoint-reconciler
-    # (EndpointSlice), not an origin-<host> record. Re-add upstream_origin only
-    # for a Mode B fallback (see runbooks/migrate-ps3-to-eks.md).
+    # ps80 + ps3 upstreams are discovered by the in-cluster jenkins-endpoint-
+    # reconciler (EndpointSlice over cross-region peering), not an origin-<host>
+    # record. Re-add upstream_origin only for a Mode B fallback.
+    ps80  = { mode = "proxy" }
     ps3   = { mode = "proxy" }
     pxc   = { mode = "proxy", upstream_origin = "origin-pxc.cd.percona.com" }
     pxb   = { mode = "proxy", upstream_origin = "origin-pxb.cd.percona.com" }

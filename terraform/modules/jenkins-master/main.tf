@@ -530,7 +530,7 @@ locals {
 }
 
 resource "aws_launch_template" "master" {
-  name = "${upper(replace(var.short_name, "jenkins-", ""))}MasterTemplate"
+  name = var.launch_template_name != null ? var.launch_template_name : "${upper(replace(var.short_name, "jenkins-", ""))}MasterTemplate"
 
   image_id      = var.ami_id
   key_name      = var.master_key_name

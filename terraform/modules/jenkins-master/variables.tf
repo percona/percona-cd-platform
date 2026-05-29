@@ -210,3 +210,9 @@ variable "on_demand_instance_type" {
   type        = string
   default     = "c7i-flex.large"
 }
+
+variable "launch_template_name" {
+  description = "Override the master launch template name. null derives `<SHORT>MasterTemplate` (preserves ps3). Set a distinct value where a same-named CFN launch template must coexist during a CFN->TF cutover (ps80's CFN JMasterTemplate is literally `PS80MasterTemplate`)."
+  type        = string
+  default     = null
+}
