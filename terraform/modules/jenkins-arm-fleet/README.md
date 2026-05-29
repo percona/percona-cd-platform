@@ -18,9 +18,12 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
   (m8g/m7g/m6g.2xlarge). A single type scores ~3 on the Spot Placement Score;
   the diversified pool scores ~9. capacity-optimized is the only strategy AWS
   documents as aligned with the measured SPS, and it is AWS's pick for CI.
-- **Terraform owns the pool shape; the plugin owns `DesiredCapacity`.** Hence
-  `lifecycle { ignore_changes = [desired_capacity] }`; `min_size`/`max_size`
-  stay Terraform-managed guardrails (deliberately NOT ignored).
+- **Terraform owns the pool shape; the plugin owns `DesiredCapacity` and
+  `protect_from_scale_in`.** The ec2-fleet plugin sets `protect_from_scale_in=true`
+  at runtime so it (not ASG scale-in) controls termination, so a full apply would
+  otherwise show `protect_from_scale_in true->false` churn. Hence
+  `lifecycle { ignore_changes = [desired_capacity, protect_from_scale_in] }`;
+  `min_size`/`max_size` stay Terraform-managed guardrails (deliberately NOT ignored).
 - **Tickets are a tag, not a name.** Resource names are `${short_name}-arm-*`;
   provenance lives in the `tickets` tag (comma-separated for multiple).
 - **Cleanup-safe.** Workers carry `iit-billing-tag = short_name` so cleanup
