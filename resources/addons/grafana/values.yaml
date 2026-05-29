@@ -7,8 +7,14 @@
 #   2. Datasources for the full LGTM stack: Mimir (metrics), Loki (logs),
 #      Tempo (traces), and the in-cluster Prometheus agent for transitional
 #      scrape visibility.
-#   3. HA topology (replicas=2) with sticky-session ALB target groups so
-#      session affinity holds during the OIDC round-trip.
+#   3. Single replica with a Recreate rollout. Grafana persists to one
+#      ReadWriteOnce EBS PVC, so two replicas can only ever co-locate on one
+#      node and a node roll deadlocks on Multi-Attach (the surge pod on the new
+#      node cannot attach the volume still held by the draining pod). replicas=1
+#      + Recreate makes the old pod release the volume before the new one binds.
+#      Sticky-session ALB target groups still hold session affinity for the
+#      OIDC round-trip. HA needs a shared RWX (EFS) volume or a stateless
+#      (DB-backed) Grafana first; tracked separately.
 #
 # History: original wiring was direct SAML to Duo (HD-30780). Grafana OSS
 # does not ship SAML — it's an Enterprise-only feature. The OSS image
@@ -27,7 +33,17 @@ ingress:
   hosts: []
 
 grafana:
-  replicas: 2
+  # Single replica: the persistence PVC below is ReadWriteOnce, so HA replicas
+  # deadlock on Multi-Attach during a node roll. See header note 3.
+  replicas: 1
+
+  # Recreate (not the chart-default RollingUpdate): with one RWO PVC the
+  # rolling surge pod would try to attach a volume the old pod still holds and
+  # hang on Multi-Attach. Recreate terminates the old pod (releasing the
+  # volume) before starting the new one. Brief Grafana gap on each rollout,
+  # which is acceptable (data lives in datasources, not Grafana).
+  deploymentStrategy:
+    type: Recreate
 
   # Pin both chart + image to the same Grafana version. Chart 10.5.15
   # ships appVersion=12.3.1; without an explicit pin Helm renders
@@ -41,11 +57,13 @@ grafana:
     repository: grafana/grafana
     tag: "12.3.1"
 
-  # Robustness: not cluster-critical (data lives in datasources, not Grafana
-  # itself), but PDB so node drain doesn't kill both replicas at once.
+  # Not cluster-critical (data lives in datasources, not Grafana itself).
+  # With a single replica, maxUnavailable=1 lets a node drain evict the one
+  # pod gracefully; minAvailable=1 would block every voluntary eviction and
+  # force every node roll to fall back to force_update_version.
   priorityClassName: platform-default
   podDisruptionBudget:
-    minAvailable: 1
+    maxUnavailable: 1
 
   # Pin to the prometheus_system MNG via the canonical tier key.
   nodeSelector:
