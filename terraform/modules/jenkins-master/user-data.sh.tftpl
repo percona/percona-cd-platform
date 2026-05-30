@@ -72,6 +72,13 @@ install_software() {
     sed -i 's/apply_updates = no/apply_updates = yes/'         /etc/dnf/automatic.conf
     echo "exclude=java-17-amazon-corretto* jenkins*" >> /etc/dnf/automatic.conf
     systemctl enable --now dnf-automatic.timer
+
+    # amazon-ssm-agent ships preinstalled on STANDARD AL2023 but NOT on the
+    # minimal AMI (amis.tf sources al2023-ami-minimal). Install + enable it so
+    # the master is SSM-managed: EKS-fronted masters are administered via
+    # paws/SSM (no inbound SSH), and SSM is the only OS access path.
+    yum -y install amazon-ssm-agent
+    systemctl enable --now amazon-ssm-agent
 }
 
 volume_state() {
