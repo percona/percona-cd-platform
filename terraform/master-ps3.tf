@@ -54,7 +54,6 @@ module "ps3" {
   ssh_key_engineers = [
     "anderson.nogueira",
     "alex.miroshnychenko",
-    "andrew.siemen",
     "eduardo.casarero",
     "evgeniy.patlan",
     "santiago.ruiz",
