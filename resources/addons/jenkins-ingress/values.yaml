@@ -76,6 +76,13 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pxb.cd.percona.com
+  - name: pxc
+    # EndpointSlice kept in sync with the live pxc master private IP by the
+    # jenkins-endpoint-reconciler over the us-west-1 <-> us-east-1 peering.
+    upstream: jenkins-pxc.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: pxc.cd.percona.com
 
 ingress:
   # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`

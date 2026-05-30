@@ -37,3 +37,8 @@ data "aws_ssm_parameter" "al2023_minimal_euc1" { # eu-central-1: ps57 (pg later)
   provider = aws.eu-central-1
   name     = local.al2023_minimal_param
 }
+
+data "aws_ssm_parameter" "al2023_minimal_usw1" { # us-west-1: pxc
+  provider = aws.us-west-1
+  name     = local.al2023_minimal_param
+}
