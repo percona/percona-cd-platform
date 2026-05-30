@@ -17,7 +17,7 @@ module "ps3" {
   hostname                = "ps3.cd.percona.com"
   short_name              = "jenkins-ps3"
   vpc_cidr                = "10.181.0.0/22"
-  ami_id                  = "ami-0c27e7b62088f2235" # Amazon Linux 2023 in eu-west-1 (matches CF Mapping)
+  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   spot_instance_types     = ["c7i-flex.xlarge", "m7i-flex.xlarge", "c5a.xlarge", "c5d.xlarge"]
   spot_price              = "0.17"
   master_profile          = "eks_observability"

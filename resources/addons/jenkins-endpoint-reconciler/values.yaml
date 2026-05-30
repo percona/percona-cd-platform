@@ -42,6 +42,10 @@ hosts:
     region: eu-central-1
     tag: jenkins-ps57
     port: 8080
+  - name: pxb
+    region: us-west-2
+    tag: jenkins-pxb
+    port: 8080
 
 resources:
   requests:
