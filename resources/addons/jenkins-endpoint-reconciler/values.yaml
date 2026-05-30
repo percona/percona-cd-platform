@@ -38,6 +38,10 @@ hosts:
     region: us-west-2
     tag: jenkins-ps80
     port: 8080
+  - name: ps57
+    region: eu-central-1
+    tag: jenkins-ps57
+    port: 8080
 
 resources:
   requests:
