@@ -23,7 +23,7 @@ module "ps80" {
   hostname                = "ps80.cd.percona.com"
   short_name              = "jenkins-ps80"
   vpc_cidr                = "10.155.0.0/22"
-  ami_id                  = "ami-06a974f9b8a97ecf2" # Amazon Linux 2023 in us-west-2
+  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
   cache_bucket_name       = "ps-build-cache"
