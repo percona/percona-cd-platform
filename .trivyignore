@@ -36,3 +36,14 @@ AVD-AWS-0164
 # tunnel or bastion host inside the VPC for every operator session. Out of
 # scope for v1; revisit when the operator workflow can absorb that cost.
 AWS-0040
+
+# AWS-0132 — Bucket does not encrypt data with a customer managed key (CMK).
+# Triggered on `terraform/modules/jenkins-master/aws_s3_bucket.init_config`
+# (the per-master jenkins-<inst>-init-config bucket). The bucket holds only
+# init.groovy.d scripts that are PUBLIC in this repo (no secrets), and is
+# already SSE-S3 (AES256) encrypted by default, public-access-blocked,
+# versioned, and IAM-read-scoped to the master role. A customer-managed KMS
+# key (per-region CMK + key-policy + rotation management for 4 masters) is
+# disproportionate for non-sensitive, already-public content. Re-evaluate if
+# the bucket ever carries secret material.
+AVD-AWS-0132
