@@ -10,6 +10,9 @@
 #      coredns / ebs-csi controller placement in terraform/eks-addons.tf:50,76
 #      (the system NodeGroup). Without it the controller can schedule onto a
 #      Karpenter/data node and churn on scale-down.
+#   3. tolerations for CriticalAddonsOnly=true:NoSchedule, the taint the
+#      bootstrap NodeGroup carries (same as coredns / ebs-csi). Without it the
+#      nodeSelector lands on a tainted node the pod cannot tolerate -> Pending.
 # replicas:2 + leader-election are upstream defaults (one active, one standby).
 
 ---
@@ -41,6 +44,9 @@ spec:
       serviceAccountName: snapshot-controller
       nodeSelector:
         workload.percona.com/tier: bootstrap
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
       containers:
         - name: snapshot-controller
           image: registry.k8s.io/sig-storage/snapshot-controller:v8.5.0
