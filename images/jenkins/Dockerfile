@@ -9,6 +9,10 @@ FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:d28f21fc6daeb6c928556324a84b0548f1
 # Skip the setup wizard (configuration comes from the persistent volume)
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 
+# Run pipes under bash with -o pipefail so a failure in a piped RUN (the
+# effective-list generation below) is not masked by the pipe (hadolint DL4006).
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Community plugins from the manifest. --latest=false makes resolution
 # deterministic (use exactly the pinned versions; do not silently upgrade
 # transitive deps to "latest"). --verbose for build-log auditability.
@@ -18,14 +22,16 @@ RUN jenkins-plugin-cli \
       --latest=false \
       --verbose \
  && cp /usr/share/jenkins/ref/plugins.txt /usr/share/jenkins/ref/plugins.txt.effective \
- && ls -1 /usr/share/jenkins/ref/plugins/ | sed 's/\.jpi$//' \
-      > /usr/share/jenkins/ref/plugins.effective.txt
+ && find /usr/share/jenkins/ref/plugins/ -maxdepth 1 -name '*.jpi' -printf '%f\n' \
+      | sed 's/\.jpi$//' | sort > /usr/share/jenkins/ref/plugins.effective.txt
 
 # Custom Percona plugin forks (override update-center versions). Layered AFTER
-# the CLI step so these .hpi win. Staged by fetch-hpis.sh (SHA-verified against
-# percona-plugins.lock.json) BEFORE the build; the dir is committed (with a
-# .gitkeep) so the COPY glob is never zero-file.
-COPY percona-plugins/*.hpi /usr/share/jenkins/ref/plugins/
+# the CLI step so these win. Staged by fetch-hpis.sh as <id>.jpi (SHA-verified
+# against percona-plugins.lock.json) BEFORE the build; the dir is committed
+# (with a .gitkeep) so the COPY glob is never zero-file. Forks MUST be .jpi (not
+# .hpi): the ref-dir seeder only version-matches *.jpi and core prefers a .jpi
+# over a same-named .hpi, so a .hpi fork would lose to a restored PVC copy.
+COPY percona-plugins/*.jpi /usr/share/jenkins/ref/plugins/
 
 # init.groovy.d (persistent + one-time groovy). Present in the tree today but
 # never COPYed -> add it so the baked image carries the boot hooks.
@@ -34,6 +40,6 @@ COPY groovy/ /usr/share/jenkins/ref/init.groovy.d/
 # Reconciliation markers: force the BAKED plugin set to win over a PVC-restored
 # JENKINS_HOME. See README.md (.override decision). Generated from the effective
 # list so it always matches what was actually installed.
-RUN for plugin in /usr/share/jenkins/ref/plugins/*.jpi /usr/share/jenkins/ref/plugins/*.hpi; do \
+RUN for plugin in /usr/share/jenkins/ref/plugins/*.jpi; do \
       if [ -e "$plugin" ]; then touch "$plugin.override"; fi; \
     done

@@ -44,13 +44,14 @@ for i in $(seq 0 $((count - 1))); do
     exit 1
   fi
 
-  # Stage as <id>.hpi (the plugin short-name), NOT the versioned release-asset
-  # name: Jenkins derives the plugin id from the ref-dir filename, so the file
-  # MUST be <short-name>.hpi for the COPY into /usr/share/jenkins/ref/plugins
-  # and the .override markers to bind to the correct plugin. "filename" stays in
-  # the lock only as the remote asset name embedded in "url".
-  mv "$tmp" "$DEST/$id.hpi"
-  echo "  ok   $id.hpi (from $filename, $got)"
+  # Stage as <id>.jpi (the plugin short-name with the .jpi extension). Jenkins'
+  # ref-dir seeder (jenkins-support copy_reference_file) only version-matches
+  # plugins/*.jpi, and core prefers a .jpi over a same-named .hpi -- so a fork
+  # staged as .hpi would NOT override a restored JENKINS_HOME's existing
+  # <id>.jpi, silently defeating the bake. "filename" stays in the lock only as
+  # the remote .hpi release-asset name embedded in "url".
+  mv "$tmp" "$DEST/$id.jpi"
+  echo "  ok   $id.jpi (from $filename, $got)"
 done
 
 echo "All fork HPIs fetched + verified into $DEST/"

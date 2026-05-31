@@ -1,5 +1,6 @@
 # Jenkins plugin binaries (fetched from GitHub Releases by fetch-hpis.sh at
-# image-build time; never commit the binaries themselves).
+# image-build time, staged as <id>.jpi; never commit the binaries themselves).
+images/jenkins/percona-plugins/*.jpi
 images/jenkins/percona-plugins/*.hpi
 !images/jenkins/percona-plugins/.gitkeep
 
