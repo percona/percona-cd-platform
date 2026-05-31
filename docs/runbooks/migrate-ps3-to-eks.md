@@ -1,116 +1,169 @@
-# Migrate ps3 to EKS
+# Migrate a Jenkins master to EKS (ps3 = the reference / testbed)
 
-End state: `ps3-k8s.cd.percona.com` runs the production ps3 Jenkins master
-in-cluster, seeded as a full replica from EC2 ps3's `JENKINS_HOME` volume.
-Production traffic at `ps3.cd.percona.com` only flips after the in-cluster
-replica is validated.
+`ps3` is the **first** master moved in-cluster and the **permanent testbed** for
+migrating the rest. This runbook is the validated recipe (not a plan): it records
+exactly what worked and the gotchas that bite, so the next master is mechanical.
 
-## Phases
+End state: the in-cluster controller boots from the master's **real**
+`JENKINS_HOME` (restored from an app-consistent EBS snapshot) and serves the real
+host (`ps3.cd.percona.com`) over the shared `jenkins-masters` ALB. The EC2 master
+is **fenced, not destroyed** (single-writer), kept as a one-command rollback.
 
-1. **Snapshot + replicate** — point-in-time copy of EC2 ps3's
-   `JENKINS_HOME` EBS volume to `us-east-1a`, restored as the
-   `gp3-jenkins-1a-retain` PVC backing the in-cluster StatefulSet.
-2. **Run in parallel** — `ps3-k8s.cd.percona.com` boots with the same
-   jobs / plugins / credentials / build history as the EC2 ps3.
-   Production traffic continues to `ps3.cd.percona.com` (untouched).
-3. **Validate** — spot-check jobs, EC2 + Hetzner worker provisioning,
-   plugin behaviour, OAuth login, build artefact paths.
-4. **Cutover** — flip Route 53 record `ps3.cd.percona.com` from EC2 to
-   the in-cluster ALB. Plan a freeze window long enough for one final
-   `JENKINS_HOME` rsync + restart on the K8s side, since the snapshot
-   from phase 1 is point-in-time and ps3 keeps writing.
-5. **Decommission** — once the K8s replica owns production traffic and
-   bakes for a few days, terminate the EC2 ps3 instance + CloudFormation
-   stack and add a `ps3` entry back to `var.jenkins_hosts` only if a Mode
-   B fallback is wanted.
+## Substrate prerequisites (already in place for us-east-1a)
 
-## Phase 1 — snapshot, copy, restore
+- `jenkins_master` EKS **managed** node group (m6a.xlarge, us-east-1a, taint
+  `workload.percona.com/tier=jenkins-master`). This is a STATIC MNG, deliberately
+  outside Karpenter: no NodePool templates the `jenkins-master` tier value, so the
+  controller can only land here. If the node dies the MNG ASG replaces it (brief
+  singleton gap), not Karpenter.
+- EKS **Pod Identity** association on (ns `jenkins-<host>`, sa `jenkins`) for the
+  EC2-plugin AWS creds.
+- `gp3-jenkins-1a-retain` StorageClass: `encrypted=true` (account-default EBS key),
+  us-east-1a, `reclaimPolicy: Retain`.
+- HYBRID controller image (`percona-cd/jenkins-percona`): the two Percona forks
+  (`ec2`, `hetzner-cloud`) are baked as `.jpi.override` and FORCED over whatever
+  the restored home carries; community plugins stay soft (image is the floor).
+
+## Phase A — fence the source master (single writer) + app-consistent snapshot
+
+The in-cluster controller must be the ONLY writer to the home. Fence the EC2
+master first, over SSM (its public DNS is the ALB, so `paws ssh` won't reach it;
+use SSM or the private IP over the peering):
 
 ```bash
-# On the source side (eu-west-1 — wherever EC2 ps3 currently lives):
-aws ec2 create-snapshot \
-  --volume-id <ec2-ps3-jenkins-home-vol-id> \
-  --description "ps3 JENKINS_HOME for EKS replica seed"
-# Wait for status = completed.
+# Pre-flight: no running builds (jenkins CLI has a token even on a 403 master)
+jenkins admin -i ps3 groovy -e 'println Jenkins.instance.computers.sum{ (it.executors+it.oneOffExecutors).count{e->e.isBusy()} }'
 
-aws ec2 copy-snapshot \
-  --source-region <source-region> \
-  --source-snapshot-id snap-xxx \
-  --destination-region us-east-1 \
-  --description "ps3 JENKINS_HOME for ps3-k8s"
-# Wait for status = completed.
-
-# In us-east-1, materialise the volume in the StatefulSet AZ:
-aws ec2 create-volume \
-  --region us-east-1 \
-  --availability-zone us-east-1a \
-  --snapshot-id snap-yyy \
-  --volume-type gp3 \
-  --iops 3000 --throughput 125 \
-  --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=jenkins-ps3-k8s-data}]"
+# Fence: stop + MASK jenkins (mask is required — userdata re-enables it on boot).
+# Keep the INSTANCE running: a running-but-masked master is a seconds-fast rollback
+# (unmask+start), far better than capacity-0 (which would terminate it).
+aws ssm send-command --instance-ids <i-...> --document-name AWS-RunShellScript \
+  --parameters commands='["sudo systemctl disable --now jenkins","sudo systemctl mask jenkins"]'
 ```
 
-Pre-create a `PersistentVolume` referencing the new volume ID and label
-it so the StatefulSet's PVC binds to it instead of dynamically
-provisioning a fresh disk:
+App-consistent snapshot (the home volume is XFS, the JENKINS_HOME is a SUBDIR of
+the mount — see gotchas). Freeze the **mountpoint**, not the subdir, during the
+`create-snapshot` API call, with an auto-thaw timer as a backstop:
+
+```bash
+# arm auto-thaw, then freeze /mnt (the data-volume mountpoint)
+aws ssm send-command ... commands='["sudo systemd-run --on-active=240 bash -c \"fsfreeze -u /mnt\"","sync","sudo fsfreeze -f /mnt"]'
+aws ec2 create-snapshot --volume-id <data-vol> --description "<host> app-consistent"   # while frozen
+aws ssm send-command ... commands='["sudo fsfreeze -u /mnt"]'
+```
+
+`ps3.cd` is 503 from here until Phase C cutover (proxy still points at the fenced
+master). Acceptable for staging; minimise the window by prepping Phase B in
+parallel with the slow snapshot copy.
+
+## Phase B — restore the volume, prepare it, boot the controller
+
+```bash
+# Copy cross-region ENCRYPTED with the account-default EBS key (matches the SC, so
+# the EKS node can attach it). Do NOT tag workload=jenkins (AWS Backup auto-selects
+# that tag -> a 14-day vault would leak prod creds). Then create the gp3 volume in
+# the controller's AZ.
+aws ec2 copy-snapshot --source-region <src> --source-snapshot-id <snap> --region us-east-1 --encrypted
+aws ec2 create-volume --region us-east-1 --availability-zone us-east-1a --snapshot-id <copy> --volume-type gp3 --iops 3000 --throughput 125
+```
+
+Static PV + PVC (uncommitted — the EBS volume id stays out of this public repo).
+**`fsType: xfs`** (the EC2 master formats the data volume XFS; ext4 would fail to
+mount) and a `claimRef` so it binds to our PVC:
 
 ```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: jenkins-ps3-k8s-data
-spec:
-  capacity: { storage: 100Gi }
-  accessModes: [ReadWriteOnce]
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: gp3-jenkins-1a-retain
-  csi:
-    driver: ebs.csi.aws.com
-    volumeHandle: <new-vol-id>
-    fsType: ext4
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: topology.ebs.csi.aws.com/zone
-              operator: In
-              values: [us-east-1a]
+# PV: csi.fsType: xfs ; nodeAffinity zone us-east-1a ; claimRef -> the PVC below
+# PVC: storageClassName gp3-jenkins-1a-retain ; volumeName <the PV>
 ```
 
-Set `storage.preExistingVolumeID` in
-`resources/jenkins/master/instances/ps3-k8s/values.yaml` to the same
-volume ID and let ArgoCD reconcile.
+**One-time ownership fix — as a Job, NOT an initContainer (the load-bearing
+gotcha).** The controller pod is `runAsNonRoot: true`, so a root chown
+initContainer is rejected (`CreateContainerConfigError: runAsUser breaks non-root
+policy`). The namespace has no PSS enforce label, so run a SEPARATE root Job that
+mounts the PVC and chowns the restored home (EC2 jenkins UID is 994; in-cluster is
+1000). Scale the controller to 0 first to release the RWO PVC:
 
-## Phase 2 — parallel run
+```bash
+kubectl -n jenkins-<host> scale sts jenkins-<host> --replicas=0   # release the PVC
+# Job (busybox, runAsUser 0, ns allows it): guard config.xml+master.key, then
+#   chown -R 1000:1000 /data/<host-home-subdir>     # ~580k files on ps3, ~40s
+```
 
-Production stays on EC2 ps3 (`ps3.cd.percona.com` unchanged). The
-in-cluster replica is reachable at `ps3-k8s.cd.percona.com` only.
+Per-host values (`instances/<host>/values.yaml`):
 
-Validation checklist:
-- `kubectl -n jenkins-ps3-k8s logs -f sts/jenkins-ps3-k8s` shows the
-  `Jenkins is fully up` line.
-- One EC2 worker + one Hetzner worker provision and connect (validates
-  the EC2-plugin IRSA workaround in the image — see ADR 0004).
-- OAuth login round-trips (callback URL pre-updated for the new host).
-- Three representative jobs run end-to-end (one Hetzner, one EC2, one
-  MTR pipeline).
-- Build console streams over WebSocket without buffering.
+```yaml
+jenkins:
+  controller:
+    customInitContainers:        # NON-root boot-guard only (chown is the Job above)
+      - name: boot-guard
+        image: public.ecr.aws/docker/library/busybox:1.36
+        securityContext: { runAsUser: 1000, runAsNonRoot: true }
+        command: ["sh","-c"]
+        args: ["test -f /var/jenkins_home/config.xml && test -f /var/jenkins_home/secrets/master.key"]
+        volumeMounts: [{ name: jenkins-home, mountPath: /var/jenkins_home, subPath: <host-home-subdir> }]
+  persistence:
+    existingClaim: <host>-jenkins-home
+    subPath: <host-home-subdir>   # JENKINS_HOME is a SUBDIR of the volume root
+```
 
-## Phase 3 — DNS cutover
+Then `argocd app sync jenkins-<host> --core` (the controller is manual-sync,
+ADR 0025; remember the kube-context namespace must be `argocd` for `--core`).
 
-Plan a short freeze window (no new builds for ~30 min). Drain ps3 build
-queue. Final `JENKINS_HOME` rsync from EC2 ps3 → ps3-k8s PVC (same-region
-EBS isn't directly rsync-able — easiest is over SSH from a temporary
-bastion pod, or take a fresh snapshot + replace the PV). Bring ps3-k8s
-back up.
+## Phase C — cutover the real host (reversible overlay)
 
-Flip Route 53:
-- Before: `ps3.cd.percona.com` → EC2 public DNS.
-- After: `ps3.cd.percona.com` → ALB alias, with the `ps3` Ingress (or a
-  CNAME of `ps3.cd.percona.com` → `ps3-k8s.cd.percona.com`).
+Apply a STANDALONE Ingress for the real host with
+`alb.ingress.kubernetes.io/group.order: "-10"` on the shared `jenkins-masters`
+group. It OUTRANKS the jenkins-ingress proxy's rule for the same host by ALB
+priority, so the real host resolves to the controller directly (ALB sets a clean
+`X-Forwarded-Proto=https` for OAuth) with NO DNS change. Delete the Ingress to roll
+back. Verify: `aws elbv2 describe-rules` shows the controller TG winning,
+`curl -sI https://<host>/login` returns 200.
 
-## Rollback
+## Phase D — validate
 
-If anything fails, revert Route 53 to the EC2 record. Keep the EBS
-volume in us-east-1 for forensics. The EC2 master is untouched at this
-point and resumes serving on the same hostname.
+GitHub OAuth login (ALB forwards `X-Forwarded-Proto=https`); HYBRID plugin set
+(forks at the locked versions win over the restored copies, community survive);
+one real EC2 (spot) + one Hetzner worker provision and connect; a representative
+job runs green. NB: the worker SGs may only allow the OLD master VPC — add SSH
+ingress from the EKS VPC CIDR before provisioning.
+
+## Retire the proxy/reconciler entry (LAST, gated on "fully in place")
+
+Only once the controller permanently serves the real host: remove the `<host>`
+entry from BOTH `jenkins-endpoint-reconciler/values.yaml` and
+`jenkins-ingress/values.yaml` (ArgoCD prunes the proxy Ingress rule + the
+`jenkins-<host>` Service/EndpointSlice). Until then the reconciler is the standing
+rollback path, so leave it running.
+
+## Rollback (any time before retiring the proxy entry)
+
+```bash
+kubectl -n jenkins-<host> delete ingress jenkins-<host>-cutover     # real host falls back to the proxy
+aws ssm send-command --instance-ids <i-...> ... commands='["sudo systemctl unmask jenkins","sudo systemctl enable --now jenkins"]'
+```
+
+The reconciler already points the proxy at the (now-unmasked) EC2 master, so the
+real host serves from EC2 again within a reconcile cycle.
+
+## Gotchas (the behaviors this testbed surfaced)
+
+- **runAsNonRoot pod ⇒ chown is a Job, not an initContainer.** A root
+  initContainer dies with `CreateContainerConfigError`. Do the one-time chown in a
+  separate root Job against the PVC (the namespace allows root pods; the master pod
+  does not).
+- **`fsGroupChangePolicy: OnRootMismatch`** is already set by the chart, but the
+  FIRST boot on a 994-rooted home still does a full recursive kubelet ownership
+  pass (`VolumePermissionChangeInProgress`, ~580k files on ps3, several minutes).
+  Pre-chowning via the Job sets root to 1000, so that pass — and every later boot's
+  — is skipped. Pre-chown BEFORE first boot to avoid the double pass entirely.
+- **XFS + subPath.** The data volume is XFS (PV `fsType: xfs`), and JENKINS_HOME is
+  a subdir of the mount (`persistence.subPath`), or Jenkins boots the empty volume
+  root and ignores `config.xml`. The chart honors `persistence.subPath` on every
+  jenkins-home mount.
+- **Data volume `DeleteOnTermination=false`** — verify before any terminate so a
+  fence/teardown can never delete the real home. Root device is separate/expendable.
+- **Encrypt the cross-region copy with the account-default EBS key** (no explicit
+  kms-key-id) to match the SC, or the node cannot attach the volume.
+- **Don't tag the clone volume/snapshot `workload=jenkins`** (AWS Backup vault leak).
+- **Singleton availability:** the MNG is min=desired=max=1; node loss = a short gap
+  while the ASG replaces it. Consider a warm-standby story before busy masters.
