@@ -87,3 +87,21 @@ resource "aws_eks_addon" "ebs_csi_driver" {
 
   tags = local.tags
 }
+
+resource "aws_eks_addon" "snapshot_controller" {
+  cluster_name                = module.eks.cluster_name
+  addon_name                  = "snapshot-controller"
+  addon_version               = lookup(var.addon_versions, "snapshot-controller", null)
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  # CSI snapshot controller (kubernetes-csi/external-snapshotter) plus the
+  # snapshot.storage.k8s.io CRDs. AWS recommends the managed add-on over a
+  # self-managed install; it bundles the CRDs and handles controller placement,
+  # so no vendored Deployment/RBAC/CRDs are needed. Requires a CSI driver with
+  # snapshot support (the EBS CSI add-on above). The VolumeSnapshotClass is a
+  # user resource added via GitOps when a consumer (the k8s pilot) needs it.
+  depends_on = [aws_eks_addon.ebs_csi_driver]
+
+  tags = local.tags
+}
