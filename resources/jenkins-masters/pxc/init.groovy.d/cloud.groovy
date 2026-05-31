@@ -970,10 +970,11 @@ String region = 'us-west-1'
             getTemplate('min-noble-x64',    "${region}${it}"),
             getTemplate('min-resolute-x64',    "${region}${it}"),
             getTemplate('min-al2023-x64',       "${region}${it}"),
-            // min-al2023-aarch64 (docker-32gb-aarch64) retired: the Graviton EC2
-            // Fleet (ec2FleetCloud.groovy -> jenkins-pxc-arm-graviton) now serves
-            // docker-32gb-aarch64. Mirrors the ps57/ps80 PS-11179 cutover. PS-11228.
-            // getTemplate('min-al2023-aarch64',   "${region}${it}"),
+            // docker-32gb-aarch64 stays on the classic min-al2023-aarch64 template
+            // THROUGH cutover so the label is never orphaned. It is retired to the
+            // Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton) only after
+            // the Fleet is staged + a smoke build passes post-cutover. PS-11228.
+            getTemplate('min-al2023-aarch64',   "${region}${it}"),
             getTemplate('metal-x64',            "${region}${it}"),
             getTemplate('metal-aarch64',        "${region}${it}"),
             // getTemplate('ramdisk-centos-6-x64', "${region}${it}"),
