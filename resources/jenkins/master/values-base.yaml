@@ -20,8 +20,9 @@ jenkins:
       # Immutable SHA-tag <lts>-<gitsha> from the publish job (ECR repo is
       # IMMUTABLE so the tag cannot be overwritten). A digest bump is a
       # deliberate, windowed, human-merged PR per ADR 0025. This is the HYBRID
-      # image (forks forced via .override, community soft) from PR #64.
-      tag: "2.541.3-668ae4918b98818550c63b7a168bb8a030c4f4b0"
+      # image (forks forced via .override, community soft); this tag carries the
+      # refreshed forks hetzner-cloud 103.percona.27 + ec2 5.24.percona.3 (PR #71).
+      tag: "2.541.3-1a9e848fc33ef9d308d1d0900d7dcb663c0d65ff"
       pullPolicy: IfNotPresent
 
     # Plugins are BAKED into the image (community via plugins.txt; the 2 Percona
