@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # percona-cd-platform — Claude Code project instructions
 
 OpenTofu + ArgoCD platform repo. EKS in `us-east-1`, GitOps-bootstrapped. Public, lives at `Percona/percona-cd-platform` (moved 2026-05-18). The provisioned cluster keeps its name `percona-ci-platform` and the LGTM S3 buckets keep `percona-ci-platform-*` prefixes; those names don't track the repo move.

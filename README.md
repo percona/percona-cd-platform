@@ -1,27 +1,41 @@
 # percona-cd-platform
 
-Public OpenTofu + ArgoCD platform repo.
+Percona's CI/CD platform.
 
-Provisions an AWS EKS cluster and bootstraps its addon stack via GitOps.
-Hosts a self-service CI/CD environment: Jenkins masters, an observability
-stack (Grafana + Mimir + Loki + Tempo), and a shared ALB for SSL termination
-across the hosted services.
+It hosts Jenkins masters and the platform services around them — observability,
+single sign-on, ingress with TLS termination, and cluster autoscaling — running
+on a GitOps-managed EKS cluster in `us-east-1`. Everything is defined as code
+and reconciled from this repo; there are no manual cluster changes.
 
 Region, cluster name, hostnames, and other deployment-specific values are
 parameterized in `terraform/`.
 
-## Repo layout
+## Components
 
-| Path | Owner | What |
-|---|---|---|
-| `terraform/` | OpenTofu | VPC, EKS, addons, Pod Identity, ACM, ArgoCD bootstrap, per-master DNS records |
-| `argocd-bootstrap/` | ArgoCD | Root App-of-Apps + ApplicationSets |
-| `resources/addons/` | ArgoCD | One Helm umbrella per cluster addon (observability stack, ingress, identity, Karpenter, etc.). Also hosts a first-party `jenkins-endpoint-reconciler` (Python CronJob; polls EC2 for each master's IP, writes the matching K8s EndpointSlice). |
-| `resources/jenkins/` | ArgoCD | In-cluster Jenkins master chart with per-instance overlays under `instances/`. |
-| `images/` | Docker | Custom image build contexts: `jenkins/` (master image: WAR, Percona-patched plugins, `init.groovy.d`), `mtr-ingest/`, `jenkins-endpoint-reconciler/`. |
-| `docs/` | Markdown | Architecture, runbooks, ADRs |
-| `scripts/` | Bash + Python | Operational helpers; see [`scripts/README.md`](scripts/README.md) |
-| `.github/workflows/` | CI | Lint + validate (no plan, no deploy) |
+**CI/CD (Jenkins).** Jenkins masters served on `*.cd.percona.com`, in one of
+two modes: an ALB → in-cluster NGINX proxy → cross-region VPC peering → EC2
+master (a reconciler keeps each EndpointSlice synced to the live instance IP),
+or an in-cluster StatefulSet. The custom master image bundles the WAR,
+Percona-patched plugins, and `init.groovy.d`.
+
+**Monitoring / observability.** A distributed LGTM stack (Mimir, Loki, Tempo,
+Grafana). EC2 masters run a master-side Alloy that pushes metrics, logs, and
+traces through `alloy-gateway` (NGINX bearer-auth + Alloy receivers) into the
+stack. Grafana fronts all three behind Authentik OIDC.
+
+**Terraform / AWS.** OpenTofu owns AWS-side state through "ArgoCD healthy":
+VPC, EKS, managed node groups, Karpenter prerequisites, Pod Identity, ACM
+wildcard cert, the LGTM S3 buckets, and each EC2 Jenkins master (SpotFleet,
+IAM, EBS, userdata via a reusable module). TF outputs reach ArgoCD as
+cluster-Secret annotations consumed as Helm values.
+
+**GitOps / ArgoCD.** From "ArgoCD healthy" onward, everything in-cluster is
+GitOps-managed. A root App-of-Apps fans out to ApplicationSets that reconcile
+one Application per addon and one per in-cluster Jenkins instance. No manual
+`kubectl` mutations — drift breaks reconciliation.
+
+**Repo CI.** GitHub Actions runs lint + validate only — no plan, no deploy.
+The same checks run locally via `just ci`.
 
 ## Quickstart
 
@@ -64,11 +78,9 @@ Four tiers, each with a canonical `workload.percona.com/tier` label and
 | `lgtm-stateful` | Karpenter NodePool, on-demand, single-AZ | Stateful LGTM pods (Mimir, Loki, Tempo ingesters; store-gateway; compactor; alertmanager). Configured to behave like an MNG (no spot, no consolidation under load, no AMI-drift) while keeping instance-family flex |
 | `general` | Karpenter NodePool, spot + on-demand, single-AZ | Stateless LGTM components, Grafana web, the auth web tier, alloy-gateway, anything without an explicit tier |
 
-MNGs handle bootstrap and single-AZ stateful workloads with PDBs that
-block eviction. Karpenter handles the higher-volume tiers (LGTM stateful,
-stateless), trading off multi-AZ HA for EBS-per-pod zonality.
-
-The stateful split was driven by a real outage; full reasoning in
+MNGs handle bootstrap and single-AZ stateful workloads whose PDBs block
+eviction. Karpenter handles the higher-volume tiers (LGTM stateful,
+stateless), trading multi-AZ HA for EBS-per-pod zonality. Full reasoning in
 [the cluster tier taxonomy ADR](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md).
 
 ## Documentation
