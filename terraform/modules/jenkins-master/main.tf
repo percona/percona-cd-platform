@@ -625,6 +625,15 @@ resource "aws_launch_template" "master" {
     enabled = false
   }
 
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = var.root_volume_size
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
   metadata_options {
     # IMDSv2 required + hop_limit=1 closes the SSRF-to-instance-role
     # path. All curls in user-data.sh.tftpl and jenkins-graceful-stop.sh
@@ -752,7 +761,8 @@ resource "aws_instance" "master" {
   # (count gated on purchasing_option); SpotFleet path is unchanged. AMI
   # default size/type inherit (volume_size/volume_type unset).
   root_block_device {
-    encrypted = true
+    encrypted   = true
+    volume_size = var.root_volume_size
   }
 
   tags = {
