@@ -32,10 +32,11 @@ spec:
       destination:
         server: '{{ server }}'
         namespace: 'jenkins-{{ path.basename }}'
+      # Manual sync, no selfHeal/prune: a Jenkins master is a single-replica
+      # stateful controller (a SPOF). Auto-sync would roll it on every digest
+      # bump with no window. A digest/config change lands OutOfSync; an operator
+      # runs `argocd app sync` in a maintenance window. See ADR 0025.
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
