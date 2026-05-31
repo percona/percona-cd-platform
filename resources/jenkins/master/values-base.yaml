@@ -49,6 +49,16 @@ jenkins:
     numExecutors: 1
     executorMode: "EXCLUSIVE"
 
+    # Startup budget (configurable, override per-instance for an unusually large
+    # home). A restored-home master (real JENKINS_HOME: jobs, plugins, fingerprints,
+    # build history) takes well over the chart default 120s (failureThreshold 12 x
+    # periodSeconds 10) to finish starting and serve /login 200, so the kubelet was
+    # killing it mid-boot and BackOff-looping. 120 x 10s = 20 min gives any migrated
+    # master room to start; the liveness probe (50s) governs once it is up.
+    probes:
+      startupProbe:
+        failureThreshold: 120
+
     # Inbound JNLP listener so external EC2 + Hetzner agents reconnect.
     # internet-facing because Hetzner agents are outside the VPC.
     agentListenerPort: 50000
