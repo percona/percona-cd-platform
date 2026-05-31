@@ -1,0 +1,153 @@
+name: refresh-fork-locks
+
+# Recorded-pin auto-bump for the Percona Jenkins fork plugins (ec2, hetzner-cloud).
+#
+# scripts/refresh-fork-locks.sh rewrites images/jenkins/percona-plugins.lock.json to
+# the latest published `.percona.` fork release (version + url + sha256). This job
+# runs it on a schedule, and IF the lock moved it re-runs the real build + smoke
+# against the new pin (so a bad bump fails HERE, deterministically, regardless of
+# whether the opened PR re-triggers build-jenkins-image), then opens a PR.
+#
+# PR-only by design: no auto-merge. CODEOWNERS approval + branch protection gate the
+# merge. The deployed image tag in resources/jenkins/master/values-base.yaml is NOT
+# touched -- rollout stays manual (ADR 0025).
+#
+# The commit is created via the GitHub API (createCommitOnBranch), so it is signed
+# with GitHub's key (verified) without a GPG key in CI. Set the optional repo secret
+# FORK_LOCK_BUMP_TOKEN (a fine-grained PAT or App token with contents:write +
+# pull-requests:write) to ALSO make the opened PR re-trigger build-jenkins-image; the
+# default GITHUB_TOKEN opens the PR fine but cannot re-trigger downstream workflows.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: actionlint + zizmor
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+      - name: install zizmor
+        run: pipx install zizmor==1.24.1
+      - name: zizmor
+        run: zizmor --quiet .github/workflows/refresh-fork-locks.yml
+
+  refresh:
+    name: refresh lock + validate + open PR
+    runs-on: ubuntu-24.04
+    needs: lint
+    permissions:
+      contents: write          # createCommitOnBranch on a bump branch
+      pull-requests: write      # gh pr create
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: refresh lock to latest fork releases
+        id: refresh
+        run: |
+          scripts/refresh-fork-locks.sh
+          if git diff --quiet -- images/jenkins/percona-plugins.lock.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No fork-lock changes."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            { echo "## Fork lock bump"; echo '```diff';
+              git diff -- images/jenkins/percona-plugins.lock.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ---- prove the new pin actually builds + boots BEFORE opening the PR ----
+      - name: setup buildx
+        if: steps.refresh.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: fetch + verify fork HPIs (new lock)
+        if: steps.refresh.outputs.changed == 'true'
+        working-directory: images/jenkins
+        run: ./fetch-hpis.sh
+      - name: build (amd64, load, no push)
+        if: steps.refresh.outputs.changed == 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: images/jenkins
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jenkins-percona:fork-lock-${{ github.run_id }}
+      - name: smoke-boot the new pin (empty + restored home)
+        if: steps.refresh.outputs.changed == 'true'
+        run: images/jenkins/smoke-boot.sh jenkins-percona:fork-lock-${{ github.run_id }}
+
+      # ---- open a signed PR (no auto-merge) ----
+      - name: open pull request
+        if: steps.refresh.outputs.changed == 'true'
+        env:
+          # Prefer the PAT so the PR re-triggers build-jenkins-image; fall back to
+          # GITHUB_TOKEN (PR opens, CODEOWNERS still gates, gate already proven above).
+          GH_TOKEN: ${{ secrets.FORK_LOCK_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/refresh-fork-locks-${RUN_ID}"
+          LOCK=images/jenkins/percona-plugins.lock.json
+
+          # Create the bump branch at the checked-out base.
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" -f sha="${BASE_SHA}"
+
+          # Signed (verified) commit of the single lock file via createCommitOnBranch.
+          CONTENT_B64="$(base64 -w0 "$LOCK")"
+          # shellcheck disable=SC2016  # $vars are GraphQL variables, substituted by `gh -f`, not the shell.
+          gh api graphql -f query='
+            mutation($nwo:String!,$branch:String!,$path:String!,$contents:Base64String!,$head:GitObjectID!,$msg:String!){
+              createCommitOnBranch(input:{
+                branch:{repositoryNameWithOwner:$nwo, branchName:$branch},
+                message:{headline:$msg},
+                expectedHeadOid:$head,
+                fileChanges:{additions:[{path:$path, contents:$contents}]}
+              }){ commit { oid } }
+            }' \
+            -f nwo="$GITHUB_REPOSITORY" -f branch="$BRANCH" \
+            -f path="$LOCK" -f contents="$CONTENT_B64" -f head="$BASE_SHA" \
+            -f msg="chore(jenkins-image): refresh fork plugin locks to latest releases"
+
+          BODY="$(mktemp)"
+          # shellcheck disable=SC2016  # backticks below are markdown code spans, intentionally literal.
+          {
+            printf '%s\n' '## Summary'
+            printf '%s\n' ''
+            printf '%s\n' '- Auto-bump `images/jenkins/percona-plugins.lock.json` to the latest published `.percona.` fork releases.'
+            printf '%s\n' '- Each new pin is sha256-verified against the release asset and its `.hpi.sha256` sidecar, and MANIFEST-checked (`Short-Name` + `Plugin-Version`).'
+            printf '%s\n' '- The bumped pin is build + smoke-booted (empty-home and restored-home) by the refresh job before this PR opens.'
+            printf '%s\n' ''
+            printf '%s\n' '## Why'
+            printf '%s\n' ''
+            printf '%s\n' '- Keeps the controller image tracking the latest ec2 / hetzner-cloud fork releases while staying pinned and reproducible.'
+            printf '%s\n' '- Deploy stays manual (ADR 0025): merging this does not change the running image.'
+            printf '%s\n' ''
+            printf '%s\n' '## Review'
+            printf '%s\n' ''
+            printf '%s\n' '- Confirm the bumped versions, then approve (CODEOWNERS). No auto-merge.'
+          } > "$BODY"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(jenkins-image): refresh fork plugin locks to latest releases" \
+            --body-file "$BODY"
