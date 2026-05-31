@@ -29,6 +29,16 @@ spec:
           valueFiles:
             - values-base.yaml
             - 'instances/{{ path.basename }}/values.yaml'
+          # Inject the ECR registry from the cluster-secret annotations (set by
+          # terraform/argocd.tf) so the AWS account id is NOT committed to this
+          # public repo. helm.parameters has the highest precedence, so it always
+          # wins over the <account-id> placeholder in values-base.yaml. Mirrors
+          # the addons ApplicationSet's annotation-injection convention. The cert
+          # ARN needs no injection: the ALB controller auto-discovers the wildcard
+          # *.cd.percona.com cert via SNI (instances/<host> omits certificate-arn).
+          parameters:
+            - name: jenkins.controller.image.registry
+              value: '{{ metadata.annotations.aws_account_id }}.dkr.ecr.{{ metadata.annotations.aws_region }}.amazonaws.com'
       destination:
         server: '{{ server }}'
         namespace: 'jenkins-{{ path.basename }}'
