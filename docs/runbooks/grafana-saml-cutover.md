@@ -53,8 +53,8 @@ grafana_saml_metadata_url = "https://sso.duosecurity.com/saml2/sp/.../metadata"
 ### 3. Apply
 
 ```bash
-cd terraform && tofu plan -out=tfplan
-tofu apply tfplan
+just tf-plan
+just tf-apply
 ```
 
 Expected diff: cluster Secret annotations `grafana_saml_enabled` flips to

@@ -11,13 +11,16 @@ yamllint_ver    := "1.38.0"
 just_ver        := "1.50.0"
 
 # ---------- AWS context ----------
-# AWS_PROFILE: set in your shell to override; defaults to percona-dev-admin
-# (the only profile with the IAM scope to manage this cluster's resources).
-# Recipes that touch AWS (tf-plan, tf-apply, tf-destroy, tf-init-backend)
-# inject this so a fresh shell `just tf-apply` works without manual export.
-aws_profile := env_var_or_default("AWS_PROFILE", "percona-dev-admin")
-aws_region  := env_var_or_default("AWS_REGION", "us-east-1")
-cluster     := "percona-ci-platform"
+# AWS_PROFILE / AWS_REGION come from the operator's environment. They are NEVER
+# interpolated into a recipe's shell source (interpolating a value like $(...)
+# would let it execute); recipes reference the inherited $AWS_PROFILE /
+# ${AWS_REGION} directly, and `_require-aws-profile` asserts AWS_PROFILE is set.
+# Credential-free recipes (ci, lint, validate, tf-init, tf-fmt) never touch it,
+# so they parse and run with no profile set — exactly how .github/workflows/ci.yml
+# runs them (no AWS creds). providers.tf falls through to the SDK default chain
+# when var.aws_profile == "".
+cluster      := "percona-ci-platform"
+state_bucket := "terraform-state-storage-" + cluster
 
 # ---------- top-level ----------
 default: help
@@ -32,13 +35,24 @@ lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
 
 validate: tf-validate manifest-validate
 
+# ---------- internal guards ----------
+# Fail loudly (at runtime, never parse time) if AWS_PROFILE is not exported.
+# Reads the env var directly (no {{...}} interpolation) so its value is never
+# evaluated as shell source. A dependency of every AWS-touching recipe.
+_require-aws-profile:
+    @: "${AWS_PROFILE:?AWS_PROFILE must be exported (e.g. export AWS_PROFILE=percona-dev-admin); do NOT set aws_profile in local.auto.tfvars}"
+
 # ---------- terraform / opentofu ----------
+# Offline init — no backend, no credentials, no -upgrade (matches CI's
+# `tofu init -backend=false`, so `just ci` does not rewrite .terraform.lock.hcl).
 tf-init:
-    cd terraform && tofu init -backend=false -upgrade
+    tofu -chdir=terraform init -backend=false
 
-tf-init-backend:
-    cd terraform && AWS_PROFILE={{aws_profile}} tofu init -upgrade
+# Real backend init (reads the inherited AWS_PROFILE); -upgrade is intentional here.
+tf-init-backend: _require-aws-profile
+    tofu -chdir=terraform init -upgrade
 
+# fmt stays at repo root (recurses into terraform/ and every module).
 tf-fmt:
     tofu fmt -recursive
 
@@ -46,12 +60,12 @@ tf-fmt-check:
     tofu fmt -recursive -check -diff
 
 tf-validate: tf-init
-    cd terraform && tofu validate
+    tofu -chdir=terraform validate
 
 # tflint disabled: its terraform plugin (v0.14.x) doesn't understand OpenTofu 1.8+
 # early-eval syntax we use for module pins (versions.tf, D11). Re-enable when supported.
 #tf-lint:
-#    cd terraform && tflint --init && tflint --recursive --format compact
+#    tofu -chdir=terraform tflint --init && tflint --recursive --format compact
 
 tf-trivy:
     trivy config --quiet --severity HIGH,CRITICAL --exit-code 1 \
@@ -59,19 +73,53 @@ tf-trivy:
       --skip-files terraform/tfplan \
       --ignorefile .trivyignore terraform/
 
-tf-plan:
-    cd terraform && AWS_PROFILE={{aws_profile}} tofu plan -out=tfplan
+tf-plan: _require-aws-profile
+    tofu -chdir=terraform plan -out=tfplan
 
-tf-apply:
-    cd terraform && AWS_PROFILE={{aws_profile}} tofu apply tfplan
+# Applies the SAVED plan from `just tf-plan`. NEVER auto-approve. Re-run tf-plan
+# first if terraform/tfplan is stale; tofu rejects an out-of-date saved plan.
+tf-apply: _require-aws-profile
+    tofu -chdir=terraform apply tfplan
 
-# Fast path for routine apply: plan + apply in one shot, auto-approved.
-# Use tf-plan + tf-apply when you want a separate review step.
-tf-apply-now:
-    cd terraform && AWS_PROFILE={{aws_profile}} tofu apply -auto-approve
+tf-destroy: _require-aws-profile
+    tofu -chdir=terraform destroy
 
-tf-destroy:
-    cd terraform && AWS_PROFILE={{aws_profile}} tofu destroy
+# Back up live state to a local, gitignored snapshot before any risky apply.
+# *.tfstate is already gitignored; .state-backups/ stays out of git the same way.
+tf-state-backup: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p terraform/.state-backups
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    out="terraform/.state-backups/terraform.${ts}.tfstate"
+    tofu -chdir=terraform state pull > "$out"
+    echo "state backed up to $out"
+
+# Read-only GATE: assert the state bucket has S3 Object Versioning enabled (the
+# only recovery path if a state write goes wrong). Prints the status and EXITS
+# NON-ZERO if it is not "Enabled" — STOP and enable it before any apply.
+tf-state-versioning-check: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status="$(aws s3api get-bucket-versioning \
+      --bucket {{state_bucket}} \
+      --region "${AWS_REGION:-us-east-1}" \
+      --query Status --output text)"
+    echo "state bucket versioning: ${status}"
+    [ "${status}" = "Enabled" ] || { echo "ERROR: state bucket versioning is '${status}', expected 'Enabled' — STOP and enable it before any apply." >&2; exit 1; }
+
+# PLAN-ONLY, read-only review of the Jenkins master modules and their Graviton
+# (arm) EC2-fleet siblings. Enumerates each *_arm_fleet sibling explicitly —
+# omitting them would silently exclude the Graviton fleets from the plan.
+# There is intentionally NO tf-apply-masters: apply the full saved plan via
+# `just tf-plan` + `just tf-apply` after review.
+tf-plan-masters: _require-aws-profile
+    tofu -chdir=terraform plan \
+      -target=module.ps3   -target=module.ps3_arm_fleet \
+      -target=module.ps57  -target=module.ps57_arm_fleet \
+      -target=module.ps80  -target=module.ps80_arm_fleet \
+      -target=module.pxb   -target=module.pxb_arm_fleet \
+      -target=module.pxc   -target=module.pxc_arm_fleet
 
 # ---------- gitops / yaml ----------
 yaml-lint:
@@ -80,10 +128,12 @@ yaml-lint:
 manifest-validate:
     #!/usr/bin/env bash
     set -euo pipefail
-    URL='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{{{.Group}}}}/{{{{.ResourceKind}}}}_{{{{.ResourceAPIVersion}}}}.json'
+    URL='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{{{.Group}}/{{{{.ResourceKind}}_{{{{.ResourceAPIVersion}}.json'
     kubeconform -strict -summary -ignore-missing-schemas \
       -ignore-filename-pattern '(Chart|values.*)\.yaml' \
       -ignore-filename-pattern '.*/templates/.*' \
+      -ignore-filename-pattern '.*/files/.*' \
+      -ignore-filename-pattern '.*/dashboards/.*\.json' \
       -schema-location default \
       -schema-location "$URL" \
       argocd-bootstrap/ resources/
@@ -102,14 +152,14 @@ check-versions:
 # Bootstrap S3 state bucket (one-time, manual on first apply)
 bootstrap-state:
     @echo "State bucket is pre-created."
-    @echo "  S3:     s3://terraform-state-storage-{{cluster}}"
-    @echo "  Region: {{aws_region}}"
+    @echo "  S3:     s3://{{state_bucket}}"
+    @echo "  Region: ${AWS_REGION:-us-east-1}"
     @echo "See docs/runbooks/bootstrap-state.md for the recreate-from-zero recipe."
 
 # Update local kubeconfig to talk to the cluster.
 # Honours AWS_PROFILE if set; otherwise uses the SDK default chain.
 kubeconfig:
-    aws eks update-kubeconfig --name {{cluster}} --region {{aws_region}} --alias {{cluster}}
+    aws eks update-kubeconfig --name {{cluster}} --region "${AWS_REGION:-us-east-1}" --alias {{cluster}}
 
 # Status snapshot
 status:
@@ -124,8 +174,8 @@ sync-all:
 # ---------- Karpenter validation ----------
 # Systematic before/during/after harness for scale-up + scale-down.
 # Plan: ~/.claude/plans/hashed-shimmying-crane.md.
-verify-karpenter *ARGS:
-    AWS_PROFILE={{aws_profile}} scripts/verify-karpenter.sh {{ARGS}}
+verify-karpenter *ARGS: _require-aws-profile
+    scripts/verify-karpenter.sh {{ARGS}}
 
 # ---------- ArgoCD UI port-forward (browser) ----------
 argocd-ui:
@@ -143,12 +193,12 @@ argocd-password:
 # in terraform/ecr.tf. Usage:
 #   just build-image mtr-ingest 0.1.0
 #   just build-image jenkins-endpoint-reconciler 0.1.0
-build-image name tag="0.1.0":
+build-image name tag="0.1.0": _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
-    account=$(aws sts get-caller-identity --profile {{aws_profile}} --query Account --output text)
-    registry="${account}.dkr.ecr.{{aws_region}}.amazonaws.com"
-    aws ecr get-login-password --region {{aws_region}} --profile {{aws_profile}} \
+    account=$(aws sts get-caller-identity --query Account --output text)
+    registry="${account}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com"
+    aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" \
       | docker login --username AWS --password-stdin "$registry"
     docker buildx build --platform linux/amd64 \
       -t "${registry}/percona-cd/{{name}}:{{tag}}" \
