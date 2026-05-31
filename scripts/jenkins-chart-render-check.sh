@@ -29,7 +29,12 @@ render_check() {
   fi
   assert "$name" 'percona-cd/jenkins-percona'                "$out"  # our controller image reached the subchart
   assert "$name" 'kind: StatefulSet'                         "$out"
-  assert "$name" 'gp3-jenkins-1a-retain'                     "$out"  # Retain, AZ-pinned PVC
+  # Persistence reaches the subchart as EITHER a templated AZ-pinned Retain PVC
+  # (gp3-jenkins-1a-retain) OR a pre-bound restored-home existingClaim (the chart
+  # then templates no PVC, so the storageClass string is absent by design).
+  if ! grep -qE 'gp3-jenkins-1a-retain|claimName: .+-jenkins-home' <<<"$out"; then
+    echo "  FAIL [$name]: persistence not wired (no Retain SC and no *-jenkins-home existingClaim)"; fail=1
+  fi
   assert "$name" 'group.name: jenkins-masters'               "$out"  # shared ALB group
   assert "$name" 'name: agent-listener'                      "$out"  # inbound JNLP listener for EC2/Hetzner agents
   assert "$name" 'workload.percona.com/tier: jenkins-master' "$out"  # pinned to the dedicated node pool
