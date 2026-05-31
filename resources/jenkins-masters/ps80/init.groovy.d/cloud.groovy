@@ -833,8 +833,8 @@ execMap['min-bookworm-aarch64'] = '1'
 execMap['min-trixie-aarch64']   = '1'
 
 devMap = [:]
-devMap['docker']            = '/dev/xvda=:8:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['docker2']           = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
+devMap['docker']            = '/dev/xvda=:8:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['docker2']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
 devMap['docker-32gb']       = devMap['docker']
 devMap['docker-32gb-hirsute']  = devMap['docker']
 devMap['docker-32gb-jammy']    = devMap['docker']
@@ -842,10 +842,10 @@ devMap['docker-32gb-noble']    = devMap['docker']
 devMap['docker-32gb-resolute']    = devMap['docker']
 devMap['docker-32gb-focal']    = devMap['docker']
 devMap['docker-32gb-bullseye'] = devMap['docker']
-devMap['micro-amazon']      = '/dev/xvda=:30:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-amazon-2-x64']  = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-al2023-x64']    = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-bionic-x64']    = '/dev/sda1=:30:true:gp2,/dev/sdd=:120:true:gp2'
+devMap['micro-amazon']      = '/dev/xvda=:30:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-amazon-2-x64']  = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-al2023-x64']    = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-bionic-x64']    = '/dev/sda1=:30:true:gp3,/dev/sdd=:120:true:gp3'
 devMap['min-focal-x64']     = devMap['min-bionic-x64']
 devMap['min-jammy-x64']     = devMap['min-bionic-x64']
 devMap['min-noble-x64']     = devMap['min-bionic-x64']
@@ -853,25 +853,25 @@ devMap['min-resolute-x64']     = devMap['min-bionic-x64']
 devMap['min-centos-6-x64']  = devMap['min-bionic-x64']
 devMap['min-centos-7-x64']  = devMap['min-bionic-x64']
 devMap['fips-centos-7-x64'] = devMap['min-bionic-x64']
-devMap['min-centos-8-x64']  = '/dev/sda1=:30:true:gp2,/dev/sdd=:80:true:gp2'
-devMap['min-ol-8-x64']      = '/dev/sda1=:30:true:gp2,/dev/sdd=:80:true:gp2'
-devMap['min-ol-9-x64']      = '/dev/sda1=:30:true:gp2,/dev/sdd=:80:true:gp2'
-devMap['min-stretch-x64']   = 'xvda=:30:true:gp2,xvdd=:120:true:gp2'
+devMap['min-centos-8-x64']  = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
+devMap['min-ol-8-x64']      = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
+devMap['min-ol-9-x64']      = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
+devMap['min-stretch-x64']   = 'xvda=:30:true:gp3,xvdd=:120:true:gp3'
 devMap['min-xenial-x64']    = devMap['min-bionic-x64']
-devMap['min-buster-x64']    = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-bullseye-x64']  = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-bookworm-x64']  = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-trixie-x64']    = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
+devMap['min-buster-x64']    = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-bullseye-x64']  = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-bookworm-x64']  = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-trixie-x64']    = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
 devMap['min-rhel-10-x64']   = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
 
-devMap['docker-64gb-aarch64']  = '/dev/xvda=:8:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-al2023-aarch64']   = '/dev/xvda=:30:true:gp2,/dev/xvdd=:120:true:gp2'
-devMap['min-jammy-aarch64']    = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-noble-aarch64']    = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-resolute-aarch64']    = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-bullseye-aarch64'] = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-bookworm-aarch64'] = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
-devMap['min-trixie-aarch64']   = '/dev/xvda=:8:true:gp2,/dev/xvdd=:80:true:gp2'
+devMap['docker-64gb-aarch64']  = '/dev/xvda=:8:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-al2023-aarch64']   = '/dev/xvda=:30:true:gp3,/dev/xvdd=:120:true:gp3'
+devMap['min-jammy-aarch64']    = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-noble-aarch64']    = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-resolute-aarch64']    = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-bullseye-aarch64'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-bookworm-aarch64'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
+devMap['min-trixie-aarch64']   = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
 
 labelMap = [:]
 labelMap['docker']            = ''
