@@ -6,8 +6,8 @@
 #
 # Modes:
 #   empty-home (always): boot with a fresh JENKINS_HOME. The ref-dir contents
-#     (community .jpi + baked fork .hpi + the .override markers) seed the home,
-#     so the running instance reflects exactly what the image baked.
+#     (community .jpi + the two fork .jpi.override) seed the home, so the running
+#     instance reflects exactly what the image baked.
 #   restored-home (optional): if SMOKE_RESTORED_HOME_TAR points to a tar of a
 #     real, plugin-populated JENKINS_HOME, boot with it extracted into the home
 #     to PROVE the .override markers make the baked fork plugins win over the

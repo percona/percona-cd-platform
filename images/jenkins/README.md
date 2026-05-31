@@ -52,37 +52,46 @@ Releases fetched with `curl`, so the PR validation job needs no GitHub token. Th
 `sha256` pins the published-asset bytes (the release workflow rebuilds the HPI, so
 the lock records the release sha, not a local build).
 
-## Baked-image-is-source-of-truth: the `.override` decision
+## Plugin reconciliation: HYBRID (forks forced, community soft)
 
 The chart sets `installPlugins: false` and `overwritePluginsFromImage: false`.
 In the upstream `jenkins` chart, `overwritePluginsFromImage` only does anything
 when `installPlugins: true`, so with `installPlugins: false` it is **inert**, and
-`/usr/share/jenkins/ref/plugins/` seeds `$JENKINS_HOME/plugins` ONLY when that
-target is empty. On a PVC restored from a real EC2 master's `$JENKINS_HOME`, the
-plugins dir is already populated, so the OLD on-disk plugins win and a newer
-baked HPI is silently ignored.
+`/usr/share/jenkins/ref/plugins/` seeds `$JENKINS_HOME/plugins` per the ref-dir
+seeder's own rules: a plain `<id>.jpi` is seeded ONLY when the home lacks that
+plugin or carries an OLDER build (version-compare), while a `<id>.jpi.override`
+is force-installed UNCONDITIONALLY (its content is COPYed over
+`$JENKINS_HOME/plugins/<id>.jpi` on every boot). On a PVC restored from a real
+EC2 master's `$JENKINS_HOME` the plugins dir is already populated, so for a plain
+`.jpi` the on-disk copy wins unless the baked one is strictly newer.
 
-To make the baked image authoritative, the Dockerfile RENAMES every baked plugin
-to `/usr/share/jenkins/ref/plugins/<id>.jpi.override`. The jenkins entrypoint's
-ref-dir seeder force-installs any `<id>.jpi.override` by COPYing THAT file's
-content to `$JENKINS_HOME/plugins/<id>.jpi`, overwriting an existing copy. The
-`.override` file must therefore BE the plugin: an empty `.override` marker would
-be copied over the plugin as 0 bytes and every plugin would fail to load
-(`ZipException: archive is not a ZIP archive`). Renaming the real `.jpi` to
-`.jpi.override` makes the baked set win deterministically over a PVC-restored
-home. (Fork files are COPYed `--chown=jenkins:jenkins` so the seeder, which runs
-as the jenkins user, can read them.)
+We exploit those two behaviors deliberately:
 
-We do NOT set `overwritePluginsFromImage: true` (it is inert here and would
-mislead future readers), and we do NOT strip plugins from the seed snapshot (a
-one-time, manual, error-prone step that must be redone on every new snapshot, is
-invisible in code review, and loses the byte-identical-to-EC2 restore property).
+- **Patched forks (`ec2`, `hetzner-cloud`) are FORCED.** The Dockerfile renames
+  ONLY the two fork plugins to `<id>.jpi.override`, so the patched build always
+  wins over whatever a PVC-restored home carries. The `.override` file must
+  therefore BE the plugin: an empty `.override` marker would be copied over the
+  plugin as 0 bytes and it would fail to load (`ZipException: archive is not a
+  ZIP archive`). Fork files are COPYed `--chown=jenkins:jenkins` so the seeder
+  (which runs as the jenkins user) can read them.
+- **Community plugins stay SOFT.** They are left as plain `<id>.jpi`, so the
+  seeder version-compares and seeds only when the home lacks the plugin or has an
+  older build. A community plugin a human installed or upgraded via the Jenkins
+  UI on a live master is NOT clobbered on the next pod restart unless the image
+  pins a newer version. The image is the **floor** for community plugins, the
+  **source of truth** for the forks.
 
-> **LOUD WARNING for operators:** `.override` makes the image win on EVERY pod
-> boot. A plugin that a human pinned or downgraded directly on a live master's
-> PVC will be reset to the baked version on the next pod restart. That is the
-> intended GitOps behavior (the image is the source of truth), but to change a
-> plugin version you MUST rebuild the image, not hand-edit the PVC.
+We do NOT set `overwritePluginsFromImage: true` (inert here, and it would force
+the WHOLE baked set, defeating the soft-community half of this policy), and we do
+NOT strip plugins from the seed snapshot (a one-time, manual, error-prone step
+that must be redone on every new snapshot, is invisible in code review, and loses
+the byte-identical-to-EC2 restore property).
+
+> **Operator note:** the two forks win on EVERY pod boot, so to change a fork
+> version rebuild the image (bump `percona-plugins.lock.json`); a hand-edit on
+> the PVC is reset on the next restart. Community plugins are the opposite: a UI
+> upgrade persists, so pin a community plugin in `plugins.txt` and rebuild when
+> you want it enforced rather than merely floored.
 
 ## Image reference: TAG, not digest (today)
 
