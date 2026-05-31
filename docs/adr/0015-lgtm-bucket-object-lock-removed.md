@@ -7,6 +7,8 @@ Lock (Compliance, 7 d) on LGTM buckets")
 backends), [ADR 0014](0014-memberlist-cluster-label-isolation.md) (the
 canary that surfaced the Loki write-path failure)
 
+> **Clarification:** "remove" here means removing the bucket's **default retention rule**, not Object Lock itself. Object Lock cannot be disabled after bucket creation, so the buckets keep `ObjectLockEnabled: Enabled` (verified live), but with no retention rule and no legal hold it is dormant and does not gate writes. `terraform/lgtm-storage.tf` no longer declares `object_lock_enabled = true`, so consider re-adding it as a comment to reflect the immutable live state.
+
 ## Context
 
 ADR 0011 H5 enabled S3 Object Lock with `COMPLIANCE` mode + 7 d default

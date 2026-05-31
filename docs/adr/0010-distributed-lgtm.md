@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-05-06)
 **Supersedes:** [ADR 0006](0006-kube-prometheus-stack-over-mimir.md)
-**Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) (the multi-AZ ingester topology collapsed to single-AZ, single-replica).
+**Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) (the multi-AZ ingester topology collapsed to single-AZ, single-replica), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (the pull/scrape edge model inverted to master-side push), and [ADR 0016](0016-lgtm-only-metrics-stack.md) (kube-prometheus-stack retired; Alloy DS is the sole scraper, Mimir the long-term store).
 
 ## Context
 
@@ -126,8 +126,8 @@ duplicative.
 
 | Wave | PR | Scope |
 |---|---|---|
-| L-1 | [#8](https://github.com/nogueiraanderson/percona-ci-platform/pull/8) | S3 buckets + KMS + Pod Identity |
-| L-2 | [#9](https://github.com/nogueiraanderson/percona-ci-platform/pull/9) | Mimir/Loki/Tempo Helm wrappers |
-| L-3 | [#10](https://github.com/nogueiraanderson/percona-ci-platform/pull/10) | kube-prometheus-stack agent + AM HA |
-| L-4 | [#11](https://github.com/nogueiraanderson/percona-ci-platform/pull/11) | Grafana + Alloy + Alloy gateway + SAML |
+| L-1 | [#8](https://github.com/Percona/percona-cd-platform/pull/8) | S3 buckets + KMS + Pod Identity |
+| L-2 | [#9](https://github.com/Percona/percona-cd-platform/pull/9) | Mimir/Loki/Tempo Helm wrappers |
+| L-3 | [#10](https://github.com/Percona/percona-cd-platform/pull/10) | kube-prometheus-stack agent + AM HA |
+| L-4 | [#11](https://github.com/Percona/percona-cd-platform/pull/11) | Grafana + Alloy + Alloy gateway + SAML |
 | L-5 | this PR | ADR + observability.md + runbooks |

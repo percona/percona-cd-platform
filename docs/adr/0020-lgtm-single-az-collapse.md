@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-05-13; PVC-retention values codified 2026-05-27)
 **Supersedes:** Multi-AZ ingester topology described in [ADR 0010](0010-distributed-lgtm.md) and the multi-AZ portion of [ADR 0017](0017-cluster-tier-taxonomy-and-lgtm-pinning.md).
+**Amended by:** [ADR 0023](0023-lgtm-stateful-az-drift.md) — live PVs drifted into 1b/1c despite the single-AZ intent; the verification in this ADR could not detect it. Remediation (default-`gp3` `allowedTopologies` lock) is tracked there.
 **Related:** [ADR 0014](0014-memberlist-cluster-label-isolation.md), [ADR 0015](0015-lgtm-bucket-object-lock-removed.md).
 
 ## Context

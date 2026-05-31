@@ -1,7 +1,7 @@
 # 0024 — Jenkins fleet ownership boundary: five-layer model
 
 **Status:** Proposed (2026-05-31)
-**Related:** [ADR 0005](0005-gitops-bridge-bootstrap.md) (GitOps-bridge bootstrap), [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) (managed NG for stateful workloads), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (master-side push pipeline), [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (shared ALB front door).
+**Related:** [ADR 0005](0005-gitops-bridge-bootstrap.md) (GitOps-bridge bootstrap), [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) (managed NG for stateful workloads), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (master-side push pipeline), [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (shared ALB front door), [ADR 0027](0027-baked-jenkins-controller-image.md) (the baked image that shrinks the EBS plugin residue this model calls for).
 
 ## Context
 
@@ -49,7 +49,7 @@ Any Terraform reaching into a higher layer that is NOT one of these three is a b
 
 **(-) Some friction at the seams.** A change that spans delivery and content (e.g. a new groovy script in a new bucket key) touches two layers in two PRs. This is intentional: it forces the delivery-vs-content split to stay clean.
 
-**(-) The model is aspirational at the edges today.** Plugins still live on EBS until the baked image lands; some config is still groovy, not JCasC. The boundary describes the target; the reproducibility direction is what closes the gap.
+**(-) The model is aspirational at the edges today.** Plugins still live on EBS until the baked image lands ([ADR 0027](0027-baked-jenkins-controller-image.md), now landing for the in-cluster pilot); some config is still groovy, not JCasC. The boundary describes the target; the reproducibility direction is what closes the gap.
 
 ## Verification
 

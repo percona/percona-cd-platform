@@ -131,7 +131,17 @@ trip is confirmed, the form is disabled. Recovery moves to in-pod
 - **Operational surface**: one new namespace (`authentik`), four new
   pods (server + worker + bundled Postgres + bundled Redis), one new
   ALB Ingress rule (joins existing `jenkins-cd` group, no new LB), one
-  new Secrets Manager bundle with four random_password keys.
+  new Secrets Manager bundle with eight `random_password` keys (secret_key,
+  bootstrap password + token, PG password, and the Grafana / ArgoCD /
+  Headlamp OIDC client secrets).
+- **Secrets persist in Terraform state.** The eight `random_password` values
+  are written into `aws_secretsmanager_secret_version.authentik_config` via
+  `secret_string`, so they land in plaintext in the OpenTofu state file
+  (mitigated by the encrypted, access-locked S3 backend, not eliminated). The
+  modern fix is the provider's write-only arguments (`secret_string_wo` +
+  `secret_string_wo_version`, available on the pinned aws provider) which keep
+  the value out of state; deferred, worth doing when the auth bundle is next
+  touched.
 - **SP record management is centralized.** One SP record at Duo, one
   cert pair, one ACS URL. SP cert rotation = one HD JSM Change Request,
   not N.
@@ -170,9 +180,9 @@ trip is confirmed, the form is disabled. Recovery moves to in-pod
 
 | Wave | PR / commit | Scope |
 |---|---|---|
-| A-1 | [#26](https://github.com/nogueiraanderson/percona-ci-platform/pull/26) | TF bootstrap: random secrets + Secrets Manager bundle + var/data/local rename from `grafana_saml_*` to `authentik_*` |
-| A-2 | [#27](https://github.com/nogueiraanderson/percona-ci-platform/pull/27) | Authentik chart wrapper + ApplicationSet entry + bootstrap runbook |
-| A-2b | [#29](https://github.com/nogueiraanderson/percona-ci-platform/pull/29) | Codify SAML source + Grafana OIDC client as blueprint ConfigMap + PostSync Job (replaces manual UI runbook) |
+| A-1 | [#26](https://github.com/Percona/percona-cd-platform/pull/26) | TF bootstrap: random secrets + Secrets Manager bundle + var/data/local rename from `grafana_saml_*` to `authentik_*` |
+| A-2 | [#27](https://github.com/Percona/percona-cd-platform/pull/27) | Authentik chart wrapper + ApplicationSet entry + bootstrap runbook |
+| A-2b | [#29](https://github.com/Percona/percona-cd-platform/pull/29) | Codify SAML source + Grafana OIDC client as blueprint ConfigMap + PostSync Job (replaces manual UI runbook) |
 | A-3 | `952c753` (direct to main) | Grafana SAML→OIDC cutover: drop SAML env block + cert mounts, add OIDC env block, ALLOWED_GROUPS gate, role mapping |
 | A-3b | `55f4164` | Move LDAP DN strip from `user_property_mappings` to `group_property_mappings` (Authentik 2024.8 split) |
 | A-3c | `684095d` | Disable Grafana local login form after SSO validation |

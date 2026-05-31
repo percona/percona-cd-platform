@@ -31,6 +31,8 @@ mandatory — without it, every association silently no-ops.
 IRSA stays available via `terraform-aws-modules/iam/aws//modules/iam-role-for-
 service-accounts-eks` for edge cases (legacy SDK quirks).
 
+**Update 2026-05-31 (post-review):** IRSA was subsequently *retired*, not merely kept as a fallback. `terraform/eks.tf` sets `enable_irsa = false` and the cluster's IAM OIDC provider was deleted, so the `iam_irsa` pin in `versions.tf` is now dead code (instantiated nowhere) and should be dropped. Every in-cluster consumer is on Pod Identity. The ps3-k8s verification gate below was also mooted: the masters are EKS-*fronted* EC2 ([ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md)), not in-cluster pods, and the EC2-plugin credential problem was solved by the patched plugin fork + `e-ec2-irsa-credential.groovy`, not by Pod Identity (see `docs/lessons-from-poc.md`).
+
 ## Consequences
 
 - Adding a new addon: one `local.modules.pod_identity` block in

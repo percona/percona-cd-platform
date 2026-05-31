@@ -1,6 +1,6 @@
 # 0009 — Central scrape now, agent + remote_write later (Jenkins fleet)
 
-**Status:** Accepted (2026-04-30)
+**Status:** Superseded (2026-05-07) by [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) — the "v1 ships central scrape (Option A)" decision was replaced by master-side push (Alloy → ALB → alloy-gateway). _Original status: Accepted (2026-04-30); the "Update 2026-05-07" section below is historical._
 
 ## Context
 
@@ -111,5 +111,4 @@ operational picture: documented here.
 Implementation in commit
 `bf2f68f` (`feat(addons): PS-10997 Phase 2+3 GitOps scaffolding`) and
 the follow-up Terraform / SG / out-of-band steps tracked in tasks
-#44-47. Plan file:
-[`/home/percona/.claude/plans/spicy-prancing-nebula.md`](../../README.md).
+#44-47. Plan file: the private platform plan (not in this repo).
