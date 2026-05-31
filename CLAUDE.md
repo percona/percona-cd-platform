@@ -16,7 +16,7 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 - **`persistence.volumes`, not `extraVolumes`** for ConfigMap mounts. Init containers can't see `extraVolumes`.
 - **Docker image:** always `docker buildx build --platform linux/amd64 --push`. Build host (m3) is arm64, EKS nodes are amd64.
 - **Public repo:** no AWS account IDs / ARNs / secrets in `.tfvars` or values files. All sensitive bits flow via `var.account_id`, cluster-secret annotations, or AWS Secrets Manager → External Secrets Operator.
-- **TLS policy:** every ALB Ingress sets `alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06`. Defaults allow TLS 1.0/1.1.
+- **TLS policy:** every ALB Ingress sets `alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` (AWS's recommended default since 2025-09 — TLS 1.3+1.2 only, post-quantum hybrid key exchange, forward-secrecy-only ciphers). Defaults allow TLS 1.0/1.1.
 - **Shared ALB:** every Jenkins host Ingress carries `alb.ingress.kubernetes.io/group.name: jenkins-cd`.
 - **Pre-commit + CI:** `just ci` is the gate. Same set runs on PR.
 - **Terraform only via `just tf-*`.** The justfile is the single TF entrypoint; no raw `tofu`, no `cd terraform`. Recipes: `tf-plan` (writes `tfplan`), `tf-apply` (applies the saved `tfplan`, never auto-approve — `tf-apply-now` is removed), `tf-state-backup` before risky applies, `tf-state-versioning-check`, `tf-plan-masters` (PLAN-ONLY; `-target`/`-exclude` are plan-only, no `tf-apply-masters`).

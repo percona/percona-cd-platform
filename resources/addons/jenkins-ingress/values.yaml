@@ -92,4 +92,4 @@ ingress:
   # automatically the first time an Ingress on this group reconciles.
   # ACM wildcard *.cd.percona.com is discovered automatically via SNI.
   groupName: jenkins-masters
-  sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  sslPolicy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09

@@ -151,7 +151,7 @@ resource "helm_release" "argocd" {
           "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
           "alb.ingress.kubernetes.io/target-type"      = "ip"
           "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTPS\":443}]"
-          "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+          "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
           "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
           "alb.ingress.kubernetes.io/healthcheck-path" = "/healthz"
           "alb.ingress.kubernetes.io/healthcheck-port" = "traffic-port"

@@ -147,10 +147,14 @@ The default ALB security policy allows TLS 1.0 and TLS 1.1, which are
 deprecated and insecure. Must explicitly set the annotation:
 
 ```
-alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
 ```
 
-This enforces TLS 1.2 as the minimum with TLS 1.3 support.
+This enforces TLS 1.2 as the minimum with TLS 1.3 support. `Res-PQ-2025-09`
+is AWS's recommended default since Sept 2025: it adds hybrid post-quantum
+key exchange (ML-KEM, transparent fallback for clients without it) and the
+restricted (`Res`) cipher set, dropping the legacy non-forward-secret RSA
+ciphers that the older `…-2021-06` policy still carried.
 
 **Lesson**: never rely on ALB defaults for TLS. Always set the ssl-policy
 annotation explicitly.
