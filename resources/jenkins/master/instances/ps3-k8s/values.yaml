@@ -1,30 +1,54 @@
-# ps3-k8s.cd.percona.com -- first Jenkins controller to run in-cluster (the pilot).
+# ps3-k8s.cd.percona.com -- in-cluster ps3 controller.
 #
-# ENABLED as a FRESH-PVC dark replica (Stage 1): comes up on an EMPTY JENKINS_HOME
-# (the baked image seeds plugins) with NO production traffic, to prove the
-# substrate wiring end-to-end: node pool placement, Pod Identity -> EC2-plugin AWS
-# creds, ALB + wildcard ACM (SNI) + external-dns, and the JNLP agent listener.
-# Production ps3.cd.percona.com keeps serving on EC2 throughout. The snapshot-seed
-# of the real ps3 JENKINS_HOME (runbooks/migrate-ps3-to-eks.md) and the DNS cutover
-# are LATER, separately-gated steps -- until then existingClaim stays unset.
-# Generated Application is MANUAL-SYNC (ADR 0025). These are jenkins:-scoped
-# overrides layered on values-base.yaml.
+# STAGE 2 (real-data clone): booting from the REAL ps3 JENKINS_HOME, restored from
+# an app-consistent EBS snapshot of the fenced EC2 master, to validate plugins,
+# upgrades, GitHub OAuth and real agent provisioning against ps3's actual config.
+# The EC2 ps3 master is fenced (jenkins masked + :8080 down) so the in-cluster
+# controller is the single writer. jenkins:-scoped overrides on values-base.yaml.
+# Generated Application is MANUAL-SYNC (ADR 0025).
 jenkins:
   controller:
     ingress:
       hostName: ps3-k8s.cd.percona.com
-      # No certificate-arn: the AWS Load Balancer Controller auto-discovers the
-      # wildcard *.cd.percona.com ACM cert via SNI from the Ingress host (same as
-      # the jenkins-ingress proxy). Keeps the cert ARN (account id) out of this
-      # public repo; the whole jenkins-masters ALB group stays on discovery.
+      # No certificate-arn: the ALB controller auto-discovers the wildcard
+      # *.cd.percona.com ACM cert via SNI (keeps the cert ARN out of this repo).
       tls:
         - hosts:
             - ps3-k8s.cd.percona.com
+    # Restored-home preparation. The chart's apply_config.sh exits early on a
+    # populated home, so the safety guard + ownership fix live here as init
+    # containers (they get the jenkins-home mount with the same subPath):
+    #  - boot-guard: refuse to start unless the restored home is genuinely ps3's
+    #    (config.xml + secrets/master.key present), so an empty or wrong volume
+    #    can never silently boot a blank Jenkins over ps3's identity.
+    #  - chown: the EC2 jenkins UID/GID is 994; the in-cluster controller runs as
+    #    1000, so fsGroup fixes the group but the files need an explicit chown.
+    customInitContainers:
+      - name: prepare-restored-home
+        image: public.ecr.aws/docker/library/busybox:1.36
+        securityContext:
+          runAsUser: 0
+        command: ["sh", "-c"]
+        args:
+          - |
+            set -e
+            test -f /var/jenkins_home/config.xml || { echo "GUARD FAIL: config.xml missing (empty/wrong volume)"; exit 1; }
+            test -f /var/jenkins_home/secrets/master.key || { echo "GUARD FAIL: secrets/master.key missing"; exit 1; }
+            echo "boot-guard ok: real ps3 JENKINS_HOME present"
+            chown -R 1000:1000 /var/jenkins_home
+            echo "chown 1000:1000 complete"
+        volumeMounts:
+          - name: jenkins-home
+            mountPath: /var/jenkins_home
+            subPath: ps3.cd.percona.com
   persistence:
-    # Fresh (throwaway) PVC for the dark-replica boot test: empty JENKINS_HOME,
-    # baked image seeds plugins. Pre-binding to a volume restored from the EC2 ps3
-    # cross-region EBS snapshot (us-east-1a, runbooks/migrate-ps3-to-eks.md) is the
-    # later seed step; set existingClaim then.
     storageClass: gp3-jenkins-1a-retain
     size: 100Gi
-    # existingClaim: ps3-k8s-jenkins-home
+    # JENKINS_HOME on the EC2 master is the SUBDIR ps3.cd.percona.com of the XFS
+    # data volume, so mount that subdir as /var/jenkins_home (else Jenkins boots
+    # the empty volume root and ignores config.xml).
+    subPath: ps3.cd.percona.com
+    # Pre-bound static PV from the restored snapshot volume (us-east-1a, xfs),
+    # created out-of-band (kubectl, uncommitted) so the EBS volume id stays out of
+    # this public repo.
+    existingClaim: ps3-k8s-jenkins-home
