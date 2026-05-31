@@ -9,6 +9,9 @@ kubeconform_ver := "0.7.0"
 trivy_ver       := "0.70.0"
 yamllint_ver    := "1.38.0"
 just_ver        := "1.50.0"
+helm_version      := "3.16.4"
+helm_sha256_amd64 := "fc307327959aa38ed8f9f7e66d45492bb022a66c3e5da6063958254b9767d179"
+helm_sha256_arm64 := "d3f8f15b3d9ec8c8678fbf3280c3e5902efabe5912e2f9fcf29107efbc8ead69"
 
 # ---------- AWS context ----------
 # AWS_PROFILE / AWS_REGION come from the operator's environment. They are NEVER
@@ -33,7 +36,7 @@ ci: lint validate
 
 lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
 
-validate: tf-validate manifest-validate
+validate: tf-validate manifest-validate helm-render
 
 # ---------- internal guards ----------
 # Fail loudly (at runtime, never parse time) if AWS_PROFILE is not exported.
@@ -137,6 +140,34 @@ manifest-validate:
       -schema-location default \
       -schema-location "$URL" \
       argocd-bootstrap/ resources/
+
+# ---------- jenkins controller chart ----------
+# Render the per-instance Jenkins controller chart and assert the values reach
+# the `jenkins` subchart (image / Retain PVC / ALB group / JNLP listener / node
+# pool). Mirrors the .github/workflows/ci.yml `helm` job; uses a pinned,
+# sha-verified helm cached under .cache/.
+helm-render: _helm
+    PATH="$(pwd)/.cache/helm:$PATH" scripts/jenkins-chart-render-check.sh
+
+# Download + sha256-verify the pinned helm into .cache/helm (idempotent,
+# arch-detected). Pins mirror .github/workflows/ci.yml.
+_helm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dest=".cache/helm"
+    if [ -x "$dest/helm" ] && "$dest/helm" version --short 2>/dev/null | grep -q "v{{helm_version}}"; then exit 0; fi
+    case "$(uname -m)" in
+      x86_64|amd64)  arch=amd64; sha="{{helm_sha256_amd64}}" ;;
+      aarch64|arm64) arch=arm64; sha="{{helm_sha256_arm64}}" ;;
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+    esac
+    mkdir -p "$dest"
+    tgz="$(mktemp)"
+    curl -fsSL -o "$tgz" "https://get.helm.sh/helm-v{{helm_version}}-linux-${arch}.tar.gz"
+    echo "${sha}  ${tgz}" | sha256sum -c -
+    tar -xzf "$tgz" -C "$dest" --strip-components=1 "linux-${arch}/helm"
+    rm -f "$tgz"
+    "$dest/helm" version --short
 
 # ---------- workflow security ----------
 actionlint:

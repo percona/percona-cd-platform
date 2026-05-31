@@ -125,9 +125,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: install helm
+      - name: install helm (pinned + sha-verified)
         run: |
           curl -sSL -o helm.tgz https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz
+          echo "fc307327959aa38ed8f9f7e66d45492bb022a66c3e5da6063958254b9767d179  helm.tgz" | sha256sum -c -
           tar -xzf helm.tgz linux-amd64/helm
           sudo mv linux-amd64/helm /usr/local/bin/
 
