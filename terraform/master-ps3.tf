@@ -26,6 +26,10 @@ module "ps3" {
   create_eip              = false # ALB owns HTTPS, SSM owns SSH
   create_route53_record   = false # external-dns owns ps3.cd.percona.com
 
+  # ps3 is the staging master; keep its root at the original 8GB rather than
+  # the module's 50GB default (the 50GB fix targets the production masters).
+  root_volume_size = 8
+
   # CloudWatch policy is vestigial after the Alloy push migration; kept
   # attached to keep import diff zero, detached in a follow-up.
   extra_master_managed_policies = [
