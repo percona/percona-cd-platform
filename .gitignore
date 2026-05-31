@@ -1,5 +1,7 @@
-# Jenkins plugin binaries (downloaded from GH releases at image-build time)
-image/percona-plugins/*.hpi
+# Jenkins plugin binaries (fetched from GitHub Releases by fetch-hpis.sh at
+# image-build time; never commit the binaries themselves).
+images/jenkins/percona-plugins/*.hpi
+!images/jenkins/percona-plugins/.gitkeep
 
 # Terraform / OpenTofu
 .terraform/

@@ -40,6 +40,11 @@ aws-java-sdk2-autoscaling:2.33.4-62.vc1a_8df64b_4c9
 aws-java-sdk2-cloudformation:2.33.4-62.vc1a_8df64b_4c9
 aws-java-sdk2-core:2.33.4-62.vc1a_8df64b_4c9
 aws-java-sdk2-ec2:2.33.4-62.vc1a_8df64b_4c9
+# REP 2.1 (TIER 8): chart-mandatory secrets provider for JCasC-backed
+# credentials. Pin is a plausible 2.541.3-compatible version; CI MUST regenerate
+# plugins.effective.txt against the 2.541.3 base and re-pin if the resolver
+# disagrees. See README.md "CI" + tf-to-k8s-2/62 §5.
+aws-secrets-manager-credentials-provider:2.222.v376939a_9ffb_b
 azure-credentials:418.v6628eec6a_2c5
 azure-sdk:259.vf079c96088a_f
 badge:2.562.vc3c0b_6925377
@@ -87,6 +92,10 @@ commons-lang3-api:3.20.0-109.ve43756e2d2b_4
 commons-text-api:1.15.0-210.v7480a_da_70b_9e
 compress-buildlog:1.2
 conditional-buildstep:1.5.0
+# REP 2.1 (TIER 8): chart-mandatory JCasC engine. Pin is a plausible
+# 2.541.3-compatible version; CI MUST regenerate plugins.effective.txt against
+# the 2.541.3 base and re-pin if the resolver disagrees. See README.md "CI".
+configuration-as-code:2081.v2d0940662a_34
 copyartifact:795.ve8e151429b_27
 credentials:1490.ve7532596f1fd
 credentials-binding:717.v951d49b_5f3a_a_

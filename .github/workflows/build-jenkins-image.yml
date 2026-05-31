@@ -1,0 +1,153 @@
+name: build-jenkins-image
+
+on:
+  pull_request:
+    paths:
+      - 'images/jenkins/**'
+      - '.github/workflows/build-jenkins-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'images/jenkins/**'
+      - '.github/workflows/build-jenkins-image.yml'
+
+# Default: read-only. The privileged push job re-declares its own permissions.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_REPO: percona-cd/jenkins-percona
+  AWS_REGION: us-east-1
+  JENKINS_LTS: "2.541.3"
+
+jobs:
+  # ---- actionlint/zizmor gate (mirrors ci.yml) ----
+  lint:
+    name: actionlint + zizmor
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+      - name: install zizmor
+        run: pipx install zizmor==1.24.1
+      - name: zizmor
+        run: zizmor --quiet .github/workflows/build-jenkins-image.yml
+
+  # ---- PR validation: build + smoke, NO AWS token, NO push ----
+  validate:
+    name: build + smoke (no push)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read            # explicitly NO id-token
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # docker/* is not in the repo zizmor ref-pin allowlist (.github/zizmor.yml),
+      # so its actions are SHA-pinned everywhere. Refresh with:
+      #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: fetch + verify fork HPIs
+        working-directory: images/jenkins
+        run: ./fetch-hpis.sh
+      - name: build (amd64, load to local daemon, no push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: images/jenkins
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jenkins-percona:pr-${{ github.sha }}
+      - name: smoke-boot (empty-home AND restored-home)
+        run: images/jenkins/smoke-boot.sh jenkins-percona:pr-${{ github.sha }}
+      - name: upload effective plugin list
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-effective-${{ github.sha }}
+          path: images/jenkins/plugins.effective.txt
+          if-no-files-found: warn
+
+  # ---- main: build + smoke + push to ECR via OIDC ----
+  publish:
+    name: build + smoke + push (OIDC)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write          # ONLY this job mints the OIDC JWT
+    steps:
+      # Third-party actions pinned by commit SHA below this line (the job holds
+      # AWS creds after configure-aws-credentials). Resolve/refresh the SHAs with:
+      #   gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha
+      # (dereference annotated-tag objects via .../git/tags/<sha> --jq .object.sha)
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: fetch + verify fork HPIs
+        working-directory: images/jenkins
+        run: ./fetch-hpis.sh
+      - name: build (amd64, load, NO push yet)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: images/jenkins
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jenkins-percona:${{ github.sha }}
+      - name: smoke-boot BEFORE push (empty-home AND restored-home)
+        run: images/jenkins/smoke-boot.sh jenkins-percona:${{ github.sha }}
+
+      # --- AWS creds appear here; everything after is privileged ---
+      - name: configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        with:
+          role-to-assume: ${{ secrets.JENKINS_IMAGE_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: ECR login
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
+      - name: push (amd64) with SBOM + provenance
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: images/jenkins
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ env.JENKINS_LTS }}-${{ github.sha }}
+      - name: capture pushed digest
+        env:
+          # Bind trusted step outputs to env so they are not interpolated
+          # directly into the run shell (zizmor template-injection guard).
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "digest=${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
+      - name: SECOND smoke against the PUSHED digest
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          REF="${REGISTRY}/${IMAGE_REPO}@${DIGEST}"
+          images/jenkins/smoke-boot.sh "$REF"
+      - name: upload effective plugin list
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: plugins-effective-${{ github.sha }}
+          path: images/jenkins/plugins.effective.txt
+          if-no-files-found: warn
