@@ -49,6 +49,10 @@ data "aws_iam_policy_document" "gha_jenkins_image_push_perms" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
+      # Read-only: buildx issues a HEAD on the manifest when pushing with
+      # provenance + SBOM attestations (a manifest list), so the push 403s on
+      # the manifest HEAD without it. Repo-scoped, not a mutate action.
+      "ecr:BatchGetImage",
     ]
     resources = [aws_ecr_repository.jenkins_percona.arn]
   }
