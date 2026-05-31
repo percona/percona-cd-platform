@@ -7,3 +7,11 @@ import {
   to = module.pxc.aws_ebs_volume.data
   id = "vol-03b3852ad6dd6c553"
 }
+
+# TRANSIENT: adopt the retained pxc EIP (13.56.198.107) so the new master keeps the
+# SAME public IP for the CHAOS test-chaos-vm :50000 inbound-agent path (removable
+# workaround, see master-pxc.tf create_eip). Remove with the import after apply.
+import {
+  to = module.pxc.aws_eip.master[0]
+  id = "eipalloc-0eafd1db6cc78a809"
+}

@@ -48,10 +48,15 @@ module "pxc" {
   # order-independent of delete-stack). The instance references the LT by ID.
   launch_template_name = "PXCMasterTemplateTF"
 
-  # EKS-fronted: DNS is external-dns -> ALB -> private IP over peering, admin is
-  # paws/SSM, EIP-less (outbound rides the auto-assigned public IP from the
-  # public subnet's MapPublicIpOnLaunch + 0.0.0.0/0 -> IGW).
-  create_eip            = false
+  # EKS-fronted for HTTP: DNS is external-dns -> ALB -> private IP over peering,
+  # admin via paws/SSM. NOT EIP-less (unlike ps3/ps80): create_eip=true is a
+  # REMOVABLE WORKAROUND that keeps the public IP 13.56.198.107 for the CHAOS
+  # team's `test-chaos-vm` direct-TCP inbound JNLP agent (:50000 from the corp DC
+  # range 40.143.89.204/30, set up by IT in Feb 2026). jnlpHost.groovy advertises
+  # this EIP as the inbound-agent host so the agent connects transparently. REMOVE
+  # when test-chaos-vm is retired or moved to WebSocket: set create_eip=false,
+  # delete jnlpHost.groovy + the EIP retain, then -replace the instance. PS-11228.
+  create_eip            = true
   create_route53_record = false
 
   extra_master_managed_policies = [
