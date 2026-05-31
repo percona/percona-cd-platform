@@ -3,7 +3,7 @@
 **Status:** Proposed (2026-05-31)
 **Related:** [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (ownership boundary), [ADR 0025](0025-singleton-controller-rollout-gating.md) (rollout gating), [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (shared ALB / host ownership), [ADR 0020](0020-lgtm-single-az-collapse.md) (single-AZ + WAL-on-EBS precedent), [ADR 0023](0023-lgtm-stateful-az-drift.md) (AZ-drift trap).
 
-> **Implementation status: NOT YET implemented.** This ADR decides the operating model; several mechanisms it references are absent from the repo as of 2026-05-31 — there is no `VolumeSnapshotClass` or CSI snapshot controller, `terraform/backup.tf` has no cross-region copy action, and `docs/runbooks/disaster-recovery.md` is a stub. The gating it builds on is also pending ([ADR 0025](0025-singleton-controller-rollout-gating.md)). The sections below describe the target and its acceptance criteria, not the current repo state.
+> **Implementation status: PARTIAL.** The break-glass ordering (pause Argo before `kubectl`) and the disable-via-generator path are now documented in `docs/runbooks/disaster-recovery.md`, and the rollout gating this builds on landed ([ADR 0025](0025-singleton-controller-rollout-gating.md), CD-A, 2026-05-31). STILL PENDING: a CSI `VolumeSnapshotClass` + snapshot controller, a `terraform/backup.tf` cross-region copy action, the seed/cutover flow, and a tested restore drill. Those sections remain target + acceptance criteria, not current state.
 
 ## Context
 

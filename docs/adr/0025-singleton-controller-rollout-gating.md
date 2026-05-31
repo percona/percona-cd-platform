@@ -3,7 +3,7 @@
 **Status:** Proposed (2026-05-31)
 **Related:** [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (ownership boundary), [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) (managed NG for stateful workloads), [ADR 0023](0023-lgtm-stateful-az-drift.md) (the `do-not-disrupt` double-edge).
 
-> **Implementation status: NOT YET implemented.** This ADR records the decision, not current behavior. As of 2026-05-31 the `jenkins-masters` ApplicationSet still runs `automated.selfHeal: true` + `prune: true`, `argocd-bootstrap/projects/platform.yaml` has no `syncWindows`, and there is no dedicated controller node pool, PDB, preStop quiet-down, or per-master image-digest pin. Master Applications therefore auto-sync today. The CD-A workstream implements the gating below; the Decision and Acceptance-criteria sections describe the target, not the live repo.
+> **Implementation status: PARTIAL (CD-A landed 2026-05-31).** The sync gating is now live: the `jenkins-masters` ApplicationSet is manual-sync (no `automated.selfHeal`/`prune`), `argocd-bootstrap/projects/platform.yaml` carries an explicit-name deny `syncWindows` entry for `jenkins-ps3-k8s`, the disable-via-generator path is documented in `docs/runbooks/disaster-recovery.md`, and `ps3-k8s` has been removed from the generator (parked in `resources/jenkins/_disabled/`). STILL PENDING (Decision items 4-5 remain target, not live): a dedicated controller node pool, PDB, preStop quiet-down, and per-master image-digest pin.
 
 ## Context
 

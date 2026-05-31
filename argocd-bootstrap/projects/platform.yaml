@@ -7,6 +7,19 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   description: Platform addons + Jenkins masters for percona-ci-platform cluster.
+  # Deny auto-sync to singleton Jenkins masters; manual sync stays allowed.
+  # Named EXPLICITLY (never `jenkins-*`): the live jenkins-ingress and
+  # jenkins-endpoint-reconciler addon Applications are in THIS project and a
+  # glob would freeze them. Add each new master's Application name here.
+  # See ADR 0025.
+  syncWindows:
+    - kind: deny
+      schedule: '* * * * *'
+      duration: 24h
+      applications:
+        - jenkins-ps3-k8s
+      manualSync: true
+      timeZone: Europe/Berlin
   sourceRepos:
     - https://github.com/Percona/percona-cd-platform
     - https://argoproj.github.io/argo-helm
