@@ -39,16 +39,21 @@ Index of design notes, runbooks, and ADRs for the platform.
 
 Step-by-step procedures for operational tasks.
 
-- [`bootstrap-state.md`](runbooks/bootstrap-state.md) — pre-creating the state bucket + lock
 - [`add-jenkins-host.md`](runbooks/add-jenkins-host.md) — bring a new Jenkins host onto the shared ALB
+- [`authentik-blueprint-ops.md`](runbooks/authentik-blueprint-ops.md) — manage Authentik blueprints (export, apply, troubleshoot)
 - [`authentik-bootstrap.md`](runbooks/authentik-bootstrap.md) — Authentik first-time configuration
+- [`authentik-cert-rotation.md`](runbooks/authentik-cert-rotation.md) — rotate Authentik signing certificates
+- [`bootstrap-state.md`](runbooks/bootstrap-state.md) — pre-creating the state bucket + lock
 - [`disaster-recovery.md`](runbooks/disaster-recovery.md) — cluster recovery procedures
 - [`eks-upgrade.md`](runbooks/eks-upgrade.md) — control plane + node group upgrades
 - [`grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md) — Grafana OAuth cutover
 - [`jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md) — per-master SSL cutover to the shared ALB
+- [`lgtm-az-migration.md`](runbooks/lgtm-az-migration.md) — relocate bound LGTM PVCs across AZs
+- [`lgtm-orphan-pvc-sweep.md`](runbooks/lgtm-orphan-pvc-sweep.md) — clean up orphaned LGTM PVCs
 - [`migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md) — moving a Jenkins master in-cluster
 - [`mng-label-taint-changes.md`](runbooks/mng-label-taint-changes.md) — apply MNG label/taint edits without a drain
 - [`restore-mimir.md`](runbooks/restore-mimir.md) — restore Mimir state from S3
+- [`rotate-acm.md`](runbooks/rotate-acm.md) — rotate the ACM wildcard cert (stub)
 
 ## ADRs
 
