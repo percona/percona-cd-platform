@@ -1,0 +1,19 @@
+{
+  "_comment": "Patched Percona fork HPIs baked over the community plugin set. fetch-hpis.sh downloads each url to a temp file, verifies sha256 against this lock, then stages it as <id>.hpi in ./percona-plugins/. Both forks live in Percona-Lab and publish via their tag-driven release.yml; the sha256 values are of the published GitHub Release assets (release.yml rebuilds the HPI from source, so these are the canonical build shas, not the nogueiraanderson pre-move builds).",
+  "plugins": [
+    {
+      "id": "hetzner-cloud",
+      "version": "103.percona.26",
+      "filename": "hetzner-cloud-103.percona.26.hpi",
+      "url": "https://github.com/Percona-Lab/jenkins-hetzner-cloud-plugin/releases/download/v103.percona.26/hetzner-cloud-103.percona.26.hpi",
+      "sha256": "3c591c071b3e1987b8d3f3ad41b8f570bba2daaaee464583f80e8703024718ea"
+    },
+    {
+      "id": "ec2",
+      "version": "5.24.percona.3",
+      "filename": "ec2-5.24.percona.3.hpi",
+      "url": "https://github.com/Percona-Lab/jenkins-ec2-plugin/releases/download/v5.24.percona.3/ec2-5.24.percona.3.hpi",
+      "sha256": "c0696defb4ced2e3da23a3d7c6f6ea8e4c6f8236d1fe1822644b808b8481645f"
+    }
+  ]
+}

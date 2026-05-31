@@ -4,13 +4,23 @@
 # Lift-and-shift of the ps57 Jenkins master to EKS (eu-central-1).
 # Workers (EC2 + Hetzner) are unchanged; only the master runs on EKS.
 # TLS via ALB Ingress Controller + ACM certificate.
-# Jenkins version: 2.528.3 (same as current fleet).
+# Jenkins version: 2.541.3 LTS (matches the live fleet; baked controller image).
 
 controller:
   image:
-    registry: "<account-id>.dkr.ecr.eu-central-1.amazonaws.com"
-    repository: jenkins-percona
-    tag: "2.528.3-ps57"
+    # Canonical controller-image registry: us-east-1 ECR, namespaced
+    # percona-cd/jenkins-percona (TIER 5 ecr.tf; matches the cluster region and
+    # the `just build-image` percona-cd/<name> convention). The old
+    # eu-central-1 bare `jenkins-percona` was stale POC wiring with no backing repo.
+    registry: "<account-id>.dkr.ecr.us-east-1.amazonaws.com"
+    repository: percona-cd/jenkins-percona
+    # CAVEAT: this is an immutable SHA-TAG <lts>-<gitsha>, NOT a true @sha256
+    # digest. The upstream jenkins subchart (5.9.18) has no `digest` key, so a
+    # real digest pin waits on the pilot chart rebuild (Step 13). The ECR repo is
+    # IMMUTABLE so the tag cannot be overwritten; the build records the pushed
+    # @sha256 digest in the bump PR body for traceability. Replace the placeholder
+    # below with the actual <JENKINS_LTS>-<github.sha> the build pushed.
+    tag: "2.541.3-a1b2c3d"  # PLACEHOLDER: <lts>-<gitsha>, set from the build
     pullPolicy: IfNotPresent
 
   # Plugins are baked into the Docker image, not downloaded at startup
