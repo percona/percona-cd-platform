@@ -153,9 +153,11 @@ variable "jenkins_hosts" {
     # ps80 + ps3 upstreams are discovered by the in-cluster jenkins-endpoint-
     # reconciler (EndpointSlice over cross-region peering), not an origin-<host>
     # record. Re-add upstream_origin only for a Mode B fallback.
-    ps80  = { mode = "proxy" }
-    ps3   = { mode = "proxy" }
-    pxc   = { mode = "proxy", upstream_origin = "origin-pxc.cd.percona.com" }
+    ps80 = { mode = "proxy" }
+    ps3  = { mode = "proxy" }
+    # pxc upstream discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), like ps80/ps3/ps57.
+    pxc   = { mode = "proxy" }
     pxb   = { mode = "proxy", upstream_origin = "origin-pxb.cd.percona.com" }
     psmdb = { mode = "proxy", upstream_origin = "origin-psmdb.cd.percona.com" }
     pg    = { mode = "proxy", upstream_origin = "origin-pg.cd.percona.com" }

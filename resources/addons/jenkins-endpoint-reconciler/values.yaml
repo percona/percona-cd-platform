@@ -46,6 +46,10 @@ hosts:
     region: us-west-2
     tag: jenkins-pxb
     port: 8080
+  - name: pxc
+    region: us-west-1
+    tag: jenkins-pxc
+    port: 8080
 
 resources:
   requests:
