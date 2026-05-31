@@ -1,98 +1,106 @@
-# Jenkins Helm values for ps57-k8s.cd.percona.com POC on EKS
-# Chart: jenkinsci/jenkins
+# Per-instance Jenkins controller -- BASE values (merged with instances/<host>/values.yaml).
 #
-# Lift-and-shift of the ps57 Jenkins master to EKS (eu-central-1).
-# Workers (EC2 + Hetzner) are unchanged; only the master runs on EKS.
-# TLS via ALB Ingress Controller + ACM certificate.
-# Jenkins version: 2.541.3 LTS (matches the live fleet; baked controller image).
+# This chart is a thin wrapper over the upstream `jenkins` subchart (Chart.yaml
+# dependency, charts.jenkins.io 5.9.18). EVERYTHING the subchart consumes MUST be
+# nested under the `jenkins:` key (the dependency name) -- top-level keys are
+# ignored by the subchart (the old top-level `controller:` was the reason ps3-k8s
+# came up as chart defaults). Host-specific values (ingress host, ACM cert,
+# pre-bound PVC) live in instances/<host>/values.yaml, also under `jenkins:`.
+jenkins:
+  controller:
+    image:
+      # Canonical controller image: us-east-1 ECR, percona-cd/jenkins-percona
+      # (TIER 5 ecr.tf). Built + pushed by build-jenkins-image.yml.
+      registry: "<account-id>.dkr.ecr.us-east-1.amazonaws.com"
+      repository: percona-cd/jenkins-percona
+      # Immutable SHA-tag <lts>-<gitsha> from the publish job (ECR repo is
+      # IMMUTABLE so the tag cannot be overwritten). A digest bump is a
+      # deliberate, windowed, human-merged PR per ADR 0025.
+      tag: "2.541.3-2dfcef2f83df0e06a582443a6e7f331fe2d51eae"
+      pullPolicy: IfNotPresent
 
-controller:
-  image:
-    # Canonical controller-image registry: us-east-1 ECR, namespaced
-    # percona-cd/jenkins-percona (TIER 5 ecr.tf; matches the cluster region and
-    # the `just build-image` percona-cd/<name> convention). The old
-    # eu-central-1 bare `jenkins-percona` was stale POC wiring with no backing repo.
-    registry: "<account-id>.dkr.ecr.us-east-1.amazonaws.com"
-    repository: percona-cd/jenkins-percona
-    # CAVEAT: this is an immutable SHA-TAG <lts>-<gitsha>, NOT a true @sha256
-    # digest. The upstream jenkins subchart (5.9.18) has no `digest` key, so a
-    # real digest pin waits on the pilot chart rebuild (Step 13). The ECR repo is
-    # IMMUTABLE so the tag cannot be overwritten; the build records the pushed
-    # @sha256 digest in the bump PR body for traceability. Replace the placeholder
-    # below with the actual <JENKINS_LTS>-<github.sha> the build pushed.
-    tag: "2.541.3-a1b2c3d"  # PLACEHOLDER: <lts>-<gitsha>, set from the build
-    pullPolicy: IfNotPresent
+    # Plugins are BAKED into the image (community via plugins.txt; the 2 Percona
+    # forks force-installed via .override -- Hybrid policy). Never download at
+    # startup, never let the chart re-install over the baked set.
+    installPlugins: false
+    overwritePluginsFromImage: false
+    initializeOnce: true
 
-  # Plugins are baked into the Docker image, not downloaded at startup
-  installPlugins: false
-  overwritePluginsFromImage: false
-  initializeOnce: true
+    javaOpts: >-
+      -Xms3072m -Xmx4096m -Xss4m -server
+      -Djava.awt.headless=true
+      -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600
 
-  javaOpts: >-
-    -Xms3072m -Xmx4096m -Xss4m -server
-    -Djava.awt.headless=true
-    -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "4Gi"
+      limits:
+        cpu: "4000m"
+        memory: "6Gi"
 
-  resources:
-    requests:
-      cpu: "1000m"
-      memory: "4Gi"
-    limits:
-      cpu: "4000m"
-      memory: "6Gi"
+    serviceType: ClusterIP
+    numExecutors: 1
+    executorMode: "EXCLUSIVE"
 
-  serviceType: ClusterIP
+    # Inbound JNLP listener so external EC2 + Hetzner agents reconnect.
+    # internet-facing because Hetzner agents are outside the VPC.
+    agentListenerPort: 50000
+    agentListenerServiceType: LoadBalancer
+    agentListenerServiceAnnotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "iit-billing-tag=percona-ci-platform"
 
-  # JNLP agent port: EC2 and Hetzner workers connect here
-  agentListenerPort: 50000
-  agentListenerServiceType: LoadBalancer
-  agentListenerServiceAnnotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: nlb
-    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-    service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "iit-billing-tag=jenkins-eks-poc"
+    # Pin the singleton controller to its dedicated on-demand single-AZ node pool
+    # (substrate: terraform recreates this node group with the taint). Placement
+    # is the real anti-disruption guard (ADR 0023), not do-not-disrupt alone.
+    nodeSelector:
+      workload.percona.com/tier: jenkins-master
+    tolerations:
+      - key: workload.percona.com/tier
+        operator: Equal
+        value: jenkins-master
+        effect: NoSchedule
 
-  # Master runs in EXCLUSIVE mode with 1 executor (matches current setup)
-  numExecutors: 1
-  executorMode: "EXCLUSIVE"
+    # ALB ingress; hostName + certificate-arn come from instances/<host>/.
+    ingress:
+      enabled: true
+      ingressClassName: alb
+      annotations:
+        alb.ingress.kubernetes.io/group.name: jenkins-masters
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+        alb.ingress.kubernetes.io/ssl-redirect: "443"
+        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+        alb.ingress.kubernetes.io/healthcheck-path: /login
+        alb.ingress.kubernetes.io/tags: "iit-billing-tag=percona-ci-platform"
 
-  # ALB Ingress with ACM TLS
-  ingress:
+    # JCasC OFF for the dark-replica stage: the PVC (restored from a real EC2
+    # JENKINS_HOME snapshot) is the source of truth for config/jobs/credentials.
+    # TIER 8 (reproducibility) later moves clouds/templates/labels to a per-host
+    # JCasC ConfigMap.
+    JCasC:
+      defaultConfig: false
+      overwriteConfiguration: false
+
+    podLabels:
+      iit-billing-tag: percona-ci-platform
+
+  persistence:
     enabled: true
-    ingressClassName: alb
-    hostName: ps57-k8s.cd.percona.com
-    annotations:
-      alb.ingress.kubernetes.io/group.name: jenkins-shared
-      alb.ingress.kubernetes.io/scheme: internet-facing
-      alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/ssl-redirect: "443"
-      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:<account-id>:certificate/1ec6590a-0529-4af0-81e9-ec59ec71aab2"
-      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
-      alb.ingress.kubernetes.io/healthcheck-path: /login
-      alb.ingress.kubernetes.io/tags: "iit-billing-tag=jenkins-eks-poc"
-    tls:
-      - hosts:
-          - ps57-k8s.cd.percona.com
+    # AZ-pinned Retain StorageClass (reclaimPolicy: Retain). The per-host PVC is
+    # seeded from a real EC2 EBS snapshot; a host may pre-bind via existingClaim.
+    storageClass: gp3-jenkins-1a-retain
+    size: 100Gi
 
-  # JCasC: disabled. The PVC (JENKINS_HOME) is the source of truth.
-  # Manual UI changes (secrets, job configs, plugins) persist on the PVC.
-  JCasC:
-    defaultConfig: false
-    overwriteConfiguration: false
+  serviceAccount:
+    # Created by the substrate (EKS Pod Identity association in terraform); the
+    # chart only references it so the EC2 plugin resolves AWS creds in-pod.
+    create: false
+    name: jenkins
 
-  # Pod labels for cost allocation
-  podLabels:
-    iit-billing-tag: jenkins-eks-poc
-
-persistence:
-  enabled: true
-  existingClaim: ps57-jenkins-home
-  subPath: "ps57.cd.percona.com"
-
-serviceAccount:
-  create: false
-  name: jenkins
-
-# No Kubernetes pod agents; workers are EC2/Hetzner
-agent:
-  enabled: false
+  # External EC2 + Hetzner agents only; no in-cluster Kubernetes pod agents.
+  agent:
+    enabled: false
