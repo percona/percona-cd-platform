@@ -27,11 +27,29 @@ parameterized in `terraform/`.
 
 ```sh
 just ci                # local lint + validate
-just tf-plan           # TF plan
-just tf-apply          # TF apply
+just tf-plan           # TF plan (writes tfplan)
+just tf-apply          # TF apply (applies the saved tfplan; never auto-approve)
 ```
 
 State bucket + lock are pre-created; see [the bootstrap runbook](docs/runbooks/bootstrap-state.md).
+
+## Operating Terraform via the justfile
+
+The justfile is the single entrypoint for Terraform. Drive every `tofu`
+operation through a `just tf-*` recipe; do not run raw `tofu` or `cd terraform`
+by hand.
+
+- **`AWS_PROFILE` is required and supplied externally.** Export it in your shell
+  (e.g. `export AWS_PROFILE=percona-dev-admin`); AWS-touching recipes fail loudly
+  if it is unset. It is never baked into a default and never set in `terraform/`.
+- **Back up state before any risky apply:** run `just tf-state-backup` (timestamped
+  `tofu state pull`) first. `just tf-state-versioning-check` confirms bucket
+  versioning is on.
+- **`tf-plan` writes `tfplan`; `tf-apply` applies that saved plan** — never
+  auto-approve. There is no `tf-apply-now`.
+- **`-target` / `-exclude` are PLAN-ONLY.** `just tf-plan-masters` scopes a plan to
+  the per-master modules for inspection; there is no `tf-apply-masters`. Targeting
+  is for exceptional ops, not routine applies.
 
 ## Compute topology
 

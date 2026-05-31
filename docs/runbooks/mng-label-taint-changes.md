@@ -80,9 +80,12 @@ After the AWS CLI update, the live MNG matches the `eks.tf` config but
 tofu state still reflects the pre-update values. Refresh:
 
 ```sh
-cd terraform
-AWS_PROFILE=percona-dev-admin tofu apply -refresh-only -auto-approve
-AWS_PROFILE=percona-dev-admin tofu plan -target='module.eks.module.eks_managed_node_group["<mng-name>"]'
+# Raw-tofu exception: refresh-only + a targeted plan are intentionally NOT
+# exposed as `just` recipes (the justfile entrypoint forbids -auto-approve and
+# keeps -target plan-only; see CLAUDE.md). Run them directly here, with
+# AWS_PROFILE exported (export AWS_PROFILE=percona-dev-admin).
+tofu -chdir=terraform apply -refresh-only -auto-approve
+tofu -chdir=terraform plan -target='module.eks.module.eks_managed_node_group["<mng-name>"]'
 # Expect: "No changes. Your infrastructure matches the configuration."
 # If labels/taints still show drift, the CLI update didn't match what's in
 # eks.tf -- re-check both sides.

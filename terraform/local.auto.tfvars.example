@@ -3,9 +3,15 @@
 #
 # `cp local.auto.tfvars.example local.auto.tfvars`
 
-# AWS named profile (must exist in ~/.aws/config). Leave commented to use the
-# SDK default chain (AWS_PROFILE env var, SSO, instance profile, etc.).
-#aws_profile = "your-profile-name-here"
+# AWS profile: do NOT set `aws_profile` here.
+#
+# Credential selection is owned by the AWS_PROFILE environment variable, which
+# the justfile reads and injects into every AWS-touching recipe (tf-plan,
+# tf-apply, tf-destroy, ...). Setting aws_profile in local.auto.tfvars creates a
+# split-brain: a tfvars value silently overrides the env var inside `tofu`, so
+# `AWS_PROFILE=X just tf-plan` would plan against profile Y. Leave it unset and
+# providers.tf falls through to the SDK default chain (the AWS_PROFILE you export).
+#   export AWS_PROFILE=percona-dev-admin   # in your shell, NOT here.
 
 # Override only if you want a different region or hostname for a fork/dev cluster.
 #aws_region        = "us-east-1"

@@ -15,6 +15,26 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 - **TLS policy:** every ALB Ingress sets `alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06`. Defaults allow TLS 1.0/1.1.
 - **Shared ALB:** every Jenkins host Ingress carries `alb.ingress.kubernetes.io/group.name: jenkins-cd`.
 - **Pre-commit + CI:** `just ci` is the gate. Same set runs on PR.
+- **Terraform only via `just tf-*`.** The justfile is the single TF entrypoint; no raw `tofu`, no `cd terraform`. Recipes: `tf-plan` (writes `tfplan`), `tf-apply` (applies the saved `tfplan`, never auto-approve — `tf-apply-now` is removed), `tf-state-backup` before risky applies, `tf-state-versioning-check`, `tf-plan-masters` (PLAN-ONLY; `-target`/`-exclude` are plan-only, no `tf-apply-masters`).
+- **`AWS_PROFILE` from env, never baked.** AWS-touching recipes require it and fail loudly if unset. Do NOT set `aws_profile` in `terraform/local.auto.tfvars` (that file is local/gitignored; `providers.tf` falls through to the SDK chain when the var is empty — setting it there reintroduces the profile split-brain).
+
+## Common commands
+
+The justfile is the single entrypoint. Export `AWS_PROFILE` first (e.g. `export AWS_PROFILE=percona-dev-admin`); `just` (no args) lists everything.
+
+```text
+just ci                         # lint + validate; no AWS creds, mirrors CI
+just tf-plan                    # tofu plan -> terraform/tfplan
+just tf-apply                   # apply the saved tfplan (never auto-approve)
+just tf-plan-masters            # PLAN-ONLY -target sweep over master + *_arm_fleet modules
+just tf-state-backup            # timestamped `tofu state pull` before a risky apply
+just tf-state-versioning-check  # assert the state bucket has Object Versioning enabled
+just tf-fmt | tf-fmt-check      # format | check-format (repo root)
+just kubeconfig                 # update kubeconfig for the cluster
+just build-image <name> [tag]   # buildx --push a percona-cd/<name> image to ECR
+```
+
+Raw `tofu` / `cd terraform` is disallowed except where a runbook explicitly flags a raw-tofu exception (e.g. a `-refresh-only` state sync).
 
 ## Module + chart pins
 
