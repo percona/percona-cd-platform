@@ -116,3 +116,24 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             argocd-bootstrap/ resources/
+
+  helm:
+    name: jenkins chart render-check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: install helm (pinned + sha-verified)
+        run: |
+          curl -sSL -o helm.tgz https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz
+          echo "fc307327959aa38ed8f9f7e66d45492bb022a66c3e5da6063958254b9767d179  helm.tgz" | sha256sum -c -
+          tar -xzf helm.tgz linux-amd64/helm
+          sudo mv linux-amd64/helm /usr/local/bin/
+
+      # Render the per-instance Jenkins controller chart and assert the values
+      # reach the `jenkins` subchart (image / Retain PVC / ALB group / JNLP
+      # listener / node-pool pin). Guards the jenkins:-scoping regression.
+      - name: jenkins chart render-check
+        run: scripts/jenkins-chart-render-check.sh
