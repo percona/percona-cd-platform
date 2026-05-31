@@ -28,10 +28,12 @@ Define a five-tier compute topology. Each tier has a single canonical label and 
 | `bootstrap` | `bootstrap` | `CriticalAddonsOnly=true:NoSchedule` | EKS MNG `system` -- `m6a.large` ×3 multi-AZ on-demand |
 | `lgtm-stateful` | `lgtm-stateful` | `workload.percona.com/tier=lgtm-stateful:NoSchedule` | Karpenter NodePool `lgtm-stateful` -- on-demand `r7a/r7i/m7a/m7i` multi-AZ |
 | `obs-state` | `obs-state` | `workload.percona.com/tier=obs-state:NoSchedule` | EKS MNG `prometheus_system` -- `m6a.large` ×1 us-east-1a |
-| `jenkins-master` | `jenkins-master` | `workload.percona.com/tier=jenkins-master:NoSchedule` | EKS MNG `jenkins_system` -- `m6a.xlarge` ×1 us-east-1a |
+| `jenkins-master` | `jenkins-master` | `workload.percona.com/tier=jenkins-master:NoSchedule` | EKS MNG `jenkins_master` -- `m6a.xlarge` ×1 us-east-1a (live but uncommitted; see note) |
 | `general` | `general` | (untainted) | Karpenter NodePool `default` -- spot+on-demand `c7/m7/r7-i/a` |
 
 DaemonSets keep the blanket `tolerations: [{operator: Exists}]` so they cover any new taint without per-DS changes.
+
+> **`jenkins-master` tier — live state (2026-05-31, post-review).** The tier definition (label/taint) is unchanged, but its backing MNG churned: the original `jenkins_system` MNG was **removed 2026-05-13** ([ADR 0008](0008-managed-ng-for-stateful-system-workloads.md)), then a `jenkins_master` MNG (`m6a.xlarge` ×1, us-east-1a, this taint+label) was **recreated 2026-05-31** for the singleton-controller pilot ([ADR 0025](0025-singleton-controller-rollout-gating.md)). That MNG is **live but not yet committed to `terraform/eks.tf`** — a `tofu apply` from current code would destroy it. Reconcile by committing the node-group block; the capacity-source cell above reflects the intended live shape, not the committed code.
 
 ### `CriticalAddonsOnly`, not `workload.percona.com/tier=bootstrap`
 

@@ -38,4 +38,4 @@ plane). Skip Tempo (no traced workloads). Skip Mimir (one cluster, one tenant,
   Cloud** (free tier 14 d, Pro 13 mo) or self-hosted Mimir. No chart swap.
 - Loki / Tempo can be added later as separate addons without touching this
   one.
-- See `docs/lgtm-evaluation.md` for the full triggers-to-revisit table.
+- The revisit triggers fired once the platform's scope expanded to the durable Jenkins fleet; see [ADR 0010](0010-distributed-lgtm.md) (full distributed LGTM) and [ADR 0016](0016-lgtm-only-metrics-stack.md) (the final LGTM-only shape).

@@ -2,6 +2,7 @@
 
 **Status:** Accepted (2026-05-04)
 **Related:** [ADR 0010](0010-distributed-lgtm.md), [eks-hardening.md](../eks-hardening.md)
+**Superseded in part by:** [ADR 0015](0015-lgtm-bucket-object-lock-removed.md) — decision **H5** (S3 Object Lock COMPLIANCE retention on the LGTM buckets) was reversed: Object Lock broke Loki's PutObject path, so retention moved to lifecycle expiration. The bucket-level Object Lock flag remains structurally enabled but dormant (it cannot be disabled post-creation).
 
 ## Context
 
@@ -147,6 +148,6 @@ when the NAT-GW data-transfer bill warrants.
 
 | Wave | PR | Scope |
 |---|---|---|
-| H-1 | [#13](https://github.com/nogueiraanderson/percona-ci-platform/pull/13) | PriorityClasses addon, PDBs across HA components, Karpenter AMI pin |
-| H-2 | [#14](https://github.com/nogueiraanderson/percona-ci-platform/pull/14) | TF — Object Lock, multi-AZ NAT-GW, VPC endpoints, native S3 lock, ArgoCD priority + PDBs |
+| H-1 | [#13](https://github.com/Percona/percona-cd-platform/pull/13) | PriorityClasses addon, PDBs across HA components, Karpenter AMI pin |
+| H-2 | [#14](https://github.com/Percona/percona-cd-platform/pull/14) | TF — Object Lock, multi-AZ NAT-GW, VPC endpoints, native S3 lock, ArgoCD priority + PDBs |
 | H-3 | this PR | ADR + hardening-doc updates marking items 6/7/10/11/19/20 as Done |

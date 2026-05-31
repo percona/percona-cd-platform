@@ -1,6 +1,7 @@
 # 0002 — Public-path connectivity, PrivateLink reserved
 
 **Status:** Accepted (2026-04-30)
+**Superseded in part by:** [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) — the public-path / SG-EIP-allowlist model gave way to a shared, TLS-terminating ALB reaching each master over cross-region VPC peering on `:8080`; PrivateLink stayed unbuilt and the `10.177.0.0/22` CIDR collision was resolved by per-master renumbering rather than a flat L3 fabric.
 
 ## Context
 

@@ -11,7 +11,7 @@ GitOps repo to a specific account/region/cluster.
 
 ## Decision
 
-Adopt the **GitOps Bridge** pattern (`gitops-bridge-dev/gitops-bridge`):
+Adopt the **GitOps Bridge** pattern — hand-rolled with `helm_release` + `kubernetes_secret_v1` + `kubectl_manifest`, **not** the `gitops-bridge-dev/gitops-bridge` module (that module is referenced nowhere in `terraform/`; only the pattern was adopted):
 
 1. Terraform installs the `argo-cd` Helm chart (v9.5.9) in HA after the EKS
    control plane and Pod Identity associations are healthy.

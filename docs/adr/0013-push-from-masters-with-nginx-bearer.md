@@ -178,8 +178,7 @@ single-identity-per-host posture.
   `resources/addons/kube-prometheus-stack/values.yaml` (commit `bf2f68f`
   introduced it).
 
-Plan file:
-[`/home/percona/.claude/plans/spicy-prancing-nebula.md`](../../README.md),
+Plan file: the private platform plan (not in this repo),
 section "Push-model implementation".
 
 ADR 0009's "Update 2026-05-07: implementation diverges from original

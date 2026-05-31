@@ -134,7 +134,7 @@ is probe-and-mark only.
 ## What this ADR does NOT decide
 
 - Plugin v103.percona.18's heartbeat-based worker self-kill (Phase 3 of
-  the [plugin upgrade roadmap](../../../../home/percona/.claude/plans/plugin-updates-ahead.md)).
+  the plugin upgrade roadmap (private planning notes, not in this repo)).
   That's a separate decision because it actively tears down Hetzner VMs;
   ADR-worthy when it ships.
 - Controller-side hung-pipeline detection (Workset C in the same roadmap).

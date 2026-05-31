@@ -1,7 +1,7 @@
 # 0019 — Shared-ALB SSL termination for Jenkins masters
 
 **Status:** Accepted (2026-05-18)
-**Related:** [ADR 0003](0003-acm-vs-cert-manager-for-alb.md) (ACM strategy this builds on), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (push-model pattern reused for the proxy nginx)
+**Related:** [ADR 0003](0003-acm-vs-cert-manager-for-alb.md) (ACM strategy this builds on), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (push-model pattern reused for the proxy nginx), [ADR 0002](0002-public-path-vs-privatelink.md) (advances its public-path / PrivateLink-reserved posture and resolves the CIDR-collision constraint via per-master peering)
 **Amendment (2026-05-18, ps3 cutover):** path between the proxy pod and the master is cross-region VPC peering, not a public NAT hairpin. See "Decision" Mode B and "Consequences" sections, both updated below; `terraform/peering-<host>.tf` and the per-host CIDR notes capture the operational shape.
 
 ## Context
@@ -72,10 +72,11 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - Per-master cutover is a 1-PR-per-side + 1-tfvars-edit + 1-runbook-walk pattern (percona-ci-platform `terraform/peering-<host>.tf` + `local.auto.tfvars` origin target; `Percona-Lab/jenkins-pipelines` single PR that renumbers CIDR if needed, strips openresty/certbot, tightens SG to `10.220.0.0/16:8080`, drops CF JDNSRecord). Blast radius is contained to one master at a time.
 - Long-standing `10.177.0.0/22` VPC collision is no longer an SSL blocker but DOES bite per-master peering: two collidors cannot both peer to EKS at the same time. ps3 was renumbered to `10.181.0.0/22` as part of this cutover; the next collidor to be wired in (`pxc`/`ps57`/`cloud`) needs a fresh /22. Per-master peerings stay clean as long as each master VPC's CIDR is unique against EKS (`10.220.0.0/16`) AND against any other already-peered master.
 - `origin-<host>` Route53 records are driven by a tag-filtered `data.aws_instances.<host>_master` discovery in `peering-<host>.tf` (matches the pattern already used for VPC + route-table lookups). `tofu apply` re-resolves the master's private IP automatically; SpotFleet replacements, AZ failovers and renumbers self-heal without manual intervention. `var.jenkins_origin_targets` remains as an explicit operator override (rare: debugging, parked master, manual cutover). Edge case: during a ~30-90s SpotFleet replacement window where no instance is in `running` state, both sources are null and apply errors — acceptable because we don't apply mid-rotation; operator can set the override IP if unattended apply is needed.
+- **ALB access logs are not enabled** on either the `jenkins-masters` or the shared `jenkins-cd` ALB (no `alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled` annotation). Same Well-Architected gap class as the absent VPC Flow Logs; enable to an S3 bucket with lifecycle expiry if request-level audit of the master front door is wanted.
 
 ## References
 
-- PS-10945 spike plan: `~/.claude/plans/validated-herding-stardust.md`
+- PS-10945 spike plan: private platform planning notes (not in this repo)
 - Per-master cutover procedure: `docs/runbooks/jenkins-ssl-cutover.md`
 - Addon: `resources/addons/jenkins-ingress/`
 - Per-master IaC: `Percona-Lab/jenkins-pipelines/IaC/<host>.cd/JenkinsStack.yml`
