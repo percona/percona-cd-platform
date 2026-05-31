@@ -10,13 +10,18 @@ jenkins:
   controller:
     image:
       # Canonical controller image: us-east-1 ECR, percona-cd/jenkins-percona
-      # (TIER 5 ecr.tf). Built + pushed by build-jenkins-image.yml.
+      # (TIER 5 ecr.tf). Built + pushed by build-jenkins-image.yml. The registry
+      # account id is injected at deploy by the jenkins-masters ApplicationSet
+      # (helm.parameters, from the aws_account_id cluster-secret annotation), so it
+      # is NOT committed to this public repo; the placeholder below is only what
+      # the creds-free helm-render CI check sees.
       registry: "<account-id>.dkr.ecr.us-east-1.amazonaws.com"
       repository: percona-cd/jenkins-percona
       # Immutable SHA-tag <lts>-<gitsha> from the publish job (ECR repo is
       # IMMUTABLE so the tag cannot be overwritten). A digest bump is a
-      # deliberate, windowed, human-merged PR per ADR 0025.
-      tag: "2.541.3-2dfcef2f83df0e06a582443a6e7f331fe2d51eae"
+      # deliberate, windowed, human-merged PR per ADR 0025. This is the HYBRID
+      # image (forks forced via .override, community soft) from PR #64.
+      tag: "2.541.3-668ae4918b98818550c63b7a168bb8a030c4f4b0"
       pullPolicy: IfNotPresent
 
     # Plugins are BAKED into the image (community via plugins.txt; the 2 Percona
