@@ -236,6 +236,19 @@ build-image name tag="0.1.0": _require-aws-profile
       --push "images/{{name}}"
     echo "pushed ${registry}/percona-cd/{{name}}:{{tag}}"
 
+# ---------- jenkins fork plugin locks ----------
+# Recorded-pin auto-bump: rewrite images/jenkins/percona-plugins.lock.json to the
+# latest published `.percona.` fork releases (ec2, hetzner-cloud), sha256- and
+# MANIFEST-verified. Mirrors .github/workflows/refresh-fork-locks.yml, which then
+# build+smoke-validates and opens a PR (no auto-merge). Local run rewrites the file
+# only; commit + PR are the CI job's responsibility.
+refresh-fork-locks:
+    scripts/refresh-fork-locks.sh
+
+# Report-only probe: exit 3 if a newer fork release is available, no file changes.
+check-fork-locks:
+    scripts/refresh-fork-locks.sh --check
+
 # ---------- pre-commit ----------
 pre-commit-install:
     pre-commit install --install-hooks

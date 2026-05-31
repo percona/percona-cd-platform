@@ -52,6 +52,36 @@ Releases fetched with `curl`, so the PR validation job needs no GitHub token. Th
 `sha256` pins the published-asset bytes (the release workflow rebuilds the HPI, so
 the lock records the release sha, not a local build).
 
+## Keeping the forks current: recorded-pin auto-bump
+
+The lock is a **recorded pin**, not a float: the build always fetches an exact,
+sha-verified version. `scripts/refresh-fork-locks.sh` is what moves the pin
+forward. For each entry it derives the GitHub repo from the entry's own `url`,
+lists that repo's releases (public, so no token needed to list), keeps only
+non-draft, non-prerelease tags carrying a `.percona.` version, picks the highest
+with `sort -V` (numeric-aware: `.9 < .10 < .26`), and only if that is strictly
+newer than the locked version it downloads the single `<id>-<ver>.hpi` asset,
+runs `unzip -t`, checks the embedded MANIFEST `Short-Name` + `Plugin-Version`,
+computes the sha256 (cross-checked against the published `.hpi.sha256` sidecar),
+and rewrites that entry. It NEVER edits the Dockerfile, `fetch-hpis.sh`, or the
+deployed image tag.
+
+```bash
+just refresh-fork-locks    # rewrite the lock to the latest fork releases (if newer)
+just check-fork-locks      # report only; exit 3 if a newer release is available
+```
+
+`.github/workflows/refresh-fork-locks.yml` runs it weekly (and on demand). If the
+lock moves, the job re-runs `fetch-hpis.sh` + the Docker build + `smoke-boot.sh`
+against the new pin BEFORE opening a PR, so a bad bump fails in the refresh run.
+The PR is **never auto-merged**: CODEOWNERS approves, and because the PR touches
+`images/jenkins/**` the `build-jenkins-image` validation runs on it too. Set the
+optional repo secret `FORK_LOCK_BUMP_TOKEN` (a PAT/App token) so the opened PR
+re-triggers that validation; the commit itself is signed via the GitHub API
+(`createCommitOnBranch`), so CI needs no GPG key. The deployed image tag in
+`resources/jenkins/master/values-base.yaml` stays a separate, manual bump
+(ADR 0025): merging a lock PR does not change the running controller.
+
 ## Plugin reconciliation: HYBRID (forks forced, community soft)
 
 The chart sets `installPlugins: false` and `overwritePluginsFromImage: false`.
@@ -119,3 +149,6 @@ its LOCKED version. By default it runs the empty-home boot; set
 `SMOKE_RESTORED_HOME_TAR` to a real `$JENKINS_HOME` tar to also exercise the
 `.override`-wins-over-a-populated-PVC path (the only test that proves the
 override). Wiring a restored-home fixture into CI is a follow-up.
+
+`.github/workflows/refresh-fork-locks.yml` (recorded-pin auto-bump, above) is the
+third workflow: scheduled, opens a build+smoke-validated lock-bump PR, no push.
