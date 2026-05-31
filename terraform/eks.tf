@@ -1,7 +1,9 @@
 # EKS control plane + two managed node groups (system, prometheus_system).
 # Karpenter handles workload nodes; managed NGs host stateful + bootstrap pods only.
 # jenkins_system NG was removed 2026-05-13: no Jenkins master pod ever claimed
-# its taint, so the m6a.xlarge was running only DaemonSets at ~$126/mo.
+# its taint, so the m6a.xlarge was running only DaemonSets at ~$126/mo. It is
+# re-added below as jenkins_master for the in-cluster controller pilot (ps3-k8s),
+# which DOES claim the tier via the chart's nodeSelector + toleration.
 #
 # Hardening baked in (see docs/eks-hardening.md):
 #   1. authentication_mode = "API" + enable_cluster_creator_admin_permissions = false
@@ -126,6 +128,45 @@ module "eks" {
           effect = "NO_SCHEDULE"
         }
       }
+      metadata_options = {
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 1
+        http_endpoint               = "enabled"
+      }
+    }
+
+    # In-cluster Jenkins controller pilot (ps3-k8s). Re-adds a dedicated node
+    # pool in the spirit of the jenkins_system NG removed 2026-05-13, but this
+    # time a pod WILL claim it: the controller chart's nodeSelector + toleration
+    # target `workload.percona.com/tier=jenkins-master`. Single-AZ (us-east-1a)
+    # so it co-locates with the gp3-jenkins-1a-retain PVC (EBS cannot cross AZ).
+    # Managed NG (not Karpenter), so consolidation never disrupts it; pinned AMI
+    # + single node (min=desired=max=1) keep it stable for the SPOF controller.
+    jenkins_master = {
+      instance_types = local.ng.jenkins_master.instance_types
+      capacity_type  = "ON_DEMAND"
+      min_size       = local.ng.jenkins_master.min_size
+      desired_size   = local.ng.jenkins_master.desired_size
+      max_size       = local.ng.jenkins_master.max_size
+      subnet_ids     = [module.vpc.private_subnets[0]] # us-east-1a; matches gp3-jenkins-1a-retain
+
+      # Pin the AMI release so an unrelated tofu apply never rolls (drains) the
+      # singleton controller node. Bump explicitly in a maintenance window.
+      ami_release_version            = "1.35.5-20260520"
+      use_latest_ami_release_version = false
+
+      labels = {
+        "workload.percona.com/tier"       = "jenkins-master"
+        "workload.percona.com/managed-by" = "mng"
+      }
+      taints = {
+        tier = {
+          key    = "workload.percona.com/tier"
+          value  = "jenkins-master"
+          effect = "NO_SCHEDULE"
+        }
+      }
+
       metadata_options = {
         http_tokens                 = "required"
         http_put_response_hop_limit = 1

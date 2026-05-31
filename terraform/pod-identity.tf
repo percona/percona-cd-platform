@@ -285,3 +285,36 @@ module "pod_identity_jenkins_endpoint_reconciler" {
 
   tags = local.tags
 }
+
+# ---------------------------------------------------------------------------
+# In-cluster Jenkins controller pilot (ps3-k8s). The patched EC2 plugin (AWS
+# SDK v2) resolves AWS creds via the default chain -> EKS Pod Identity in the
+# pod. Bound to the chart's `jenkins` SA in the per-host namespace
+# `jenkins-ps3-k8s` (the jenkins-masters ApplicationSet sets
+# destination.namespace = jenkins-{{ path.basename }}; the chart creates the SA
+# with serviceAccount.create=true). EC2 provisioning perms live in
+# iam-jenkins-controller.tf. The Hetzner cloud uses a token (no AWS), so it
+# needs nothing here.
+# ---------------------------------------------------------------------------
+
+module "pod_identity_jenkins_controller" {
+  source  = local.modules.pod_identity.source
+  version = local.modules.pod_identity.version
+
+  # Short IAM-side name to stay well under the role-name cap; Pod Identity binds
+  # on (cluster, namespace, sa), not on this label.
+  name = "${local.cluster_name}-jenkins-ctlr"
+  additional_policy_arns = {
+    ec2_provision = aws_iam_policy.jenkins_controller.arn
+  }
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "jenkins-ps3-k8s"
+      service_account = "jenkins"
+    }
+  }
+
+  tags = local.tags
+}

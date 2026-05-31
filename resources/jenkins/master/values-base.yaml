@@ -96,9 +96,12 @@ jenkins:
     size: 100Gi
 
   serviceAccount:
-    # Created by the substrate (EKS Pod Identity association in terraform); the
-    # chart only references it so the EC2 plugin resolves AWS creds in-pod.
-    create: false
+    # The chart creates this SA; the substrate's EKS Pod Identity association
+    # (terraform/pod-identity.tf) binds AWS creds to it on (cluster, namespace
+    # jenkins-<host>, sa jenkins) so the EC2 plugin resolves creds in-pod. Pod
+    # Identity needs no SA annotation (unlike IRSA), so a plain chart-created SA
+    # suffices; the association itself does NOT create the ServiceAccount.
+    create: true
     name: jenkins
 
   # External EC2 + Hetzner agents only; no in-cluster Kubernetes pod agents.
