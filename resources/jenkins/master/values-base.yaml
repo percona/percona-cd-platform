@@ -73,7 +73,7 @@ jenkins:
         alb.ingress.kubernetes.io/target-type: ip
         alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
         alb.ingress.kubernetes.io/ssl-redirect: "443"
-        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
         alb.ingress.kubernetes.io/healthcheck-path: /login
         alb.ingress.kubernetes.io/tags: "iit-billing-tag=percona-ci-platform"
 

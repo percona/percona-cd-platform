@@ -97,7 +97,7 @@ grafana:
       # hop). Required because the Grafana Service is ClusterIP — the LBC
       # default of `instance` target-type only works with NodePort services.
       alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
       # Sticky sessions for the OIDC round-trip (otherwise the SP-initiated
       # flow can land on a different replica than the one that issued
       # the AuthnRequest and the state-cookie check fails).

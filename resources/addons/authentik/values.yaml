@@ -80,7 +80,7 @@ authentik:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
         alb.ingress.kubernetes.io/ssl-redirect: '443'
-        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
         # Direct pod targeting via VPC CNI — Authentik Service is ClusterIP.
         alb.ingress.kubernetes.io/target-type: ip
         # Sticky sessions for the OIDC + SAML round-trip.
