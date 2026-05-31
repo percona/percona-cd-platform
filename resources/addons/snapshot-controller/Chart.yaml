@@ -1,5 +1,0 @@
-apiVersion: v2
-name: snapshot-controller
-version: 0.1.0
-description: CSI external snapshot-controller + snapshot.storage.k8s.io CRDs (VolumeSnapshot support for EBS-CSI).
-type: application
