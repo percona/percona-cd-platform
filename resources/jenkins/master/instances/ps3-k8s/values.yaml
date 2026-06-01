@@ -178,5 +178,8 @@ jenkins:
         data:
           - secretKey: github-oauth-client-secret
             remoteRef:
-              key: jenkins/ps3/github-oauth
+              # percona-ci-platform/<app>/... convention: the ESO role is
+              # least-privilege-scoped to secret:percona-ci-platform/*, so this path
+              # is readable with no IAM change and off-convention names are denied.
+              key: percona-ci-platform/jenkins/ps3/github-oauth
               property: client_secret
