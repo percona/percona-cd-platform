@@ -54,6 +54,23 @@ jenkins:
       securityRealm: ""
       authorizationStrategy: ""
       configScripts:
+        # aws-secrets-manager-credentials-provider: list only secrets under the ps3
+        # namespace (server-side ListSecrets name-prefix filter, matched on the RAW
+        # secret name), then strip that prefix so the credential id stays clean, e.g.
+        # percona-ci-platform/jenkins/ps3/percona-slack-token -> percona-slack-token.
+        # The filter runs before the transform, so it must use the full prefix.
+        ps3-sm-provider: |
+          unclassified:
+            awsCredentialsProvider:
+              listSecrets:
+                filters:
+                  - key: "name"
+                    values:
+                      - "percona-ci-platform/jenkins/ps3/"
+              transformations:
+                name:
+                  removePrefix:
+                    prefix: "percona-ci-platform/jenkins/ps3/"
         ps3-security: |
           jenkins:
             securityRealm:
