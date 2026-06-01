@@ -52,11 +52,11 @@ resource "aws_security_group" "this" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "SSH from the master (ec2-fleet plugin launcher)"
+    description = "SSH from the master (ec2-fleet plugin launcher) + any extra controller CIDRs"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.this.cidr_block]
+    cidr_blocks = concat([data.aws_vpc.this.cidr_block], var.extra_ssh_cidrs)
   }
 
   egress {

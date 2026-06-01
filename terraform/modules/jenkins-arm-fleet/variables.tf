@@ -70,3 +70,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "extra_ssh_cidrs" {
+  description = "Additional CIDRs allowed to SSH (:22) to the workers, e.g. the in-cluster controller's EKS VPC CIDR for the ec2-fleet privateIpUsed connection over VPC peering."
+  type        = list(string)
+  default     = []
+}
