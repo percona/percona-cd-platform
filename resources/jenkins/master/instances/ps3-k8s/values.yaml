@@ -9,44 +9,26 @@
 jenkins:
   controller:
     ingress:
-      hostName: ps3-k8s.cd.percona.com
+      # Serve the REAL host ps3.cd.percona.com directly from the chart's PRIMARY
+      # ingress. The primary renders a HOST-ONLY rule (no path condition), so it
+      # matches every path including /login -- unlike a secondaryingress, whose
+      # forced path-pattern only matched "/" and let /login fall through to the
+      # proxy. One ingress, one host (ps3-k8s.cd dropped: it was dark-replica
+      # scaffolding; ps3.cd is canonical and matches the restored config.xml
+      # JENKINS_URL, so OAuth callbacks + agent JNLP URLs self-align).
+      hostName: ps3.cd.percona.com
       # No certificate-arn: the ALB controller auto-discovers the wildcard
       # *.cd.percona.com ACM cert via SNI (keeps the cert ARN out of this repo).
       tls:
         - hosts:
-            - ps3-k8s.cd.percona.com
-    # Second Ingress so the REAL host ps3.cd.percona.com also resolves to this
-    # in-cluster controller -- the cutover from the EC2-backed nginx proxy
-    # (jenkins-ingress + endpoint-reconciler) to a pure-k8s serving path. The
-    # subchart's native secondaryingress renders a full second Ingress to the same
-    # controller Service on the shared jenkins-masters ALB. It does NOT inherit
-    # controller.ingress.annotations, so the ALB-group set is repeated here.
-    # group.order:-10 makes this rule win over the still-present jenkins-ingress
-    # proxy rule for ps3.cd during the brief overlap (harmless once the proxy ps3
-    # entry is removed). external-dns derives the record from the host field and
-    # both hosts resolve to the SAME ALB, so the ps3.cd A record never changes
-    # (zero-gap ownership handoff). ps3's restored config.xml has
-    # JENKINS_URL=https://ps3.cd.percona.com, so serving ps3.cd self-aligns OAuth
-    # callbacks and agent JNLP URLs.
-    secondaryingress:
-      enabled: true
-      ingressClassName: alb
-      hostName: ps3.cd.percona.com
-      paths:
-        - "/"
-      tls:
-        - hosts:
             - ps3.cd.percona.com
+      # group.order:-10 wins the ps3.cd host condition over the lower-priority
+      # jenkins-ingress proxy rule during the cutover overlap (harmless once the
+      # proxy ps3 entry is removed). Deep-merges with the ALB-group annotations
+      # from values-base. external-dns publishes ps3.cd to the same ALB from the
+      # host field, so the A record never changes (zero-gap handoff).
       annotations:
-        alb.ingress.kubernetes.io/group.name: jenkins-masters
         alb.ingress.kubernetes.io/group.order: "-10"
-        alb.ingress.kubernetes.io/scheme: internet-facing
-        alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-        alb.ingress.kubernetes.io/ssl-redirect: "443"
-        alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
-        alb.ingress.kubernetes.io/healthcheck-path: /login
-        alb.ingress.kubernetes.io/tags: "iit-billing-tag=percona-ci-platform"
     # Restored-home boot-guard (non-root). The controller pod is runAsNonRoot, so
     # it CANNOT host a root chown initContainer; the one-time ownership fix (EC2
     # jenkins UID 994 -> in-cluster 1000) is done by a separate root Job against
