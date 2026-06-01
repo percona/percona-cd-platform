@@ -87,6 +87,18 @@ data "aws_iam_policy_document" "jenkins_controller" {
     ]
     resources = ["*"]
   }
+
+  # The aws-secrets-manager-credentials-provider plugin (baked into the controller
+  # image) polls ListSecrets to discover SM-backed credentials. ListSecrets has no
+  # resource-level scoping, so it is account-wide metadata only (names / ARNs /
+  # tags); reading a secret's value still needs GetSecretValue, granted per
+  # credential namespace when those secrets are introduced. Without this the plugin
+  # logs an AccessDenied warning every 60s.
+  statement {
+    sid       = "SecretsManagerList"
+    actions   = ["secretsmanager:ListSecrets"]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_policy" "jenkins_controller" {
