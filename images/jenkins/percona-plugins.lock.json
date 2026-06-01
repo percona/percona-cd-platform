@@ -3,17 +3,17 @@
   "plugins": [
     {
       "id": "hetzner-cloud",
-      "version": "103.percona.27",
-      "filename": "hetzner-cloud-103.percona.27.hpi",
-      "url": "https://github.com/Percona-Lab/jenkins-hetzner-cloud-plugin/releases/download/v103.percona.27/hetzner-cloud-103.percona.27.hpi",
-      "sha256": "31ad282899e783826a8b1c50c25ec5066bfe491b11972eeb3ac8463830696593"
+      "version": "103.percona.28",
+      "filename": "hetzner-cloud-103.percona.28.hpi",
+      "url": "https://github.com/Percona-Lab/jenkins-hetzner-cloud-plugin/releases/download/v103.percona.28/hetzner-cloud-103.percona.28.hpi",
+      "sha256": "3c5da5b56cffc6aaa978a826c54d4e5cd46c82edcbc2e77682b67c16ee1d0d2d"
     },
     {
       "id": "ec2",
-      "version": "5.24.percona.3",
-      "filename": "ec2-5.24.percona.3.hpi",
-      "url": "https://github.com/Percona-Lab/jenkins-ec2-plugin/releases/download/v5.24.percona.3/ec2-5.24.percona.3.hpi",
-      "sha256": "c0696defb4ced2e3da23a3d7c6f6ea8e4c6f8236d1fe1822644b808b8481645f"
+      "version": "5.24.percona.4",
+      "filename": "ec2-5.24.percona.4.hpi",
+      "url": "https://github.com/Percona-Lab/jenkins-ec2-plugin/releases/download/v5.24.percona.4/ec2-5.24.percona.4.hpi",
+      "sha256": "a9e8869cc14176ec05d47e179d7125c2af3af7bd9bc888326456713942607b3c"
     }
   ]
 }
