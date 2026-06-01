@@ -117,6 +117,17 @@ jenkins:
                         - "hudson.model.Item.Workspace"
                         - "hudson.model.View.Read"
     # === end Phase 1 controller config (ExternalSecret -> jenkins.extraObjects below) =
+    # === Phase 2 (ADR 0027 -- clouds) =======================================
+    # The Graviton EC2 Fleet (ASG jenkins-ps3-arm-graviton, ec2-fleet plugin) was
+    # never in ps3's restored config.xml -- on the EC2 master it lived only in
+    # init.groovy.d. Re-create it as a boot-time init script, GitOps-managed (the
+    # jenkins-ps3-k8s-clouds-init ConfigMap under jenkins.extraObjects), which the
+    # chart mounts at /var/jenkins_home/init.groovy.d so it runs on the restored
+    # home at boot. The script is imperative (adds the cloud by name) so it cannot
+    # disturb the restored Hetzner / classic-EC2 / DigitalOcean clouds -- unlike a
+    # declarative jenkins.clouds block, which JCasC would treat as authoritative
+    # and prune any cloud it does not list.
+    initConfigMap: jenkins-ps3-k8s-clouds-init
     # Restored-home boot-guard (non-root). The controller pod is runAsNonRoot, so
     # it CANNOT host a root chown initContainer; the one-time ownership fix (EC2
     # jenkins UID 994 -> in-cluster 1000) is done by a separate root Job against
@@ -183,3 +194,67 @@ jenkins:
               # is readable with no IAM change and off-convention names are denied.
               key: percona-ci-platform/jenkins/ps3/github-oauth
               property: client_secret
+
+    # Boot-time clouds init (Phase 2): controller.initConfigMap mounts this CM's
+    # keys at /var/jenkins_home/init.groovy.d, so ec2FleetCloud.groovy runs on the
+    # restored home at boot. A ConfigMap (not a Secret): nothing here is sensitive --
+    # AWS API auth is the pod's Pod Identity role and the worker SSH key is the
+    # restored 'ec2-fleet-arm-graviton' credential.
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: jenkins-ps3-k8s-clouds-init
+        labels:
+          app.kubernetes.io/part-of: jenkins-ps3-k8s
+      data:
+        ec2FleetCloud.groovy: |
+          // ec2FleetCloud.groovy (PS-11179) -- ps3-k8s in-cluster Graviton Fleet.
+          //
+          // Mounted at /var/jenkins_home/init.groovy.d by controller.initConfigMap, so it
+          // runs at boot on the restored JENKINS_HOME. Registers the diversified Graviton
+          // EC2 Fleet (ASG jenkins-ps3-arm-graviton, ec2-fleet plugin) serving the
+          // docker-32gb-aarch64 workload, plus an arm-graviton-fleet label to target it.
+          //
+          // AWS API auth: awsCredentialsId='' -> the controller pod's Pod Identity role
+          // (terraform/iam-jenkins-controller.tf grants autoscaling + ec2). SSH cred
+          // 'ec2-fleet-arm-graviton' is ps3's restored key for the launch-template key pair
+          // percona-jenkins. privateIpUsed=true: the in-cluster controller reaches workers
+          // by private IP over the EKS<->ps3 VPC peering (the jenkins-arm-fleet TF module
+          // opens the worker SG to the EKS VPC CIDR via extra_ssh_cidrs).
+          import com.amazon.jenkins.ec2fleet.EC2FleetCloud
+          import hudson.plugins.sshslaves.SSHConnector
+          import hudson.plugins.sshslaves.verifiers.NonVerifyingKeyVerificationStrategy
+          import jenkins.model.Jenkins
+          import java.util.logging.Logger
+
+          final Logger LOG = Logger.getLogger('ec2FleetCloud')
+          final String CLOUD_NAME  = 'arm-graviton-fleet'
+          final String REGION      = 'eu-west-1'
+          final String ASG_NAME    = 'jenkins-ps3-arm-graviton'
+          final String LABEL       = 'docker-32gb-aarch64 arm-graviton-fleet'
+          final String SSH_CRED_ID = 'ec2-fleet-arm-graviton'
+
+          def jk = Jenkins.instance
+          jk.clouds.findAll { it.name == CLOUD_NAME }.toList().each { jk.clouds.remove(it) }
+
+          def sshConn = new SSHConnector(22, SSH_CRED_ID, '', '', '', '', null, null, null,
+              new NonVerifyingKeyVerificationStrategy())
+
+          def fleet = new EC2FleetCloud(
+              CLOUD_NAME, '', '', REGION, '', ASG_NAME, LABEL, '/mnt/jenkins',
+              sshConn,
+              true,            // privateIpUsed
+              false,           // alwaysReconnect
+              (Integer) 10,    // idleMinutes
+              0, 16, 0, 1,     // minSize, maxSize, minSpareSize, numExecutors
+              true,            // addNodeOnlyIfRunning
+              false,           // restrictUsage
+              '-1',            // maxTotalUses
+              false,           // disableTaskResubmit
+              (Integer) 600, (Integer) 15, (Integer) 10,   // initOnlineTimeout, initOnlineCheckInterval, cloudStatusInterval
+              false,           // noDelayProvision
+              false,           // scaleExecutorsByWeight
+              new EC2FleetCloud.NoScaler()
+          )
+          jk.clouds.add(fleet)
+          LOG.info("ec2FleetCloud: registered cloud='${CLOUD_NAME}' label='${LABEL}' fleet='${ASG_NAME}' sshCred='${SSH_CRED_ID}'")
