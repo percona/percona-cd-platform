@@ -38,6 +38,32 @@ data "aws_iam_policy_document" "jenkins_controller" {
     resources = ["*"]
   }
 
+  # autoscaling for the ec2-fleet plugin (ASG-backed Graviton workers,
+  # module.ps3_arm_fleet -> jenkins-ps3-arm-graviton). autoscaling Describe* do
+  # not support resource-level scoping; the mutating actions are scoped to the
+  # Jenkins ARM fleet ASGs (jenkins-*-arm-*).
+  statement {
+    sid = "Ec2FleetAutoScalingRead"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeAutoScalingInstances",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "Ec2FleetAutoScalingWrite"
+    actions = [
+      "autoscaling:UpdateAutoScalingGroup",
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+    ]
+    resources = [
+      "arn:aws:autoscaling:*:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/jenkins-*-arm-*",
+    ]
+  }
+
   # PassRole so the EC2 plugin can launch agents that carry a worker instance
   # profile (mirrors master_pass_role). Scoped to the Jenkins worker role naming
   # conventions (<short>-worker / <short>-slave); tighten to the pilot's exact

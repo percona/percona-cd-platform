@@ -98,7 +98,10 @@ module "ps3_arm_fleet" {
   key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
+  # The in-cluster ps3-k8s controller reaches Fleet workers by private IP over the
+  # EKS<->ps3 VPC peering (ec2-fleet privateIpUsed), so allow SSH from the EKS VPC.
+  extra_ssh_cidrs = [module.vpc.vpc_cidr_block]
+  tickets         = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not
