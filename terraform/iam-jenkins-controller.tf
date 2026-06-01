@@ -99,6 +99,18 @@ data "aws_iam_policy_document" "jenkins_controller" {
     actions   = ["secretsmanager:ListSecrets"]
     resources = ["*"]
   }
+
+  # GetSecretValue IS resource-scopable, so it is scoped to the ps3 credential
+  # namespace; this lets the SM-provider plugin read the values it lists. The
+  # plugin needs no DescribeSecret (all metadata comes from ListSecrets) and reads
+  # AWSCURRENT only (no version-id permissions). Backs the SM-backed credentials.
+  statement {
+    sid     = "SecretsManagerReadPs3"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:us-east-1:${data.aws_caller_identity.current.account_id}:secret:percona-ci-platform/jenkins/ps3/*",
+    ]
+  }
 }
 
 resource "aws_iam_policy" "jenkins_controller" {
