@@ -30,10 +30,7 @@ targetNamespace: jenkins-ingress
 # `jenkins-<name>` in targetNamespace. Add an entry per master as each
 # is wired into the proxy (a peering-<host>.tf must already exist).
 hosts:
-  - name: ps3
-    region: eu-west-1
-    tag: jenkins-ps3
-    port: 8080
+  # ps3 retired: the in-cluster ps3-k8s controller owns ps3.cd; no EC2 endpoint to sync.
   - name: ps80
     region: us-west-2
     tag: jenkins-ps80
