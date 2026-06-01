@@ -43,18 +43,8 @@ resources:
 # (must differ from `<name>.cd.percona.com` to avoid resolution loops).
 # `upstreamHostHeader` is sent as both the Host header and the TLS SNI.
 hosts:
-  - name: ps3
-    # K8s Service backed by an EndpointSlice that the jenkins-endpoint-reconciler
-    # CronJob keeps in sync with the live ps3 master private IP via the VPC
-    # peering. SpotFleet replacements / AZ failovers re-target automatically
-    # without any Route53 or `tofu apply`. nginx resolves this name via kube-
-    # dns (still using the runtime resolver + $upstream pattern so a Service
-    # ClusterIP change picks up within the 5s TTL).
-    upstream: jenkins-ps3.jenkins-ingress.svc.cluster.local
-    upstreamScheme: http
-    upstreamPort: 8080
-    # upstreamHostHeader unused for plain HTTP (no SNI); harmless to leave.
-    upstreamHostHeader: ps3.cd.percona.com
+  # ps3 retired from the proxy: ps3.cd is served directly by the in-cluster ps3-k8s
+  # controller (host-only ALB ingress). See ADR 0027 / migrate-ps3-to-eks runbook.
   - name: ps80
     # EndpointSlice kept in sync with the live ps80 master private IP by the
     # jenkins-endpoint-reconciler over the us-west-2 <-> us-east-1 peering.
