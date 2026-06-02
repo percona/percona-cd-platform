@@ -87,8 +87,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: pip install yamllint
-        run: pip install yamllint==1.38.0
+      - name: pip install yamllint + pyyaml
+        run: pip install yamllint==1.38.0 pyyaml
 
       - name: yamllint
         run: yamllint -s argocd-bootstrap/ resources/ .github/
@@ -117,6 +117,13 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             argocd-bootstrap/ resources/
+
+      # ADR 0029: assert each master's committed JCasC clouds configScript stays
+      # in sync with the shared catalog AND carries no YAML anchors/aliases (JCasC
+      # SnakeYAML caps aliases at 50 -- the reload fails above that). Static gate;
+      # the loaded-model check is a pre-cutover tier-2 step (see ADR 0029).
+      - name: clouds-catalog drift + no-alias check (ADR 0029)
+        run: python scripts/render-clouds.py check ps3
 
   helm:
     name: jenkins chart render-check
