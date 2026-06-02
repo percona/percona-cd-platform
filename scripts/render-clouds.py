@@ -35,6 +35,10 @@ def retpl(s): return s.replace(PLACEHOLDER, SPRIG)
 class Dumper(yaml.SafeDumper): pass
 Dumper.add_representer(str, lambda d, v: d.represent_scalar(
     "tag:yaml.org,2002:str", v, style="|" if "\n" in v else None))
+# JCasC (SnakeYAML) caps YAML aliases at 50 and the reload throws ConfiguratorException
+# above that. Spell every repeated node out fully (no anchors/aliases), exactly like the
+# hand-written original, so the generated configScript loads on reload and on boot.
+Dumper.ignore_aliases = lambda self, data: True
 def dump(obj): return yaml.dump(obj, Dumper=Dumper, sort_keys=True,
                                 default_flow_style=False, width=10**9, allow_unicode=True)
 
@@ -125,7 +129,12 @@ def cmd_apply(host):
     cmd_check(host)
 
 def cmd_check(host):
-    gen = yaml.safe_load(detpl(render_configscript(host)))["jenkins"]["clouds"]
+    rendered = render_configscript(host)
+    aliases = re.findall(r"(?:^|\s)[&*]id\d+\b", rendered)
+    if aliases:
+        print(f"DRIFT [{host}]: configScript emits {len(aliases)} YAML anchors/aliases; "
+              f"JCasC (SnakeYAML) caps aliases at 50 and the reload fails. The dumper must ignore_aliases."); sys.exit(1)
+    gen = yaml.safe_load(detpl(rendered))["jenkins"]["clouds"]
     com = yaml.safe_load(detpl(committed_configscript(host)))["jenkins"]["clouds"]
     shape = lambda cl: [(list(c)[0], (list(c.values())[0].get("name") or list(c.values())[0].get("fleet")),
                          len(list(c.values())[0].get("templates") or list(c.values())[0].get("serverTemplates") or []))

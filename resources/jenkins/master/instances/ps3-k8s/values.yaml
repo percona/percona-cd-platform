@@ -153,7 +153,7 @@ jenkins:
                 serverTemplates:
                 - bootDeadline: 8
                   connectivity: both
-                  connector: &id001
+                  connector:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
@@ -166,7 +166,7 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx42
-                  shutdownPolicy: &id002
+                  shutdownPolicy:
                     idle:
                       idleMinutes: 10
                   userData: |
@@ -239,7 +239,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
@@ -249,7 +252,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax31
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -320,7 +325,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
@@ -330,7 +338,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx42
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -401,7 +411,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
@@ -411,7 +424,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax31
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -482,7 +497,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
@@ -492,7 +510,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx42
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -563,7 +583,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
@@ -573,7 +596,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax31
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -644,7 +669,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-x64 docker-deb12-x64 deb12-x64
@@ -654,7 +682,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx62
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -725,7 +755,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
@@ -735,7 +768,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax41
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -806,7 +841,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-x64 docker-deb12-x64 deb12-x64
@@ -816,7 +854,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx62
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -887,7 +927,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
@@ -897,7 +940,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax41
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -968,7 +1013,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-x64 docker-deb12-x64 deb12-x64
@@ -978,7 +1026,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx62
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -1049,7 +1099,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690389'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
@@ -1059,7 +1112,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cax41
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -1130,7 +1185,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
@@ -1141,7 +1199,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx22
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -1212,7 +1272,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
@@ -1223,7 +1286,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx22
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -1294,7 +1359,10 @@ jenkins:
                         sudo systemctl restart docker
                 - bootDeadline: 8
                   connectivity: both
-                  connector: *id001
+                  connector:
+                    root:
+                      connectionMethod: public
+                      sshCredentialsId: htz.cd.key
                   image: '114690387'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
@@ -1305,7 +1373,9 @@ jenkins:
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
                   serverType: cpx22
-                  shutdownPolicy: *id002
+                  shutdownPolicy:
+                    idle:
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
@@ -1381,7 +1451,7 @@ jenkins:
                 sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
                 templates:
                 - ami: ami-07e9032b01a41341a
-                  amiType: &id003
+                  amiType:
                     unixData:
                       sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
@@ -1489,7 +1559,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-07e9032b01a41341a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -1595,7 +1667,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-07e9032b01a41341a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -1683,7 +1757,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-091a906f2e1e40076
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -1787,7 +1863,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-008970b8da0f7ef4a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -1875,7 +1953,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0842239ad749d2730
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -1963,7 +2043,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b93e28d1386a8580
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2033,7 +2115,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-09725ca3f13c523fd
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2124,7 +2208,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-00aa3f69e07141166
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2215,7 +2301,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0ae2703824063fcf1
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2306,7 +2394,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-089f338f3a2e69431
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2397,7 +2487,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-04034bfd5da1fa2ed
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2488,7 +2580,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-02e52747ec1f04026
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2579,7 +2673,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-016ee74f2cf016914
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2670,7 +2766,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-05147510eb2885c80
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2782,7 +2880,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b126f69ececf3c3d
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -2894,7 +2994,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0776c814353b4814d
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3006,7 +3108,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0de864d6a3bd20ea8
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3118,7 +3222,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-089f338f3a2e69431
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3223,7 +3329,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-004aa048722f3ac3e
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3329,7 +3437,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-02dda204c4af0aecc
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3420,7 +3530,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0083086bc808b1d71
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3511,7 +3623,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0fd301a23be2fbe30
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3602,7 +3716,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0a636034c582e2138
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3693,7 +3809,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0a0f534ab418ceb0f
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3784,7 +3902,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-08aa48334e0370a03
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3875,7 +3995,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b24063151d1c59e7
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -3986,7 +4108,9 @@ jenkins:
                 sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
                 templates:
                 - ami: ami-07e9032b01a41341a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4092,7 +4216,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-07e9032b01a41341a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4198,7 +4324,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-07e9032b01a41341a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4286,7 +4414,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-091a906f2e1e40076
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4390,7 +4520,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-008970b8da0f7ef4a
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4478,7 +4610,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0842239ad749d2730
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4566,7 +4700,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b93e28d1386a8580
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4636,7 +4772,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-09725ca3f13c523fd
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4727,7 +4865,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-00aa3f69e07141166
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4818,7 +4958,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0ae2703824063fcf1
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -4909,7 +5051,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-089f338f3a2e69431
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5000,7 +5144,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-04034bfd5da1fa2ed
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5091,7 +5237,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-02e52747ec1f04026
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5182,7 +5330,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-016ee74f2cf016914
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5273,7 +5423,9 @@ jenkins:
                   type: c5n.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-05147510eb2885c80
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5385,7 +5537,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b126f69ececf3c3d
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5497,7 +5651,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0776c814353b4814d
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5609,7 +5765,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0de864d6a3bd20ea8
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5721,7 +5879,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-089f338f3a2e69431
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5826,7 +5986,9 @@ jenkins:
                   type: i4i.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-004aa048722f3ac3e
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -5932,7 +6094,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-02dda204c4af0aecc
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6023,7 +6187,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0083086bc808b1d71
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6114,7 +6280,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0fd301a23be2fbe30
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6205,7 +6373,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0a636034c582e2138
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6296,7 +6466,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0a0f534ab418ceb0f
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6387,7 +6559,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-08aa48334e0370a03
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
@@ -6478,7 +6652,9 @@ jenkins:
                   type: r6g.2xlarge
                   useEphemeralDevices: false
                 - ami: ami-0b24063151d1c59e7
-                  amiType: *id003
+                  amiType:
+                    unixData:
+                      sshPort: '22'
                   associateIPStrategy: PUBLIC_IP
                   connectBySSHProcess: true
                   connectionStrategy: PRIVATE_IP
