@@ -1,5 +1,5 @@
 {
-  "_comment": "Patched Percona fork HPIs baked over the community plugin set. fetch-hpis.sh downloads each url to a temp file, verifies sha256 against this lock, then stages it as <id>.hpi in ./percona-plugins/. Both forks live in Percona-Lab and publish via their tag-driven release.yml; the sha256 values are of the published GitHub Release assets (release.yml rebuilds the HPI from source, so these are the canonical build shas, not the nogueiraanderson pre-move builds).",
+  "_comment": "Patched Percona fork HPIs baked over the community plugin set. fetch-hpis.sh downloads each url to a temp file, verifies sha256 against this lock, then stages it as <id>.hpi in ./percona-plugins/. Both forks live in Percona-Lab and publish via their tag-driven release.yml; the sha256 values are of the published GitHub Release assets (release.yml rebuilds the HPI from source, so these are the canonical build shas, not the pre-move personal-fork builds).",
   "plugins": [
     {
       "id": "hetzner-cloud",

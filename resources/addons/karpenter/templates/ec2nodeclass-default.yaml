@@ -78,4 +78,4 @@ spec:
     iit-billing-tag: percona-ci-platform
     PerconaKeep: "True"
     managed-by: karpenter
-    repo: github.com/nogueiraanderson/percona-ci-platform
+    repo: github.com/Percona/percona-cd-platform

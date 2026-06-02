@@ -7,7 +7,7 @@ aws-load-balancer-controller:
   enableServiceMutatorWebhook: false
   defaultTags:
     managed-by: argocd
-    repo: github.com/nogueiraanderson/percona-ci-platform
+    repo: github.com/Percona/percona-cd-platform
 
   # Robustness: 2 replicas, PDB minAvailable=1 so node drain can't fully
   # evict; system-critical priority so Karpenter consolidation never preempts.

@@ -93,10 +93,11 @@ jenkins:
         alb.ingress.kubernetes.io/healthcheck-path: /login
         alb.ingress.kubernetes.io/tags: "iit-billing-tag=percona-ci-platform"
 
-    # JCasC OFF for the dark-replica stage: the PVC (restored from a real EC2
-    # JENKINS_HOME snapshot) is the source of truth for config/jobs/credentials.
-    # TIER 8 (reproducibility) later moves clouds/templates/labels to a per-host
-    # JCasC ConfigMap.
+    # The chart's built-in JCasC default config is OFF here (defaultConfig: false) so the
+    # subchart does not inject its own local-admin realm. Per-instance files MAY still
+    # layer their own JCasC via controller.JCasC.configScripts; ps3-k8s does (GitHub OAuth
+    # realm, matrix authz, clouds, AWS Secrets Manager credentials provider).
+    # overwriteConfiguration: false so a hot reload merges rather than clobbers.
     JCasC:
       defaultConfig: false
       overwriteConfiguration: false

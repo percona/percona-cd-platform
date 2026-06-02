@@ -1,3 +1,5 @@
 # Default code owners for percona-cd-platform.
 # Auto-requested for review on any matching PR.
-* @nogueiraanderson
+# NOTE: @Percona/build-engineers must have write access to this repo for this
+# rule to take effect; GitHub silently ignores a team that lacks repo access.
+* @Percona/build-engineers

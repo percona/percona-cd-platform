@@ -37,6 +37,8 @@ Cutover treats `JENKINS_HOME` as having exactly one writer at any instant:
 
 Per the locked decisions, `ps3.cd` on EC2 is retained as the EC2 staging canary; `ps3-k8s` is net-new, not a replacement, so the "test on ps3 first" protocol survives the pilot.
 
+> **Amendment (2026-06-01):** the pilot moved faster than this canary framing. `ps3-k8s` was cut over to serve `ps3.cd` directly from the in-cluster controller, and the EC2 NGINX proxy and endpoint-sync were retired, so `ps3.cd` now runs on Kubernetes rather than EC2. The single-writer cutover and break-glass discipline above still hold; the retained-EC2-staging-canary wording is superseded for `ps3` specifically. The other nine masters remain on EC2.
+
 ### Single-AZ + tested snapshot-restore RTO
 
 - Accept single-AZ, single-replica (no active-active). An AZ outage pauses the controller until a replacement pod schedules and the volume restores, the documented limit, same class as one EC2.
