@@ -1,0 +1,507 @@
+# Copyright (C) 2026 Percona LLC
+# Per-master overlay for ps3 (ADR 0029): enabled templates + per-master constants.
+eC2Fleet:
+  addNodeOnlyIfRunning: true
+  alwaysReconnect: false
+  cloudStatusIntervalSec: 10
+  computerConnector:
+    sSHConnector:
+      credentialsId: ec2-fleet-arm-graviton
+      launchTimeoutSeconds: 60
+      maxNumRetries: 10
+      port: 22
+      retryWaitTime: 15
+      sshHostKeyVerificationStrategy: nonVerifyingKeyVerificationStrategy
+  disableTaskResubmit: false
+  executorScaler: noScaler
+  fleet: jenkins-ps3-arm-graviton
+  fsRoot: /mnt/jenkins
+  idleMinutes: 10
+  initOnlineCheckIntervalSec: 15
+  initOnlineTimeoutSec: 600
+  labelString: docker-32gb-aarch64 arm-graviton-fleet
+  maxSize: 16
+  maxTotalUses: -1
+  minSize: 0
+  minSpareSize: 0
+  name: arm-graviton-fleet
+  noDelayProvision: false
+  numExecutors: 1
+  privateIpUsed: true
+  region: eu-west-1
+  restrictUsage: false
+  scaleExecutorsByWeight: false
+ec2:
+  billingTag: jenkins-ps3-worker
+  clouds:
+  - name: AWS-Dev b
+    subnetId: subnet-0d1838e617a72264c
+  - name: AWS-Dev c
+    subnetId: subnet-044e425b6978ca1d7
+  instanceCapStr: '240'
+  region: eu-west-1
+  sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
+  tagPrefix: jenkins-ps3-
+  templates:
+  - ami: ami-07e9032b01a41341a
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: docker
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker '
+    numExecutors: 1
+    os: docker
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-07e9032b01a41341a
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb '
+    numExecutors: 1
+    os: docker-32gb
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-07e9032b01a41341a
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: micro-amazon
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: micro-amazon master
+    numExecutors: 30
+    os: micro-amazon
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-091a906f2e1e40076
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-al2023-aarch64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-al2023-x64 '
+    numExecutors: 1
+    os: min-al2023-x64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-008970b8da0f7ef4a
+    dev: sd-8-80-gp2
+    ebsOptimized: true
+    init: micro-amazon
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-ol-8-x64 '
+    numExecutors: 1
+    os: min-ol-8-x64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-0842239ad749d2730
+    dev: sd-10-80-gp2
+    ebsOptimized: false
+    init: micro-amazon
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-ol-9-x64 '
+    numExecutors: 1
+    os: min-ol-9-x64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-0b93e28d1386a8580
+    dev: sd-30-80-gp3
+    ebsOptimized: true
+    init: min-rhel-10-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-rhel-10-x64 '
+    numExecutors: 1
+    os: min-rhel-10-x64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.403499'
+      c: '0.402500'
+    type: c5n.2xlarge
+  - ami: ami-09725ca3f13c523fd
+    dev: sd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: min-bionic-x64 asan
+    numExecutors: 1
+    os: min-bionic-x64
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-00aa3f69e07141166
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-buster-x64 '
+    numExecutors: 1
+    os: min-buster-x64
+    remoteAdmin: admin
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-0ae2703824063fcf1
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    labelString: 'min-bookworm-x64 '
+    numExecutors: 1
+    os: min-bookworm-x64
+    remoteAdmin: admin
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-089f338f3a2e69431
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-bullseye-x64 '
+    numExecutors: 1
+    os: min-bullseye-x64
+    remoteAdmin: admin
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-04034bfd5da1fa2ed
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    labelString: 'min-trixie-x64 '
+    numExecutors: 1
+    os: min-trixie-x64
+    remoteAdmin: admin
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-02e52747ec1f04026
+    dev: bare-xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-stretch-x64 '
+    numExecutors: 1
+    os: min-stretch-x64
+    remoteAdmin: admin
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-016ee74f2cf016914
+    dev: sd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '60'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-xenial-x64 '
+    numExecutors: 1
+    os: min-xenial-x64
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.288500'
+      c: '0.287500'
+    type: c5n.2xlarge
+  - ami: ami-05147510eb2885c80
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker-32gb-focal
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-focal '
+    numExecutors: 1
+    os: docker-32gb-focal
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-0b126f69ececf3c3d
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker-32gb-focal
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-jammy '
+    numExecutors: 1
+    os: docker-32gb-jammy
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-0776c814353b4814d
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker-32gb-focal
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-noble '
+    numExecutors: 1
+    os: docker-32gb-noble
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-0de864d6a3bd20ea8
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker-32gb-focal
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-resolute '
+    numExecutors: 1
+    os: docker-32gb-resolute
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-089f338f3a2e69431
+    dev: xvd-8-80-gp2
+    ebsOptimized: false
+    init: docker-32gb-bullseye
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-bullseye '
+    numExecutors: 1
+    os: docker-32gb-bullseye
+    remoteAdmin: admin
+    spot:
+      b: '0.514400'
+      c: '0.602700'
+    type: i4i.2xlarge
+  - ami: ami-004aa048722f3ac3e
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: docker
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'docker-32gb-aarch64 '
+    numExecutors: 1
+    os: docker-32gb-aarch64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-02dda204c4af0aecc
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-bookworm-aarch64 '
+    numExecutors: 1
+    os: min-bookworm-aarch64
+    remoteAdmin: admin
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-0083086bc808b1d71
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-bullseye-aarch64 '
+    numExecutors: 1
+    os: min-bullseye-aarch64
+    remoteAdmin: admin
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-0fd301a23be2fbe30
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-jammy-aarch64 '
+    numExecutors: 1
+    os: min-jammy-aarch64
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-0a636034c582e2138
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-noble-aarch64 '
+    numExecutors: 1
+    os: min-noble-aarch64
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-0a0f534ab418ceb0f
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-resolute-aarch64 '
+    numExecutors: 1
+    os: min-resolute-aarch64
+    remoteAdmin: ubuntu
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-08aa48334e0370a03
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-bionic-x64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-trixie-aarch64 '
+    numExecutors: 1
+    os: min-trixie-aarch64
+    remoteAdmin: admin
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  - ami: ami-0b24063151d1c59e7
+    dev: xvd-8-80-gp2
+    ebsOptimized: true
+    init: min-al2023-aarch64
+    instanceCapStr: '40'
+    jvmopts: -Xmx512m -Xms512m
+    labelString: 'min-al2023-aarch64 '
+    numExecutors: 1
+    os: min-al2023-aarch64
+    remoteAdmin: ec2-user
+    spot:
+      b: '0.288999'
+      c: '0.294099'
+    type: r6g.2xlarge
+  useInstanceProfileForCredentials: false
+hetzner:
+  credentialsId: htz.cd.token
+  instanceCapStr: '100'
+  name: ps3-htz
+  serverTemplates:
+  - image: '114690387'
+    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+    location: nbg1
+    name: deb12-x64-nbg1-min
+    serverType: cpx42
+  - image: '114690389'
+    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+    location: nbg1
+    name: deb12-aarch64-nbg1-min
+    serverType: cax31
+  - image: '114690387'
+    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+    location: hel1
+    name: deb12-x64-hel1-min
+    serverType: cpx42
+  - image: '114690389'
+    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+    location: hel1
+    name: deb12-aarch64-hel1-min
+    serverType: cax31
+  - image: '114690387'
+    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+    location: fsn1
+    name: deb12-x64-fsn1-min
+    serverType: cpx42
+  - image: '114690389'
+    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+    location: fsn1
+    name: deb12-aarch64-fsn1-min
+    serverType: cax31
+  - image: '114690387'
+    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+    location: nbg1
+    name: deb12-x64-nbg1
+    serverType: cpx62
+  - image: '114690389'
+    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+    location: nbg1
+    name: deb12-aarch64-nbg1
+    serverType: cax41
+  - image: '114690387'
+    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+    location: hel1
+    name: deb12-x64-hel1
+    serverType: cpx62
+  - image: '114690389'
+    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+    location: hel1
+    name: deb12-aarch64-hel1
+    serverType: cax41
+  - image: '114690387'
+    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+    location: fsn1
+    name: deb12-x64-fsn1
+    serverType: cpx62
+  - image: '114690389'
+    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+    location: fsn1
+    name: deb12-aarch64-fsn1
+    serverType: cax41
+  - image: '114690387'
+    labelStr: launcher-x64
+    location: nbg1
+    name: launcher-x64-nbg1
+    numExecutors: 30
+    serverType: cpx22
+  - image: '114690387'
+    labelStr: launcher-x64
+    location: hel1
+    name: launcher-x64-hel1
+    numExecutors: 30
+    serverType: cpx22
+  - image: '114690387'
+    labelStr: launcher-x64
+    location: fsn1
+    name: launcher-x64-fsn1
+    numExecutors: 30
+    serverType: cpx22

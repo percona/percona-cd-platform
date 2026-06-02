@@ -9,9 +9,15 @@ extends: default
 # bundle). Reformatting them would drift them from upstream; they are
 # read via `.Files.Get` and yield a valid Kubernetes object after Helm
 # rendering, which kubeconform then validates.
+#
+# resources/jenkins/clouds-catalog/ is generator data (ADR 0029): it carries
+# byte-faithful shell init scripts (long apt-repo / docker lines). It is not a
+# Kubernetes manifest; it is validated by `just clouds-render-check` (catalog vs
+# the committed configScript) + the chart render-check, not by yamllint.
 ignore: |
   resources/addons/*/templates/
   resources/addons/*/files/
+  resources/jenkins/clouds-catalog/
 
 rules:
   line-length:
