@@ -36,7 +36,7 @@ ci: lint validate
 
 lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
 
-validate: tf-validate manifest-validate helm-render
+validate: tf-validate manifest-validate helm-render clouds-render-check
 
 # ---------- internal guards ----------
 # Fail loudly (at runtime, never parse time) if AWS_PROFILE is not exported.
@@ -137,6 +137,7 @@ manifest-validate:
       -ignore-filename-pattern '.*/templates/.*' \
       -ignore-filename-pattern '.*/files/.*' \
       -ignore-filename-pattern '.*/dashboards/.*\.json' \
+      -ignore-filename-pattern '.*/clouds-catalog/.*' \
       -schema-location default \
       -schema-location "$URL" \
       argocd-bootstrap/ resources/
@@ -179,6 +180,11 @@ zizmor:
 # ---------- helpers ----------
 check-versions:
     uv run --with pyyaml python3 scripts/check_versions.py
+
+# Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
+# is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
+clouds-render-check:
+    uv run --with pyyaml python3 scripts/render-clouds.py check ps3
 
 # Bootstrap S3 state bucket (one-time, manual on first apply)
 bootstrap-state:

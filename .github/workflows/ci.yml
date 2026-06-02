@@ -113,6 +113,7 @@ jobs:
             -ignore-filename-pattern '.*/templates/.*' \
             -ignore-filename-pattern '.*/files/.*' \
             -ignore-filename-pattern '.*/dashboards/.*\.json' \
+            -ignore-filename-pattern '.*/clouds-catalog/.*' \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             argocd-bootstrap/ resources/
