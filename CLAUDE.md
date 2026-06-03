@@ -50,7 +50,7 @@ Verify with `scripts/check_versions.py` before any pin bump.
 1. **EKS extended support.** Standard support: 1.33 / 1.34 / **1.35 (default)**. Picking 1.32 or below incurs paid extended-support fees.
 2. **EBS-CSI volume zonality.** EBS is per-AZ. StatefulSets that need volume-follows-pod must pin to one AZ via `nodeSelector` + StorageClass `allowedTopologies`. Multi-AZ HA needs EFS (slower).
 3. **Pod Identity needs the agent.** `eks-pod-identity-agent` managed addon is mandatory; without it every association silently no-ops.
-4. **EC2-plugin IRSA classloader bug.** Jenkins EC2 plugin (AWS SDK v1) has classloader isolation that breaks `DefaultCredentialsProvider`. Patched fork `ec2:5.24.percona.2` + `e-ec2-irsa-credential.groovy` are the only working path. Pod Identity *should* fix it transparently — verify on `ps3-k8s` (the first in-cluster master) before claiming so.
+4. **EC2-plugin IRSA classloader bug.** Jenkins EC2 plugin (AWS SDK v1) has classloader isolation that breaks `DefaultCredentialsProvider`. Patched fork `ec2:5.24.percona.4` + `e-ec2-irsa-credential.groovy` are the classic EKS-fronted-master path. The in-cluster `ps3-k8s` master is wired for EKS Pod Identity instead (SA-bound, no IRSA groovy); confirm the EC2 plugin resolves creds via Pod Identity in-pod before relying on it elsewhere.
 5. **Karpenter taint exclusion.** Stateful NGs (`prometheus-system`, `jenkins-system`) carry `workload=<x>:NoSchedule`. Default Karpenter NodePool must `NotIn` that taint.
 6. **EKS hardening checklist.** Before uncommenting `terraform/eks.tf` / `eks-addons.tf` modules, work through `docs/eks-hardening.md` (Top-5: access entries with `authenticationMode=API`, `publicAccessCidrs` allowlist, control-plane logging, VPC CNI prefix delegation, addon-version pinning).
 7. **`percona-dev-admin` cleanup tags.** Two tags are mandatory on all resources or AWS-side cleanup Lambdas wipe them: `iit-billing-tag` (any value — EC2 cleanup terminates instances missing this tag after 10 min) and `PerconaKeep=True` (capital P, capital K — volume cleanup deletes any `available` EBS volume daily without it). Both are in `var.tags` defaults. EBS volumes provisioned by the in-cluster CSI driver carry them via `parameters.tagSpecification_*` in `resources/addons/storageclass-gp3/templates/storageclasses.yaml`.
@@ -88,8 +88,8 @@ auth probe). Use before declaring a master ready to absorb a spot interrupt.
 | Repo | Purpose |
 |---|---|
 | `Percona-Lab/jenkins-pipelines` | Jenkins pipeline code, cloud.groovy, job definitions (master + hetzner branches) |
-| `nogueiraanderson/hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.11`, DC breakers, type fallback, `/hetzner-prometheus` `UnprotectedRootAction` for the push model) |
-| `nogueiraanderson/ec2-plugin` | Patched EC2 plugin (`v5.24.percona.2` — IRSA classloader fix, NPE guards) |
+| `Percona-Lab/jenkins-hetzner-cloud-plugin` | Patched Hetzner plugin (`v103.percona.28`; DC breakers, type fallback, `/hetzner-prometheus` `UnprotectedRootAction`, `SSHUserPrivateKey`-interface fix for external cred providers). |
+| `Percona-Lab/jenkins-ec2-plugin` | Patched EC2 plugin (`v5.24.percona.4`; IRSA classloader fix, NPE/CRW guards). |
 
 ## Skill loading reminders
 

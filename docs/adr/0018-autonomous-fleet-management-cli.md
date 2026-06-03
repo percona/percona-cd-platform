@@ -42,8 +42,7 @@ The fleet needed:
 
 ## Decision
 
-The `jenkins` CLI (Rust binary at `~/.local/bin/jenkins`, source in
-`nogueiraanderson/dotfiles/rust/jenkins`) gains five subcommands that
+The `jenkins` CLI (Rust binary at `~/.local/bin/jenkins`, maintained in the operator's dotfiles) gains five subcommands that
 collectively let cron drive autonomous rollouts and let operators
 intervene manually with full audit. All shipped 2026-05-16/17 across
 ~10 commits.

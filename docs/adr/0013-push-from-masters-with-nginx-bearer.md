@@ -209,9 +209,9 @@ The actual fix shipped in **`v103.percona.11`**: change
 endpoints that opt out of the global authentication filter — the same
 mechanism `cli-proxy` and `instance-identity` use.
 
-Source: `nogueiraanderson/hetzner-cloud-plugin` commits `226b669` (code
-change) and `fed1d15` (README + CHANGELOG); GitHub Release
-[`v103.percona.11`](https://github.com/nogueiraanderson/hetzner-cloud-plugin/releases/tag/v103.percona.11).
+Source: `Percona-Lab/jenkins-hetzner-cloud-plugin` (canonical; formerly the
+personal fork) commits `226b669` (code change) and `fed1d15` (README +
+CHANGELOG); first shipped in `v103.percona.11`.
 
 Verification on ps3.cd, 2026-05-08:
 
