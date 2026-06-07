@@ -1,0 +1,18 @@
+apiVersion: v2
+name: snapscheduler
+description: |
+  backube snapscheduler: scheduled CSI VolumeSnapshots with retention. Lands the
+  ADR 0028 section 3 backup mechanism for the in-cluster Jenkins controller PVC
+  (ps3-k8s-jenkins-home). It creates VolumeSnapshots on a cron, which the managed
+  snapshot-controller + ebs-csi driver turn into EBS snapshots via the
+  ebs-csi-retain VolumeSnapshotClass (storageclass-gp3 addon), so recovery points
+  survive a GitOps prune. The live data volume is deliberately NOT tagged
+  workload=jenkins (that would copy secrets/ + credentials.xml into the generic
+  14-day AWS Backup vault; see docs/runbooks/migrate-ps3-to-eks.md and ADR 0028).
+type: application
+version: 1.0.0
+appVersion: "3.5.0"
+dependencies:
+  - name: snapscheduler
+    version: 3.5.0
+    repository: https://backube.github.io/helm-charts

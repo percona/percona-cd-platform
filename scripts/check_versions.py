@@ -116,6 +116,7 @@ def main() -> int:
         ("jenkins chart", "https://charts.jenkins.io", "jenkins", "5.9.18"),
         ("cloudnative-pg chart", "https://cloudnative-pg.github.io/charts", "cloudnative-pg", "0.28.2"),
         ("headlamp chart", "https://kubernetes-sigs.github.io/headlamp/", "headlamp", "0.42.0"),
+        ("snapscheduler chart", "https://backube.github.io/helm-charts", "snapscheduler", "3.5.0"),
     ]
     for name, repo, chart, pinned in index_charts:
         try:

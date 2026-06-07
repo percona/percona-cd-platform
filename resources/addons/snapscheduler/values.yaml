@@ -1,0 +1,14 @@
+# backube snapscheduler operator. Values scoped under the dependency name
+# (see Chart.yaml). Defaults suit a single-operator install: 1 replica,
+# amd64/linux nodeSelector, CRD management on (ships the SnapshotSchedule CRD).
+# Lightweight controller; runs on the default (general) Karpenter NodePool,
+# same as cloudnative-pg.
+snapscheduler:
+  replicaCount: 1
+  manageCRDs: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi

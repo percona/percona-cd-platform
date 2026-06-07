@@ -119,6 +119,13 @@ locals {
       name = "headlamp"
       ver  = "0.42.0"
     }
+    # snapscheduler (backube) — scheduled CSI VolumeSnapshots for the in-cluster
+    # Jenkins controller PVC (ADR 0028 section 3). resources/addons/snapscheduler.
+    snapscheduler = {
+      repo = "https://backube.github.io/helm-charts"
+      name = "snapscheduler"
+      ver  = "3.5.0"
+    }
     # cert-manager deferred to v1.5 — see docs/adr/0004-pod-identity-default.md (TBC) and the plan.
     # cert_manager = { repo = "https://charts.jetstack.io", name = "cert-manager", ver = "v1.20.2" }
   }
