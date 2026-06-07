@@ -6880,12 +6880,6 @@ jenkins:
         labels:
           app.kubernetes.io/part-of: jenkins-ps3-k8s
       data:
-        ec2FleetCloud.groovy: |
-          // Neutered (PS-11179 follow-up): the Graviton Fleet now loads via the ps3-clouds
-          // JCasC configScript (jenkins.clouds). This ConfigMap stays wired via
-          // controller.initConfigMap only so retiring it does not change the StatefulSet
-          // pod spec (which would force a roll); it is unset + deleted in a later roll.
-          // No-op at boot.
         hetznerArmHealth.groovy: |
           // hetznerArmHealth.groovy  (PS-11179)
           //
