@@ -150,11 +150,12 @@ variable "jenkins_hosts" {
     # `origin-<host>.cd.percona.com` keeps pointing at the EC2 master so
     # the proxy upstream stays reachable through cutover.
     pmm = { mode = "proxy", upstream_origin = "origin-pmm.cd.percona.com" }
-    # ps80 + ps3 upstreams are discovered by the in-cluster jenkins-endpoint-
-    # reconciler (EndpointSlice over cross-region peering), not an origin-<host>
-    # record. Re-add upstream_origin only for a Mode B fallback.
+    # ps80 upstream is discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), not an origin-<host> record.
+    # Re-add upstream_origin only for a Mode B fallback.
     ps80 = { mode = "proxy" }
-    ps3  = { mode = "proxy" }
+    # ps3 has no proxy entry: the EC2 ps3 master was retired, and ps3.cd is now
+    # served by the in-cluster controller "ps3-k8s" below.
     # pxc upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps3/ps57.
     pxc   = { mode = "proxy" }
@@ -168,12 +169,10 @@ variable "jenkins_hosts" {
     rel   = { mode = "proxy", upstream_origin = "origin-rel.cd.percona.com" }
     cloud = { mode = "proxy", upstream_origin = "origin-cloud.cd.percona.com" }
 
-    # ps3-k8s = future in-cluster Jenkins master. Seeded as a full replica of
-    # the production EC2 ps3 via cross-region EBS snapshot copy of
-    # JENKINS_HOME (see runbooks/migrate-ps3-to-eks.md). Independent of the
-    # `ps3` proxy entry above: ps3 stays the user-facing host, served by the
-    # EC2 master via the ALB; ps3-k8s exposes the in-cluster replica for
-    # validation until the EC2 ps3 is retired.
+    # ps3-k8s = the in-cluster Jenkins master serving ps3.cd. Seeded as a full
+    # replica of the former EC2 ps3 via a cross-region EBS snapshot copy of
+    # JENKINS_HOME (see runbooks/migrate-ps3-to-eks.md). The EC2 ps3 master has
+    # been retired; this in-cluster controller is now the sole ps3.
     "ps3-k8s" = {
       mode             = "in-cluster"
       upstream_az      = "us-east-1a"
