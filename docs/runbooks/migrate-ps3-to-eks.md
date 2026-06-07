@@ -1,5 +1,17 @@
 # Migrate a Jenkins master to EKS (ps3 = the reference / testbed)
 
+> **Outcome (2026-06-07, PS-11206): the ps3 EC2 master is fully decommissioned.**
+> The fence-don't-destroy rollback this runbook describes was the staging posture
+> while the in-cluster controller was being proven. That validation is complete:
+> the EC2 spot master was terminated, `module.ps3` deleted from Terraform, and
+> `ps3.cd` is now served directly by the in-cluster `jenkins-ps3-k8s` pod (no EC2
+> origin, no Mode B proxy). The old EC2 `JENKINS_HOME` volume is retained (plus an
+> EBS snapshot and an S3 archive). The single-writer EC2 rollback in Phase C/the
+> Rollback section below **no longer exists** for ps3; the in-cluster home is now
+> protected by the `snapscheduler` daily CSI snapshot (ADR 0028) with a proven xfs
+> restore drill. See [`decommission-ps3-ec2-master.md`](decommission-ps3-ec2-master.md).
+> The recipe itself stays valid for the **next** master to be moved in-cluster.
+
 `ps3` is the **first** master moved in-cluster and the **permanent testbed** for
 migrating the rest. This runbook is the validated recipe (not a plan): it records
 exactly what worked and the gotchas that bite, so the next master is mechanical.
