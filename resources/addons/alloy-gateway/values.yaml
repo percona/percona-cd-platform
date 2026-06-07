@@ -101,6 +101,16 @@ alloy:
           }
         }
 
+    # Inner Alloy container resources. MUST live under alloy.alloy (the
+    # grafana/alloy subchart's own values), NOT alloy.controller: the chart
+    # wires the alloy container from `$values.resources` where `$values` is
+    # `.Values.alloy`, so a controller.resources block is silently dropped
+    # and the container schedules with requests={}, making it the first
+    # node-pressure eviction victim. Sized from observed ~57Mi working set.
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 512Mi }
+
   controller:
     type: deployment
     replicas: 2
@@ -130,13 +140,6 @@ alloy:
               labelSelector:
                 matchLabels:
                   app.kubernetes.io/instance: alloy-gateway
-    # Inner Alloy container -- the chart leaves this unset, so requests
-    # default to {} and Karpenter has zero scheduling signal. Sidecar's
-    # own requests are already set further below.
-    resources:
-      requests: { cpu: 100m, memory: 256Mi }
-      limits: { memory: 512Mi }
-
     # Mount the nginx config template (rendered from
     # templates/configmap-nginx-auth.yaml) plus the writable scratch
     # dirs nginx needs when readOnlyRootFilesystem is on. The bearer
