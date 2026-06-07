@@ -1,0 +1,29 @@
+# Daily scheduled VolumeSnapshot of the in-cluster Jenkins controller home
+# (PVC ps3-k8s-jenkins-home, selected by its project=ps3-eks-clone label so it
+# never matches the orphan default PVC). Lives in the jenkins-ps3-k8s namespace
+# (snapscheduler selects PVCs in the SnapshotSchedule's own namespace); the
+# platform AppProject allows namespace '*', so this addon Application manages it
+# cross-namespace. sync-wave 1 so the operator + CRD (wave 0) land first.
+# snapshotClassName ebs-csi-retain keeps the underlying EBS snapshot on a
+# GitOps prune. Daily at 02:00 UTC (one hour before the AWS Backup window),
+# 14 retained = matches the rest of the fleet's RPO.
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: ps3-k8s-jenkins-home-daily
+  namespace: jenkins-ps3-k8s
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  claimSelector:
+    matchLabels:
+      project: ps3-eks-clone
+  schedule: "0 2 * * *"
+  retention:
+    maxCount: 14
+    expires: "336h"
+  snapshotTemplate:
+    snapshotClassName: ebs-csi-retain
+    labels:
+      app.kubernetes.io/name: jenkins-ps3-k8s
+      backup: ps3-k8s-jenkins-home
