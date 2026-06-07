@@ -118,7 +118,7 @@ tf-state-versioning-check: _require-aws-profile
 # `just tf-plan` + `just tf-apply` after review.
 tf-plan-masters: _require-aws-profile
     tofu -chdir=terraform plan \
-      -target=module.ps3   -target=module.ps3_arm_fleet \
+      -target=module.ps3_arm_fleet \
       -target=module.ps57  -target=module.ps57_arm_fleet \
       -target=module.ps80  -target=module.ps80_arm_fleet \
       -target=module.pxb   -target=module.pxb_arm_fleet \
