@@ -45,10 +45,19 @@ parameters:
 allowVolumeExpansion: true
 ---
 # Jenkins-master class — single-AZ (us-east-1a), Retain. Used by Jenkins StatefulSets.
+# fsType=xfs: the in-cluster JENKINS_HOME volumes are xfs (lifted from the EC2
+# masters' xfs home; the static PVs declare fsType: xfs). Without this, a snapshot
+# RESTORE provisions ext4 (the EBS CSI default) and cannot mount the xfs filesystem
+# ("wrong fs type, bad superblock"), which silently breaks DR. StorageClass
+# parameters are immutable, so the Replace+Force sync-option lets ArgoCD
+# delete+recreate the class on this change (safe: bound PVs are untouched; the
+# class is only consulted at provision time).
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: gp3-jenkins-1a-retain
+  annotations:
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Retain
@@ -61,6 +70,7 @@ parameters:
   encrypted: "true"
   iops: "3000"
   throughput: "125"
+  csi.storage.k8s.io/fstype: "xfs"
   tagSpecification_1: "iit-billing-tag=percona-ci-platform"
   tagSpecification_2: "PerconaKeep=True"
   tagSpecification_3: "managed-by=ebs-csi-driver"
