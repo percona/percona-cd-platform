@@ -6,8 +6,13 @@ master had provisioned. This doc covers the four layered mechanisms the
 platform puts in place, and the specific cases where each one does not
 help (so operators know what to expect and what to monitor).
 
-Validated end-to-end on `ps3` via three FIS spot-interruption experiments;
-not yet rolled out to the other nine production masters.
+Validated end-to-end on the former EC2 `ps3` master via three FIS
+spot-interruption experiments; not yet rolled out to the other nine
+production masters. `ps3` itself has since moved in-cluster and its EC2
+spot master was decommissioned on 2026-06-07 (see
+[`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md)),
+so this doc now describes the resilience model for the nine remaining EC2
+spot masters; the original `ps3` validation is kept as the reference run.
 
 ## The four mechanisms
 
@@ -52,8 +57,8 @@ each surviving VM as a Jenkins agent. `ControllerListener.onOnline`
 defers `OrphanedNodesCleaner` by 5 minutes so the rehydrate pass has
 time to claim VMs first.
 
-Validated tonight: 1/1 VM re-adopted on the post-FIS replacement
-instance, agent name preserved, no manual intervention.
+Validated on the `ps3` FIS run: 1/1 VM re-adopted on the post-FIS
+replacement instance, agent name preserved, no manual intervention.
 
 ## Rehydrate: when workers are still lost
 
@@ -89,10 +94,11 @@ it:
   workers left from a different master).
 - Every Hetzner VM labeled with this cloud is reaped within seconds.
 
-Today's userdata bakes the flag in via the `JAVA_OPTS` line in the
-systemd override, gated by `master_profile == "eks_observability"`
-(only `ps3` so far). On any other master, or on `ps3` if someone
-edits the override out, the flag is missing and rehydrate is a no-op.
+The userdata bakes the flag in via the `JAVA_OPTS` line in the
+systemd override, gated by `master_profile == "eks_observability"` (only
+the former EC2 `ps3` ever used that profile; its spot master has since been
+decommissioned). On any master without the flag the rehydrate path is a
+no-op.
 
 `check-master-spot-readiness.sh` shows this as `FAIL rehydrate flag in
 JVM args`.

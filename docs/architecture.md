@@ -28,22 +28,29 @@
 ```
 
 *`jenkins-system` tier was retired 2026-05-13 (no master ever claimed it).
-The in-cluster `ps3-k8s` master currently targets the `jenkins-master`
-tier label; with the dedicated MNG gone it relies on Karpenter
-provisioning a matching node. Pending design review.
+The in-cluster `ps3` master targets the `jenkins-master` tier label, served
+by the dedicated `jenkins_master` MNG (ADR 0025); see the compute-topology
+table below.
 
 ## Host scope
 
 | Host(s) | Role | Notes |
 |---|---|---|
-| `pmm`, `ps80`, `ps3`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 origin) | Friendly DNS points at the ALB; the proxy `proxy_pass`es to `origin-<host>.cd.percona.com`, which resolves to the EC2 master. The `jenkins-endpoint-reconciler` CronJob keeps each per-host K8s Service's EndpointSlice in sync with the live EC2 master IP (re-runs every minute, survives SpotFleet replacement). |
-| `ps3-k8s.cd.percona.com` | Mode A (in-cluster StatefulSet) | First in-cluster Jenkins master. Seeded as a full replica of the production EC2 `ps3` via cross-region EBS snapshot copy of `JENKINS_HOME`. See [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md). |
+| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 origin) | Friendly DNS points at the ALB; the proxy `proxy_pass`es to `origin-<host>.cd.percona.com`, which resolves to the EC2 master. The `jenkins-endpoint-reconciler` CronJob keeps each per-host K8s Service's EndpointSlice in sync with the live EC2 master IP (re-runs every minute, survives SpotFleet replacement). |
+| `ps3.cd.percona.com` | Mode A (in-cluster StatefulSet) | First master moved in-cluster, and the only one served directly by the pod. The shared ALB routes `ps3.cd` straight to `jenkins-ps3-k8s-0`; there is no Mode B proxy or EC2 origin in the path. Seeded from the former EC2 `ps3` via a cross-region EBS snapshot copy of `JENKINS_HOME`. See [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md). |
 | `grafana.cd.percona.com`, `argocd.cd.percona.com` | In-cluster Service behind the same ALB | Platform UIs. |
 
-The `ps3` EC2 master is fully Terraform-managed by this repo (the legacy
-CFN stack was deleted; the platform owns the SpotFleet, IAM, EBS, userdata,
-and resilience plumbing). It is still served via the Mode B proxy until
-`ps3-k8s` is validated and the friendly DNS flips.
+The `ps3` EC2 "pet" master was retired on 2026-06-07 (PS-11206): the spot
+fleet was cancelled, the EC2 instance terminated, and `module.ps3` deleted
+from Terraform. Its still-load-bearing substrate (the VPC, subnets, IGW,
+route table, S3 gateway endpoint, worker IAM role/profile, and the ARM
+Graviton SG/launch-template/ASG) was re-parented into the
+`jenkins-arm-standalone` module (`terraform/master-ps3.tf` →
+`module.ps3_arm_fleet`) via zero-diff `moved{}` blocks, so the in-cluster
+controller keeps its `docker-32gb-aarch64` Fleet fallback over the EKS↔ps3
+peering. The old EC2 `JENKINS_HOME` volume is retained (forgotten from state
+with `destroy=false`, `PerconaKeep=True`), plus an EBS snapshot and an S3
+archive. See [`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md).
 
 ## Ownership boundary
 
@@ -146,6 +153,7 @@ reboot despite rehydrate) in [`ec2-master-resilience.md`](ec2-master-resilience.
 - [`runbooks/eks-upgrade.md`](runbooks/eks-upgrade.md) — minor version bump procedure
 - [`runbooks/mng-label-taint-changes.md`](runbooks/mng-label-taint-changes.md) — apply MNG label/taint edits without a drain
 - [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md) — cross-region EBS snapshot lift
+- [`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md) — retire the ps3 EC2 spot master + re-parent its substrate
 - [`runbooks/add-jenkins-host.md`](runbooks/add-jenkins-host.md) — bring a new Jenkins host onto the shared ALB
 - [`runbooks/jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md) — per-master SSL cutover
 - [`runbooks/disaster-recovery.md`](runbooks/disaster-recovery.md) — cluster recovery procedures

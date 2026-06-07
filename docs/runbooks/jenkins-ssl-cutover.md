@@ -6,15 +6,22 @@ the wildcard ACM cert. The master's openresty + certbot stack is gone;
 Jenkins listens on `:8080` only; master SG allows `:8080` only from the
 EKS VPC CIDR (`10.220.0.0/16`) over a cross-region VPC peering. (PS-10945)
 
-This runbook is generic: substitute `<host>` for each of the 10 active
-masters (`pmm`, `ps80`, `ps3`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`,
-`rel`, `cloud`). Concrete examples use `ps3.cd.percona.com` because it
-was the first cut over.
+This runbook is generic: substitute `<host>` for each of the EC2 spot
+masters still fronted this way (`pmm`, `ps80`, `pxc`, `pxb`, `psmdb`,
+`pg`, `ps57`, `rel`, `cloud`). Concrete examples use `ps3.cd.percona.com`
+because `ps3` was the first master cut over to the shared ALB and the
+example commands are kept verbatim as the reference run. **`ps3` itself
+is no longer an EC2 master:** its EC2 spot controller was decommissioned
+2026-06-07 (PS-11206) and `ps3.cd` is now served directly by the
+in-cluster `jenkins-ps3-k8s` pod, so do not run this procedure against
+`ps3` — see [`decommission-ps3-ec2-master.md`](decommission-ps3-ec2-master.md).
 
 Out of scope:
-- The `ps3-k8s` migration (Jenkins-as-pods in the cluster) is a separate
-  track; see `docs/runbooks/migrate-ps3-to-eks.md`. Do not confuse the
-  two: `ps3` here is the live EC2 master, not the in-cluster replica.
+- The `ps3` in-cluster migration (Jenkins-as-pods in the cluster) is a
+  separate track; see `docs/runbooks/migrate-ps3-to-eks.md`. When this
+  runbook's examples say `ps3`, they refer to the EC2 master as it existed
+  during the original cutover, not the in-cluster controller that serves
+  `ps3.cd` today.
 - The upstream `origin-<host>` Route53 record and the `jenkins_hosts`
   TF entry are prerequisites handled outside this runbook (operator
   populates them ahead of the first cutover; see comments in
