@@ -8,9 +8,9 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
 ## Design decisions
 
 - **Standalone module, one call per master.** Not folded into `jenkins-master`,
-  so it also attaches to **still-CloudFormation masters** (ps57/ps80) by feeding
-  their existing VPC/subnet/profile/role via `data` sources, without migrating
-  the whole master to Terraform first.
+  so it also attaches to **still-CloudFormation masters** (cloud/pg/psmdb/rel) by
+  feeding their existing VPC/subnet/profile/role via `data` sources, without
+  migrating the whole master to Terraform first.
 - **ASG + `MixedInstancesPolicy`, not Spot Fleet.** AWS's recommended self-healing
   construct; the ec2-fleet plugin gets automatic AZ rebalancing only with an ASG.
   Spot Fleet is legacy.
@@ -37,38 +37,46 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
 Terraform-managed master (consume the master module's outputs):
 
 ```hcl
-module "ps3_arm_fleet" {
+module "ps80_arm_fleet" {
   source    = "./modules/jenkins-arm-fleet"
-  providers = { aws = aws.eu-west-1 }
+  providers = { aws = aws.us-west-2 }
 
-  short_name                   = "jenkins-ps3"
-  vpc_id                       = module.ps3.vpc_id
-  subnet_ids                   = module.ps3.subnet_ids
-  worker_instance_profile_name = module.ps3.worker_instance_profile_name
-  master_role_name             = module.ps3.master_iam_role_name
-  key_name                     = "jenkins-ps3"
+  short_name                   = "jenkins-ps80"
+  vpc_id                       = module.ps80.vpc_id
+  subnet_ids                   = module.ps80.subnet_ids
+  worker_instance_profile_name = module.ps80.worker_instance_profile_name
+  master_role_name             = module.ps80.master_iam_role_name
+  key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  max_size                     = 16
   tickets                      = "PS-11179"
 }
 ```
 
+> **Note**
+> `ps3` is now an in-cluster controller, not an EC2 master, so it does not consume
+> this attach-to-existing module. Its Graviton pool plus the surviving VPC and
+> worker IAM substrate live in the sibling `jenkins-arm-standalone` module, which
+> owns that substrate outright (see `terraform/master-ps3.tf`).
+
 Still-CloudFormation master (feed existing resource IDs via data sources):
 
 ```hcl
-data "aws_vpc" "ps57"    { tags = { Name = "jenkins-ps57" } }
-data "aws_subnets" "ps57" { filter { name = "vpc-id"; values = [data.aws_vpc.ps57.id] } }
+data "aws_vpc" "pg"     { tags = { Name = "jenkins-pg" } }
+data "aws_subnets" "pg" { filter { name = "vpc-id"; values = [data.aws_vpc.pg.id] } }
 
-module "ps57_arm_fleet" {
+module "pg_arm_fleet" {
   source    = "./modules/jenkins-arm-fleet"
   providers = { aws = aws.eu-central-1 }
 
-  short_name                   = "jenkins-ps57"
-  vpc_id                       = data.aws_vpc.ps57.id
-  subnet_ids                   = data.aws_subnets.ps57.ids
-  worker_instance_profile_name = "jenkins-ps57-worker"
-  master_role_name             = "jenkins-ps57-master"
-  key_name                     = "jenkins-ps57"
+  short_name                   = "jenkins-pg"
+  vpc_id                       = data.aws_vpc.pg.id
+  subnet_ids                   = data.aws_subnets.pg.ids
+  worker_instance_profile_name = "jenkins-pg-worker"
+  master_role_name             = "jenkins-pg-master"
+  key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  max_size                     = 16
   tickets                      = "PS-11179"
 }
 ```
