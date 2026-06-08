@@ -1,14 +1,9 @@
 # ps3.cd.percona.com is now served by the in-cluster jenkins-ps3-k8s controller
-# (EKS). The classic EC2 spot master (the former module "ps3") is being retired.
+# (EKS). The classic EC2 spot master (the former module "ps3") was retired.
 # Its network + worker-IAM substrate and the ARM Graviton fleet are re-parented
 # into module.ps3_arm_fleet (./modules/jenkins-arm-standalone) so the in-cluster
 # controller keeps its docker-32gb-aarch64 fallback, reached by private IP over
 # the EKS<->ps3 peering and driven by the controller's EKS Pod Identity role.
-#
-# The moved{} blocks relocate the substrate + worker IAM with zero diff (state
-# re-key, not recreate); the removed{} block forgets the JENKINS_HOME EBS without
-# destroying it; the master-only resources (spot fleet, launch template, master
-# role + SGs, init bucket, SQS) are destroyed when the old module block is gone.
 
 module "ps3_arm_fleet" {
   source    = "./modules/jenkins-arm-standalone"
@@ -63,66 +58,4 @@ resource "aws_route" "ps3_to_eks" {
   route_table_id            = each.value
   destination_cidr_block    = module.vpc.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.ps3.id
-}
-
-# ----- one-time re-parent scaffolding (delete in a follow-up once applied) -----
-# Relocate the substrate + worker IAM from the retired master into the standalone
-# ARM module. `moved` is a state re-key: the resources are preserved, not recreated.
-moved {
-  from = module.ps3.aws_vpc.this
-  to   = module.ps3_arm_fleet.aws_vpc.this
-}
-moved {
-  from = module.ps3.aws_internet_gateway.this
-  to   = module.ps3_arm_fleet.aws_internet_gateway.this
-}
-moved {
-  from = module.ps3.aws_subnet.this["b"]
-  to   = module.ps3_arm_fleet.aws_subnet.this["b"]
-}
-moved {
-  from = module.ps3.aws_subnet.this["c"]
-  to   = module.ps3_arm_fleet.aws_subnet.this["c"]
-}
-moved {
-  from = module.ps3.aws_route_table.this
-  to   = module.ps3_arm_fleet.aws_route_table.this
-}
-moved {
-  from = module.ps3.aws_route.internet
-  to   = module.ps3_arm_fleet.aws_route.internet
-}
-moved {
-  from = module.ps3.aws_route_table_association.this["b"]
-  to   = module.ps3_arm_fleet.aws_route_table_association.this["b"]
-}
-moved {
-  from = module.ps3.aws_route_table_association.this["c"]
-  to   = module.ps3_arm_fleet.aws_route_table_association.this["c"]
-}
-moved {
-  from = module.ps3.aws_vpc_endpoint.s3
-  to   = module.ps3_arm_fleet.aws_vpc_endpoint.s3
-}
-moved {
-  from = module.ps3.aws_iam_role.worker
-  to   = module.ps3_arm_fleet.aws_iam_role.worker
-}
-moved {
-  from = module.ps3.aws_iam_role_policy.worker
-  to   = module.ps3_arm_fleet.aws_iam_role_policy.worker
-}
-moved {
-  from = module.ps3.aws_iam_instance_profile.worker
-  to   = module.ps3_arm_fleet.aws_iam_instance_profile.worker
-}
-
-# Forget the JENKINS_HOME data volume without destroying it. It has prevent_destroy
-# and PerconaKeep=True; it detaches to `available` when the spot master terminates
-# and is retained (plus the pre-decommission snapshot snap-07e2b31bc3c01241a).
-removed {
-  from = module.ps3.aws_ebs_volume.data
-  lifecycle {
-    destroy = false
-  }
 }
