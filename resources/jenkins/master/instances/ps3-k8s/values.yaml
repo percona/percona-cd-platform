@@ -13,6 +13,46 @@
 #   from the live controller export. line-length is disabled file-wide for that reason.
 jenkins:
   controller:
+    # Alloy loopback sidecar (PS-11173 / metrics gap): scrape the Hetzner plugin's
+    # /hetzner-prometheus endpoint and ship to Mimir. The endpoint enforces a
+    # loopback-only peer check (HetznerPrometheusEndpoint 403s any non-127.0.0.1
+    # caller), so a cluster ServiceMonitor over the pod IP yields up=1 with zero
+    # hetzner_* samples. This in-pod Alloy scrapes over loopback (200) and
+    # remote_writes to the in-cluster Mimir distributor, mirroring the EC2 fleet's
+    # per-master Alloy (ADR 0013). Config = jenkins-ps3-k8s-alloy-metrics ConfigMap
+    # (extraObjects below); volumes via persistence.volumes; master=ps3-k8s (ADR
+    # 0013 A2 / CLAUDE.md #11). No probes, so a sidecar failure never gates the
+    # controller's readiness.
+    sidecars:
+      additionalSidecarContainers:
+        - name: alloy-metrics
+          image: docker.io/grafana/alloy:v1.16.0
+          args:
+            - run
+            - --server.http.listen-addr=127.0.0.1:12345
+            - --storage.path=/tmp/alloy
+            - --disable-reporting
+            - /etc/alloy/config.alloy
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 473
+          volumeMounts:
+            - name: alloy-metrics-config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: alloy-metrics-data
+              mountPath: /tmp/alloy
+
     ingress:
       # Serve the REAL host ps3.cd.percona.com directly from the chart's PRIMARY
       # ingress. The primary renders a HOST-ONLY rule (no path condition), so it
@@ -6839,6 +6879,15 @@ jenkins:
     # created out-of-band (kubectl, uncommitted) so the EBS volume id stays out of
     # this public repo.
     existingClaim: ps3-k8s-jenkins-home
+    # Pod-level volumes for the alloy-metrics sidecar. The chart still provisions
+    # jenkins-home automatically: it only skips its own home volume when this list
+    # contains the literal string "jenkins-home", which these two entries do not.
+    volumes:
+      - name: alloy-metrics-config
+        configMap:
+          name: jenkins-ps3-k8s-alloy-metrics
+      - name: alloy-metrics-data
+        emptyDir: {}
 
   # Subchart-level extraObjects (rendered by the jenkins chart's extra-objects.yaml,
   # which reads .Values.extraObjects -- NOT controller.extraObjects). The ExternalSecret
@@ -7079,4 +7128,44 @@ jenkins:
               println "durability.groovy: ${current} -> ${target}"
           } else {
               println "durability.groovy: GlobalDefaultFlowDurabilityLevel already ${target}"
+          }
+
+    # Alloy sidecar config (mounted by controller.sidecars.additionalSidecarContainers
+    # above via the alloy-metrics-config volume). River pipeline: loopback-scrape the Hetzner plugin
+    # metrics endpoint, stamp master=ps3-k8s + cluster, remote_write to the in-cluster
+    # Mimir distributor (same endpoint + tenant the cluster Alloy DaemonSet uses).
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: jenkins-ps3-k8s-alloy-metrics
+        labels:
+          app.kubernetes.io/part-of: jenkins-ps3-k8s
+      data:
+        config.alloy: |
+          // Loopback scrape of the Hetzner plugin's /hetzner-prometheus endpoint.
+          // The endpoint is loopback-only (HetznerPrometheusEndpoint 403s non-127.0.0.1
+          // peers), so this sidecar scrapes 127.0.0.1 and remote_writes to Mimir,
+          // mirroring the EC2 fleet's per-master Alloy (ADR 0013). Trailing slash on
+          // the metrics path is required (no-slash 302s).
+          prometheus.scrape "hetzner_local" {
+            targets = [{
+              __address__      = "127.0.0.1:8080",
+              __metrics_path__ = "/hetzner-prometheus/",
+            }]
+            scrape_interval = "60s"
+            forward_to      = [prometheus.remote_write.mimir.receiver]
+          }
+
+          prometheus.remote_write "mimir" {
+            endpoint {
+              url     = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+              headers = { "X-Scope-OrgID" = "percona-ci" }
+            }
+            // master=ps3-k8s per ADR 0013 A2 / CLAUDE.md #11 (bare ps3 collided ->
+            // err-mimir-sample-out-of-order with the decommissioned EC2 ps3). cluster
+            // matches the cluster Alloy external label for dashboard correlation.
+            external_labels = {
+              cluster = "percona-ci-platform",
+              master  = "ps3-k8s",
+            }
           }
