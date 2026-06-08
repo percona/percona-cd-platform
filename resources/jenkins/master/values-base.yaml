@@ -32,10 +32,15 @@ jenkins:
     overwritePluginsFromImage: false
     initializeOnce: true
 
+    # hetzner.rehydrate.* : after a controller restart, re-adopt the surviving
+    # Hetzner worker VMs instead of reaping them (OrphanedNodesCleaner deferred
+    # for grace-period-minutes). Fleet parity with the EC2 masters, which carry
+    # the same flag via systemd (jenkins-pipelines PR 4118 / PS-11173 Phase 4b).
     javaOpts: >-
       -Xms3072m -Xmx4096m -Xss4m -server
       -Djava.awt.headless=true
       -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600
+      -Dhetzner.rehydrate.enabled=true -Dhetzner.rehydrate.grace-period-minutes=5
 
     resources:
       requests:
