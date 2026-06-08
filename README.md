@@ -25,8 +25,8 @@ stack. Grafana fronts all three behind Authentik OIDC.
 
 **Terraform / AWS.** OpenTofu owns AWS-side state through "ArgoCD healthy":
 VPC, EKS, managed node groups, Karpenter prerequisites, Pod Identity, ACM
-wildcard cert, the LGTM S3 buckets, and each EC2 Jenkins master (SpotFleet,
-IAM, EBS, userdata via a reusable module). TF outputs reach ArgoCD as
+wildcard cert, the LGTM S3 buckets, and each EC2 Jenkins master (spot fleet or
+on-demand, IAM, EBS, userdata via a reusable module). TF outputs reach ArgoCD as
 cluster-Secret annotations consumed as Helm values.
 
 **GitOps / ArgoCD.** From "ArgoCD healthy" onward, everything in-cluster is
@@ -67,7 +67,7 @@ by hand.
 
 ## Compute topology
 
-Four tiers, each with a canonical `workload.percona.com/tier` label and
+Five tiers, each with a canonical `workload.percona.com/tier` label and
 (where exclusive) a matching taint. Workloads opt in via `nodeSelector` +
 `tolerations`. `general` is untainted and is the safe fallthrough.
 
@@ -75,6 +75,7 @@ Four tiers, each with a canonical `workload.percona.com/tier` label and
 |---|---|---|
 | `bootstrap` | EKS MNG, on-demand, multi-AZ | ArgoCD, Karpenter, AWS LB controller, external-secrets, external-dns, kube-state-metrics |
 | `obs-state` | EKS MNG, single-AZ | Stateful single-replica pods that block eviction (Authentik Postgres, Grafana, prometheus-operator CRDs) |
+| `jenkins-master` | EKS MNG, on-demand, single-AZ | The in-cluster Jenkins controller (ps3-k8s pilot); pinned to us-east-1a to co-locate with its zonal EBS PVC |
 | `lgtm-stateful` | Karpenter NodePool, on-demand, single-AZ | Stateful LGTM pods (Mimir, Loki, Tempo ingesters; store-gateway; compactor; alertmanager). Configured to behave like an MNG (no spot, no consolidation under load, no AMI-drift) while keeping instance-family flex |
 | `general` | Karpenter NodePool, spot + on-demand, single-AZ | Stateless LGTM components, Grafana web, the auth web tier, alloy-gateway, anything without an explicit tier |
 
