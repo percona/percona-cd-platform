@@ -26,8 +26,8 @@ The wiring (Lambda, EventBridge rule, log group, execution role) lives in the
 `scheduled-lambda` module; see
 [`terraform/modules/scheduled-lambda/README.md`](../../terraform/modules/scheduled-lambda/README.md).
 The per-reaper policy and instantiation live in
-[`terraform/lambda-volume-cleanup.tf`](../../terraform/lambda-volume-cleanup.tf)
-and [`terraform/lambda-ec2-cleanup.tf`](../../terraform/lambda-ec2-cleanup.tf).
+[`terraform/volume-cleanup.tf`](../../terraform/volume-cleanup.tf)
+and [`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf).
 All tunables (schedules, `dry_run`, EKS skip regex, volume age floor) live in the
 `Cleanup Lambda parameters` block of
 [`terraform/locals.tf`](../../terraform/locals.tf).
@@ -160,8 +160,8 @@ To pause a reaper, reverse the arming change: set `dry_run = "true"` in its
 log-only and deletes nothing.
 
 For a hard stop (no invocations at all), set the module's `schedule_enabled =
-false` on the relevant instantiation in `lambda-volume-cleanup.tf` or
-`lambda-ec2-cleanup.tf`, then plan and apply. That disables the EventBridge rule
+false` on the relevant instantiation in `volume-cleanup.tf` or
+`ec2-cleanup.tf`, then plan and apply. That disables the EventBridge rule
 so the function is never triggered. Reserved concurrency `1` already guarantees a
 stuck run cannot overlap the next schedule.
 
@@ -196,8 +196,8 @@ the PR.
 
 - [`terraform/modules/scheduled-lambda/README.md`](../../terraform/modules/scheduled-lambda/README.md)
   -- the generic cron-Lambda module the reapers instantiate.
-- [`terraform/lambda-volume-cleanup.tf`](../../terraform/lambda-volume-cleanup.tf),
-  [`terraform/lambda-ec2-cleanup.tf`](../../terraform/lambda-ec2-cleanup.tf)
+- [`terraform/volume-cleanup.tf`](../../terraform/volume-cleanup.tf),
+  [`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf)
   -- per-reaper least-privilege policy and module instantiation.
 - [`terraform/locals.tf`](../../terraform/locals.tf) -- the `Cleanup Lambda
   parameters` block (schedules, `dry_run`, age floor, EKS skip regex).

@@ -13,18 +13,6 @@
 # ./modules/github-oidc-role; this file owns the subject allowlist, the
 # least-privilege EC2/AMI/SSM policy, and the builder instance profile.
 
-variable "ppg_ami_factory_region" {
-  description = "AWS region the PPG AMI factory bakes in (matches the PG molecule region). Distinct from the cluster region."
-  type        = string
-  default     = "eu-central-1"
-}
-
-variable "ppg_ami_factory_subject_claims" {
-  description = "GitHub Actions sub claims allowed to assume the PPG AMI-factory role. Production is master-only on Percona-Lab/jenkins-pipelines. A temporary nogueiraanderson/jenkins-pipelines subject may be supplied at apply time for end-to-end testing, then removed."
-  type        = list(string)
-  default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
-}
-
 # ---------------------------------------------------------------------------
 # Builder SSM instance profile (Packer builder + smoke instance run with this)
 # ---------------------------------------------------------------------------

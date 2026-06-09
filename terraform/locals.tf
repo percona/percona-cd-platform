@@ -81,7 +81,7 @@ locals {
   }
 
   # ---- Cleanup Lambda parameters ----
-  # Tunables for the scheduled cleanup reapers (terraform/lambda-{volume,ec2}-cleanup.tf):
+  # Tunables for the scheduled cleanup reapers (terraform/{volume,ec2}-cleanup.tf):
   # schedules, dry-run flags, the EKS skip regex, and the volume age floor, all
   # in one reviewable place. The scheduled-lambda module stays generic; these
   # are the workload knobs. Arm a reaper by flipping its dry_run to "false" here

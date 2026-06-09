@@ -28,7 +28,7 @@ Reading env at invocation (not import) means a Terraform `DRY_RUN` flip is a pla
 
 ### 4. IAM scoped as tightly as the APIs allow, residual risk documented
 
-`Describe*` actions take `Resource: "*"` (no resource-level scoping exists). `TerminateInstances` is scoped to account instance ARNs with **no tag condition**, because the eligibility test compares an epoch tag against the clock and IAM cannot do that comparison. CloudFormation actions are scoped to `stack/eksctl-*-cluster/*`. The three `DELETE_FAILED` remediation actions (`RevokeSecurityGroupIngress`, `DisassociateRouteTable`, `DeleteRoute`) remain `Resource: "*"` because those APIs take physical IDs (`sg-`/`rtb-`); safety there rests on handler provenance (the handler only invokes them for resources of an `eksctl-*-cluster` stack it is already deleting). This residual risk is accepted and documented in `lambda-ec2-cleanup.tf`. Because each function is deployed once in the default-provider region while its handler sweeps regions in code, no policy may carry an `aws:RequestedRegion` condition.
+`Describe*` actions take `Resource: "*"` (no resource-level scoping exists). `TerminateInstances` is scoped to account instance ARNs with **no tag condition**, because the eligibility test compares an epoch tag against the clock and IAM cannot do that comparison. CloudFormation actions are scoped to `stack/eksctl-*-cluster/*`. The three `DELETE_FAILED` remediation actions (`RevokeSecurityGroupIngress`, `DisassociateRouteTable`, `DeleteRoute`) remain `Resource: "*"` because those APIs take physical IDs (`sg-`/`rtb-`); safety there rests on handler provenance (the handler only invokes them for resources of an `eksctl-*-cluster` stack it is already deleting). This residual risk is accepted and documented in `ec2-cleanup.tf`. Because each function is deployed once in the default-provider region while its handler sweeps regions in code, no policy may carry an `aws:RequestedRegion` condition.
 
 ### 5. Tested, and gated in CI
 
@@ -58,7 +58,7 @@ Schedules ship `ENABLED` with `DRY_RUN = "true"`. Arming a reaper is flipping it
 ## Verification
 
 - `terraform/modules/scheduled-lambda/main.tf`: the invoke `aws_lambda_permission` always sets `source_arn` (AWS-0067); the role trust is `lambda.amazonaws.com` only; `reserved_concurrent_executions` defaults to 1; the log group is explicit with retention and the function `depends_on` it.
-- `terraform/lambda-volume-cleanup.tf` and `lambda-ec2-cleanup.tf`: each caller supplies its own `permissions_policy_json`; `TerminateInstances` is scoped to account instance ARNs with no tag condition; CloudFormation actions are scoped to `stack/eksctl-*-cluster/*`; no `aws:RequestedRegion` condition appears.
+- `terraform/volume-cleanup.tf` and `ec2-cleanup.tf`: each caller supplies its own `permissions_policy_json`; `TerminateInstances` is scoped to account instance ARNs with no tag condition; CloudFormation actions are scoped to `stack/eksctl-*-cluster/*`; no `aws:RequestedRegion` condition appears.
 - `locals.tf` "Cleanup Lambda parameters": both reapers ship `dry_run = "true"` and a single `cleanup_lambda_runtime` pin.
 - The `lambda-pytest` CI job runs the 41 `moto`/`freezegun` tests, including the Terraform-to-handler contract tests (`test_terraform_contract.py`) that assert env-name wiring, entrypoint existence, the runtime pin, and `dry_run` shipping `"true"`.
 - `just ci` passes (fmt, validate, Trivy, kubeconform).
