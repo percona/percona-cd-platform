@@ -70,8 +70,10 @@ module "ec2_cleanup_lambda" {
   timeout             = local.ec2_cleanup.timeout
 
   environment_variables = {
-    DRY_RUN          = local.ec2_cleanup.dry_run
-    EKS_SKIP_PATTERN = local.ec2_cleanup.eks_skip_pattern
+    DRY_RUN                  = local.ec2_cleanup.dry_run
+    EKS_SKIP_PATTERN         = local.ec2_cleanup.eks_skip_pattern
+    MOLECULE_BILLING_PATTERN = local.ec2_cleanup.molecule_billing_pattern
+    MOLECULE_MAX_AGE_HOURS   = local.ec2_cleanup.molecule_max_age_hours
   }
 
   permissions_policy_json = data.aws_iam_policy_document.ec2_cleanup.json

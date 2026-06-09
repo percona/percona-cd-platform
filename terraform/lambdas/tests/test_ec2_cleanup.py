@@ -151,6 +151,70 @@ def test_eks_skip_pattern_match_not_marked(ec2_cleanup):
         assert clusters_to_delete == {}
 
 
+# ---- molecule age-bound (leaked package-testing instances) ----
+
+def test_should_terminate_molecule_age_bound(ec2_cleanup):
+    import re as _re
+    mol_re = _re.compile(r".*_package_testing$")
+    old = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=8)
+    young = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    tag = [{"Key": "iit-billing-tag", "Value": "ps_80_package_testing"}]
+    # Past the bound: reaped despite the (category) billing tag.
+    assert ec2_cleanup.should_terminate(
+        SimpleNamespace(id="i-old", tags=tag, launch_time=old), mol_re, 7 * 3600) is True
+    # Within the bound: spared.
+    assert ec2_cleanup.should_terminate(
+        SimpleNamespace(id="i-young", tags=tag, launch_time=young), mol_re, 7 * 3600) is False
+    # Non-matching category tag: permanent exemption unchanged.
+    other = [{"Key": "iit-billing-tag", "Value": "jenkins"}]
+    assert ec2_cleanup.should_terminate(
+        SimpleNamespace(id="i-cat", tags=other, launch_time=old), mol_re, 7 * 3600) is False
+    # No pattern (disabled): molecule tag behaves as a plain category again.
+    assert ec2_cleanup.should_terminate(
+        SimpleNamespace(id="i-off", tags=tag, launch_time=old), None, 7 * 3600) is False
+
+
+def test_leaked_molecule_instance_reaped_end_to_end(ec2_cleanup, monkeypatch):
+    """A *_package_testing instance past MOLECULE_MAX_AGE_HOURS is terminated
+    even though its billing tag is a valid category."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    with mock_aws():
+        iid = _mk_instance(REGION, tags={"iit-billing-tag": "ps_80_package_testing"})
+        with freeze_time(FUTURE):  # far past any age bound
+            result = ec2_cleanup.lambda_handler({}, None)
+        assert iid in [t["InstanceId"] for t in result["terminated"]]
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_fresh_molecule_instance_spared(ec2_cleanup, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    with mock_aws():
+        with freeze_time(FUTURE):  # created AND scanned at the same instant: age 0
+            iid = _mk_instance(REGION, tags={"iit-billing-tag": "pxc_84_package_testing"})
+            result = ec2_cleanup.lambda_handler({}, None)
+        assert iid not in [t["InstanceId"] for t in result["terminated"]]
+        assert _state(REGION, iid) == "running"
+
+
+def test_invalid_molecule_pattern_degrades_to_exemption(ec2_cleanup, monkeypatch):
+    """An invalid MOLECULE_BILLING_PATTERN disables only the age-bound: the
+    molecule tag falls back to the permanent category exemption, and the rest
+    of the reaper keeps working."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    monkeypatch.setenv("MOLECULE_BILLING_PATTERN", "(")  # invalid regex
+    with mock_aws():
+        molecule = _mk_instance(REGION, tags={"iit-billing-tag": "ps_80_package_testing"})
+        untagged = _mk_instance(REGION)
+        with freeze_time(FUTURE):
+            result = ec2_cleanup.lambda_handler({}, None)
+        assert _state(REGION, molecule) == "running"   # age-bound off -> exempt
+        assert _state(REGION, untagged) == "terminated"  # reaper itself unaffected
+        assert untagged in [t["InstanceId"] for t in result["terminated"]]
+
+
 # ---- multi-region + epoch end-to-end ----
 
 def test_two_region_aggregation(ec2_cleanup, monkeypatch):
