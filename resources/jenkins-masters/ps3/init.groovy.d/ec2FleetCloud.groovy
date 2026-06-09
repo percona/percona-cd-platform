@@ -64,7 +64,7 @@ def fleet = new EC2FleetCloud(
     true,                        // addNodeOnlyIfRunning
     false,                       // restrictUsage
     '-1',                        // maxTotalUses (-1 = unlimited)
-    true,                        // disableTaskResubmit (PS-11265: resubmit aborts pipeline node bodies and re-schedules with wrong params and no cause)
+    false,                       // disableTaskResubmit
     (Integer) 600,               // initOnlineTimeoutSec
     (Integer) 15,                // initOnlineCheckIntervalSec
     (Integer) 10,                // cloudStatusIntervalSec
