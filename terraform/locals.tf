@@ -91,14 +91,14 @@ locals {
 
   volume_cleanup = {
     schedule      = "rate(1 day)"
-    dry_run       = "true"
+    dry_run       = "false" # armed 2026-06-09 after dry-run review (12 orphans incl 16 TB)
     min_age_hours = "24"
   }
 
   ec2_cleanup = {
     schedule         = "rate(5 minutes)"
     timeout          = 120
-    dry_run          = "true"
+    dry_run          = "false" # armed 2026-06-09 after clean dry-run cycles
     eks_skip_pattern = "pe-.*"
     # Ephemeral package-testing molecule instances: their non-numeric billing
     # tag would exempt them forever, but an aborted build skips `molecule
