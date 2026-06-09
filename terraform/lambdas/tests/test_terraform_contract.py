@@ -80,12 +80,17 @@ def test_runtime_pin_matches_locals() -> None:
         assert "python3." not in tf, f"{name} hardcodes a runtime"
 
 
-def test_dry_run_ships_true() -> None:
-    """The committed default must be the safe one; arming is a reviewed edit."""
+def test_dry_run_locked_to_committed_state() -> None:
+    """Both reapers were ARMED on 2026-06-09 after the dry-run bake-in (the
+    volume dry run surfaced 12 orphans incl a 16 TB volume; EC2 ran clean
+    cycles). This lock works in both directions: flipping a reaper's dry_run,
+    either way, must update this expectation in the same PR, so the safety
+    knob can never move silently."""
+    expected = {"volume_cleanup": "false", "ec2_cleanup": "false"}
     locals_tf = _tf("locals.tf")
-    for block in ("volume_cleanup", "ec2_cleanup"):
+    for block, want in expected.items():
         m = re.search(rf'{block}\s*=\s*{{(.*?)}}', locals_tf, re.S)
         assert m, f"{block} params block not found in locals.tf"
-        assert re.search(r'dry_run\s*=\s*"true"', m.group(1)), (
-            f"{block} ships with dry_run != \"true\"; arming must be a deliberate reviewed change"
+        assert re.search(rf'dry_run\s*=\s*"{want}"', m.group(1)), (
+            f"{block} dry_run is not \"{want}\"; update this lock in the same PR as the flip"
         )
