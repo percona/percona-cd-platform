@@ -9,9 +9,13 @@ Asserts, fail-closed:
      copyright headers belong to product source via .licenserc.yaml).
   4. No `CLAUDE.md` reference in .tf text (gotcha numbers renumber; cite an
      ADR or docs/ anchor instead).
-  5. No Jira ticket IDs (PS-/PKG-/PXB-/PG-NNNN) in .tf COMMENT text. Functional
-     arguments (e.g. `tickets = "PS-11179"`) and quoted strings are exempt:
-     only the substring after the first `#` on a line is scanned.
+  5. No Jira ticket IDs (PS-/PKG-/PXB-/PG-NNNN) in .tf COMMENT text, for the
+     `#` and `//` line-comment forms. Functional arguments (e.g.
+     `tickets = "PS-11179"`) and quoted strings are exempt: only text after a
+     comment marker is scanned. Known accepted gaps: `/* */` block comments
+     (untracked; ARN strings like ":instance/*" would false-open a block, and
+     tofu fmt keeps the repo on line comments) and a `#`/`//` inside a quoted
+     string (false-positive risk).
 
 Credential-free, stdlib-only. Run from the repo root:
   python3 scripts/check_conventions.py
@@ -98,9 +102,14 @@ def main() -> int:
                 errors.append(f"{rel}:{n}  `Copyright` line (no copyright headers in IaC)")
             if "CLAUDE.md" in line:
                 errors.append(f"{rel}:{n}  `CLAUDE.md` reference (cite an ADR or docs/ anchor)")
-            if "#" in line:
-                comment = line.split("#", 1)[1]
-                hit = TICKET_RE.search(comment)
+
+            # Comment text = everything after the earliest '#' or '//' marker.
+            # '/* ... */' block comments are deliberately NOT tracked: IAM ARN
+            # strings ("...:instance/*") would false-open a block, and tofu fmt
+            # (a CI gate) keeps this repo on line comments anyway.
+            markers = [m for m in (line.find("#"), line.find("//")) if m != -1]
+            if markers:
+                hit = TICKET_RE.search(line[min(markers):])
                 if hit:
                     errors.append(f"{rel}:{n}  ticket ID {hit.group(0)} in comment (keep IDs out of .tf comments)")
 

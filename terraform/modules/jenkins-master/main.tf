@@ -179,7 +179,7 @@ resource "aws_security_group" "ssh" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { "iit-billing-tag" = var.short_name }
+  tags = local.base_tags
 }
 
 resource "aws_security_group" "http" {
@@ -218,7 +218,7 @@ resource "aws_security_group" "http" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { "iit-billing-tag" = var.short_name }
+  tags = local.base_tags
 }
 
 data "aws_iam_policy_document" "ec2_assume" {
@@ -296,6 +296,7 @@ resource "aws_iam_instance_profile" "worker" {
   name = local.worker_name
   path = "/"
   role = aws_iam_role.worker.name
+  tags = local.base_tags
 }
 
 # Master role: 4 inline policies in CF order (StartInstances, PassRole,
@@ -455,6 +456,7 @@ resource "aws_iam_instance_profile" "master" {
   name = var.short_name
   path = "/"
   role = aws_iam_role.master.name
+  tags = local.base_tags
 }
 
 resource "aws_iam_role" "spot_fleet" {

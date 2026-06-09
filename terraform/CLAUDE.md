@@ -1,8 +1,8 @@
 # terraform/ — conventions
 
 Scoped instructions for this directory. Enforced fail-closed by
-`scripts/check_conventions.py` (runs in `just ci` and the CI lint job); the
-repo-root `CLAUDE.md` carries the platform-wide rules.
+`scripts/check_conventions.py` (runs in `just ci` via the lint recipe and in
+the CI `tofu` job); the repo-root `CLAUDE.md` carries the platform-wide rules.
 
 ## File naming grammar
 
