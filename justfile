@@ -36,7 +36,18 @@ ci: lint validate
 
 lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
 
-validate: tf-validate manifest-validate helm-render clouds-render-check
+validate: tf-validate manifest-validate helm-render clouds-render-check lambda-test
+
+# ---------- cleanup lambdas ----------
+# Mirrors the `cleanup-lambda tests` CI job (moto, credential-free). Runtime
+# pin matches terraform/locals.tf cleanup_lambda_runtime.
+lambda-test:
+    uv run --python 3.14 --with-requirements terraform/lambdas/tests/requirements.txt \
+      python -m pytest terraform/lambdas/tests
+
+# Tail a reaper's dry-run/real decisions. Usage: just lambda-logs ec2-cleanup [since]
+lambda-logs name since="1h": _require-aws-profile
+    aws logs tail /aws/lambda/percona-ci-platform-{{name}} --since {{since}} --format short
 
 # ---------- internal guards ----------
 # Fail loudly (at runtime, never parse time) if AWS_PROFILE is not exported.

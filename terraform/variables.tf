@@ -266,12 +266,14 @@ variable "lgtm_push_hostnames" {
 variable "tags" {
   description = <<-EOT
     Default tags for every taggable AWS resource. Two of these are required by
-    the percona-dev-admin account's cleanup automation — do not drop them:
+    the percona-dev-admin account's cleanup reapers (this repo,
+    lambda-ec2-cleanup.tf / lambda-volume-cleanup.tf) — do not drop them:
 
-    - `iit-billing-tag` — IaC/LambdaEC2Cleanup.yml terminates EC2 instances
-      missing this tag (any value) after 10 minutes.
-    - `PerconaKeep` — IaC/LambdaVolumeCleanup.yml deletes any `available`
-      EBS volume daily unless this tag is present (capital P, capital K).
+    - `iit-billing-tag` — the EC2 reaper terminates instances missing a valid
+      value after 10 minutes (numeric values are a unix-epoch expiry; anything
+      else is a permanent category).
+    - `PerconaKeep` — the volume reaper deletes any `available` EBS volume
+      daily unless this tag is present (capital P, capital K).
 
     EBS volumes provisioned by the in-cluster aws-ebs-csi-driver pick up
     these tags via StorageClass `parameters.tagSpecification_*` (see

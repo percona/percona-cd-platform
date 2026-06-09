@@ -29,13 +29,22 @@ wildcard cert, the LGTM S3 buckets, and each EC2 Jenkins master (spot fleet or
 on-demand, IAM, EBS, userdata via a reusable module). TF outputs reach ArgoCD as
 cluster-Secret annotations consumed as Helm values.
 
+**Account cleanup reapers.** Two scheduled Lambdas from the
+[`scheduled-lambda` module](terraform/modules/scheduled-lambda/README.md):
+daily unattached-EBS reaper, 5-minute untagged-EC2 + orphan-`eksctl`-stack
+reaper. Tunables (schedules, `dry_run`, EKS skip regex) in
+[`terraform/locals.tf`](terraform/locals.tf); ops in
+[`docs/runbooks/cleanup-reapers.md`](docs/runbooks/cleanup-reapers.md).
+
 **GitOps / ArgoCD.** From "ArgoCD healthy" onward, everything in-cluster is
 GitOps-managed. A root App-of-Apps fans out to ApplicationSets that reconcile
 one Application per addon and one per in-cluster Jenkins instance. No manual
 `kubectl` mutations — drift breaks reconciliation.
 
-**Repo CI.** GitHub Actions runs lint + validate only — no plan, no deploy.
-The same checks run locally via `just ci`.
+**Repo CI.** GitHub Actions runs lint + validate only (no plan, no deploy):
+one check per job, `ci-gate` aggregate as the single required check. `just ci`
+mirrors it locally. Dependabot bumps actions, test deps, and the Jenkins base
+image weekly.
 
 ## Quickstart
 
