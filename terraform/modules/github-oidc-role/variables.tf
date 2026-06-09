@@ -13,7 +13,7 @@ variable "name" {
 }
 
 variable "description" {
-  description = "Free-form description, surfaced on both the IAM role and the IAM policy. Reference the originating ticket (e.g. PS-11219) so an operator landing on the role in the AWS console can find the context."
+  description = "Free-form description, surfaced on both the IAM role and the IAM policy. Reference the originating Jira key so an operator landing on the role in the AWS console can find the context."
   type        = string
 }
 

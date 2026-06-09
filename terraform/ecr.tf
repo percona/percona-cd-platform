@@ -1,6 +1,7 @@
+# Owner: platform
 # ECR repositories for platform-owned container images, namespaced under
 # percona-cd/. The mtr-ingest image (images/mtr-ingest) is built and pushed
-# here and run by the mtr-ingest CronJob (resources/addons/mtr, PS-10541).
+# here and run by the mtr-ingest CronJob (resources/addons/mtr).
 # EKS nodes pull via the node role; no imagePullSecret needed.
 
 resource "aws_ecr_repository" "mtr_ingest" {

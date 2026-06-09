@@ -1,3 +1,4 @@
+# Owner: platform
 variable "aws_region" {
   description = "AWS region for the EKS cluster + all data-plane resources."
   type        = string
@@ -23,7 +24,7 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = <<-EOT
     EKS Kubernetes minor version. Track standard support only — picking a version
-    in extended support incurs the paid extended-support fee (CLAUDE.md rule).
+    in extended support incurs the paid extended-support fee.
     Verify with `aws eks describe-cluster-versions`.
   EOT
   type        = string

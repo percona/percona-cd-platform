@@ -1,11 +1,12 @@
+# Owner: platform
 # LGTM object storage — three S3 buckets backed by a shared KMS CMK, one per
 # LGTM component (Mimir blocks, Loki chunks, Tempo traces). Each component's
 # chart writes to its own bucket only; pod-identity.tf scopes IAM to the
 # matching bucket + this CMK.
 #
-# Cleanup-automation contract (CLAUDE.md item #7):
+# Cleanup-automation contract (docs/runbooks/cleanup-reapers.md):
 #   - default_tags in providers.tf already merges iit-billing-tag + PerconaKeep
-#     onto every aws_* resource we create. The explicit tags below are
+#     onto every aws_* resource this root creates. The explicit tags below are
 #     belt-and-suspenders so any future cleanup Lambda that scans S3 / KMS /
 #     IAM by tag will see the right pair on every LGTM resource.
 #   - These buckets carry application data (metrics blocks, log chunks, trace
@@ -92,7 +93,7 @@ resource "aws_s3_bucket" "lgtm" {
 }
 
 # BucketOwnerEnforced — disables ACLs, makes IAM the only access path.
-# AWS default for new buckets since April 2023 but we set it explicitly so
+# AWS default for new buckets since April 2023, set explicitly here so
 # the hardening posture survives a future provider default change.
 resource "aws_s3_bucket_ownership_controls" "lgtm" {
   for_each = local.lgtm_buckets

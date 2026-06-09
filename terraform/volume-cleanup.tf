@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Percona LLC
+# Owner: platform
 #
 # Daily reaper of unattached (available) EBS volumes across all regions.
 #

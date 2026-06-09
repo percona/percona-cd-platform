@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Percona LLC
+# Owner: platform
 #
 # Reaper of untagged EC2 instances (+ orphan eksctl-* stack cleanup) across
 # all regions.

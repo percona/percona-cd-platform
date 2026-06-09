@@ -1,4 +1,5 @@
-# Outputs feed the ArgoCD cluster-secret annotations contract (see argocd.tf when implemented).
+# Owner: platform
+# Outputs feed the ArgoCD cluster-secret annotations contract (see argocd.tf).
 
 output "cluster_name" {
   description = "EKS cluster name."

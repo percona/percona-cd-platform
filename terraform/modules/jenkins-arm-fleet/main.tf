@@ -1,3 +1,4 @@
+# Owner: platform
 # Diversified ARM (Graviton) spot worker pool consumed by the Jenkins ec2-fleet
 # plugin (EC2FleetCloud): automatic AWS Graviton fallback for the docker-aarch64
 # workload when Hetzner ARM (CAX) capacity is unavailable.

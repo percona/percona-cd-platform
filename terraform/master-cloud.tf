@@ -1,6 +1,7 @@
-# PS-11179: ARM Graviton spot fleet for cloud, Fleet-only (still-CloudFormation master).
+# Owner: cloud
+# ARM Graviton spot fleet for cloud, Fleet-only (still-CloudFormation master).
 # Provisions ONLY the worker ASG in Terraform; the cloud master stays CFN-managed in
-# eu-west-1, so no PS-11206-style cutover is required. The ec2-fleet plugin (installed
+# eu-west-1, so no CFN-to-TF cutover is required. The ec2-fleet plugin (installed
 # on cloud in a separately announced idle window) drives the ASG via the CFN-managed
 # jenkins-cloud-master role; the jenkins-arm-fleet module attaches the autoscaling IAM
 # policy by role NAME, so no Terraform management of that role is required.

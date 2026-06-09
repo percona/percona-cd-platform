@@ -1,3 +1,4 @@
+# Owner: platform
 # State backend: S3 with native locking (`use_lockfile = true` — OpenTofu
 # 1.10+). The bucket holds both the state file and its sibling .tflock object
 # (S3 conditional writes via If-None-Match header). Bucket pre-created — see

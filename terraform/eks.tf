@@ -1,4 +1,6 @@
-# EKS control plane + two managed node groups (system, prometheus_system).
+# Owner: platform
+# EKS control plane + three managed node groups (system, prometheus_system,
+# jenkins_master).
 # Karpenter handles workload nodes; managed NGs host stateful + bootstrap pods only.
 # jenkins_system NG was removed 2026-05-13: no Jenkins master pod ever claimed
 # its taint, so the m6a.xlarge was running only DaemonSets at ~$126/mo. It is
@@ -39,7 +41,7 @@ module "eks" {
   enabled_log_types = ["audit", "authenticator", "api"]
 
   # Hardening #9 — envelope encryption with a customer-managed CMK that the module
-  # creates on our behalf and rotates yearly.
+  # creates alongside the cluster and rotates yearly.
   create_kms_key                  = true
   enable_kms_key_rotation         = true
   kms_key_deletion_window_in_days = 7
@@ -108,8 +110,9 @@ module "eks" {
       # landing spot for the evicted stateful singles), and force_update_version
       # lets the drain proceed past the zero-disruption PDBs
       # (mtr-pg-primary ALLOWED=0, single-replica authentik-postgresql, Grafana
-      # minAvailable=1 with both replicas co-located). See repo CLAUDE.md gotcha
-      # #14: AMI bumps are the case where rolling IS intended; pair with force.
+      # minAvailable=1 with both replicas co-located). See
+      # docs/runbooks/mng-label-taint-changes.md: AMI bumps are the case where
+      # rolling IS intended; pair with force.
       ami_release_version            = "1.35.5-20260520"
       use_latest_ami_release_version = false
       force_update_version           = true

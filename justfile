@@ -34,7 +34,7 @@ help:
 ci: lint validate
     @echo "✅ ci passed"
 
-lint: tf-fmt-check tf-trivy yaml-lint actionlint zizmor
+lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor
 
 validate: tf-validate manifest-validate helm-render clouds-render-check lambda-test
 
@@ -72,6 +72,11 @@ tf-fmt:
 
 tf-fmt-check:
     tofu fmt -recursive -check -diff
+
+# Conventions gate for terraform/ (Owner banners, no copyright / CLAUDE.md /
+# ticket-ID comments) — rules in terraform/CLAUDE.md. Credential-free.
+tf-conventions:
+    python3 scripts/check_conventions.py
 
 tf-validate: tf-init
     tofu -chdir=terraform validate

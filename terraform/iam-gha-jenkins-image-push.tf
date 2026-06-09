@@ -1,3 +1,4 @@
+# Owner: platform
 # IAM role assumed by the build-jenkins-image GitHub Actions workflow in
 # Percona/percona-cd-platform via OIDC, used ONLY by the push-to-main job to
 # push the baked Jenkins controller image to the percona-cd/jenkins-percona

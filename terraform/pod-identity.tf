@@ -1,9 +1,16 @@
-# Five Pod Identity associations for the in-cluster addons that need AWS IAM:
+# Owner: platform
+# Nine Pod Identity associations for the in-cluster addons that need AWS IAM:
 #
-#   alb-controller        kube-system / aws-load-balancer-controller
+#   alb-controller        aws-load-balancer-controller / aws-load-balancer-controller
 #   external-dns          external-dns / external-dns
 #   ebs-csi               kube-system / ebs-csi-controller-sa
 #   external-secrets      external-secrets / external-secrets
+#   mimir / loki / tempo  per-stack roles scoped to their S3 bucket + the
+#                         LGTM CMK (lgtm-storage.tf)
+#   jenkins-endpoint-reconciler   read-only ec2:DescribeInstances
+#                         (policy in iam-jenkins-endpoint-reconciler.tf)
+#   jenkins-controller    EC2-plugin provisioning for the in-cluster master
+#                         (policy in iam-jenkins-controller.tf)
 #   karpenter             handled by karpenter-prereqs.tf (the eks//modules/karpenter
 #                         submodule creates its own association inline)
 #
@@ -254,7 +261,7 @@ module "pod_identity_tempo" {
 # EC2 Jenkins master IPs into K8s EndpointSlices (resources/addons/
 # jenkins-endpoint-reconciler/). Replaces the Terraform-driven origin-<host>
 # Route53 records: discovery happens continuously in the cluster, not on
-# `tofu apply`. See ADR 0019 amendment (PS-10945).
+# `tofu apply`. See ADR 0019 amendment.
 # ---------------------------------------------------------------------------
 
 module "pod_identity_jenkins_endpoint_reconciler" {

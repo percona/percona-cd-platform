@@ -21,6 +21,7 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 - **Pre-commit + CI:** `just ci` is the gate. Same set runs on PR. If the local pre-commit git-hook is broken (e.g. an `InvalidManifestError` from a corrupted hook cache that survives `pre-commit clean`), run `just ci` directly and commit with `--no-verify` — the hook plumbing is the broken part, not the checks. Never use `--no-verify` to skip a *failing* check.
 - **Terraform only via `just tf-*`.** The justfile is the single TF entrypoint; no raw `tofu`, no `cd terraform`. Recipes: `tf-plan` (writes `tfplan`), `tf-apply` (applies the saved `tfplan`, never auto-approve — `tf-apply-now` is removed), `tf-state-backup` before risky applies, `tf-state-versioning-check`, `tf-plan-masters` (PLAN-ONLY; `-target`/`-exclude` are plan-only, no `tf-apply-masters`).
 - **`AWS_PROFILE` from env, never baked.** AWS-touching recipes require it and fail loudly if unset. Do NOT set `aws_profile` in `terraform/local.auto.tfvars` (that file is local/gitignored; `providers.tf` falls through to the SDK chain when the var is empty — setting it there reintroduces the profile split-brain).
+- **Terraform conventions are gated.** The file-naming grammar, per-team `# Owner:` banners, and comment rules (no copyright headers, no `CLAUDE.md` refs, no Jira ticket IDs in comments) live in [`terraform/CLAUDE.md`](terraform/CLAUDE.md), enforced fail-closed by `scripts/check_conventions.py` — part of `just ci` (standalone: `just tf-conventions`). Run it whenever working on terraform.
 
 ## Common commands
 

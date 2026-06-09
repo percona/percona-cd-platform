@@ -1,3 +1,4 @@
+# Owner: platform
 provider "aws" {
   region = var.aws_region
   # Empty string -> SDK default credential chain (env vars, SSO, instance profile, etc.).
@@ -9,7 +10,7 @@ provider "aws" {
   }
 }
 
-# Aliased providers for the Jenkins master regions. Used by peerings.tf to
+# Aliased providers for the Jenkins master regions. Used by the master-<host>.tf peering blocks to
 # create cross-region VPC peering accepters and ps3-side route table entries
 # in each master's own region. Only the regions hosting a Jenkins master
 # need an alias; us-east-1 is covered by the default provider above.

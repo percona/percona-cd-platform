@@ -1,3 +1,4 @@
+# Owner: platform
 # Shared "always-latest AL2023 minimal" AMI sources.
 #
 # AWS publishes the current Amazon Linux 2023 minimal AMI id as a public SSM
@@ -23,17 +24,17 @@ locals {
   al2023_minimal_param = "/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-6.1-x86_64"
 }
 
-data "aws_ssm_parameter" "al2023_minimal_usw2" { # us-west-2: ps80, pxb (psmdb later)
+data "aws_ssm_parameter" "al2023_minimal_usw2" { # us-west-2: ps80, pxb
   provider = aws.us-west-2
   name     = local.al2023_minimal_param
 }
 
-data "aws_ssm_parameter" "al2023_minimal_euw1" { # eu-west-1: ps3 (rel, cloud later)
+data "aws_ssm_parameter" "al2023_minimal_euw1" { # eu-west-1: ps3
   provider = aws.eu-west-1
   name     = local.al2023_minimal_param
 }
 
-data "aws_ssm_parameter" "al2023_minimal_euc1" { # eu-central-1: ps57 (pg later)
+data "aws_ssm_parameter" "al2023_minimal_euc1" { # eu-central-1: ps57
   provider = aws.eu-central-1
   name     = local.al2023_minimal_param
 }

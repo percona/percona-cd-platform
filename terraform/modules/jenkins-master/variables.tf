@@ -136,7 +136,7 @@ variable "create_eip" {
 }
 
 variable "create_route53_record" {
-  description = "Create the public A record. ps3=false (external-dns owns it post-PS-10945)."
+  description = "Create the public A record. ps3=false (external-dns owns it)."
   type        = bool
   default     = false
 }

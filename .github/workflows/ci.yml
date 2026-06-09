@@ -46,6 +46,10 @@ jobs:
           tofu_version: 1.11.6
       - name: tofu fmt -check
         run: tofu fmt -recursive -check -diff
+      # Conventions gate: Owner banners, no copyright/CLAUDE.md/ticket-ID
+      # comments in .tf — see terraform/CLAUDE.md. Stdlib-only.
+      - name: terraform conventions
+        run: python3 scripts/check_conventions.py
       # init + validate share the provider cache, so they stay in one job
       # (job filesystems do not persist between jobs).
       - name: tofu init -backend=false

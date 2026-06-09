@@ -1,3 +1,4 @@
+# Owner: platform
 # Reusable GitHub Actions OIDC role module.
 #
 # Why this module exists:

@@ -1,3 +1,4 @@
+# Owner: platform
 # ArgoCD bootstrap — GitOps Bridge pattern.
 #
 # Three resources, in strict order:
@@ -78,10 +79,9 @@ resource "helm_release" "argocd" {
         OIDC
       }
       # argocd-rbac-cm — group → role mapping. Reuses the Grafana group
-      # naming for now (single bootstrap-phase admin cohort: Anderson,
-      # Alex Miroshnychenko, Vadim Yalovets in grafana_cd_admins). Split
-      # into dedicated argocd_cd_admins / argocd_cd_users via Santiago
-      # later if the cohorts diverge.
+      # naming for now (the bootstrap-phase admin cohort lives in
+      # grafana_cd_admins). Split into dedicated argocd_cd_admins /
+      # argocd_cd_users in the IdP later if the cohorts diverge.
       #
       # policy.default: '' (deny by default) — unmapped users get nothing.
       # scopes: '[groups]' — ArgoCD reads the OIDC `groups` claim only.
@@ -195,7 +195,7 @@ resource "helm_release" "argocd" {
   # coredns + kube-proxy must be running before any pod can resolve cluster
   # DNS or reach a Service IP. Pod Identity agent must be running before any
   # pod that would normally use it (ArgoCD itself does not, but downstream
-  # addons absolutely do, and we don't want the chain ever broken).
+  # addons absolutely do, and the chain must never break).
   depends_on = [
     aws_eks_addon.coredns,
     aws_eks_addon.kube_proxy,

@@ -1,11 +1,10 @@
+# Owner: mysql
 # IAM role assumed by GitHub Actions workflows in `percona/percona-server`
 # via OIDC federation, used as the fallback path when Hetzner CAX capacity
 # is exhausted for the arm64 build matrix.
 #
-# Tickets:
-#   PS-11219  -- this role (GHA EC2 fallback)
-#   PS-11078  -- parent: Cirrus -> GHA migration before the 2026-06-01
-#                Cirrus shutdown deadline
+# Scope: this file owns the fallback role only. Parent effort: the Cirrus ->
+# GHA migration, completed before the 2026-06-01 Cirrus shutdown deadline.
 #
 # Validation:
 #   End-to-end PoC validated on a personal fork (iter 11, 2026-05-28). The
@@ -280,7 +279,7 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
   }
 
   # GetConsoleOutput for post-mortem debugging when the runner fails to
-  # register (the no-IAM-on-VM design means we cannot SSM in, and self-
+  # register (the no-IAM-on-VM design rules out SSM-ing in, and self-
   # termination removes local logs). Read-only; bounded to the
   # eu-central-1 instance ARN namespace. Called by the workflow's "Wait
   # for runner to come online" step on timeout.
@@ -327,6 +326,6 @@ module "gha_percona_server_ec2_fallback" {
 # role ARNs); exposing as a plain output is fine and avoids hand-copying
 # from the AWS console.
 output "gha_percona_server_ec2_fallback_role_arn" {
-  description = "Role ARN to set as `role-to-assume` in percona/percona-server GHA workflow (PS-11219 fallback)."
+  description = "Role ARN to set as `role-to-assume` in percona/percona-server GHA workflow (Hetzner-exhausted fallback)."
   value       = module.gha_percona_server_ec2_fallback.role_arn
 }
