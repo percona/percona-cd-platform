@@ -24,7 +24,7 @@ and reconciled from this repo; there are no manual cluster changes.
 
 | Path | What lives there |
 |---|---|
-| [`terraform/`](terraform/) | AWS substrate; reusable modules with their own READMEs ([jenkins-arm-fleet](terraform/modules/jenkins-arm-fleet/README.md), [jenkins-arm-standalone](terraform/modules/jenkins-arm-standalone/README.md), [scheduled-lambda](terraform/modules/scheduled-lambda/README.md)); pins in [`versions.tf`](terraform/versions.tf) |
+| [`terraform/`](terraform/) | AWS substrate; conventions in [`terraform/CLAUDE.md`](terraform/CLAUDE.md) (file-naming grammar, per-team `# Owner:` banners, tags); reusable modules with their own READMEs ([jenkins-arm-fleet](terraform/modules/jenkins-arm-fleet/README.md), [jenkins-arm-standalone](terraform/modules/jenkins-arm-standalone/README.md), [scheduled-lambda](terraform/modules/scheduled-lambda/README.md)); pins in [`versions.tf`](terraform/versions.tf) |
 | [`argocd-bootstrap/`](argocd-bootstrap/) | Root Application, ApplicationSets, AppProject |
 | [`resources/addons/`](resources/addons/) | One dir = one ArgoCD Application (observability, ingress, SSO, ...) |
 | [`resources/jenkins/`](resources/jenkins/) | In-cluster master chart, per-instance values, clouds catalog (rendered by [`scripts/render-clouds.py`](scripts/render-clouds.py), drift-gated in CI) |
@@ -60,6 +60,7 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 ## Contributing
 
 - `just ci` must pass before PR; pre-commit hooks mirror it ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)).
+- Terraform changes follow [`terraform/CLAUDE.md`](terraform/CLAUDE.md), gated fail-closed by [`scripts/check_conventions.py`](scripts/check_conventions.py) (part of `just ci`).
 - Propose architecture changes in [`docs/adr/`](docs/adr/) first.
 - Version pins live in [`terraform/versions.tf`](terraform/versions.tf); run [`scripts/check_versions.py`](scripts/check_versions.py) before bumping.
 - Commit format: `type(scope): subject`. No AI footers.
