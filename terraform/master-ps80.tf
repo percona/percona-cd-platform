@@ -110,7 +110,7 @@ module "ps80_arm_fleet" {
   worker_instance_profile_name = module.ps80.worker_instance_profile_name
   master_role_name             = module.ps80.master_iam_role_name
   key_name                     = "percona-jenkins"
-  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"
 }

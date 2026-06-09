@@ -311,7 +311,10 @@ resource "aws_autoscaling_group" "this" {
     instances_distribution {
       on_demand_base_capacity                  = 0
       on_demand_percentage_above_base_capacity = 0 # 100% spot
-      spot_allocation_strategy                 = "capacity-optimized"
+      # price-capacity-optimized (AWS-recommended): capacity-optimized concentrated
+      # the whole fleet into one pool (m7g.2xlarge us-west-2b, 2026-06-08), so one
+      # pool squeeze took out three workers in 25 minutes.
+      spot_allocation_strategy = "price-capacity-optimized"
     }
 
     launch_template {

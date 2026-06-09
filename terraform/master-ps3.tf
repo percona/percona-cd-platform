@@ -15,7 +15,7 @@ module "ps3_arm_fleet" {
   vpc_cidr          = "10.181.0.0/22"
   cache_bucket_name = "ps-build-cache"
   key_name          = "percona-jenkins"
-  instance_types    = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  instance_types    = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size          = 16
 
   # The in-cluster ps3-k8s controller reaches Fleet workers by private IP over the

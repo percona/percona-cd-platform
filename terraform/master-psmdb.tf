@@ -34,7 +34,7 @@ module "psmdb_arm_fleet" {
   worker_instance_profile_name = "jenkins-psmdb-slave"
   master_role_name             = "jenkins-psmdb-master"
   key_name                     = "percona-jenkins"
-  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
+  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"
 }
