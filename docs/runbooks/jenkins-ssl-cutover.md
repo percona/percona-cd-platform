@@ -39,7 +39,7 @@ Out of scope:
 - The master's VPC CIDR does not conflict with EKS VPC (`10.220.0.0/16`)
   nor with any already-peered master VPC. Renumber first if it does
   (the ps3 cutover renumbered `10.177.0.0/22` -> `10.181.0.0/22`).
-- `terraform/peering-<host>.tf` exists in this repo and `tofu apply` is
+- The peering blocks in `terraform/master-<host>.tf` exist in this repo and `tofu apply` is
   done; the peering is `active` (`aws ec2 describe-vpc-peering-connections
   --filters Name=tag:Name,Values=percona-ci-platform-to-jenkins-<host>`).
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2026 Percona LLC
+# Owner: postgresql
 #
 # AWS resources for the Oracle Linux package-test AMI factory: the GitHub Actions
 # OIDC role, the SSM builder instance profile, and the egress-only builder security

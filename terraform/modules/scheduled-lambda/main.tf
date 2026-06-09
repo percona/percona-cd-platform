@@ -1,3 +1,4 @@
+# Owner: platform
 # Reusable cron-scheduled Lambda module.
 #
 # Why this module exists:

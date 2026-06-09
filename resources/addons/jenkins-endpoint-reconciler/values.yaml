@@ -28,7 +28,7 @@ targetNamespace: jenkins-ingress
 
 # Hosts to reconcile. One Service + EndpointSlice per entry, named
 # `jenkins-<name>` in targetNamespace. Add an entry per master as each
-# is wired into the proxy (a peering-<host>.tf must already exist).
+# is wired into the proxy (the peering block in master-<host>.tf must already exist).
 hosts:
   # ps3 retired: the in-cluster ps3-k8s controller owns ps3.cd; no EC2 endpoint to sync.
   - name: ps80

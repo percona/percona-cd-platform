@@ -1,3 +1,4 @@
+# Owner: platform
 # Per-host "origin" Route 53 records: origin-<host>.cd.percona.com points at
 # the existing EC2 Jenkins master's private IP, reached over the per-master
 # VPC peering. The in-cluster NGINX proxy (resources/addons/jenkins-ingress)
@@ -11,14 +12,14 @@
 #      specific IP that overrides the discovery (debugging, parked master,
 #      manual cutover).
 #   2. `local.jenkins_discovered_origins[<host>]` — default. Live private IP
-#      from `data.aws_instances.<host>_master` in `peering-<host>.tf`, tag-
+#      from `data.aws_instances.<host>_master` in `master-<host>.tf`, tag-
 #      filtered by `iit-billing-tag=jenkins-<host>` and `instance_state_names
 #      =["running"]`. Re-resolves on every `tofu apply` so SpotFleet
 #      replacements, AZ failovers and renumbers self-heal automatically.
 #
 # Edge case: during a SpotFleet replacement window where no instance is in
 # `running` state (~30-90s), both sources are null and apply will error.
-# Acceptable failure mode: we're not applying mid-rotation. If you need a
+# Acceptable failure mode: applies do not happen mid-rotation. If you need a
 # safety net for unattended apply, set var.jenkins_origin_targets[<host>] to
 # the last-known-good IP and it takes precedence.
 #
@@ -28,7 +29,7 @@
 locals {
   # Per-master live IP discoveries. One line per master; each refers to the
   # tag-filtered `data.aws_instances.<host>_master` block declared in the
-  # corresponding `peering-<host>.tf`. The provider alias on the data source
+  # corresponding `master-<host>.tf`. The provider alias on the data source
   # is statically pinned to the master's region (TF provider aliases cannot
   # be dynamic), which is why this map enumerates hosts by name rather than
   # iterating var.jenkins_hosts.

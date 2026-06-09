@@ -1,3 +1,4 @@
+# Owner: platform
 # Source of truth for OpenTofu engine + provider + module + Helm chart versions.
 # Bumping a pin here is the only edit needed to roll a new version.
 # Verify pins programmatically before merge: `just check-versions`.
@@ -97,7 +98,7 @@ locals {
       ver  = "1.8.0"
     }
     # CloudNativePG operator — declarative Postgres for the MTR test-history
-    # store (PS-10541, resources/addons/mtr). Chosen over Bitnami postgresql,
+    # store (resources/addons/mtr). Chosen over Bitnami postgresql,
     # frozen to bitnamilegacy after the Broadcom 2025 catalogue change.
     cloudnative_pg = {
       repo = "https://cloudnative-pg.github.io/charts"

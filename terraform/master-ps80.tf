@@ -1,6 +1,7 @@
+# Owner: mysql
 # ps80.cd.percona.com -- Terraform-managed via ./modules/jenkins-master/.
 # Migrated from CloudFormation stack jenkins-ps80
-# (Percona-Lab/jenkins-pipelines/IaC/ps80.cd), PS-11206.
+# (Percona-Lab/jenkins-pipelines/IaC/ps80.cd).
 #
 # Switched from SpotFleet to a single on-demand instance via the module's
 # purchasing_option toggle. Three spot reclamations in 4 days (2026-05-25/26)
@@ -9,11 +10,11 @@
 # blend and pays back on the first avoided reclamation.
 #
 # The TF module runs Jenkins on plain :8080 with no master-side TLS, so this
-# cut is EKS-fronted like ps3 (PS-10945): TLS terminates at the jenkins-masters
+# cut is EKS-fronted like ps3: TLS terminates at the jenkins-masters
 # ALB, reached over cross-region VPC peering on :8080. It also folds in the
 # resilience workstreams sequenced to land here: init.groovy.d auto-loading
-# (PS-11173), MAX_SURVIVABILITY + Hetzner rehydration (PS-11173), and the
-# Graviton ARM EC2 Fleet fallback (PS-11179). EIP/Route53 stay TRUE through
+#, MAX_SURVIVABILITY + Hetzner rehydration, and the
+# Graviton ARM EC2 Fleet fallback. EIP/Route53 stay TRUE through
 # the cutover and flip to false at the Window-1 DNS step.
 
 module "ps80" {
@@ -77,7 +78,7 @@ module "ps80" {
     "vadim.yalovets",
   ]
 
-  # PS-11173/PS-11179: declarative init.groovy.d wiring delivered via the
+  # Declarative init.groovy.d wiring delivered via the
   # module-created S3 bucket (jenkins-ps80-init-config). The repo is now the
   # source of truth: each file under resources/jenkins-masters/ps80/init.groovy.d/
   # is uploaded by Terraform and pulled at boot, self-healing a fresh-volume
@@ -91,7 +92,7 @@ module "ps80" {
   }
 }
 
-# PS-11179: ARM Graviton spot fleet for the ec2-fleet plugin -- the
+# ARM Graviton spot fleet for the ec2-fleet plugin -- the
 # docker-aarch64 fallback when Hetzner CAX capacity is unavailable.
 # capacity-optimized across m8g/m7g/m6g.2xlarge (SPS ~9 vs ~3 single-type).
 # ec2FleetCloud.groovy points ps80's EC2FleetCloud at this ASG
@@ -127,7 +128,7 @@ data "aws_iam_policy_document" "ps80_alloy_bearer_read" {
 # Cross-region VPC peering EKS (us-east-1) <-> ps80 (us-west-2), so the
 # in-cluster jenkins-ingress nginx can reach the master's private IP on :8080
 # (TLS offloaded at the jenkins-masters ALB). Mirrors the ps3 peering
-# (master-ps3.tf, PS-10945). CIDRs are distinct: EKS 10.220.0.0/16,
+# (master-ps3.tf). CIDRs are distinct: EKS 10.220.0.0/16,
 # ps3 10.181.0.0/22, ps80 10.155.0.0/22.
 
 resource "aws_vpc_peering_connection" "ps80" {

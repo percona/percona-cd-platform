@@ -1,6 +1,7 @@
+# Owner: mysql
 # ps57.cd.percona.com -- Terraform-managed via ./modules/jenkins-master/.
 # Migrated from CloudFormation stack jenkins-ps57
-# (Percona-Lab/jenkins-pipelines/IaC/ps57.cd), PS-11206.
+# (Percona-Lab/jenkins-pipelines/IaC/ps57.cd).
 #
 # The same cutover applied to ps80: off the AWS SpotFleet onto a single
 # on-demand instance (purchasing_option), EKS-fronted (TLS terminates at the
@@ -79,13 +80,13 @@ module "ps57" {
     "vadim.yalovets",
   ]
 
-  # PS-11173/PS-11179: declarative init.groovy.d delivered via the
+  # Declarative init.groovy.d delivered via the
   # module-created S3 bucket (jenkins-ps57-init-config). Each file under
   # resources/jenkins-masters/ps57/init.groovy.d/ is uploaded by Terraform and
   # pulled at boot, self-healing a fresh-volume rebuild. cloud.groovy + matrix
   # come from ps57's own jenkins-pipelines files (eu-central-1 subnets/AMIs +
   # PS auth groups), htz.cloud.groovy from the hetzner branch, ec2FleetCloud
-  # from the PS-11179 codify. `jenkins iac deploy` stays the no-restart
+  # from the fleet codify. `jenkins iac deploy` stays the no-restart
   # hot-reload path between boots.
   init_groovy_files = {
     for f in fileset("${path.module}/../resources/jenkins-masters/ps57/init.groovy.d", "*.groovy") :
@@ -93,7 +94,7 @@ module "ps57" {
   }
 }
 
-# PS-11179: ARM Graviton spot fleet for the ec2-fleet plugin -- the
+# ARM Graviton spot fleet for the ec2-fleet plugin -- the
 # docker-aarch64 fallback when Hetzner CAX capacity is unavailable.
 # capacity-optimized across m8g/m7g/m6g.2xlarge. ec2FleetCloud.groovy points
 # ps57's EC2FleetCloud at this ASG (jenkins-ps57-arm-graviton) on the

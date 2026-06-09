@@ -19,7 +19,7 @@ variable "name" {
 }
 
 variable "description" {
-  description = "Free-form description surfaced on the function, role and policy. Reference the originating ticket (e.g. PS-11262) so an operator landing on the resource in the console can find the context."
+  description = "Free-form description surfaced on the function, role and policy. Reference the originating Jira key so an operator landing on the resource in the console can find the context."
   type        = string
 }
 

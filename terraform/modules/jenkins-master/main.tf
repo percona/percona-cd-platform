@@ -1,12 +1,13 @@
+# Owner: platform
 # jenkins-master module. Maps a per-master CF stack (jenkins-pipelines/IaC/
 # <host>.cd/JenkinsStack.yml) to Terraform; consumed once per master from
 # terraform/master-<host>.tf with `providers = { aws = aws.<region> }`.
-# Built against PS-10945-era ps3 as the canonical shape; non-ps3 quirks are
+# Built against the original ps3 cutover as the canonical shape; non-ps3 quirks are
 # carried via variables.tf toggles.
 
 locals {
   # iit-billing-tag = short_name overrides provider default_tags so cleanup
-  # Lambdas don't terminate the master (see CLAUDE.md item #7).
+  # Lambdas don't terminate the master (see docs/runbooks/cleanup-reapers.md).
   base_tags = merge(
     {
       Name              = var.short_name
@@ -66,8 +67,8 @@ resource "aws_route_table" "this" {
   tags   = local.base_tags
 }
 
-# Default-route to IGW. Explicit dependency mirrors CF's DependsOn (PS-10945
-# fix: prevents the route/IGW race on UPDATE-replace).
+# Default-route to IGW. Explicit dependency mirrors CF's DependsOn
+# (prevents the route/IGW race on UPDATE-replace).
 resource "aws_route" "internet" {
   route_table_id         = aws_route_table.this.id
   destination_cidr_block = "0.0.0.0/0"
@@ -662,7 +663,7 @@ resource "aws_launch_template" "master" {
 
   user_data = base64encode(local.user_data_rendered)
 
-  # PS-11173 Phase 0: ignore_changes = [user_data] lifted now that the CF
+  # Spot-survivability Phase 0: ignore_changes = [user_data] lifted now that the CF
   # stack jenkins-ps3 is gone (deleted 2026-05-19 via update-stack with
   # DeletionPolicy: Retain on all 24 resources, then plain delete-stack).
   # Future userdata edits (e.g. Phase 3 graceful spot-interrupt drain)
@@ -682,7 +683,7 @@ resource "aws_spot_fleet_request" "master" {
   terminate_instances_with_expiration = false
   fleet_type                          = "maintain"
 
-  # PS-11173 Phase 5: launch a replacement on EC2 Spot rebalance
+  # Spot-survivability Phase 5: launch a replacement on EC2 Spot rebalance
   # recommendation. AWS issues rebalance recommendations minutes to
   # hours before the 2-min interruption notice; on receipt the fleet
   # launches a new instance proactively. We use `launch` (not
@@ -714,7 +715,7 @@ resource "aws_spot_fleet_request" "master" {
       # `aws_launch_template.master.latest_version` which TF resolved to
       # a literal number at plan time, then `ignore_changes` below
       # blocked updates -- so SpotFleet stayed pinned to the v at last
-      # apply and userdata edits never landed (PS-11173 Phase 3 surfaced
+      # apply and userdata edits never landed (the Phase 3 rollout surfaced
       # this when LT bumped 99 -> 101 but SpotFleet still referenced 99).
       version = "$Latest"
     }

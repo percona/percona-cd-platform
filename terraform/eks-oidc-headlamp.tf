@@ -1,3 +1,4 @@
+# Owner: platform
 # EKS external OIDC identity provider — Authentik, for Headlamp per-user
 # passthrough (resources/addons/headlamp). Headlamp runs the browser OIDC
 # round-trip against Authentik and forwards the user's id_token as the

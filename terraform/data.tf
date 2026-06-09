@@ -1,3 +1,4 @@
+# Owner: platform
 # Shared data sources. Keep narrow — single-line lookups only; complex
 # computed values belong in locals.tf.
 

@@ -1,3 +1,4 @@
+# Owner: xtrabackup
 # pxb.cd.percona.com -- Terraform-managed via ./modules/jenkins-master/.
 # Migrated from the legacy standalone Terraform config
 # (Percona-Lab/jenkins-pipelines/IaC/pxb.cd/terraform, S3 backend
@@ -92,14 +93,14 @@ module "pxb" {
     "vadim.yalovets",
   ]
 
-  # PS-11173/PS-11179: declarative init.groovy.d delivered via the module-created
+  # Declarative init.groovy.d delivered via the module-created
   # S3 bucket (jenkins-pxb-init-config). Each file under
   # resources/jenkins-masters/pxb/init.groovy.d/ is uploaded by Terraform and
   # pulled at boot, self-healing a fresh-volume rebuild. cloud.groovy + matrix
   # come from pxb's own jenkins-pipelines files (us-west-2 subnets/AMIs + PXB auth
   # groups), htz.cloud.groovy from the hetzner branch, ec2FleetCloud from the
-  # PS-11179 codify. The classic aarch64 templates are i4g.2xlarge, NOT m8g
-  # (#4112 / PXB-3796 fix, pxb-origin). `jenkins iac deploy` stays the no-restart
+  # fleet codify. The classic aarch64 templates are i4g.2xlarge, NOT m8g
+  # (ported from the classic pxb-origin templates). `jenkins iac deploy` stays the no-restart
   # hot-reload path between boots.
   init_groovy_files = {
     for f in fileset("${path.module}/../resources/jenkins-masters/pxb/init.groovy.d", "*.groovy") :
@@ -107,7 +108,7 @@ module "pxb" {
   }
 }
 
-# PS-11179: ARM Graviton spot fleet for the ec2-fleet plugin -- the
+# ARM Graviton spot fleet for the ec2-fleet plugin -- the
 # docker-aarch64 fallback when Hetzner CAX capacity is unavailable.
 # capacity-optimized across m8g/m7g/m6g.2xlarge. ec2FleetCloud.groovy points
 # pxb's EC2FleetCloud at this ASG (jenkins-pxb-arm-graviton) on the

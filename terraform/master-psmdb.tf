@@ -1,6 +1,7 @@
-# PS-11179: ARM Graviton spot fleet for psmdb, Fleet-only (still-CloudFormation master).
+# Owner: mongodb
+# ARM Graviton spot fleet for psmdb, Fleet-only (still-CloudFormation master).
 # Provisions ONLY the worker ASG in Terraform; the psmdb master stays CFN-managed in
-# us-west-2, so no PS-11206-style cutover is required. The ec2-fleet plugin (installed
+# us-west-2, so no CFN-to-TF cutover is required. The ec2-fleet plugin (installed
 # on psmdb in a separately announced idle window) drives the ASG via the CFN-managed
 # jenkins-psmdb-master role; the jenkins-arm-fleet module attaches the autoscaling IAM
 # policy by role NAME, so no Terraform management of that role is required.

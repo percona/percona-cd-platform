@@ -1,6 +1,7 @@
+# Owner: pxc
 # pxc.cd.percona.com -- Terraform-managed via ./modules/jenkins-master/.
 # Migrated from CloudFormation stack jenkins-pxc
-# (Percona-Lab/jenkins-pipelines/IaC/pxc.cd), PS-11228.
+# (Percona-Lab/jenkins-pipelines/IaC/pxc.cd).
 #
 # Same cutover as ps3/ps80/ps57/pxb: off the AWS SpotFleet onto a single
 # on-demand instance (purchasing_option), EKS-fronted (TLS terminates at the
@@ -55,7 +56,7 @@ module "pxc" {
   # range 40.143.89.204/30, set up by IT in Feb 2026). jnlpHost.groovy advertises
   # this EIP as the inbound-agent host so the agent connects transparently. REMOVE
   # when test-chaos-vm is retired or moved to WebSocket: set create_eip=false,
-  # delete jnlpHost.groovy + the EIP retain, then -replace the instance. PS-11228.
+  # delete jnlpHost.groovy + the EIP retain, then -replace the instance.
   create_eip            = true
   create_route53_record = false
 
@@ -90,7 +91,7 @@ module "pxc" {
     "vadim.yalovets",
   ]
 
-  # PS-11173/PS-11179: declarative init.groovy.d delivered via the
+  # Declarative init.groovy.d delivered via the
   # module-created S3 bucket (jenkins-pxc-init-config). Each file under
   # resources/jenkins-masters/pxc/init.groovy.d/ is uploaded by Terraform and
   # pulled at boot, self-healing a fresh-volume rebuild. cloud.groovy is
@@ -104,7 +105,7 @@ module "pxc" {
   }
 }
 
-# PS-11179 pattern: ARM Graviton spot fleet for the ec2-fleet plugin -- the
+# ARM Graviton spot fleet for the ec2-fleet plugin -- the
 # docker-aarch64 fallback. capacity-optimized across m8g/m7g/m6g.2xlarge.
 # ec2FleetCloud.groovy points pxc's EC2FleetCloud at this ASG
 # (jenkins-pxc-arm-graviton) on the docker-32gb-aarch64 label. $0 idle

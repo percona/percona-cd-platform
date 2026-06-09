@@ -1,3 +1,4 @@
+# Owner: platform
 # Cluster VPC. CIDR avoids the Jenkins-VPC ranges (var.vpc_cidr default 10.220.0.0/16).
 # Subnets carry the EKS LB-controller tags (kubernetes.io/role/elb, internal-elb)
 # and the Karpenter discovery tag.

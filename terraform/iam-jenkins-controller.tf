@@ -1,3 +1,4 @@
+# Owner: platform
 # IAM policy for the in-cluster Jenkins controller pilot (ps3-k8s). Attached to
 # the matching EKS Pod Identity association in pod-identity.tf so the patched
 # EC2 plugin (AWS SDK v2) resolves credentials via the default chain in-pod and

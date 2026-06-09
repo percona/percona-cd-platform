@@ -1,3 +1,4 @@
+# Owner: platform
 # IAM policy for the in-cluster jenkins-endpoint-reconciler CronJob
 # (resources/addons/jenkins-endpoint-reconciler/). Attached to the matching
 # Pod Identity association in pod-identity.tf.

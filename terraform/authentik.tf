@@ -1,3 +1,4 @@
+# Owner: platform
 # Authentik bootstrap — random secrets stored in AWS Secrets Manager and
 # synced into the cluster by ESO (resources/addons/authentik/templates/
 # external-secret-config.yaml). Authentik front-doors Duo SAML for
@@ -25,7 +26,7 @@
 #     after rotation since in-flight code-exchange will fail.
 #
 # Cleanup-Lambda contract: tags include iit-billing-tag + PerconaKeep
-# (per docs/eks-hardening.md and CLAUDE.md). The secret is application
+# (per docs/runbooks/cleanup-reapers.md). The secret is application
 # data; cleanup automation must not touch it.
 
 resource "random_password" "authentik_secret_key" {
@@ -62,7 +63,7 @@ resource "random_password" "authentik_oidc_headlamp_client_secret" {
 # token for the akadmin user with this exact value. Required by the
 # templates/bootstrap-keypair-job.yaml Job (which uploads the SP signing
 # keypair via the Authentik API). Authentik's API rejects HTTP basic auth
-# with username:password — only username:token works — so we cannot reuse
+# with username:password — only username:token works — so API automation cannot reuse
 # AUTHENTIK_BOOTSTRAP_PASSWORD for API automation.
 #
 # Rotation: taint + apply, then restart authentik-server so the new token

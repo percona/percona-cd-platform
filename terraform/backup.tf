@@ -1,9 +1,10 @@
+# Owner: platform
 # AWS Backup plan for the cluster's stateful EBS volumes.
 #
 # StorageClass `reclaimPolicy: Retain` on gp3-monitoring-1a-retain and
 # gp3-jenkins-1a-retain only stops Kubernetes from deleting the volume — it
 # does not protect against AZ outage, EBS data corruption, accidental
-# snapshot pruning, or operator error. AWS Backup gives us:
+# snapshot pruning, or operator error. AWS Backup adds:
 #   - daily snapshots, KMS-encrypted (separate CMK from the cluster CMK)
 #   - 14-day retention (covers a full incident-response window)
 #   - tag-based selection so new stateful workloads are auto-protected
@@ -13,7 +14,7 @@
 # selection_tag block, in the same region as the vault. The EBS-CSI driver
 # propagates `workload=prometheus` (resources/addons/storageclass-gp3/
 # templates/storageclasses.yaml) and `workload=jenkins` onto the AWS volume,
-# so we get coverage automatically when a PVC binds.
+# so coverage is automatic when a PVC binds.
 
 # Separate CMK for the backup vault — keeps backup-encryption blast radius
 # distinct from the cluster CMK (eks.tf -> module.eks.kms_key_arn). If the
@@ -86,7 +87,7 @@ resource "aws_iam_role_policy_attachment" "backup_restore" {
 
 # Tag-based selections, one per workload. `selection_tag` is STRINGEQUALS-only
 # and multiple `selection_tag` blocks within a single selection are AND'd —
-# so to cover both monitoring + jenkins we need two resources. Adding a new
+# so covering both monitoring + jenkins needs two resources. Adding a new
 # stateful workload (e.g. mimir, registry) is one line: append its short
 # name to local.backup_workloads and add `tagSpecification_4: workload=<name>`
 # to its StorageClass.

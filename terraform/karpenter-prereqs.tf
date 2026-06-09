@@ -1,3 +1,4 @@
+# Owner: platform
 # Karpenter prerequisites (controller IAM role + SQS interruption queue +
 # Pod Identity association + node-side IAM role for the EC2NodeClass to assume).
 # The controller chart, NodePool, and EC2NodeClass manifests live in
