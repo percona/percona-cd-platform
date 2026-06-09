@@ -12,7 +12,7 @@ eC2Fleet:
       port: 22
       retryWaitTime: 15
       sshHostKeyVerificationStrategy: nonVerifyingKeyVerificationStrategy
-  disableTaskResubmit: false
+  disableTaskResubmit: true
   executorScaler: noScaler
   fleet: jenkins-ps3-arm-graviton
   fsRoot: /mnt/jenkins
