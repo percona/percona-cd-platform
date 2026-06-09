@@ -9,7 +9,12 @@ For every region it:
   ``EKS_SKIP_PATTERN``; an EKS instance with no billing tag marks its
   ``eksctl-<cluster>-cluster`` stack for deletion (it does NOT enumerate
   standalone orphan stacks),
-* terminates instances older than 600s that lack a valid ``iit-billing-tag``.
+* terminates instances older than 600s that lack a valid ``iit-billing-tag``,
+* age-bounds ephemeral package-testing molecule instances: their non-numeric
+  ``iit-billing-tag`` (e.g. ``ps_80_package_testing``) would otherwise exempt
+  them forever, but an aborted build skips ``molecule destroy`` and leaks
+  them, so tags matching ``MOLECULE_BILLING_PATTERN`` are terminated past
+  ``MOLECULE_MAX_AGE_HOURS`` instead (7h clears the worst genuine run, 4.34h).
 
 The original Lambda also auto-tagged Cirrus CI instances to protect them;
 Cirrus CI shut down on 2026-06-01, so that path was dropped: a leftover
@@ -31,9 +36,13 @@ Changes vs the inline CloudFormation version:
 
 Environment:
 
-* ``DRY_RUN``          -- ``"true"``/``"false"`` (default ``"true"``: safe)
-* ``EKS_SKIP_PATTERN`` -- regex of cluster names to spare (default ``"pe-.*"``)
-* ``REGIONS``          -- CSV to scan; default = every region from
+* ``DRY_RUN``                  -- ``"true"``/``"false"`` (default ``"true"``: safe)
+* ``EKS_SKIP_PATTERN``         -- regex of cluster names to spare (default ``"pe-.*"``)
+* ``MOLECULE_BILLING_PATTERN`` -- regex on ``iit-billing-tag`` identifying
+  age-bounded molecule instances (default ``".*_package_testing$"``; invalid
+  regex disables the age-bound, never the rest of the reaper)
+* ``MOLECULE_MAX_AGE_HOURS``   -- age bound for matches (default ``"7"``)
+* ``REGIONS``                  -- CSV to scan; default = every region from
   ``describe_regions()`` (the CSV also lets tests bound the scan)
 """
 
@@ -61,6 +70,22 @@ def _dry_run() -> bool:
 
 def _eks_skip_pattern() -> str:
     return os.environ.get("EKS_SKIP_PATTERN", "pe-.*")
+
+
+def _molecule_re() -> re.Pattern[str] | None:
+    """Compiled MOLECULE_BILLING_PATTERN, or None (age-bound disabled) when the
+    pattern is invalid. Only the molecule age-bound degrades; the rest of the
+    reaper is unaffected."""
+    pattern = os.environ.get("MOLECULE_BILLING_PATTERN", r".*_package_testing$")
+    try:
+        return re.compile(pattern)
+    except re.error as e:
+        logger.error(f"Invalid MOLECULE_BILLING_PATTERN '{pattern}': {e}; molecule age-bound disabled")
+        return None
+
+
+def _molecule_max_age_seconds() -> int:
+    return int(float(os.environ.get("MOLECULE_MAX_AGE_HOURS", "7")) * 3600)
 
 
 def _regions() -> list[str]:
@@ -164,11 +189,28 @@ def is_eks_managed(
     return True
 
 
-def should_terminate(instance: Any) -> bool:
+def should_terminate(
+    instance: Any,
+    molecule_re: re.Pattern[str] | None = None,
+    molecule_max_age_s: int = 0,
+) -> bool:
     tags_dict = convert_tags_to_dict(instance.tags)
+    running = datetime.datetime.now(datetime.timezone.utc) - instance.launch_time
+    # Ephemeral package-testing molecule instances carry a non-numeric
+    # iit-billing-tag (e.g. ps_80_package_testing) that has_valid_billing_tag
+    # treats as a permanent category exemption. They leak when a build is
+    # aborted before "molecule destroy" runs, so age-bound them instead.
+    billing_tag = tags_dict.get("iit-billing-tag", "")
+    if billing_tag and molecule_re and molecule_re.match(billing_tag):
+        if running.total_seconds() > molecule_max_age_s:
+            logger.info(
+                f"Molecule leak: {instance.id} tag={billing_tag} "
+                f"age={int(running.total_seconds())}s > {molecule_max_age_s}s, terminate"
+            )
+            return True
+        return False
     if has_valid_billing_tag(tags_dict):
         return False
-    running = datetime.datetime.now(datetime.timezone.utc) - instance.launch_time
     return running.total_seconds() > 600
 
 
@@ -272,6 +314,8 @@ def process_region(
     dry_run: bool,
     eks_skip_pattern: str,
     clusters_to_delete: dict[str, set[str]],
+    molecule_re: re.Pattern[str] | None = None,
+    molecule_max_age_s: int = 0,
 ) -> tuple[list[TerminatedInfo], list[SkippedInfo]]:
     ec2 = boto3.resource("ec2", region_name=region)
     instances = ec2.instances.filter(
@@ -287,7 +331,7 @@ def process_region(
                 skipped.append({"id": instance.id, "reason": f"EKS ({cluster or 'unknown'})"})
                 continue
 
-            if should_terminate(instance):
+            if should_terminate(instance, molecule_re, molecule_max_age_s):
                 info: TerminatedInfo = {
                     "InstanceId": instance.id,
                     "SSHKeyName": instance.key_name,
@@ -321,6 +365,8 @@ def process_region(
 def lambda_handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
     dry_run = _dry_run()
     eks_skip_pattern = _eks_skip_pattern()
+    molecule_re = _molecule_re()
+    molecule_max_age_s = _molecule_max_age_seconds()
     clusters_to_delete: dict[str, set[str]] = {}
 
     all_terminated: list[TerminatedInfo] = []
@@ -329,7 +375,10 @@ def lambda_handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]
 
     for region in _regions():
         try:
-            term, skip = process_region(region, dry_run, eks_skip_pattern, clusters_to_delete)
+            term, skip = process_region(
+                region, dry_run, eks_skip_pattern, clusters_to_delete,
+                molecule_re, molecule_max_age_s,
+            )
             all_terminated.extend(term)
             all_skipped.extend(skip)
         except Exception as e:  # noqa: BLE001

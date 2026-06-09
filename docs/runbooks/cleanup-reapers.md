@@ -142,7 +142,12 @@ never touched.
 EC2 reaper. An instance or its cluster is spared when any of these hold:
 
 - The instance has a valid `iit-billing-tag`: a non-numeric category value, or a
-  numeric unix-epoch timestamp that is still in the future.
+  numeric unix-epoch timestamp that is still in the future. Exception: category
+  tags matching `molecule_billing_pattern` (default `.*_package_testing$`) are
+  age-bounded, not exempt; an aborted molecule build skips `molecule destroy`
+  and leaks the instance, so matches older than `molecule_max_age_hours`
+  (default 7) are reaped. Both knobs live in the `ec2_cleanup` block of
+  `locals.tf`.
 - It is an EKS instance whose `eksctl-<cluster>-cluster` CloudFormation stack
   carries a valid billing tag (same category-or-future-epoch rule).
 - Its cluster name matches the EKS skip regex `eks_skip_pattern` (default

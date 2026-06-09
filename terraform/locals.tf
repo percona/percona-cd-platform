@@ -99,5 +99,12 @@ locals {
     timeout          = 120
     dry_run          = "true"
     eks_skip_pattern = "pe-.*"
+    # Ephemeral package-testing molecule instances: their non-numeric billing
+    # tag would exempt them forever, but an aborted build skips `molecule
+    # destroy` and leaks them. Tags matching the pattern are age-bounded
+    # instead; 7h clears the worst genuine run (4.34h, p99 0.93h over 819
+    # builds) while reclaiming leaks.
+    molecule_billing_pattern = ".*_package_testing$"
+    molecule_max_age_hours   = "7"
   }
 }
