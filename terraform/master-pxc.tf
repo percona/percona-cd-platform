@@ -22,6 +22,7 @@ module "pxc" {
 
   hostname                = "pxc.cd.percona.com"
   short_name              = "jenkins-pxc"
+  team                    = "pxc"
   vpc_cidr                = "10.156.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
@@ -116,6 +117,7 @@ module "pxc_arm_fleet" {
   providers = { aws = aws.us-west-1 }
 
   short_name                   = "jenkins-pxc"
+  team                         = "pxc"
   vpc_id                       = module.pxc.vpc_id
   subnet_ids                   = module.pxc.subnet_ids
   worker_instance_profile_name = module.pxc.worker_instance_profile_name

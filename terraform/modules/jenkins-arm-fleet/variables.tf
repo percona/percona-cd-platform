@@ -66,9 +66,15 @@ variable "tickets" {
 }
 
 variable "tags" {
-  description = "Extra tags merged onto all fleet resources (and propagated to instances)."
+  description = "Extra tags merged onto all fleet resources (and propagated to instances). Module-set keys (iit-billing-tag, team, PerconaKeep) win over this map."
   type        = map(string)
   default     = {}
+}
+
+variable "team" {
+  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Allowed values: the Owner set enforced by scripts/check_conventions.py."
+  type        = string
+  default     = "platform"
 }
 
 variable "extra_ssh_cidrs" {

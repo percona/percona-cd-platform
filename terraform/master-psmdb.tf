@@ -28,6 +28,7 @@ module "psmdb_arm_fleet" {
   providers = { aws = aws.us-west-2 }
 
   short_name                   = "jenkins-psmdb"
+  team                         = "mongodb"
   vpc_id                       = data.aws_vpc.psmdb.id
   subnet_ids                   = data.aws_subnets.psmdb.ids
   worker_instance_profile_name = "jenkins-psmdb-slave"

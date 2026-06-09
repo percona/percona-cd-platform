@@ -286,6 +286,7 @@ variable "tags" {
     "PerconaKeep"     = "True"
     "managed-by"      = "opentofu"
     "repo"            = "github.com/Percona/percona-cd-platform"
+    "team"            = "platform"
   }
 }
 
