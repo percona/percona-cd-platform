@@ -1,0 +1,43 @@
+# Dependabot keeps the pinned supply chain current:
+#   - github-actions: bumps action pins on release; understands SHA pins and
+#     updates the trailing version comment alongside the hash. Complements the
+#     zizmor pin policy (.github/zizmor.yml) -- zizmor enforces pinning,
+#     Dependabot keeps the pins from rotting.
+#   - pip: the cleanup-Lambda test deps (moto/boto3/pytest). A moto major bump
+#     surfaces as a reviewable PR against the `<6` ceiling instead of a silent
+#     drift.
+#   - docker: the Jenkins controller base image; PRs trigger the
+#     build-jenkins-image validate job (build + smoke, no push).
+#
+# Known not covered (manual): the `docker://rhysd/actionlint` ref inside
+# .github/actions/actions-lint and the `pipx install zizmor==` line.
+#
+# Weekly + grouped: one PR per ecosystem per week, not one per dependency.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /terraform/lambdas/tests
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      lambda-test-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /images/jenkins
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      jenkins-image:
+        patterns: ["*"]

@@ -2,8 +2,13 @@ name: ci
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
+
+# Always-on (no top-level path filter): a skipped workflow leaves the required
+# `ci-gate` check pending and would block merges. Jobs are cheap and run on
+# every change; gate on `ci-gate` in branch protection.
 
 permissions:
   contents: read
@@ -13,93 +18,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  actionlint:
-    name: actionlint + zizmor
+  # One check = one job. Jobs run in parallel; only the aggregate `ci-gate`
+  # depends on them. Steps are grouped into a job only when they share
+  # expensive setup (tofu init -> validate; yamllint + kubeconform share
+  # Python); otherwise they are split so one failure never masks another.
+
+  lint:
+    name: actions lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: actionlint
-        uses: docker://rhysd/actionlint:1.7.12
-        with:
-          args: -color
-      - name: install zizmor
-        run: pipx install zizmor==1.24.1
+      - uses: ./.github/actions/actions-lint
 
-      - name: zizmor
-        run: zizmor --quiet .github/workflows/
-
-  terraform:
-    name: tofu fmt + validate + trivy
+  tofu:
+    name: opentofu fmt + validate
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - uses: opentofu/setup-opentofu@v1
         with:
           tofu_version: 1.11.6
-
       - name: tofu fmt -check
         run: tofu fmt -recursive -check -diff
-
+      # init + validate share the provider cache, so they stay in one job
+      # (job filesystems do not persist between jobs).
       - name: tofu init -backend=false
         working-directory: terraform
         run: tofu init -backend=false
-
+      # tflint is intentionally NOT run after validate: its terraform plugin
+      # doesn't understand OpenTofu 1.8+ early-eval
+      # (`module.source = local.modules.<x>.source`), which this repo uses as
+      # the single source of truth for module pins.
       - name: tofu validate
         working-directory: terraform
         run: tofu validate
 
-      # tflint is intentionally not run — its terraform plugin (v0.14.x bundled
-      # with tflint 0.62.0) doesn't understand OpenTofu 1.8+ early-eval syntax
-      # (`module.source = local.modules.<name>.source`), which we use as the
-      # single source of truth for module pins (versions.tf, decision D11).
-      # Re-enable when the ruleset adds early-eval support.
-
+  trivy-config:
+    name: trivy config scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Split from `tofu` so a Trivy finding never hides a fmt/validate failure.
+    # The config scan is static (no tofu init needed); skip the vendored module
+    # cache and the local plan snapshot.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: terraform/
           severity: HIGH,CRITICAL
           exit-code: '1'
-          # `.terraform/` is the vendored module cache populated by `tofu init`
-          # above; skip it so we only scan our own .tf, not the modules' internals.
           skip-dirs: terraform/.terraform
-          # tfplan: a saved plan produced by `tofu plan -out=tfplan` for local dev.
-          # Trivy descends into the snapshot and re-flags the modules' internals;
-          # gitignored so CI never sees it, listed here as belt-and-suspenders.
           skip-files: terraform/tfplan
-          # Per-rule allowlist with rationale; see .trivyignore for entries.
           trivyignores: .trivyignore
 
   yaml:
     name: yamllint + kubeconform
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: pip install yamllint + pyyaml
         run: pip install yamllint==1.38.0 pyyaml
-
       - name: yamllint
         run: yamllint -s argocd-bootstrap/ resources/ .github/
-
       - name: install kubeconform
         run: |
           curl -sSL -o kubeconform.tgz \
             https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
           tar -xzf kubeconform.tgz kubeconform
           sudo mv kubeconform /usr/local/bin/
-
       - name: kubeconform
         run: |
           # Grafana dashboard JSONs under resources/addons/grafana/dashboards/
@@ -118,30 +119,94 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             argocd-bootstrap/ resources/
 
-      # ADR 0029: assert each master's committed JCasC clouds configScript stays
-      # in sync with the shared catalog AND carries no YAML anchors/aliases (JCasC
-      # SnakeYAML caps aliases at 50 -- the reload fails above that). Static gate;
-      # the loaded-model check is a pre-cutover tier-2 step (see ADR 0029).
-      - name: clouds-catalog drift + no-alias check (ADR 0029)
-        run: python scripts/render-clouds.py check ps3
-
-  helm:
-    name: jenkins chart render-check
+  clouds-catalog-drift:
+    name: clouds catalog drift (ADR 0029)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Split from `yaml`: a different tool/concern. Assert each master's committed
+    # JCasC clouds configScript stays in sync with the shared catalog AND carries
+    # no YAML anchors/aliases (JCasC SnakeYAML caps aliases at 50 -- the reload
+    # fails above that).
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: pip install pyyaml
+        run: pip install pyyaml
+      - name: render-clouds drift + no-alias check
+        run: python scripts/render-clouds.py check ps3
 
+  helm-render:
+    name: jenkins chart render-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: install helm (pinned + sha-verified)
         run: |
           curl -sSL -o helm.tgz https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz
           echo "fc307327959aa38ed8f9f7e66d45492bb022a66c3e5da6063958254b9767d179  helm.tgz" | sha256sum -c -
           tar -xzf helm.tgz linux-amd64/helm
           sudo mv linux-amd64/helm /usr/local/bin/
-
       # Render the per-instance Jenkins controller chart and assert the values
       # reach the `jenkins` subchart (image / Retain PVC / ALB group / JNLP
       # listener / node-pool pin). Guards the jenkins:-scoping regression.
       - name: jenkins chart render-check
         run: scripts/jenkins-chart-render-check.sh
+
+  lambda-pytest:
+    name: cleanup-lambda tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Pure-Python + moto, no AWS credentials. Uses setup-python + pip to match
+    # the `yaml` job (astral-sh/setup-uv is not in the zizmor ref-pin allowlist).
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'  # match the Lambda runtime
+          cache: 'pip'
+          cache-dependency-path: terraform/lambdas/tests/requirements.txt
+      - name: install test deps
+        run: pip install -r terraform/lambdas/tests/requirements.txt
+      - name: pytest
+        run: python -m pytest terraform/lambdas/tests
+
+  ci-gate:
+    name: ci-gate
+    # The single required status check for branch protection. Runs even when a
+    # dependency fails/skips (if: always()) and asserts each result is success
+    # or an intentional skip; fails on failure/cancelled.
+    if: always()
+    needs:
+      - lint
+      - tofu
+      - trivy-config
+      - yaml
+      - clouds-catalog-drift
+      - helm-render
+      - lambda-pytest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: assert all required jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          echo "dependency results: $RESULTS"
+          if [ -z "$RESULTS" ]; then echo "::error::no dependency results"; exit 1; fi
+          IFS=',' read -ra results <<< "$RESULTS"
+          for r in "${results[@]}"; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a required job result was '$r'"; exit 1 ;;
+            esac
+          done
+          echo "all required jobs passed"

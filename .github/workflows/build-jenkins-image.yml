@@ -25,28 +25,23 @@ env:
   JENKINS_LTS: "2.541.3"
 
 jobs:
-  # ---- actionlint/zizmor gate (mirrors ci.yml) ----
+  # ---- actionlint/zizmor gate (shared composite, mirrors ci.yml) ----
   lint:
-    name: actionlint + zizmor
+    name: actions lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: actionlint
-        uses: docker://rhysd/actionlint:1.7.12
-        with:
-          args: -color
-      - name: install zizmor
-        run: pipx install zizmor==1.24.1
-      - name: zizmor
-        run: zizmor --quiet .github/workflows/build-jenkins-image.yml
+      - uses: ./.github/actions/actions-lint
 
   # ---- PR validation: build + smoke, NO AWS token, NO push ----
   validate:
     name: build + smoke (no push)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read            # explicitly NO id-token
     steps:
@@ -84,6 +79,7 @@ jobs:
     name: build + smoke + push (OIDC)
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write          # ONLY this job mints the OIDC JWT

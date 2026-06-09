@@ -1,0 +1,4 @@
+# Python bytecode must never be committed (or zipped into the Lambda package).
+__pycache__/
+*.pyc
+.pytest_cache/
