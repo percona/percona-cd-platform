@@ -216,6 +216,44 @@ def test_delete_eks_stack_toctou_aborts_if_tagged(ec2_cleanup):
         assert cfn.describe_stacks(StackName="eksctl-tagged-cluster")["Stacks"]  # still present
 
 
+def test_eks_orphan_full_flow_through_handler(ec2_cleanup, monkeypatch):
+    """The complete EKS orphan use case in ONE lambda_handler call: scan finds
+    the EKS-tagged instance, the cluster gets marked, its eksctl stack is
+    deleted, the result reports it, and the instance itself is skipped (the
+    stack teardown owns it), all wired through the real handler path."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    monkeypatch.setenv("EKS_SKIP_PATTERN", "pe-.*")  # 'orphan' does not match
+    with mock_aws():
+        _mk_eksctl_stack(REGION, "orphan")  # exists, no billing tag
+        iid = _mk_instance(REGION, tags={"kubernetes.io/cluster/orphan": "owned"})
+        with freeze_time(FUTURE):
+            result = ec2_cleanup.lambda_handler({}, None)
+        assert f"orphan ({REGION})" in result["deleted_clusters"]
+        assert iid not in [t["InstanceId"] for t in result["terminated"]]
+        assert _state(REGION, iid) == "running"  # instance left to the stack teardown
+        # The stack is deleting or already gone (a deleted stack is no longer
+        # describable by name, in moto as in real AWS).
+        from botocore.exceptions import ClientError
+        cfn = boto3.client("cloudformation", region_name=REGION)
+        try:
+            status = cfn.describe_stacks(StackName="eksctl-orphan-cluster")["Stacks"][0]["StackStatus"]
+            assert status.startswith("DELETE")
+        except ClientError as e:
+            assert "does not exist" in str(e)
+
+
+def test_default_region_discovery_path(ec2_cleanup, monkeypatch):
+    """With REGIONS unset (the production default), the handler discovers
+    regions via describe_regions() and still finds the instance."""
+    monkeypatch.setenv("DRY_RUN", "true")  # keep the full-region sweep read-only
+    with mock_aws():
+        iid = _mk_instance(REGION)
+        with freeze_time(FUTURE):
+            result = ec2_cleanup.lambda_handler({}, None)
+        assert iid in [t["InstanceId"] for t in result["terminated"]]  # would-terminate
+
+
 # ---- fail-closed CFN probe + DELETE_FAILED remediation (stubbed clients) ----
 
 def _client_error(code, message=""):
