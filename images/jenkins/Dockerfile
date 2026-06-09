@@ -44,14 +44,24 @@ COPY --chown=jenkins:jenkins percona-plugins/*.jpi /usr/share/jenkins/ref/percon
 #     BE the plugin (an empty marker would 0-byte it and the plugin would fail to
 #     load). We rename ONLY the two forks to .override, so the patched ec2 /
 #     hetzner-cloud always win over whatever a PVC-restored JENKINS_HOME carries.
-#   * COMMUNITY plugins stay SOFT. They are left as plain ref/plugins/<id>.jpi, so
-#     the seeder version-compares and seeds only when the home lacks the plugin or
-#     carries an OLDER build. A community plugin upgraded via the UI on a live
+#   * COMMUNITY plugins stay SOFT. They are left as plain ref/plugins/<id>.jpi and
+#     seed ONLY when the home lacks the plugin entirely. An existing home copy wins
+#     regardless of version (verified 2026-06-09: a 4.2.2 ec2-fleet on the PVC
+#     survived a 4.2.3 image roll untouched), so a plugins.txt bump alone never
+#     upgrades a live home. A community plugin upgraded via the UI on a live
 #     master survives a pod restart (the reconcile point we deliberately keep).
+#   * PINNED community plugins (PINNED_PLUGINS below) are FORCED like the forks:
+#     plugins we manage exclusively through plugins.txt, where the image must win
+#     over whatever the PVC carries.
 RUN set -euo pipefail; \
     for fork in /usr/share/jenkins/ref/percona-plugins/*.jpi; do \
       id="$(basename "$fork" .jpi)"; \
       cp "$fork" "/usr/share/jenkins/ref/plugins/${id}.jpi.override"; \
       rm -f "/usr/share/jenkins/ref/plugins/${id}.jpi"; \
+    done; \
+    PINNED_PLUGINS="ec2-fleet"; \
+    for id in $PINNED_PLUGINS; do \
+      test -f "/usr/share/jenkins/ref/plugins/${id}.jpi"; \
+      mv "/usr/share/jenkins/ref/plugins/${id}.jpi" "/usr/share/jenkins/ref/plugins/${id}.jpi.override"; \
     done; \
     rm -rf /usr/share/jenkins/ref/percona-plugins
