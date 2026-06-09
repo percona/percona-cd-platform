@@ -75,8 +75,10 @@ tf-fmt-check:
 
 # Conventions gate for terraform/ (Owner banners, no copyright / CLAUDE.md /
 # ticket-ID comments) — rules in terraform/CLAUDE.md. Credential-free.
+# Run via `uv run` for a consistent interpreter with the other script gates;
+# the script itself is stdlib-only (no --with deps).
 tf-conventions:
-    python3 scripts/check_conventions.py
+    uv run python3 scripts/check_conventions.py
 
 tf-validate: tf-init
     tofu -chdir=terraform validate
@@ -128,8 +130,12 @@ tf-state-versioning-check: _require-aws-profile
     [ "${status}" = "Enabled" ] || { echo "ERROR: state bucket versioning is '${status}', expected 'Enabled' — STOP and enable it before any apply." >&2; exit 1; }
 
 # PLAN-ONLY, read-only review of the Jenkins master modules and their Graviton
-# (arm) EC2-fleet siblings. Enumerates each *_arm_fleet sibling explicitly —
-# omitting them would silently exclude the Graviton fleets from the plan.
+# (arm) EC2-fleet siblings. Every module declared across terraform/master-*.tf
+# must appear here — omitting one silently excludes that master/fleet from the
+# plan. Source of truth is the `module "<x>"` blocks in terraform/master-*.tf:
+# full TF masters (ps57/ps80/pxb/pxc) carry both a master and an _arm_fleet;
+# ps3 and the still-CFN masters (cloud/pg/psmdb/rel) are _arm_fleet-only.
+# When a CFN master migrates to TF, add its `-target=module.<x>` line here.
 # There is intentionally NO tf-apply-masters: apply the full saved plan via
 # `just tf-plan` + `just tf-apply` after review.
 tf-plan-masters: _require-aws-profile
@@ -138,7 +144,11 @@ tf-plan-masters: _require-aws-profile
       -target=module.ps57  -target=module.ps57_arm_fleet \
       -target=module.ps80  -target=module.ps80_arm_fleet \
       -target=module.pxb   -target=module.pxb_arm_fleet \
-      -target=module.pxc   -target=module.pxc_arm_fleet
+      -target=module.pxc   -target=module.pxc_arm_fleet \
+      -target=module.cloud_arm_fleet \
+      -target=module.pg_arm_fleet \
+      -target=module.psmdb_arm_fleet \
+      -target=module.rel_arm_fleet
 
 # ---------- gitops / yaml ----------
 yaml-lint:
