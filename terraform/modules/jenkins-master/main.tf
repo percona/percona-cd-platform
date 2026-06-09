@@ -8,12 +8,15 @@
 locals {
   # iit-billing-tag = short_name overrides provider default_tags so cleanup
   # Lambdas don't terminate the master (see docs/runbooks/cleanup-reapers.md).
+  # Module-set keys are merged LAST so a caller-supplied map can never clobber
+  # the per-instance billing/team identity.
   base_tags = merge(
+    var.tags,
     {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
+      team              = var.team
     },
-    var.tags,
   )
 
   worker_logical = var.worker_role_legacy_naming ? "slave" : "worker"
@@ -646,11 +649,15 @@ resource "aws_launch_template" "master" {
     http_endpoint               = "enabled"
   }
 
+  # Runtime-spawned instances/volumes never see provider default_tags, so the
+  # reaper pair + team must be re-asserted here (docs/runbooks/cleanup-reapers.md).
   tag_specifications {
     resource_type = "instance"
     tags = {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
+      "PerconaKeep"     = "True"
+      team              = var.team
     }
   }
   tag_specifications {
@@ -658,6 +665,8 @@ resource "aws_launch_template" "master" {
     tags = {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
+      "PerconaKeep"     = "True"
+      team              = var.team
     }
   }
 
@@ -769,6 +778,7 @@ resource "aws_instance" "master" {
   tags = {
     Name              = var.short_name
     "iit-billing-tag" = var.short_name
+    team              = var.team
   }
 
   lifecycle {

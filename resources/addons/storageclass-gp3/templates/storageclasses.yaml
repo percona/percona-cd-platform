@@ -45,6 +45,9 @@ parameters:
 allowVolumeExpansion: true
 ---
 # Jenkins-master class — single-AZ (us-east-1a), Retain. Used by Jenkins StatefulSets.
+# SHARED across in-cluster masters, so its volumes bill to the platform; a
+# per-team class (own tagSpecification_* with team=<x>) is deliberately
+# deferred until a second team's master moves in-cluster.
 # fsType=xfs: the in-cluster JENKINS_HOME volumes are xfs (lifted from the EC2
 # masters' xfs home; the static PVs declare fsType: xfs). Without this, a snapshot
 # RESTORE provisions ext4 (the EBS CSI default) and cannot mount the xfs filesystem

@@ -82,3 +82,12 @@ gotcha 7 and `docs/runbooks/cleanup-reapers.md` for the mandatory
 do not inherit `default_tags` and must re-assert the pair. Per-master billing
 uses `iit-billing-tag = jenkins-<inst>` (master) and `jenkins-<inst>-worker`
 (workers).
+
+**`team` attribution tag**: every resource carries `team=<value from the
+Owner set>` — `platform` via the `var.tags` default, overridden per master
+through the jenkins modules' `team` variable (substrate + runtime
+instances/volumes). Exists because `iit-billing-tag` alone can no longer
+group a team's spend once a master moves in-cluster (shared StorageClass
+bills to the platform). In the modules, module-set identity keys
+(`iit-billing-tag`, `team`, `PerconaKeep`) merge LAST so a caller-supplied
+map can never clobber them.

@@ -20,6 +20,7 @@ module "ps57" {
 
   hostname                = "ps57.cd.percona.com"
   short_name              = "jenkins-ps57"
+  team                    = "mysql"
   vpc_cidr                = "10.157.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euc1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
@@ -106,6 +107,7 @@ module "ps57_arm_fleet" {
   providers = { aws = aws.eu-central-1 }
 
   short_name                   = "jenkins-ps57"
+  team                         = "mysql"
   vpc_id                       = module.ps57.vpc_id
   subnet_ids                   = module.ps57.subnet_ids
   worker_instance_profile_name = module.ps57.worker_instance_profile_name

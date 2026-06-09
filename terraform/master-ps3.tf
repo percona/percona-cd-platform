@@ -11,6 +11,7 @@ module "ps3_arm_fleet" {
   providers = { aws = aws.eu-west-1 }
 
   short_name        = "jenkins-ps3"
+  team              = "mysql"
   vpc_cidr          = "10.181.0.0/22"
   cache_bucket_name = "ps-build-cache"
   key_name          = "percona-jenkins"

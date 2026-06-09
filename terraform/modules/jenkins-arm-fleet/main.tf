@@ -13,10 +13,17 @@ locals {
   # iit-billing-tag=<short_name>, so a worker sharing it becomes a candidate for
   # the master EndpointSlice and can blackhole the master's ingress (503). The
   # worker form also matches the existing ec2-plugin workers and is cleanup-safe.
+  # Module-set keys merge LAST: a caller map must never clobber the worker
+  # billing form, and runtime-spawned instances/volumes need PerconaKeep + team
+  # re-asserted (no provider default_tags on ASG-launched resources).
   fleet_tags = merge(
-    { "iit-billing-tag" = "${var.short_name}-worker" },
     var.tags,
     var.tickets == "" ? {} : { tickets = var.tickets },
+    {
+      "iit-billing-tag" = "${var.short_name}-worker"
+      "PerconaKeep"     = "True"
+      team              = var.team
+    },
   )
   instance_tags = merge(local.fleet_tags, { Name = "${var.short_name}-arm-worker" })
 }

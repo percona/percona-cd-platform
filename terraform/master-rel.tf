@@ -25,6 +25,7 @@ module "rel_arm_fleet" {
   providers = { aws = aws.eu-west-1 }
 
   short_name                   = "jenkins-rel"
+  team                         = "release"
   vpc_id                       = data.aws_vpc.rel.id
   subnet_ids                   = data.aws_subnets.rel.ids
   worker_instance_profile_name = "jenkins-rel-worker"

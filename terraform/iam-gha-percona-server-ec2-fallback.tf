@@ -299,8 +299,8 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
 
 # Trust + role wiring delegated to the in-repo module. The four-entry
 # subject_claims list intentionally pre-includes `refs/heads/trunk` and
-# `refs/heads/8.4` so the planned trunk + 8.4 follow-ups (Przemyslaw) do
-# not require an IAM edit when they land.
+# `refs/heads/8.4` so the planned trunk + 8.4 follow-ups do not require an
+# IAM edit when they land.
 module "gha_percona_server_ec2_fallback" {
   source = "./modules/github-oidc-role"
 
@@ -317,7 +317,7 @@ module "gha_percona_server_ec2_fallback" {
 
   permissions_policy_json = data.aws_iam_policy_document.gha_percona_server_ec2_fallback_perms.json
 
-  tags = local.tags
+  tags = merge(local.tags, { team = "mysql" })
 }
 
 # Surface the role ARN so the operator can plug it into the

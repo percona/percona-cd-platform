@@ -25,6 +25,7 @@ module "cloud_arm_fleet" {
   providers = { aws = aws.eu-west-1 }
 
   short_name                   = "jenkins-cloud"
+  team                         = "cloud"
   vpc_id                       = data.aws_vpc.cloud.id
   subnet_ids                   = data.aws_subnets.cloud.ids
   worker_instance_profile_name = "jenkins-cloud-worker"

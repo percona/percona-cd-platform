@@ -196,9 +196,15 @@ variable "init_groovy_files" {
 }
 
 variable "tags" {
-  description = "Per-master tag overrides merged on top of provider default_tags."
+  description = "Per-master tag overrides. The module-set keys (Name, iit-billing-tag, team) win over this map."
   type        = map(string)
   default     = {}
+}
+
+variable "team" {
+  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Allowed values: the Owner set enforced by scripts/check_conventions.py."
+  type        = string
+  default     = "platform"
 }
 
 variable "purchasing_option" {

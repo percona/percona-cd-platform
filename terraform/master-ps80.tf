@@ -23,6 +23,7 @@ module "ps80" {
 
   hostname                = "ps80.cd.percona.com"
   short_name              = "jenkins-ps80"
+  team                    = "mysql"
   vpc_cidr                = "10.155.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
@@ -103,6 +104,7 @@ module "ps80_arm_fleet" {
   providers = { aws = aws.us-west-2 }
 
   short_name                   = "jenkins-ps80"
+  team                         = "mysql"
   vpc_id                       = module.ps80.vpc_id
   subnet_ids                   = module.ps80.subnet_ids
   worker_instance_profile_name = module.ps80.worker_instance_profile_name

@@ -15,12 +15,14 @@
 # when module.ps3_arm_fleet's source flips to this module.
 
 locals {
+  # Module-set keys merge LAST so a caller map can never clobber identity.
   base_tags = merge(
+    var.tags,
     {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
+      team              = var.team
     },
-    var.tags,
   )
 
   worker_name = "${var.short_name}-worker"
@@ -28,10 +30,16 @@ locals {
   # CF used AZ index 1 (B) + 2 (C); matches the ps3 master subnets being moved in.
   subnet_indices = { "b" = 1, "c" = 2 }
 
+  # Worker form + reaper pair + team re-asserted for runtime-spawned
+  # instances/volumes (no provider default_tags there).
   fleet_tags = merge(
-    { "iit-billing-tag" = "${var.short_name}-worker" },
     var.tags,
     var.tickets == "" ? {} : { tickets = var.tickets },
+    {
+      "iit-billing-tag" = "${var.short_name}-worker"
+      "PerconaKeep"     = "True"
+      team              = var.team
+    },
   )
   instance_tags = merge(local.fleet_tags, { Name = "${var.short_name}-arm-worker" })
 }

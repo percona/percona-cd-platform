@@ -29,6 +29,7 @@ module "pxb" {
 
   hostname                = "pxb.cd.percona.com"
   short_name              = "jenkins-pxb"
+  team                    = "xtrabackup"
   vpc_cidr                = "10.179.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value)
   master_profile          = "eks_observability"
@@ -119,6 +120,7 @@ module "pxb_arm_fleet" {
   providers = { aws = aws.us-west-2 }
 
   short_name                   = "jenkins-pxb"
+  team                         = "xtrabackup"
   vpc_id                       = module.pxb.vpc_id
   subnet_ids                   = module.pxb.subnet_ids
   worker_instance_profile_name = module.pxb.worker_instance_profile_name

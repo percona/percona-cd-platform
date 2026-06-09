@@ -25,6 +25,7 @@ module "pg_arm_fleet" {
   providers = { aws = aws.eu-central-1 }
 
   short_name                   = "jenkins-pg"
+  team                         = "postgresql"
   vpc_id                       = data.aws_vpc.pg.id
   subnet_ids                   = data.aws_subnets.pg.ids
   worker_instance_profile_name = "jenkins-pg-worker"

@@ -31,7 +31,7 @@ resource "aws_iam_role" "ppg_ami_builder_ssm" {
   name               = "ppg-ami-builder-ssm"
   description        = "Builder + smoke instance profile so Packer/smoke connect over SSM Session Manager (no inbound SSH)."
   assume_role_policy = data.aws_iam_policy_document.ppg_ami_builder_trust.json
-  tags               = local.tags
+  tags               = merge(local.tags, { team = "postgresql" })
 }
 
 resource "aws_iam_role_policy_attachment" "ppg_ami_builder_ssm_core" {
@@ -42,7 +42,7 @@ resource "aws_iam_role_policy_attachment" "ppg_ami_builder_ssm_core" {
 resource "aws_iam_instance_profile" "ppg_ami_builder_ssm" {
   name = "ppg-ami-builder-ssm"
   role = aws_iam_role.ppg_ami_builder_ssm.name
-  tags = local.tags
+  tags = merge(local.tags, { team = "postgresql" })
 }
 
 # ---------------------------------------------------------------------------
@@ -74,6 +74,7 @@ resource "aws_security_group" "ppg_ami_builder" {
   tags = merge(local.tags, {
     Name              = "ppg-ami-factory-builder"
     "iit-billing-tag" = "ppg-ami-factory"
+    team              = "postgresql"
   })
 }
 
@@ -268,7 +269,7 @@ module "ppg_ami_factory_oidc" {
 
   subject_claims          = var.ppg_ami_factory_subject_claims
   permissions_policy_json = data.aws_iam_policy_document.gha_ppg_ami_factory_perms.json
-  tags                    = local.tags
+  tags                    = merge(local.tags, { team = "postgresql" })
 }
 
 output "ppg_ami_factory_oidc_role_arn" {
