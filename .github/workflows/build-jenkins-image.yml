@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: ./.github/actions/actions-lint
@@ -45,20 +45,20 @@ jobs:
     permissions:
       contents: read            # explicitly NO id-token
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       # docker/* is not in the repo zizmor ref-pin allowlist (.github/zizmor.yml),
       # so its actions are SHA-pinned everywhere. Refresh with:
       #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: fetch + verify fork HPIs
         working-directory: images/jenkins
         run: ./fetch-hpis.sh
       - name: build (amd64, load to local daemon, no push)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
           platforms: linux/amd64
@@ -68,7 +68,7 @@ jobs:
       - name: smoke-boot (empty-home AND restored-home)
         run: images/jenkins/smoke-boot.sh jenkins-percona:pr-${{ github.sha }}
       - name: upload effective plugin list
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugins-effective-${{ github.sha }}
           path: images/jenkins/plugins.effective.txt
@@ -88,17 +88,17 @@ jobs:
       # AWS creds after configure-aws-credentials). Resolve/refresh the SHAs with:
       #   gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha
       # (dereference annotated-tag objects via .../git/tags/<sha> --jq .object.sha)
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: fetch + verify fork HPIs
         working-directory: images/jenkins
         run: ./fetch-hpis.sh
       - name: build (amd64, load, NO push yet)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
           platforms: linux/amd64
@@ -110,7 +110,7 @@ jobs:
 
       # --- AWS creds appear here; everything after is privileged ---
       - name: configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
         with:
           role-to-assume: ${{ secrets.JENKINS_IMAGE_PUSH_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -119,7 +119,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
       - name: push (amd64) with SBOM + provenance
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
           platforms: linux/amd64
@@ -142,7 +142,7 @@ jobs:
           REF="${REGISTRY}/${IMAGE_REPO}@${DIGEST}"
           images/jenkins/smoke-boot.sh "$REF"
       - name: upload effective plugin list
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: plugins-effective-${{ github.sha }}
           path: images/jenkins/plugins.effective.txt
