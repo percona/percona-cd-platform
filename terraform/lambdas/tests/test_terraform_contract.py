@@ -36,7 +36,7 @@ def _handler_env_reads(subdir: str) -> set[str]:
 
 
 def test_volume_env_contract() -> None:
-    tf_keys = _env_keys(_tf("lambda-volume-cleanup.tf"))
+    tf_keys = _env_keys(_tf("volume-cleanup.tf"))
     handler_keys = _handler_env_reads("volume-cleanup")
     # Terraform must set only knobs the handler reads...
     assert tf_keys <= handler_keys, f"TF sets unread env: {tf_keys - handler_keys}"
@@ -45,15 +45,15 @@ def test_volume_env_contract() -> None:
 
 
 def test_ec2_env_contract() -> None:
-    tf_keys = _env_keys(_tf("lambda-ec2-cleanup.tf"))
+    tf_keys = _env_keys(_tf("ec2-cleanup.tf"))
     handler_keys = _handler_env_reads("ec2-cleanup")
     assert tf_keys <= handler_keys, f"TF sets unread env: {tf_keys - handler_keys}"
     assert handler_keys - {"REGIONS"} <= tf_keys, f"handler knobs unset by TF: {handler_keys - {'REGIONS'} - tf_keys}"
 
 
 @pytest.mark.parametrize("tf_name,subdir", [
-    ("lambda-volume-cleanup.tf", "volume-cleanup"),
-    ("lambda-ec2-cleanup.tf", "ec2-cleanup"),
+    ("volume-cleanup.tf", "volume-cleanup"),
+    ("ec2-cleanup.tf", "ec2-cleanup"),
 ])
 def test_handler_entrypoint_exists(tf_name: str, subdir: str) -> None:
     tf = _tf(tf_name)
@@ -74,7 +74,7 @@ def test_runtime_pin_matches_locals() -> None:
     m = re.search(r'cleanup_lambda_runtime\s*=\s*"(python3\.\d+)"', locals_tf)
     assert m, "cleanup_lambda_runtime not found in locals.tf"
     # Both instantiations must consume the shared pin, not hardcode their own.
-    for name in ("lambda-volume-cleanup.tf", "lambda-ec2-cleanup.tf"):
+    for name in ("volume-cleanup.tf", "ec2-cleanup.tf"):
         tf = _tf(name)
         assert "local.cleanup_lambda_runtime" in tf, f"{name} does not use the shared runtime pin"
         assert "python3." not in tf, f"{name} hardcodes a runtime"

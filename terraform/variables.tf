@@ -267,7 +267,7 @@ variable "tags" {
   description = <<-EOT
     Default tags for every taggable AWS resource. Two of these are required by
     the percona-dev-admin account's cleanup reapers (this repo,
-    lambda-ec2-cleanup.tf / lambda-volume-cleanup.tf) — do not drop them:
+    ec2-cleanup.tf / volume-cleanup.tf) — do not drop them:
 
     - `iit-billing-tag` — the EC2 reaper terminates instances missing a valid
       value after 10 minutes (numeric values are a unix-epoch expiry; anything
@@ -286,4 +286,16 @@ variable "tags" {
     "managed-by"      = "opentofu"
     "repo"            = "github.com/Percona/percona-cd-platform"
   }
+}
+
+variable "ppg_ami_factory_region" {
+  description = "AWS region the PPG AMI factory bakes in (matches the PG molecule region). Distinct from the cluster region."
+  type        = string
+  default     = "eu-central-1"
+}
+
+variable "ppg_ami_factory_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the PPG AMI-factory role. Production is master-only on Percona-Lab/jenkins-pipelines. A temporary fork subject may be supplied at apply time for end-to-end testing, then removed."
+  type        = list(string)
+  default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
 }
