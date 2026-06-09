@@ -32,24 +32,19 @@ concurrency:
 
 jobs:
   lint:
-    name: actionlint + zizmor
+    name: actions lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
-      - name: actionlint
-        uses: docker://rhysd/actionlint:1.7.12
-        with:
-          args: -color
-      - name: install zizmor
-        run: pipx install zizmor==1.24.1
-      - name: zizmor
-        run: zizmor --quiet .github/workflows/refresh-fork-locks.yml
+      - uses: ./.github/actions/actions-lint
 
   refresh:
     name: refresh lock + validate + open PR
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs: lint
     permissions:
       contents: write          # createCommitOnBranch on a bump branch

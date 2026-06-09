@@ -1,0 +1,25 @@
+name: actions-lint
+description: >-
+  Lint the GitHub Actions workflows (and local actions) with actionlint +
+  zizmor. Call AFTER actions/checkout (a local composite cannot perform the
+  checkout itself). Deduplicates the gate that every workflow in this repo
+  shares.
+
+runs:
+  using: composite
+  steps:
+    # Keep actionlint as a zizmor-visible `uses:` (same form the workflows used
+    # before this composite) so the image ref stays under zizmor's lens.
+    - name: actionlint
+      uses: docker://rhysd/actionlint:1.7.12
+      with:
+        args: -color
+
+    - name: install zizmor
+      shell: bash
+      run: pipx install zizmor==1.24.1
+
+    # Scan both workflows AND this composite action.
+    - name: zizmor
+      shell: bash
+      run: zizmor --quiet .github/workflows/ .github/actions/
