@@ -58,6 +58,17 @@ archive. See [`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-p
 - **ArgoCD** owns everything in-cluster from there. App-of-Apps + ApplicationSets reconcile from `resources/`.
 - The cluster Secret (`argocd.argoproj.io/secret-type: cluster`) carries TF outputs (cluster name, OIDC, role ARNs, ACM ARN, Karpenter SQS) as annotations. ApplicationSets read those annotations as Helm `valuesObject`.
 
+## Account cleanup reapers
+
+Account hygiene, not cluster path: a daily unattached-EBS-volume reaper and a
+5-minute untagged-EC2 + orphan-`eksctl`-stack reaper, both instantiated from
+the `scheduled-lambda` module (caller supplies the least-privilege IAM policy;
+the module owns zip, EventBridge rule, `source_arn` invoke permission, log
+retention, concurrency 1). One function each in us-east-1; handlers sweep
+regions in code. Tunables and the `dry_run` arming flag live in
+`terraform/locals.tf`. Design: [ADR 0030](adr/0030-account-cleanup-reapers-in-terraform.md);
+ops: [`runbooks/cleanup-reapers.md`](runbooks/cleanup-reapers.md).
+
 ## Compute topology
 
 Four tiers, each tagged with `workload.percona.com/tier` and (where
