@@ -79,4 +79,25 @@ locals {
       max_size       = 1
     }
   }
+
+  # ---- Cleanup Lambda parameters ----
+  # Tunables for the scheduled cleanup reapers (terraform/lambda-{volume,ec2}-cleanup.tf):
+  # schedules, dry-run flags, the EKS skip regex, and the volume age floor, all
+  # in one reviewable place. The scheduled-lambda module stays generic; these
+  # are the workload knobs. Arm a reaper by flipping its dry_run to "false" here
+  # (a reviewed edit, not a CLI -var) once its dry-run logs look right.
+  cleanup_lambda_runtime = "python3.14" # latest supported Lambda Python runtime
+
+  volume_cleanup = {
+    schedule      = "rate(1 day)"
+    dry_run       = "true"
+    min_age_hours = "24"
+  }
+
+  ec2_cleanup = {
+    schedule         = "rate(5 minutes)"
+    timeout          = 120
+    dry_run          = "true"
+    eks_skip_pattern = "pe-.*"
+  }
 }
