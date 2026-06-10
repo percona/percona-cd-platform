@@ -17,8 +17,8 @@ logger.info("Cloud init started")
 Jenkins jenkins = Jenkins.getInstance()
 
 netMap = [:]
-netMap['us-east-2b'] = 'subnet-04356480646777b55'
-netMap['us-east-2c'] = 'subnet-00b3df129e7d8c658'
+netMap['us-east-2b'] = 'subnet-05be3728311d11363' // TF VPC vpc-07959efa06543bd98
+netMap['us-east-2c'] = 'subnet-01267cd0c01aed343' // TF VPC vpc-07959efa06543bd98
 
 
 // TODO We use rhel label here, in reality it's a RHEL-compatible derivative.
