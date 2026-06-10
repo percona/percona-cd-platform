@@ -133,8 +133,8 @@ tf-state-versioning-check: _require-aws-profile
 # (arm) EC2-fleet siblings. Every module declared across terraform/master-*.tf
 # must appear here — omitting one silently excludes that master/fleet from the
 # plan. Source of truth is the `module "<x>"` blocks in terraform/master-*.tf:
-# full TF masters (ps57/ps80/pxb/pxc) carry both a master and an _arm_fleet;
-# ps3 and the still-CFN masters (cloud/pg/psmdb/rel) are _arm_fleet-only.
+# full TF masters (ps57/ps80/pxb/pxc/psmdb/rel/cloud/pmm) carry both a master
+# and an _arm_fleet; ps3 (in-cluster) and pg (still CFN) are _arm_fleet-only.
 # When a CFN master migrates to TF, add its `-target=module.<x>` line here.
 # There is intentionally NO tf-apply-masters: apply the full saved plan via
 # `just tf-plan` + `just tf-apply` after review.
@@ -145,10 +145,11 @@ tf-plan-masters: _require-aws-profile
       -target=module.ps80  -target=module.ps80_arm_fleet \
       -target=module.pxb   -target=module.pxb_arm_fleet \
       -target=module.pxc   -target=module.pxc_arm_fleet \
-      -target=module.cloud_arm_fleet \
-      -target=module.pg_arm_fleet \
-      -target=module.psmdb_arm_fleet \
-      -target=module.rel_arm_fleet
+      -target=module.psmdb -target=module.psmdb_arm_fleet \
+      -target=module.rel   -target=module.rel_arm_fleet \
+      -target=module.cloud -target=module.cloud_arm_fleet \
+      -target=module.pmm   -target=module.pmm_arm_fleet \
+      -target=module.pg_arm_fleet
 
 # ---------- gitops / yaml ----------
 yaml-lint:
