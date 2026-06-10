@@ -486,14 +486,15 @@ resource "aws_iam_user" "worker" {
   }
 }
 
+# No prevent_destroy: flipping create_eip=false deliberately releases the
+# address (the masters are reached via the ALB for HTTPS and SSM for shell;
+# the subnet auto-assigns a dynamic public IPv4 for outbound). Disassociate
+# the address from the running instance BEFORE the destroying apply: user-data
+# associates it at boot, and releasing an associated address fails.
 resource "aws_eip" "master" {
   count  = var.create_eip ? 1 : 0
   domain = "vpc"
   tags   = local.base_tags
-
-  lifecycle {
-    prevent_destroy = true
-  }
 
   depends_on = [aws_vpc.this]
 }
