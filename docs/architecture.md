@@ -407,8 +407,11 @@ tainted. Two MNGs + two Karpenter NodePools.
 | `lgtm-stateful` | Karpenter NodePool, on-demand | us-east-1a | Mimir, Loki, Tempo ingesters; store-gateway; compactor |
 | `general` | Karpenter NodePool, spot + on-demand | us-east-1a | Stateless LGTM, web frontends, NGINX proxy, reconciler |
 
-Karpenter pools are single-AZ because their workloads carry EBS volumes that
-must follow the pod; multi-AZ there would require EFS (not provisioned).
+The Karpenter pools and the `prometheus_system` MNG are pinned to
+us-east-1a for the same reason: their workloads carry EBS volumes that must
+follow the pod, and multi-AZ there would require EFS (not provisioned).
+Only the `bootstrap` MNG is multi-AZ; everything stateful is on-demand, and
+spot appears only in the `general` pool.
 
 ### Storage
 
