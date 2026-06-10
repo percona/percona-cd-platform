@@ -51,6 +51,10 @@ hosts:
     region: us-west-2
     tag: jenkins-psmdb
     port: 8080
+  - name: rel
+    region: eu-west-1
+    tag: jenkins-rel
+    port: 8080
 
 resources:
   requests:
