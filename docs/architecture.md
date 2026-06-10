@@ -12,7 +12,7 @@
         Mode A (in-cluster)               Mode B (proxy → EC2)
                 │                                │
                 ▼                                ▼
-        StatefulSet jenkins-<host>      Deployment jenkins-proxy-<host>
+        StatefulSet jenkins-<host>      jenkins-ingress NGINX (shared)
         (tier lgtm-stateful*,                       │
          AZ us-east-1a, gp3 PVC)                    ▼
                                           K8s Service jenkins-<host>
@@ -23,7 +23,7 @@
                                           CronJob, every minute)
                                                     │
                                                     ▼
-                                          EC2 Jenkins master in
+                                          EC2 Jenkins master :8080 in
                                           another region (peered VPC)
 ```
 
@@ -36,7 +36,8 @@ table below.
 
 | Host(s) | Role | Notes |
 |---|---|---|
-| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `pg`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 origin) | Friendly DNS points at the ALB; the proxy `proxy_pass`es to `origin-<host>.cd.percona.com`, which resolves to the EC2 master. The `jenkins-endpoint-reconciler` CronJob keeps each per-host K8s Service's EndpointSlice in sync with the live EC2 master IP (re-runs every minute, survives SpotFleet replacement). |
+| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | Mode B (ALB → in-cluster NGINX → EC2 master) | Friendly DNS points at the ALB; the shared `jenkins-ingress` NGINX proxies to the per-host K8s Service, whose EndpointSlice the `jenkins-endpoint-reconciler` CronJob keeps in sync with the live EC2 master's private IP (re-runs every minute, survives instance replacement). The masters are single on-demand instances, Terraform-managed (`terraform/master-<host>.tf`), and EIP-less: the public IPv4 is subnet-auto-assigned and dynamic (shell via SSM, [`runbooks/master-shell-access.md`](runbooks/master-shell-access.md)); pxc exceptionally keeps an EIP for an inbound JNLP agent pinned to it. |
+| `pg.cd.percona.com` | Legacy direct path (NOT migrated, deferred by decision) | DNS points at the master's own EIP; on-box openresty + certbot terminate TLS. Still CloudFormation (`Percona-Lab/jenkins-pipelines/IaC/pg.cd/`) on a SpotFleet. The only master left on this shape. |
 | `ps3.cd.percona.com` | Mode A (in-cluster StatefulSet) | First master moved in-cluster, and the only one served directly by the pod. The shared ALB routes `ps3.cd` straight to `jenkins-ps3-k8s-0`; there is no Mode B proxy or EC2 origin in the path. Seeded from the former EC2 `ps3` via a cross-region EBS snapshot copy of `JENKINS_HOME`. See [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md). |
 | `grafana.cd.percona.com`, `argocd.cd.percona.com` | In-cluster Service behind the same ALB | Platform UIs. |
 
@@ -115,9 +116,13 @@ depend on them apply after. `cert-manager` is intentionally out of scope, see
 
 ## EC2 master resilience
 
-The EC2 Jenkins masters are spot instances. The platform layers four
-mechanisms so a spot recycle does not lose in-flight pipelines or
-strand workers:
+The eight Terraform-managed masters run as single ON-DEMAND instances
+(`purchasing_option` in `master-<host>.tf`), which ended the master-side
+spot reclamations; only pg's legacy CFN master still rides a SpotFleet.
+Worker-side spot interruptions are handled separately (`retry(agent())`
+in the pipelines plus `disableTaskResubmit=true` on every arm fleet).
+The four master-side mechanisms below were built for the spot era and
+are retained as defense-in-depth for any abrupt instance loss:
 
 1. **Capacity Rebalancing on the SpotFleet** — AWS launches a replacement
    on a rebalance recommendation (minutes to hours of advance warning),
@@ -166,6 +171,7 @@ reboot despite rehydrate) in [`ec2-master-resilience.md`](ec2-master-resilience.
 - [`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md) — cross-region EBS snapshot lift
 - [`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md) — retire the ps3 EC2 spot master + re-parent its substrate
 - [`runbooks/add-jenkins-host.md`](runbooks/add-jenkins-host.md) — bring a new Jenkins host onto the shared ALB
+- [`runbooks/master-shell-access.md`](runbooks/master-shell-access.md) — shell on a master (`just ssh`, SSM, dynamic IPs, ps3 kubectl)
 - [`runbooks/jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md) — per-master SSL cutover
 - [`runbooks/disaster-recovery.md`](runbooks/disaster-recovery.md) — cluster recovery procedures
 - [`runbooks/restore-mimir.md`](runbooks/restore-mimir.md) — Mimir block restore from S3
