@@ -96,6 +96,27 @@ follow the pod. Multi-AZ HA there requires EFS (not provisioned).
 LGTM long-term data lives in S3 (Mimir blocks, Loki chunks, Tempo
 traces). Ingester ring + WAL use ephemeral EBS via `gp3`.
 
+### Master JENKINS_HOME volumes
+
+The volume IS the master's identity; the compute around it is disposable.
+
+- **EC2 masters (8):** one EBS data volume per master
+  (`module.<host>.aws_ebs_volume.data` in `terraform/master-<host>.tf`),
+  carried over from the CloudFormation era via `tofu import` during each
+  cutover. It holds jobs, credentials, plugins, and `init.groovy.d`;
+  user-data attaches and mounts it at boot, so instance replacement is
+  routine and the volume persists. EBS is AZ-bound: the volume pins the
+  master's AZ (`az_index` must match it, load-bearing on every
+  migration/rebuild). Protection: Terraform `prevent_destroy`,
+  `PerconaKeep=True` plus a `... DATA, do not remove` Name (both exempt
+  it from the volume reaper), and `ignore_changes` on the encryption
+  attributes (legacy volumes stay as-is; newly created ones are
+  encrypted).
+- **In-cluster (ps3):** `JENKINS_HOME` is a PVC on `gp3-jenkins-1a-retain`
+  (Retain reclaim), backed up by a daily CSI VolumeSnapshot via the
+  `snapscheduler` addon with a validated restore drill
+  ([ADR 0028](adr/0028-jenkins-dynamic-config-data-lifecycle.md)).
+
 ## ArgoCD Applications
 
 App-of-Apps (`argocd-bootstrap/root`) fans out to ApplicationSets that
