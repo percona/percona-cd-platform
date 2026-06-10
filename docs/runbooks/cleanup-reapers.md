@@ -170,6 +170,20 @@ false` on the relevant instantiation in `volume-cleanup.tf` or
 so the function is never triggered. Reserved concurrency `1` already guarantees a
 stuck run cannot overlap the next schedule.
 
+## Other reapers in the account (not ours)
+
+This repo's two reapers are not the only cleanup automation in the
+account. The cloud team runs an hourly `deleteOrphaned*` Lambda suite
+(eu-west-3) that terminates running instances tagged `team=cloud`
+without a `delete-cluster-after-hours` TTL tag, assuming they are
+orphaned OpenShift test clusters; sibling functions sweep VPC contents
+and CloudFormation stacks the same way. It terminated the first
+Terraform cloud.cd master within an hour of its cutover, which is why
+that master is tagged `team=cloud-cd`. Before giving any new resource a
+`team` value, check what automation matches it. PMM also keeps two
+legacy volume-cleanup functions on the shared `EventVolumeCleanup` rule
+(next section).
+
 ## Shared-rule caution: do not delete `EventVolumeCleanup`
 
 The legacy volume-cleanup stack's EventBridge rule `EventVolumeCleanup`
