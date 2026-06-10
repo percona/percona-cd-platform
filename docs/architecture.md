@@ -126,42 +126,48 @@ flowchart TB
     lgtm -. "push model, bearer auth" .- masters
 ```
 
-**Fronting modes.** Master DNS points at the dedicated `jenkins-masters` ALB
-group; platform UIs (Grafana, ArgoCD, Authentik) and the observability push
-receivers ride the separate `jenkins-cd` group, so master rule churn cannot
-break platform ingress. Neither ALB is hand-managed: the **AWS Load Balancer
-Controller** provisions and reconciles both from Kubernetes Ingress objects.
-One Ingress per host carries the host rule; the `group.name` annotation
-merges Ingresses into their shared ALB, and external-dns publishes the
-records. Host rules and group definitions are therefore code:
-`resources/addons/jenkins-ingress/` (its values file is the canonical
-description of the `jenkins-masters` group) and the per-addon Ingress
-annotations for `jenkins-cd`; onboarding a host is
+**Fronting modes at a glance.** Every controller is reached one of three
+ways; the table is the map, details follow.
+
+| Mode | Hosts | Path | Status |
+|---|---|---|---|
+| A: in-cluster | `ps3` | ALB to pod, directly | Target shape for every controller; proof of concept |
+| B: proxied EC2 | `pmm`, `ps57`, `ps80`, `psmdb`, `pxb`, `pxc`, `rel`, `cloud` | ALB to in-cluster NGINX, then VPC peering to the EC2 controller | Today's production; transitional by design |
+| Legacy direct | `pg` | DNS to the master's own EIP, on-box TLS | Pre-migration shape; last master to move |
+
+**Shared ingress (modes A and B).** Master DNS points at the dedicated
+`jenkins-masters` ALB group; platform UIs (Grafana, ArgoCD, Authentik) and
+the observability push receivers ride the separate `jenkins-cd` group, so
+master rule churn cannot break platform ingress. Neither ALB is
+hand-managed: the **AWS Load Balancer Controller** provisions and reconciles
+both from Kubernetes Ingress objects. One Ingress per host carries the host
+rule; the `group.name` annotation merges Ingresses into their shared ALB,
+and external-dns publishes the records. Host rules and group definitions are
+therefore code: `resources/addons/jenkins-ingress/` (its values file is the
+canonical description of the `jenkins-masters` group) and the per-addon
+Ingress annotations for `jenkins-cd`; onboarding a host is
 [`runbooks/add-jenkins-host.md`](runbooks/add-jenkins-host.md).
 
-Mode A (`ps3`): the ALB routes straight to the in-cluster pod. This is the
-target shape for every controller; today it is still a proof of concept
+**Mode A: in-cluster.** The ALB routes straight to the controller pod. This
+is the target shape for every controller; today it is a proof of concept
 carried by ps3 alone, and no further master moves in-cluster until it has
-proven itself. Mode B (the
-eight EC2 controllers): a shared in-cluster NGINX proxies over cross-region
-VPC peering to the controller's private IP, kept current by a reconciler
-that tracks instance replacement.
+proven itself.
 
-**Why an NGINX hop at all.** ALB target groups with `target-type: ip` can
-only point at addresses inside the cluster VPC, and the masters live in
-five other regions. The NGINX Deployment is that in-VPC hop: a stateless
-data-plane proxy (plain nginx, no Jenkins role) forwarding to each master's
-private IP over the peering. It is distinct from the AWS Load Balancer
-Controller, which is control plane only (it writes ALB configuration and
-never carries traffic). The third piece, the `jenkins-endpoint-reconciler`
-CronJob, is also control plane: it polls EC2 by tag each minute and writes
-the master's current private IP into the Service's EndpointSlice, so
-instance replacement converges without DNS changes. The entire Mode B chain
-is transitional: every controller that moves in-cluster deletes its share
-of the proxy, the reconciliation, and the peering.
+**Mode B: proxied EC2.** A shared in-cluster NGINX proxies over cross-region
+VPC peering to the controller's private IP. The hop exists because ALB
+target groups with `target-type: ip` can only point at addresses inside the
+cluster VPC, and the masters live in five other regions. The NGINX
+Deployment is a stateless data-plane proxy (plain nginx, no Jenkins role),
+distinct from the AWS Load Balancer Controller, which is control plane only.
+The third piece, the `jenkins-endpoint-reconciler` CronJob, is also control
+plane: it polls EC2 by tag each minute and writes the controller's current
+private IP into the Service's EndpointSlice, so instance replacement
+converges without DNS changes. The entire Mode B chain is transitional:
+every controller that moves in-cluster deletes its share of the proxy, the
+reconciliation, and the peering.
 
-`pg` predates the migration: DNS points at its own EIP with on-box TLS,
-still CloudFormation-managed in jenkins-pipelines. Details:
+**Legacy direct.** `pg` predates the migration: DNS points at its own EIP
+with on-box TLS, still CloudFormation-managed in jenkins-pipelines. Details:
 [`connectivity.md`](connectivity.md), [`tls-strategy.md`](tls-strategy.md).
 
 **Internal network.** The private topology is a hub and spoke: the EKS cell
