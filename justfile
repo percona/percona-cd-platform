@@ -234,6 +234,59 @@ status:
 sync-all:
     argocd app list -o name | xargs -n1 argocd app sync
 
+# ---------- jenkins master shell (SSM) ----------
+# The master hostnames resolve to the shared jenkins-masters ALB (HTTPS only),
+# so plain `ssh <inst>.cd.percona.com` no longer reaches an EKS-fronted master.
+# These recipes resolve the master instance by its billing tag in its home
+# region and go through SSM (no inbound :22 needed). The interactive session
+# needs the session-manager-plugin installed locally. pmm keeps the legacy
+# jenkins-pmm-amzn2 tag; ps3 is the in-cluster controller (kubectl exec).
+_ssm-resolve inst:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{inst}}" in
+      pmm)   region=us-east-2;    tag=jenkins-pmm-amzn2 ;;
+      psmdb) region=us-west-2;    tag=jenkins-psmdb ;;
+      ps80)  region=us-west-2;    tag=jenkins-ps80 ;;
+      pxb)   region=us-west-2;    tag=jenkins-pxb ;;
+      pxc)   region=us-west-1;    tag=jenkins-pxc ;;
+      ps57)  region=eu-central-1; tag=jenkins-ps57 ;;
+      pg)    region=eu-central-1; tag=jenkins-pg ;;
+      rel)   region=eu-west-1;    tag=jenkins-rel ;;
+      cloud) region=eu-west-1;    tag=jenkins-cloud ;;
+      ps3)   echo "ps3 is in-cluster: kubectl --context {{cluster}} -n jenkins exec -it jenkins-ps3-k8s-0 -- bash" >&2; exit 2 ;;
+      *)     echo "unknown instance '{{inst}}'" >&2; exit 2 ;;
+    esac
+    id=$(aws ec2 describe-instances --region "$region" \
+      --filters "Name=tag:iit-billing-tag,Values=$tag" "Name=instance-state-name,Values=running" \
+      --query 'Reservations[].Instances[].InstanceId' --output text)
+    [ -n "$id" ] && [ "$(wc -w <<< "$id")" -eq 1 ] \
+      || { echo "expected exactly one running '$tag' instance in $region, got: '${id:-none}'" >&2; exit 1; }
+    echo "$region $id"
+
+# Interactive shell on a master. Usage: just ssm pmm
+ssm inst: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -r region id <<< "$(just _ssm-resolve {{inst}})"
+    echo "session -> {{inst}} ($id, $region)" >&2
+    exec aws ssm start-session --target "$id" --region "$region"
+
+# One-shot root command on a master via SSM RunCommand; prints status,
+# stdout and stderr when the invocation finishes.
+# Usage: just ssm-run pmm 'systemctl status jenkins | head -5'
+ssm-run inst cmd: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -r region id <<< "$(just _ssm-resolve {{inst}})"
+    params=$(python3 -c 'import json,sys; print(json.dumps({"commands": [sys.argv[1]]}))' {{quote(cmd)}})
+    cid=$(aws ssm send-command --region "$region" --instance-ids "$id" \
+      --document-name AWS-RunShellScript --parameters "$params" \
+      --query Command.CommandId --output text)
+    aws ssm wait command-executed --command-id "$cid" --instance-id "$id" --region "$region" || true
+    aws ssm get-command-invocation --command-id "$cid" --instance-id "$id" --region "$region" \
+      --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+
 # ---------- Karpenter validation ----------
 # Systematic before/during/after harness for scale-up + scale-down.
 # Plan: ~/.claude/plans/hashed-shimmying-crane.md.
