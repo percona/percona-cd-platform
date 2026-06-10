@@ -17,9 +17,9 @@ logger.info("Cloud init started")
 Jenkins jenkins = Jenkins.getInstance()
 
 netMap = [:]
-netMap['us-west-2a'] = 'subnet-086a759af174241ac'
-netMap['us-west-2b'] = 'subnet-03136d8c244f56036'
-netMap['us-west-2c'] = 'subnet-09103aa8678a054f7'
+netMap['us-west-2a'] = 'subnet-0777bf4ef1b471abe' // TF VPC vpc-08eb4de1376aba839 (10.188.0.0/24)
+netMap['us-west-2b'] = 'subnet-0c3f94b95538a5984' // TF VPC vpc-08eb4de1376aba839 (10.188.1.0/24)
+netMap['us-west-2c'] = 'subnet-07f71e1a3117a32f9' // TF VPC vpc-08eb4de1376aba839 (10.188.2.0/24)
 
 imageMap = [:]
 imageMap['micro-amazon']     = 'ami-06a974f9b8a97ecf2'
