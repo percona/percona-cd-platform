@@ -9,7 +9,6 @@ locals {
 
   # Derived hostnames for external-dns + ALB Ingresses (no hardcoded host strings elsewhere).
   jenkins_friendly_hosts = [for h, _ in var.jenkins_hosts : "${h}.${var.route53_zone_name}"]
-  jenkins_origin_hosts   = [for h, c in var.jenkins_hosts : c.upstream_origin if try(c.upstream_origin, "") != ""]
 
   # State bucket name — single source of truth referenced by docs/runbooks/.
   # Native S3 locking (use_lockfile in backend.tf) writes a sibling .tflock
