@@ -34,7 +34,7 @@ locals {
     argo_cd = {
       repo = "https://argoproj.github.io/argo-helm"
       name = "argo-cd"
-      ver  = "9.5.9"
+      ver  = "9.5.11"
     }
     aws_load_balancer_controller = {
       repo = "https://aws.github.io/eks-charts"

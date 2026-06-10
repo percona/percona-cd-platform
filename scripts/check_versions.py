@@ -78,7 +78,7 @@ def main() -> int:
         rows.append(Pin(name, pinned, latest, date, status(pinned, latest)))
 
     helm_charts = [
-        ("argo-cd chart", "argoproj/argo-helm", "argo-cd-", "9.5.9"),
+        ("argo-cd chart", "argoproj/argo-helm", "argo-cd-", "9.5.11"),
         ("prometheus-operator-crds chart", "prometheus-community/helm-charts", "prometheus-operator-crds-", "28.0.1"),
         ("kube-state-metrics chart", "prometheus-community/helm-charts", "kube-state-metrics-", "7.3.0"),
         ("prometheus-node-exporter chart", "prometheus-community/helm-charts", "prometheus-node-exporter-", "4.55.0"),
