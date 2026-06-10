@@ -394,7 +394,7 @@ Proposed ADR when picked up.
 | `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | B: ALB to in-cluster NGINX to EC2 controller | Single on-demand instances, Terraform-managed (`terraform/master-<host>.tf`), EIP-less (dynamic public IP, shell via SSM). pxc exceptionally keeps an EIP for a pinned inbound JNLP agent |
 | `pg.cd.percona.com` | Legacy direct | Own EIP, on-box openresty + certbot, CloudFormation SpotFleet (`Percona-Lab/jenkins-pipelines/IaC/pg.cd/`). The only remaining master on this shape |
 | `ps3.cd.percona.com` | A: in-cluster StatefulSet (PoC) | Served directly by the pod. Seeded from the former EC2 master via cross-region EBS snapshot ([`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md)). The EC2 pet was retired 2026-06-07, and its still-load-bearing substrate moved to `jenkins-arm-standalone` ([`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md)) |
-| `grafana.cd.percona.com`, `argocd.cd.percona.com` | In-cluster services | Platform UIs behind the same ALB |
+| `grafana.cd.percona.com`, `argo.cd.percona.com`, `auth.cd.percona.com` | In-cluster services | Platform UIs on the `jenkins-cd` ALB group |
 
 ### Compute topology (EKS cell)
 

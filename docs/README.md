@@ -46,6 +46,7 @@ Step-by-step procedures for operational tasks.
 - [`bootstrap-state.md`](runbooks/bootstrap-state.md): pre-creating the state bucket + lock
 - [`decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md): retire the ps3 EC2 spot master, re-parent its substrate (done 2026-06-07)
 - [`disaster-recovery.md`](runbooks/disaster-recovery.md): cluster recovery procedures
+- [`argocd-admin-recovery.md`](runbooks/argocd-admin-recovery.md): ArgoCD admin break-glass when SSO is down
 - [`eks-upgrade.md`](runbooks/eks-upgrade.md): control plane + node group upgrades
 - [`grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md): Grafana OAuth cutover
 - [`jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md): per-master SSL cutover to the shared ALB
