@@ -130,26 +130,22 @@ tf-state-versioning-check: _require-aws-profile
     [ "${status}" = "Enabled" ] || { echo "ERROR: state bucket versioning is '${status}', expected 'Enabled' — STOP and enable it before any apply." >&2; exit 1; }
 
 # PLAN-ONLY, read-only review of the Jenkins master modules and their Graviton
-# (arm) EC2-fleet siblings. Every module declared across terraform/master-*.tf
-# must appear here — omitting one silently excludes that master/fleet from the
-# plan. Source of truth is the `module "<x>"` blocks in terraform/master-*.tf:
-# full TF masters (ps57/ps80/pxb/pxc/psmdb/rel/cloud/pmm) carry both a master
-# and an _arm_fleet; ps3 (in-cluster) and pg (still CFN) are _arm_fleet-only.
-# When a CFN master migrates to TF, add its `-target=module.<x>` line here.
+# (arm) EC2-fleet siblings. The -target list is DERIVED from the
+# `module "<x>"` blocks in terraform/master-*.tf, so a newly migrated master
+# joins the sweep automatically and can never be silently excluded (the
+# hand-maintained list missed all four masters of one migration wave).
 # There is intentionally NO tf-apply-masters: apply the full saved plan via
 # `just tf-plan` + `just tf-apply` after review.
 tf-plan-masters: _require-aws-profile
-    tofu -chdir=terraform plan \
-      -target=module.ps3_arm_fleet \
-      -target=module.ps57  -target=module.ps57_arm_fleet \
-      -target=module.ps80  -target=module.ps80_arm_fleet \
-      -target=module.pxb   -target=module.pxb_arm_fleet \
-      -target=module.pxc   -target=module.pxc_arm_fleet \
-      -target=module.psmdb -target=module.psmdb_arm_fleet \
-      -target=module.rel   -target=module.rel_arm_fleet \
-      -target=module.cloud -target=module.cloud_arm_fleet \
-      -target=module.pmm   -target=module.pmm_arm_fleet \
-      -target=module.pg_arm_fleet
+    #!/usr/bin/env bash
+    set -euo pipefail
+    targets=()
+    for m in $(grep -hoE '^module "[a-z0-9_]+"' terraform/master-*.tf | cut -d'"' -f2 | sort); do
+      targets+=("-target=module.${m}")
+    done
+    [ "${#targets[@]}" -gt 0 ] || { echo "ERROR: no module blocks found in terraform/master-*.tf" >&2; exit 1; }
+    echo "planning ${#targets[@]} master/fleet modules"
+    tofu -chdir=terraform plan "${targets[@]}"
 
 # ---------- gitops / yaml ----------
 yaml-lint:

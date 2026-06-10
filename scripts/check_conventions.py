@@ -4,7 +4,11 @@
 Asserts, fail-closed:
   1. Every terraform/*.tf and terraform/modules/*/main.tf starts with an
      `# Owner: <value>` banner from the allowed set.
-  2. Every master-<inst>.tf banner matches the instance -> team map.
+  2. Every master-<inst>.tf banner matches the instance -> team map, and
+     every `team = "<value>"` module argument in master-<inst>.tf matches the
+     per-instance team TAG map (cloud tags team=cloud-cd so the cloud team's
+     orphan-cleanup lambdas never match the master or its workers; the Owner
+     banner stays `cloud`).
   3. No `Copyright` line in any .tf (Percona's own IaC carries no headers;
      copyright headers belong to product source via .licenserc.yaml).
   4. No `CLAUDE.md` reference in .tf text (gotcha numbers renumber; cite an
@@ -57,8 +61,18 @@ INSTANCE_TEAM = {
     "pmm": "pmm",
 }
 
+# Expected `team = "<value>"` module argument per instance: INSTANCE_TEAM,
+# except cloud. The cloud team's hourly orphan-cleanup lambdas terminate any
+# running instance tagged team=cloud that lacks a TTL tag, so cloud resources
+# tag team=cloud-cd instead (docs/runbooks/cleanup-reapers.md, foreign
+# reapers). Only the tag value diverges; the Owner banner stays "cloud".
+INSTANCE_TEAM_TAG = {**INSTANCE_TEAM, "cloud": "cloud-cd"}
+
 BANNER_RE = re.compile(r"^# Owner: ([a-z0-9-]+)$")
 TICKET_RE = re.compile(r"\b(?:PS|PKG|PXB|PG)-\d+\b")
+# Anchored at line start so `team=cloud` inside comment prose never matches;
+# only real module-argument assignment lines do.
+TEAM_ARG_RE = re.compile(r'^\s*team\s*=\s*"([a-z0-9-]+)"')
 
 
 def banner_files() -> list[pathlib.Path]:
@@ -94,6 +108,18 @@ def main() -> int:
                 errors.append(f"{rel}:1  instance {inst!r} not in INSTANCE_TEAM map")
             elif owner != want:
                 errors.append(f"{rel}:1  owner {owner!r} but instance {inst!r} belongs to {want!r}")
+            if want is not None:
+                want_tag = INSTANCE_TEAM_TAG[inst]
+                team_args = [
+                    (n, m.group(1))
+                    for n, line in enumerate(path.read_text().splitlines(), start=1)
+                    if (m := TEAM_ARG_RE.match(line))
+                ]
+                if not team_args:
+                    errors.append(f'{rel}  no `team = "..."` module argument (expected {want_tag!r})')
+                for n, got in team_args:
+                    if got != want_tag:
+                        errors.append(f"{rel}:{n}  team {got!r} but instance {inst!r} must tag team={want_tag!r}")
 
     for path in all_tf_files():
         rel = path.relative_to(REPO)
