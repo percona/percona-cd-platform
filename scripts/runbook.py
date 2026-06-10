@@ -117,6 +117,11 @@ def rb_template_change(args):
             sys.exit(0)
         if run(["just", "tf-apply"]).returncode != 0:
             die("tf-apply failed")
+    # The saved plan is consumed (or moot); tofu rejects stale plans anyway,
+    # so a lingering terraform/tfplan only confuses the next run.
+    plan_file = os.path.join(ROOT, "terraform", "tfplan")
+    if os.path.exists(plan_file):
+        os.remove(plan_file)
     evaluate_live(inst, src, args.yes)
     print("\nVERIFY:")
     print(f"  1. Probe build on the changed label (the only real proof).")
