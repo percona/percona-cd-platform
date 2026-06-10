@@ -190,30 +190,59 @@ degrades web access and observability, not running builds.
 
 ## Egress and endpoints
 
-- Master VPCs have no NAT: instances sit on public subnets and egress via
-  the IGW with auto-assigned addresses. S3 traffic (init-config fetch,
-  build caches) rides each VPC's S3 gateway endpoint instead.
-- The EKS hub egresses through a single NAT gateway (us-east-1a) and keeps
-  interface endpoints for `ecr.api`, `ecr.dkr`, `sts`, and `ec2`. The S3
-  gateway endpoint serves the private route tables.
+Two deliberate egress models coexist, chosen by traffic shape.
+
+- **Master VPCs are NAT-less.** Masters and workers sit on public subnets
+  and egress directly through the IGW with auto-assigned addresses. The
+  reasoning is volume and exposure: build fleets pull packages, images,
+  and sources at build volume, and a NAT gateway would add an hourly
+  charge plus a per-GB processing fee on all of it, while inbound exposure
+  is already controlled by security groups rather than subnet privacy.
+  The CloudFormation era used the same shape, so the migration preserved
+  it. S3 traffic (init-config fetch, build caches) bypasses the IGW
+  entirely through each VPC's free S3 gateway endpoint.
+- **The EKS hub is the opposite model.** Pods live on private subnets
+  behind a single NAT gateway in us-east-1a. The single-AZ collapse
+  (2026-05) was measured, not guessed: all stateful workloads were already
+  pinned to 1a, the S3 gateway endpoint absorbs the bulk of egress (ECR
+  layer pulls, Helm charts), and residual NAT traffic across the previous
+  three gateways was about 0.4 MB over 30 days, so two NATs were dropped
+  for roughly 64 USD/month idle savings. Interface endpoints for
+  `ecr.api`, `ecr.dkr`, `sts`, and `ec2` keep control-plane chatter off
+  the NAT. Further interface endpoints are deferred until the NAT bill
+  warrants them (`docs/eks-hardening.md`, item 11).
 - Shell access is [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) (the agent dials out on :443 with no inbound
   required). Direct SSH exists only inside `ssh_allowed_cidrs`
   ([`runbooks/master-shell-access.md`](runbooks/master-shell-access.md)).
 
 ## DNS ownership
 
-- Zone `cd.percona.com` is looked up, never created, by this repo.
+Three writers share the `cd.percona.com` zone, and the boundaries are
+mechanical, not conventional.
+
+- The zone itself is looked up, never created, by this repo.
 - [external-dns](https://kubernetes-sigs.github.io/external-dns/latest/) owns every friendly hostname (sources Ingress + Service,
-  `policy: sync`, `txtOwnerId: percona-ci-platform`, scoped to the one
-  zone).
+  `policy: sync`, scoped to the one zone). Ownership is enforced through
+  its TXT registry: each managed record is paired with a TXT record
+  stamped `txtOwnerId: percona-ci-platform`, and the sync policy only
+  creates, updates, or deletes records carrying that stamp. Records it
+  does not own, such as the CloudFormation-era `pg.cd` entry or anything
+  predating the platform, are invisible to it and cannot be clobbered.
 - Terraform owns only the ACM validation records and the dormant
   `origin-<host>` fallbacks. The module's own EIP A-record path is disabled
-  on every master (`create_route53_record = false`).
+  on every master (`create_route53_record = false`), so no master ever
+  publishes its raw address.
 
 ## EIP policy
 
-EIP-less is the default: the module skips address association and the
-master rides its subnet-auto-assigned public IPv4 (web via the ALB, shell
-via SSM, so the address may change on replacement and nothing should pin
-it). Exceptions: pxc keeps one EIP for the inbound JNLP agent above, and
-pg's addressing lives with its CloudFormation stack outside this repo.
+EIP-less is the default, for one structural reason: with the ALB owning
+web access and SSM owning shell access, a stable public IPv4 serves no
+remaining purpose on a master. The module skips address association and
+the master rides its subnet-auto-assigned public IPv4, which may change on
+any instance replacement. The operational rule that follows is absolute:
+nothing may pin to a master's public address, and discovery is always
+live (`just ssh` lists the current addresses). Dropping the four wave EIPs
+also removed their hourly public-IPv4 charges, but the pinning hazard was
+the real motive. Exceptions: pxc keeps one EIP because an inbound JNLP
+agent is pinned to it (see the worker-plane table), and pg's addressing
+lives with its CloudFormation stack outside this repo.
