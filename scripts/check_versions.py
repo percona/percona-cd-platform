@@ -137,7 +137,7 @@ def main() -> int:
         ("kubeconform", "yannh/kubeconform", "v", "TBD"),
         ("aws-cli v2", "aws/aws-cli", "", "TBD"),
         ("argo-cd core", "argoproj/argo-cd", "v", "(via chart)"),
-        ("external-secrets", "external-secrets/external-secrets", "v", "TBD"),
+        ("external-secrets", "external-secrets/external-secrets", "v", "2.5.0"),
         ("trivy", "aquasecurity/trivy", "v", "TBD"),
         ("just", "casey/just", "", "TBD"),
         ("yamllint", "adrienverge/yamllint", "v", "TBD"),
