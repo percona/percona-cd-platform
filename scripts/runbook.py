@@ -44,8 +44,16 @@ def gate_clean_main():
     run(["git", "fetch", "origin", "-q"])
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     main = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=ROOT, text=True).strip()
-    dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
+    dirty = [
+        line for line in subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=ROOT, text=True).splitlines()
+        # tofu init refreshes platform hashes in the tracked lock file on
+        # every operator machine; that is not a content change to gate on.
+        if line.strip() and not line.endswith("terraform/.terraform.lock.hcl")
+    ]
     if head != main or dirty:
+        for line in dirty:
+            print(f"  dirty: {line}", file=sys.stderr)
         die("run from a clean checkout of origin/main (merge the PR first; runbooks start post-merge)")
 
 
