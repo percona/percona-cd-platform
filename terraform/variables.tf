@@ -162,11 +162,21 @@ variable "jenkins_hosts" {
     # pxc upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps3/ps57.
     pxc = { mode = "proxy" }
-    pxb = { mode = "proxy", upstream_origin = "origin-pxb.cd.percona.com" }
+    # pxb upstream discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), like its siblings; the
+    # origin-pxb record no longer exists. Re-add upstream_origin only for a
+    # Mode B fallback.
+    pxb = { mode = "proxy" }
     # psmdb upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps57/pxc.
     psmdb = { mode = "proxy" }
-    pg    = { mode = "proxy", upstream_origin = "origin-pg.cd.percona.com" }
+    # pg is still CFN-managed and pg.cd DNS points at its own EC2 master:
+    # no in-cluster fronting exists today. This entry is staged plumbing for
+    # the eventual migration; nothing renders from it until the
+    # endpoint-reconciler watches pg or an origin target is pinned in
+    # var.jenkins_origin_targets. Re-add upstream_origin only for a Mode B
+    # fallback.
+    pg = { mode = "proxy" }
     # ps57 upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps3. Re-add
     # upstream_origin only for a Mode B fallback.
