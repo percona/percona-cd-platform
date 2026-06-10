@@ -8,6 +8,16 @@ operational procedures in the [runbooks](#runbooks), and decision history in
 the [ADRs](adr/). Each diagram shows one zoom level and omits everything that
 belongs to a deeper one.
 
+**The platform in one paragraph.** Ten product-isolated Jenkins controllers
+across five AWS regions, drawing build capacity on demand from AWS spot,
+Graviton fleets, and Hetzner Cloud, are fronted, authenticated, and observed
+by a single EKS shared-services cell in us-east-1. Everything is declared in
+two repositories and converged automatically: OpenTofu owns the AWS
+substrate, ArgoCD owns the cluster. The fleet is mid-iteration, from
+CloudFormation pets, through today's Terraform-managed EC2 controllers,
+toward controllers running as pods, with strictly fewer moving parts at
+each step.
+
 ## System context
 
 The platform builds, tests, signs, and distributes database software for every
