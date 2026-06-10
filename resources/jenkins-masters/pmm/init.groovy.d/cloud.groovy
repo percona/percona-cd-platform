@@ -95,7 +95,7 @@ priceMap['t2.large']    = '0.045'
 priceMap['t3.xlarge']   = '0.065'
 priceMap['t3.large']    = '0.035'
 priceMap['m4.large']    = '0.060'
-priceMap['m7a.large']   = '0.044' // amd64 instance type - vCPU=2, memory=8GiB, saving=73%, interruption='<5%', price=0.03
+priceMap['m7a.large']   = '0.070' // amd64 instance type - vCPU=2, memory=8GiB; max bid with headroom over the us-east-2b spot floor (0.0472 on 2026-06-10), still well under on-demand 0.1156
 priceMap['m6a.large']   = '0.050' // amd64 fallback for min-*-x64 labels (PMM-15066) - vCPU=2, memory=8GiB
 priceMap['m7i.large']   = '0.050' // amd64 fallback for min-*-x64 labels (PMM-15066) - vCPU=2, memory=8GiB
 priceMap['m7gd.large']  = '0.042' // arm64 instance type - vCPU=2, memory=8GiB, saving=63%, interruption='<5%', price=0.03
