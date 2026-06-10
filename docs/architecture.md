@@ -64,6 +64,22 @@ product's CI. Nothing in the platform may introduce a dependency that
 violates this for build execution (see
 [failure domains](#quality-attributes-and-failure-domains)).
 
+**Direction of travel.** The current shape is a deliberate intermediate
+step, not the destination. The trajectory runs: CloudFormation spot pets
+(one master left) -> Terraform-managed on-demand EC2 controllers behind
+shared ingress (today's eight) -> **controllers running as pods in the
+cluster** (the end goal, being proven by ps3). Each migration step is an
+iteration that keeps the identity volume and deletes hand-tended
+infrastructure around it; the EC2-specific plumbing documented below exists
+to serve the middle step and is designed to be removed as controllers move
+in-cluster ([ADR 0024](adr/0024-jenkins-fleet-ownership-boundary.md)).
+The end state has strictly fewer moving parts per controller: no NGINX hop,
+no endpoint reconciler, no cross-region peering, no per-master VPC,
+user-data, or SSM config sync; plugins arrive baked into a locked,
+automatically bumped image instead of being hand-fed to a JVM;
+configuration is JCasC rendered from git; and the identity volume becomes
+a snapshotted PVC with a rehearsed restore.
+
 ## Platform overview
 
 Two repositories produce the platform; one shared-services cell fronts and
@@ -113,9 +129,10 @@ description of the `jenkins-masters` group) and the per-addon Ingress
 annotations for `jenkins-cd`; onboarding a host is
 [`runbooks/add-jenkins-host.md`](runbooks/add-jenkins-host.md).
 
-Mode A (`ps3`): the ALB routes straight to the in-cluster pod. The
-in-cluster model is still a proof of concept carried by ps3 alone; no
-further master moves in-cluster until it has proven itself. Mode B (the
+Mode A (`ps3`): the ALB routes straight to the in-cluster pod. This is the
+target shape for every controller; today it is still a proof of concept
+carried by ps3 alone, and no further master moves in-cluster until it has
+proven itself. Mode B (the
 eight EC2 controllers): a shared in-cluster NGINX proxies over cross-region
 VPC peering to the controller's private IP, kept current by a reconciler
 that tracks instance replacement.
@@ -129,7 +146,9 @@ Controller, which is control plane only (it writes ALB configuration and
 never carries traffic). The third piece, the `jenkins-endpoint-reconciler`
 CronJob, is also control plane: it polls EC2 by tag each minute and writes
 the master's current private IP into the Service's EndpointSlice, so
-instance replacement converges without DNS changes.
+instance replacement converges without DNS changes. The entire Mode B chain
+is transitional: every controller that moves in-cluster deletes its share
+of the proxy, the reconciliation, and the peering.
 
 `pg` predates the migration: DNS points at its own EIP with on-box TLS,
 still CloudFormation-managed in jenkins-pipelines. Details:
