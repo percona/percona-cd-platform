@@ -264,6 +264,31 @@ _ssm-resolve inst:
       || { echo "expected exactly one running '$tag' instance in $region, got: '${id:-none}'" >&2; exit 1; }
     echo "$region $id"
 
+# Shell entrypoint. `just ssh` discovers the reachable masters live from AWS
+# (running instances carrying a jenkins-* billing tag, worker tags filtered
+# out); `just ssh <inst>` opens the SSM session (alias for `just ssm`).
+ssh inst="": _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{inst}}" ]; then exec just ssm {{inst}}; fi
+    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+    for region in us-east-2 us-west-1 us-west-2 eu-west-1 eu-central-1; do
+      ( aws ec2 describe-instances --region "$region" \
+          --filters 'Name=tag:iit-billing-tag,Values=jenkins-*' 'Name=instance-state-name,Values=running' \
+          --query 'Reservations[].Instances[].[Tags[?Key==`iit-billing-tag`]|[0].Value,InstanceId,PrivateIpAddress,PublicIpAddress]' \
+          --output text | awk -v r="$region" '$1 !~ /-(worker|slave)/ {
+            inst=$1; sub(/^jenkins-/,"",inst); sub(/-amzn2$/,"",inst);
+            print inst, r, $2, $3, ($4=="None"?"-":$4)
+          }' > "$tmp/$region" ) &
+    done
+    wait
+    { echo "INSTANCE REGION INSTANCE-ID PRIVATE-IP PUBLIC-IP"
+      sort "$tmp"/*
+      echo "ps3 us-east-1 in-cluster:jenkins-ps3-k8s-0 - -"
+    } | column -t
+    echo >&2
+    echo "usage: just ssh <instance> | just ssm-run <instance> '<cmd>'  (ps3: kubectl exec)" >&2
+
 # Interactive shell on a master. Usage: just ssm pmm
 ssm inst: _require-aws-profile
     #!/usr/bin/env bash
