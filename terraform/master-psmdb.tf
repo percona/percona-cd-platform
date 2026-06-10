@@ -95,12 +95,6 @@ module "psmdb" {
   }
 }
 
-# One-shot adopt of the retained CFN data volume (JENKINS_HOME). Remove this
-# block after the cutover apply lands.
-import {
-  to = module.psmdb.aws_ebs_volume.data
-  id = "vol-090299a14ad3da940"
-}
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned Fleet-only while psmdb was CFN-managed; now

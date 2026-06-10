@@ -91,12 +91,6 @@ module "rel" {
   }
 }
 
-# One-shot adopt of the retained CFN data volume (JENKINS_HOME). Remove this
-# block after the cutover apply lands.
-import {
-  to = module.rel.aws_ebs_volume.data
-  id = "vol-01b7479079f91c010"
-}
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback (rel also serves release builds on that label). Pre-provisioned
