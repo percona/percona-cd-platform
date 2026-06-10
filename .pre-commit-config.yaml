@@ -20,18 +20,6 @@ repos:
       - id: terraform_validate
         args: [--hook-config=--retry-once-with-cleanup=true]
 
-  - repo: https://github.com/terraform-linters/tflint
-    rev: v0.62.0
-    hooks:
-      - id: tflint
-        args: [--recursive]
-
-  - repo: https://github.com/aquasecurity/trivy
-    rev: v0.70.0
-    hooks:
-      - id: trivy-config
-        args: [--severity, "HIGH,CRITICAL", terraform/]
-
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
@@ -44,16 +32,28 @@ repos:
     hooks:
       - id: actionlint
 
-  - repo: https://github.com/woodruffw/zizmor
-    rev: v1.24.1
-    hooks:
-      - id: zizmor
-        args: [--quiet]
-
-  # ADR 0029: keep each master's committed JCasC clouds configScript in sync with
-  # the shared catalog and free of YAML anchors/aliases (JCasC SnakeYAML caps at 50).
+  # Local hooks. tflint is intentionally NOT run: its terraform plugin can't
+  # parse this repo's OpenTofu 1.8+ early-eval module sourcing (see the justfile
+  # tf-validate comment and .github/workflows/ci.yml). trivy and zizmor upstreams
+  # ship no .pre-commit-hooks.yaml by design (aquasecurity/trivy#6368), so they
+  # run via the canonical justfile recipes — the single source of truth shared
+  # with `just ci`. A manifest-less remote repo here breaks loading of ALL hooks.
   - repo: local
     hooks:
+      - id: trivy-config
+        name: trivy config scan (mirrors `just tf-trivy`)
+        entry: just tf-trivy
+        language: system
+        pass_filenames: false
+        files: ^terraform/.*\.tf$
+      - id: zizmor
+        name: zizmor GitHub Actions audit (mirrors `just zizmor`)
+        entry: just zizmor
+        language: system
+        pass_filenames: false
+        files: ^\.github/workflows/.*\.ya?ml$
+      # ADR 0029: keep each master's committed JCasC clouds configScript in sync with
+      # the shared catalog and free of YAML anchors/aliases (JCasC SnakeYAML caps at 50).
       - id: clouds-render-check
         name: clouds-catalog drift + no-alias check (ADR 0029)
         entry: uv run --with pyyaml python3 scripts/render-clouds.py check ps3
