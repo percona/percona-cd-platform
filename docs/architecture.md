@@ -440,12 +440,26 @@ App-of-Apps (`argocd-bootstrap/root`) fans out to ApplicationSets reconciling
 
 ### Resilience mechanisms (EC2 controllers)
 
-Defense-in-depth retained from the spot era, still active for any abrupt
-instance loss: capacity-rebalancing replacement, a graceful-drain hook on
-interruption notice, `MAX_SURVIVABILITY` pipeline durability, and Hetzner
-worker re-adoption after a controller restart. Mechanics and edge cases:
-[`ec2-master-resilience.md`](ec2-master-resilience.md); readiness audit:
-`scripts/check-master-spot-readiness.sh`.
+The controllers no longer run on spot, but the defenses built for that era
+stay active and cover any abrupt instance loss:
+
+- **Replacement before interruption.** Capacity rebalancing requests a
+  substitute when AWS signals reclaim risk, ahead of the two-minute notice
+  (relevant to pg, the one master still on a SpotFleet).
+- **Graceful drain.** A boot-installed hook watches instance metadata for
+  an interruption notice and runs quiet-down, wait, safe-exit, so running
+  builds checkpoint instead of dying mid-step.
+- **Pipelines survive a dead JVM.** Durability is forced to
+  `MAX_SURVIVABILITY` at every start; after an abrupt stop, builds resume
+  at the same pipeline step once the controller returns.
+- **Workers outlive the controller.** After a restart, the patched Hetzner
+  plugin re-adopts surviving workers instead of reaping them, and
+  per-datacenter circuit-breaker state is restored from disk.
+
+Mechanics and edge cases:
+[`ec2-master-resilience.md`](ec2-master-resilience.md). Readiness audit:
+`scripts/check-master-spot-readiness.sh`, run before declaring a master
+able to absorb an interrupt.
 
 ### Codemap
 
