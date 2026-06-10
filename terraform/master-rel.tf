@@ -26,7 +26,11 @@ module "rel" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
-  cache_bucket_name       = "rel-build-cache"
+  # rel workers have no S3 build cache: the CFN-era default named a
+  # rel-build-cache bucket that was never created. null drops the dead
+  # worker IAM grant (the existing rel-repo-cache bucket is separate and
+  # not wired through this module).
+  cache_bucket_name = null
 
   # Retained CFN data volume vol-01b7479079f91c010 is 100 GiB gp2 in
   # eu-west-1b. ebs_type must be gp2 (not the module default gp3) so the

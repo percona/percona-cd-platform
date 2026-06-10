@@ -87,7 +87,7 @@ variable "allocation_strategy" {
 }
 
 variable "cache_bucket_name" {
-  description = "Worker build cache S3 bucket. null disables the worker S3 IAM policy (pxc/pxb)."
+  description = "Worker build cache S3 bucket. null disables the worker S3 IAM policy (pxb/rel/cloud)."
   type        = string
   default     = null
 }
