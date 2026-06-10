@@ -130,7 +130,7 @@ variable "ssh_allowed_cidrs" {
 }
 
 variable "create_eip" {
-  description = "Create a stable EIP. ps3=false (ALB owns HTTPS, SSM owns SSH); non-cutover masters keep true. When false the SpotFleet picks a random public IPv4 each rotation and user-data skips associate-address."
+  description = "Create a stable EIP. Only pxc keeps true (test-chaos-vm inbound JNLP pins to its EIP); the rest of the fleet is EIP-less, with the subnet auto-assigning a dynamic public IPv4 and user-data skipping associate-address."
   type        = bool
   default     = false
 }
@@ -154,7 +154,7 @@ variable "jenkins_package_version" {
 }
 
 variable "create_termination_queue" {
-  description = "Create SQS + EventBridge spot-interruption queue. psmdb=false."
+  description = "Create SQS + EventBridge spot-interruption queue. All masters keep the default; spot-era defence-in-depth retained while the fleet runs on-demand."
   type        = bool
   default     = true
 }
@@ -172,13 +172,13 @@ variable "extra_subnet_a" {
 }
 
 variable "create_worker_user" {
-  description = "Create an IAM User (JWorkerUser). Only pmm."
+  description = "Create an IAM User (JWorkerUser). Reserved and fail-closed unimplemented in main.tf; no master sets it."
   type        = bool
   default     = false
 }
 
 variable "plugin_install_hook" {
-  description = "Optional plugins.groovy URL fetched into init.groovy.d at boot (pxc). null skips."
+  description = "Optional plugins.groovy URL fetched into init.groovy.d at boot. Unused by every master (psmdb ships plugins.groovy through init_groovy_files instead). null skips."
   type        = string
   default     = null
 }

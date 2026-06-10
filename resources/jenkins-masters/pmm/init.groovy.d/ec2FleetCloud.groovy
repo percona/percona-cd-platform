@@ -4,8 +4,8 @@
 // plugin) as a Jenkins Cloud serving the `docker-32gb-aarch64` label on pmm.
 // Uniform multi-SKU fallback path with ps3/ps57/ps80/pxc.
 //
-// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the CFN-managed
-// jenkins-pmm-amzn2-master role by the standalone TF block in
+// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the
+// module-managed jenkins-pmm-amzn2-master role by the standalone TF block in
 // terraform/master-pmm.tf (jenkins-arm-fleet module) in percona-cd-platform.
 // The plugin uses the master IAM instance profile (`awsCredentialsId = ""`).
 //

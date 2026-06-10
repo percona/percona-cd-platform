@@ -24,12 +24,12 @@ locals {
   al2023_minimal_param = "/aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-6.1-x86_64"
 }
 
-data "aws_ssm_parameter" "al2023_minimal_usw2" { # us-west-2: ps80, pxb
+data "aws_ssm_parameter" "al2023_minimal_usw2" { # us-west-2: ps80, pxb, psmdb
   provider = aws.us-west-2
   name     = local.al2023_minimal_param
 }
 
-data "aws_ssm_parameter" "al2023_minimal_euw1" { # eu-west-1: ps3
+data "aws_ssm_parameter" "al2023_minimal_euw1" { # eu-west-1: rel, cloud
   provider = aws.eu-west-1
   name     = local.al2023_minimal_param
 }

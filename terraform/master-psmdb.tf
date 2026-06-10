@@ -13,8 +13,9 @@
 # psmdb-specific deltas: fresh VPC reusing the same 10.188.0.0/22 (the CIDR
 # is fleet-unique, freed when the CFN stack deletes); legacy JSlave naming
 # (the worker instance profile is jenkins-psmdb-slave, referenced by name in
-# cloud.groovy); a third subnet in AZ a (the CFN VPC carried a/b/c and
-# cloud.groovy's netMap binds workers to all three). The retained 300 GiB
+# cloud.groovy); a third subnet in AZ a (the CFN VPC carried a/b/c;
+# cloud.groovy's netMap maps all three, the classic EC2 cloud instantiates
+# only AZ b, and the ARM fleet spreads across every subnet). The retained 300 GiB
 # gp2 data volume is imported in us-west-2b (az_index 1, the module default;
 # EBS is AZ-bound so the on-demand instance lands there too).
 module "psmdb" {

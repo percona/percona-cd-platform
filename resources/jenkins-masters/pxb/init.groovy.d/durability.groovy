@@ -28,7 +28,7 @@
  * write path on a fresh master, and the resulting save() materialises
  * the on-disk XML.
  *
- * Scope: ps3 canary only. PS-11173 Phase 2.
+ * Scope: fleet-wide (every master ships this file; originally the ps3 canary).
  */
 import org.jenkinsci.plugins.workflow.flow.FlowDurabilityHint
 import jenkins.model.Jenkins
