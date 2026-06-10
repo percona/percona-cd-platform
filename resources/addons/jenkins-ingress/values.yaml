@@ -87,6 +87,13 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: rel.cd.percona.com
+  - name: cloud
+    # EndpointSlice kept in sync with the live cloud master private IP by the
+    # jenkins-endpoint-reconciler over the eu-west-1 <-> us-east-1 peering.
+    upstream: jenkins-cloud.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: cloud.cd.percona.com
 
 ingress:
   # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`

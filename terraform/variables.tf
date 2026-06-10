@@ -171,8 +171,10 @@ variable "jenkins_hosts" {
     ps57 = { mode = "proxy" }
     # rel upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps57/pxc/psmdb.
-    rel   = { mode = "proxy" }
-    cloud = { mode = "proxy", upstream_origin = "origin-cloud.cd.percona.com" }
+    rel = { mode = "proxy" }
+    # cloud upstream discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), like ps80/ps57/pxc/psmdb/rel.
+    cloud = { mode = "proxy" }
 
     # ps3-k8s = the in-cluster Jenkins master serving ps3.cd. Seeded as a full
     # replica of the former EC2 ps3 via a cross-region EBS snapshot copy of
