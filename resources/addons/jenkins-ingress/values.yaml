@@ -73,6 +73,13 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pxc.cd.percona.com
+  - name: psmdb
+    # EndpointSlice kept in sync with the live psmdb master private IP by the
+    # jenkins-endpoint-reconciler over the us-west-2 <-> us-east-1 peering.
+    upstream: jenkins-psmdb.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: psmdb.cd.percona.com
 
 ingress:
   # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`

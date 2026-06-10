@@ -159,9 +159,11 @@ variable "jenkins_hosts" {
     # served by the in-cluster controller "ps3-k8s" below.
     # pxc upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps3/ps57.
-    pxc   = { mode = "proxy" }
-    pxb   = { mode = "proxy", upstream_origin = "origin-pxb.cd.percona.com" }
-    psmdb = { mode = "proxy", upstream_origin = "origin-psmdb.cd.percona.com" }
+    pxc = { mode = "proxy" }
+    pxb = { mode = "proxy", upstream_origin = "origin-pxb.cd.percona.com" }
+    # psmdb upstream discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), like ps80/ps57/pxc.
+    psmdb = { mode = "proxy" }
     pg    = { mode = "proxy", upstream_origin = "origin-pg.cd.percona.com" }
     # ps57 upstream discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), like ps80/ps3. Re-add
