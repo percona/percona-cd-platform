@@ -207,9 +207,9 @@ zizmor:
 check-versions:
     uv run --with pyyaml --with python-hcl2 python3 scripts/check_versions.py
 
-# Gated runbook automations (docs/runbooks/common-operations.md).
-# `just runbook` lists subcommands: automated ones enforce their gates
-# mechanically, guided ones confirm each step before running it.
+# Gated runbook automations (docs/runbooks/common-operations.md, lands with
+# the docs PR). `just runbook` lists subcommands: automated ones enforce
+# their gates mechanically, guided ones confirm each step before running it.
 runbook *ARGS:
     uv run --no-project python3 scripts/runbook.py {{ARGS}}
 
