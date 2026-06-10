@@ -54,10 +54,10 @@ module "cloud" {
   launch_template_name = "CLOUDMasterTemplateTF"
 
   # EKS-fronted for HTTP: DNS is external-dns -> ALB -> private IP over
-  # peering, admin via paws/SSM. create_eip stays true through the cutover
-  # (SSH path once the hostname resolves to the ALB); flipping to the
-  # ps80-style EIP-less shape is a follow-up.
-  create_eip            = true
+  # peering, admin via SSM (`just ssh`). EIP-less like ps80/ps57/pxb: the
+  # subnet auto-assigns a dynamic public IPv4 for outbound, discovered live
+  # via `just ssh` when direct ssh is needed.
+  create_eip            = false
   create_route53_record = false
 
   extra_master_managed_policies = [
