@@ -700,7 +700,10 @@ String region = 'eu-west-1'
             // getTemplate('min-hirsute-x64-zenfs', "${region}${it}"),
             getTemplate('min-focal-x64-zenfs',   "${region}${it}"),
             getTemplate('min-bionic-x64-zenfs',  "${region}${it}"),
-            getTemplate('docker-32gb-aarch64',   "${region}${it}"),
+            // docker-32gb-aarch64 retired from the classic plugin: the arm-graviton
+            // Fleet (ec2FleetCloud.groovy) is the sole provider for that label, so the
+            // two providers cannot race the same queue item.
+            // getTemplate('docker-32gb-aarch64',   "${region}${it}"),
             getTemplate('docker-64gb-aarch64',   "${region}${it}"),
             getTemplate('min-al2023-aarch64',    "${region}${it}"),
             getTemplate('min-jammy-aarch64',     "${region}${it}"),
