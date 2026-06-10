@@ -204,6 +204,13 @@ zizmor:
 check-versions:
     uv run --with pyyaml --with python-hcl2 python3 scripts/check_versions.py
 
+# Verify every active master (k8s / tf-managed / cf-managed) is shipping metrics
+# to Mimir via Alloy. Masters enumerated dynamically from repo source-of-truth;
+# per-master freshness read from the in-cluster Mimir query-frontend. Read-only.
+# Pass-through args: --max-age <s>, --json.
+check-master-alloy *ARGS:
+    uv run --no-project python3 scripts/check-master-alloy-mimir.py {{ARGS}}
+
 # Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
 # is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
 clouds-render-check:
