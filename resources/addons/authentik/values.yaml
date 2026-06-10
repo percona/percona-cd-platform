@@ -37,6 +37,14 @@ authentik:
       - secretRef:
           name: authentik-config
 
+    # Security pin: app 2026.2.4 carries the fixes for CVE-2026-49448 (9.8
+    # auth bypass) and CVE-2026-40165 / CVE-2026-47201 (SAML bypasses, on the
+    # live Duo SAML path). No 2026.2.4 chart exists (2026.2.3 is the newest
+    # 2026.2.x), so the image tag overrides the chart appVersion default.
+    # Remove this override once the chart catches up.
+    image:
+      tag: "2026.2.4"
+
     # Stateful — Authentik's session store + bootstrap admin live in
     # the bundled Postgres. Karpenter consolidation MUST NOT preempt;
     # if Authentik is down, every internal app's auth path is down.
