@@ -103,7 +103,7 @@ flowchart TB
 
     subgraph masters["Jenkins controllers (5 regions)"]
         ps3["ps3: in-cluster StatefulSet<br/>(Mode A, PoC)"]
-        ec2m["8 EC2 on-demand controllers<br/>pmm, ps57, ps80, psmdb,<br/>pxb, pxc, rel, cloud (Mode B)"]
+        ec2m["8 EC2 on-demand controllers<br/>pmm, ps57, ps80, psmdb,<br/>pxb, pxc, rel, cloud<br/>(Mode B, transitional)"]
         pg["pg: legacy CloudFormation<br/>SpotFleet, direct DNS"]
     end
 
@@ -200,7 +200,9 @@ invariant that build execution does not depend on the cell (see
 
 Every controller is an instance of the same repeating unit
 (`terraform/modules/jenkins-master`, instantiated once per
-`terraform/master-<host>.tf`). Compute is disposable; identity is the volume.
+`terraform/master-<host>.tf`). Compute is disposable; identity is the
+volume. The EC2 instantiation of the cell is the intermediate form; the pod
+instantiation (ps3 today) is the target form of the same unit.
 
 ```mermaid
 flowchart TB
@@ -294,6 +296,10 @@ dashboarded in Grafana. Full path and conventions:
 The standing decisions that shape the platform, each with the alternative it
 displaced. Full records in [`adr/`](adr/).
 
+- **Iterative migration**, not a big-bang re-platform. Each step (CFN spot
+  to TF on-demand to pods) keeps the identity volume, deletes hand-tended
+  infrastructure, and is validated by gates before the next; the cost is
+  living with transitional plumbing in the middle step.
 - **One controller per product**, not one shared controller. Isolation and
   per-team cadence over consolidation; fleet-wide work costs more.
 - **On-demand controllers, spot workers.** Paying for controller stability
@@ -315,6 +321,10 @@ displaced. Full records in [`adr/`](adr/).
 
 ## Risks and technical debt
 
+Most of these are properties of the intermediate step and retire as
+controllers move in-cluster; they are listed because the middle step is
+today's production.
+
 - `pg` remains on CloudFormation and a SpotFleet, with on-box TLS; its
   migration must follow the live-IAM-parity preflight.
 - Eight identity volumes are irreplaceable state; snapshots exist, but the
@@ -329,7 +339,8 @@ displaced. Full records in [`adr/`](adr/).
   yet rehearsed end to end.
 - Plugin state is declarative only for the in-cluster controller (locked
   manifest, baked image, automated bump PRs); the EC2 controllers are still
-  updated by operator action.
+  updated by operator action. The end state resolves this per migrated
+  controller; an interim AMI-bake for the EC2 fleet is an open question.
 
 ## Open questions
 
