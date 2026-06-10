@@ -195,6 +195,18 @@ variable "init_groovy_files" {
   default     = {}
 }
 
+variable "init_groovy_template_files" {
+  description = "init.groovy.d files rendered with templatefile() before upload, as a map of filename => .tftpl path. Template variables: subnet_by_az_name (AZ name => subnet id, from this module's subnets) and vpc_id. Lets netMap subnet IDs in cloud.groovy come from state instead of hand-edited literals, so a VPC or subnet replacement re-renders the S3 object in the same apply. Rendered entries merge OVER init_groovy_files on filename collision. Escape literal Groovy GStrings as $${...} in the template. Empty skips."
+  type        = map(string)
+  default     = {}
+}
+
+variable "init_groovy_sync_schedule" {
+  description = "SSM schedule expression (e.g. rate(30 minutes)). When set and init.groovy.d S3 delivery is active, an SSM State Manager association periodically syncs the init-config bucket into /mnt/<hostname>/init.groovy.d on the master, so post-boot S3 changes (e.g. a re-rendered netMap) reach the EBS copy without an instance replacement and a JVM restart always loads current canonical. Additive sync, no deletes. Null disables."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Per-master tag overrides. The module-set keys (Name, iit-billing-tag, team) win over this map."
   type        = map(string)

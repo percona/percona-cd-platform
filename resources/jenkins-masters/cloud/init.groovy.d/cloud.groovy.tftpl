@@ -18,8 +18,9 @@ logger.info("Cloud init started")
 Jenkins jenkins = Jenkins.getInstance()
 
 netMap = [:]
-netMap['eu-west-1b'] = 'subnet-01f77a4d3d41ae88e' // TF VPC vpc-0051d3c81a0092919
-netMap['eu-west-1c'] = 'subnet-05bf6f11349d94a9c' // TF VPC vpc-0051d3c81a0092919
+%{ for az, sid in subnet_by_az_name ~}
+netMap['${az}'] = '${sid}' // TF VPC ${vpc_id}
+%{ endfor ~}
 
 imageMap = [:]
 imageMap['eu-west-1a.docker']                = 'ami-05247819264504af0'
@@ -68,14 +69,14 @@ initMap['docker'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -132,14 +133,14 @@ initMap['docker-32gb'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -188,32 +189,32 @@ initMap['docker-32gb'] = '''
     sudo service docker status || sudo service docker start
     echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
     CRI_DOCKERD_LATEST_VERSION=$(curl -s https://api.github.com/repos/Mirantis/cri-dockerd/releases/latest|grep tag_name | cut -d '"' -f 4 | grep -Eo '([0-9].)+[0-9]')
-    sudo curl -Lo /tmp/cri-dockerd-${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz https://github.com/Mirantis/cri-dockerd/releases/download/v${CRI_DOCKERD_LATEST_VERSION}/cri-dockerd-${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz
-    sudo tar xvfz /tmp/cri-dockerd-${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz -C /tmp/
+    sudo curl -Lo /tmp/cri-dockerd-$${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz https://github.com/Mirantis/cri-dockerd/releases/download/v$${CRI_DOCKERD_LATEST_VERSION}/cri-dockerd-$${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz
+    sudo tar xvfz /tmp/cri-dockerd-$${CRI_DOCKERD_LATEST_VERSION}.amd64.tgz -C /tmp/
     sudo mv /tmp/cri-dockerd/cri-dockerd /usr/bin
     sudo chmod +x /usr/bin/cri-dockerd
-    sudo curl -Lo /etc/systemd/system/cri-docker.service https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${CRI_DOCKERD_LATEST_VERSION}/packaging/systemd/cri-docker.service
-    sudo curl -Lo /etc/systemd/system/cri-docker.socket https://raw.githubusercontent.com/Mirantis/cri-dockerd/v${CRI_DOCKERD_LATEST_VERSION}/packaging/systemd/cri-docker.socket
+    sudo curl -Lo /etc/systemd/system/cri-docker.service https://raw.githubusercontent.com/Mirantis/cri-dockerd/v$${CRI_DOCKERD_LATEST_VERSION}/packaging/systemd/cri-docker.service
+    sudo curl -Lo /etc/systemd/system/cri-docker.socket https://raw.githubusercontent.com/Mirantis/cri-dockerd/v$${CRI_DOCKERD_LATEST_VERSION}/packaging/systemd/cri-docker.socket
     sudo systemctl daemon-reload
     sudo systemctl enable cri-docker.service
     sudo systemctl enable --now cri-docker.socket
     sudo systemctl start cri-docker.service
     CRICTL_LATEST_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/cri-tools/releases/latest|grep tag_name | cut -d '"' -f 4)
-    sudo curl -Lo /tmp/crictl-${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_LATEST_VERSION}/crictl-${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz
-    sudo tar xvfz /tmp/crictl-${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz -C /usr/bin/
+    sudo curl -Lo /tmp/crictl-$${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz https://github.com/kubernetes-sigs/cri-tools/releases/download/$${CRICTL_LATEST_VERSION}/crictl-$${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz
+    sudo tar xvfz /tmp/crictl-$${CRICTL_LATEST_VERSION}-linux-amd64.tar.gz -C /usr/bin/
 '''
 initMap['micro-amazon'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     until sudo yum makecache; do
@@ -233,14 +234,14 @@ initMap['min-al2023-x64'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -393,7 +394,7 @@ String region = 'eu-west-1'
 ('b'..'c').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
     EC2Cloud ec2Cloud = new EC2Cloud(
-        "AWS-Dev ${it}",                        // String cloudName
+        "AWS-Dev $${it}",                        // String cloudName
         true,                                   // boolean useInstanceProfileForCredentials
         '',                                     // String credentialsId
         region,                                 // String region
@@ -401,15 +402,15 @@ String region = 'eu-west-1'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('docker',              "${region}${it}"),
-            getTemplate('docker-32gb',         "${region}${it}"),
-            getTemplate('micro-amazon',        "${region}${it}"),
-            getTemplate('min-al2023-x64',      "${region}${it}"),
+            getTemplate('docker',              "$${region}$${it}"),
+            getTemplate('docker-32gb',         "$${region}$${it}"),
+            getTemplate('micro-amazon',        "$${region}$${it}"),
+            getTemplate('min-al2023-x64',      "$${region}$${it}"),
             // docker-32gb-aarch64 retired from the classic plugin: the arm-graviton
             // Fleet (ec2FleetCloud.groovy) is the sole provider for that label, so the
             // two providers cannot race the same queue item.
-            // getTemplate('docker-32gb-aarch64', "${region}${it}"),
-            getTemplate('min-al2023-aarch64',  "${region}${it}"),
+            // getTemplate('docker-32gb-aarch64', "$${region}$${it}"),
+            getTemplate('min-al2023-aarch64',  "$${region}$${it}"),
         ],                                       // List<? extends SlaveTemplate> templates
         '',
         ''

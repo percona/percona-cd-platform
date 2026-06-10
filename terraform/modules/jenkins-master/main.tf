@@ -117,21 +117,39 @@ data "aws_iam_policy_document" "s3_endpoint" {
   }
 }
 
-# init.groovy.d delivery bucket (opt-in via var.init_groovy_files). One
-# private, versioned bucket per master, co-located in the master's region so
-# the boot-time `aws s3 cp` transits the existing S3 gateway VPC endpoint
-# (aws_vpc_endpoint.s3) rather than NAT egress. Terraform uploads the objects
-# with the operator's creds; the master role only gets read (see the
-# InitGroovyConfig statement on data.aws_iam_policy_document.master below).
+# init.groovy.d delivery bucket (opt-in via init_groovy_files and/or
+# init_groovy_template_files). One private, versioned bucket per master,
+# co-located in the master's region so the boot-time `aws s3 cp` transits the
+# existing S3 gateway VPC endpoint (aws_vpc_endpoint.s3) rather than NAT
+# egress. Terraform uploads the objects with the operator's creds; the master
+# role only gets read (see the InitGroovyConfig statement on
+# data.aws_iam_policy_document.master below).
+#
+# Template entries render with this module's own network identities, so a
+# subnet or VPC replacement re-renders the uploaded object in the same apply
+# instead of relying on a hand-edited literal catching up later (the
+# "re-apply re-stales netMap" failure class). Rendered entries win over raw
+# init_groovy_files on filename collision.
+locals {
+  init_groovy_rendered = {
+    for name, path in var.init_groovy_template_files :
+    name => templatefile(path, {
+      subnet_by_az_name = { for k, s in aws_subnet.this : s.availability_zone => s.id }
+      vpc_id            = aws_vpc.this.id
+    })
+  }
+  init_groovy_all = merge(var.init_groovy_files, local.init_groovy_rendered)
+}
+
 resource "aws_s3_bucket" "init_config" {
-  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  count  = length(local.init_groovy_all) > 0 ? 1 : 0
   bucket = "${var.short_name}-init-config"
 
   tags = local.base_tags
 }
 
 resource "aws_s3_bucket_versioning" "init_config" {
-  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  count  = length(local.init_groovy_all) > 0 ? 1 : 0
   bucket = aws_s3_bucket.init_config[0].id
   versioning_configuration {
     status = "Enabled"
@@ -139,7 +157,7 @@ resource "aws_s3_bucket_versioning" "init_config" {
 }
 
 resource "aws_s3_bucket_public_access_block" "init_config" {
-  count                   = length(var.init_groovy_files) > 0 ? 1 : 0
+  count                   = length(local.init_groovy_all) > 0 ? 1 : 0
   bucket                  = aws_s3_bucket.init_config[0].id
   block_public_acls       = true
   block_public_policy     = true
@@ -150,7 +168,7 @@ resource "aws_s3_bucket_public_access_block" "init_config" {
 # etag = md5(content) so a content change re-uploads the object. Key mirrors
 # the on-disk layout the boot path writes to (init.groovy.d/<filename>).
 resource "aws_s3_object" "init_config" {
-  for_each = var.init_groovy_files
+  for_each = local.init_groovy_all
 
   bucket  = aws_s3_bucket.init_config[0].id
   key     = "init.groovy.d/${each.key}"
@@ -158,6 +176,36 @@ resource "aws_s3_object" "init_config" {
   etag    = md5(each.value)
 
   tags = local.base_tags
+}
+
+# Post-boot drift gate for init.groovy.d. The user_data fetch runs once per
+# instance lifetime, so an S3 content change after boot (e.g. a re-rendered
+# netMap) otherwise sits undelivered until instance replacement and a JVM
+# restart silently loads the stale EBS copy (the 2026-06-10 cloud.cd
+# incident). The association re-syncs on a schedule; runs once immediately
+# on creation. Additive sync (no --delete): bucket-managed files converge,
+# files that exist only on disk survive.
+# On-demand masters only: the association targets the stable aws_instance id
+# (the spot path has no aws_instance and replaces instances on reclaim).
+resource "aws_ssm_association" "init_groovy_sync" {
+  count = var.init_groovy_sync_schedule != null && length(local.init_groovy_all) > 0 && var.purchasing_option == "on-demand" ? 1 : 0
+
+  name                = "AWS-RunShellScript"
+  association_name    = "${var.short_name}-init-groovy-sync"
+  schedule_expression = var.init_groovy_sync_schedule
+
+  targets {
+    key    = "InstanceIds"
+    values = [aws_instance.master[0].id]
+  }
+
+  parameters = {
+    commands = join("\n", [
+      "set -eu",
+      "aws s3 sync s3://${aws_s3_bucket.init_config[0].id}/init.groovy.d/ /mnt/${var.hostname}/init.groovy.d/",
+      "chown -R jenkins:jenkins /mnt/${var.hostname}/init.groovy.d",
+    ])
+  }
 }
 
 resource "aws_security_group" "ssh" {
@@ -396,7 +444,7 @@ data "aws_iam_policy_document" "master_read_termination_sqs" {
 # Read-only access to the init.groovy.d delivery bucket. Only the boot-time
 # `aws s3 cp` consumes this; the upload is done by Terraform, not the master.
 data "aws_iam_policy_document" "master_init_config" {
-  count = length(var.init_groovy_files) > 0 ? 1 : 0
+  count = length(local.init_groovy_all) > 0 ? 1 : 0
   statement {
     sid    = "InitGroovyConfig"
     effect = "Allow"
@@ -437,7 +485,7 @@ resource "aws_iam_role_policy" "master_read_termination_sqs" {
 }
 
 resource "aws_iam_role_policy" "master_init_config" {
-  count  = length(var.init_groovy_files) > 0 ? 1 : 0
+  count  = length(local.init_groovy_all) > 0 ? 1 : 0
   name   = "InitGroovyConfig"
   role   = aws_iam_role.master.id
   policy = data.aws_iam_policy_document.master_init_config[0].json
@@ -601,8 +649,8 @@ locals {
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
     init_groovy_hooks       = var.init_groovy_hooks
-    init_groovy_s3_bucket   = length(var.init_groovy_files) > 0 ? aws_s3_bucket.init_config[0].id : ""
-    init_groovy_files       = keys(var.init_groovy_files)
+    init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""
+    init_groovy_files       = keys(local.init_groovy_all)
   })
 }
 

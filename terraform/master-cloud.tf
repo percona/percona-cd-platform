@@ -89,14 +89,21 @@ module "cloud" {
   ]
 
   # Declarative init.groovy.d delivered via the module-created S3 bucket
-  # (jenkins-cloud-init-config). Content moved byte-identically off the live
-  # master's EBS copy; cloud.groovy's netMap subnet IDs are patched to the
-  # module-created subnets right after the first apply (the IDs do not exist
-  # before it). `jenkins iac deploy` stays the no-restart hot-reload path.
+  # (jenkins-cloud-init-config). cloud.groovy renders from a template, so its
+  # netMap subnet IDs come from module state instead of hand-edited literals
+  # (a subnet replacement re-renders the object in the same apply); the other
+  # files upload byte-identically from resources/. The SSM association
+  # re-syncs the bucket onto the EBS copy post-boot, so a JVM restart always
+  # loads current canonical. `jenkins iac deploy` stays the no-restart
+  # hot-reload path.
   init_groovy_files = {
     for f in fileset("${path.module}/../resources/jenkins-masters/cloud/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/cloud/init.groovy.d/${f}")
   }
+  init_groovy_template_files = {
+    "cloud.groovy" = "${path.module}/../resources/jenkins-masters/cloud/init.groovy.d/cloud.groovy.tftpl"
+  }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 
