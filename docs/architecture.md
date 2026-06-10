@@ -366,14 +366,13 @@ today's production.
 Unsettled points, listed here so they are visible; each graduates to a
 Proposed ADR when picked up.
 
-- **Mode B plumbing.** The reconciler loop is eventually consistent (about a
-  minute of 503s on instance replacement) and picks non-deterministically
-  when more than one instance matches the tag. Options: make the pick
-  deterministic and keep the loop; give each master a stable ENI so the
-  endpoint never changes and the reconciler retires; go event-driven
-  (EventBridge instance-state events); or accept it as-is because Mode A
-  eventually deletes the whole chain. Investment here trades against the
-  in-cluster timeline.
+- **Mode B plumbing.** The reconciler loop is eventually consistent (up to
+  about a minute of proxied 503s on instance replacement; multi-match is
+  handled by probing and preferring the newest serving instance). Options:
+  give each master a stable ENI so the endpoint never changes and the
+  reconciler retires; go event-driven (EventBridge instance-state events);
+  or accept the minute because Mode A eventually deletes the whole chain.
+  Investment here trades against the in-cluster timeline.
 - **In-cluster pace.** What ps3 must demonstrate (restore drill done; HA
   guards, PDB and preStop drain still pending per ADR 0025) before a second
   master moves, and which master goes next.
