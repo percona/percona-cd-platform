@@ -45,11 +45,12 @@ security group. A manual rule is stripped by the next `tofu apply`.
 
 ## ps3 (in-cluster)
 
-ps3 has no EC2 master. The controller is the `jenkins-ps3-k8s-0` pod:
+ps3 has no EC2 master; `just ssh ps3` and `just ssm-run ps3 '<cmd>'` exec into
+the controller pod's `jenkins` container directly (run `just kubeconfig` once
+first). The manual equivalent:
 
 ```sh
-just kubeconfig
-kubectl --context percona-ci-platform -n jenkins exec -it jenkins-ps3-k8s-0 -- bash
+kubectl --context percona-ci-platform -n jenkins-ps3-k8s exec -it jenkins-ps3-k8s-0 -c jenkins -- bash
 ```
 
 ## Background

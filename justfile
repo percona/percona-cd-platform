@@ -255,7 +255,7 @@ _ssm-resolve inst:
       pg)    region=eu-central-1; tag=jenkins-pg ;;
       rel)   region=eu-west-1;    tag=jenkins-rel ;;
       cloud) region=eu-west-1;    tag=jenkins-cloud ;;
-      ps3)   echo "ps3 is in-cluster: kubectl --context {{cluster}} -n jenkins exec -it jenkins-ps3-k8s-0 -- bash" >&2; exit 2 ;;
+      ps3)   echo "ps3 is in-cluster: use just ssh ps3 (kubectl exec into jenkins-ps3-k8s-0)" >&2; exit 2 ;;
       *)     echo "unknown instance '{{inst}}'" >&2; exit 2 ;;
     esac
     id=$(aws ec2 describe-instances --region "$region" \
@@ -290,20 +290,28 @@ ssh inst="": _require-aws-profile
     echo >&2
     echo "usage: just ssh <instance> | just ssm-run <instance> '<cmd>'  (ps3: kubectl exec)" >&2
 
-# Interactive shell on a master. Usage: just ssm pmm
+# Interactive shell on a master. EC2 masters go through SSM; in-cluster (k8s)
+# masters exec into the controller pod. Usage: just ssm pmm | just ssm ps3
 ssm inst: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
+    case "{{inst}}" in
+      ps3) echo "exec -> jenkins-ps3-k8s-0 (in-cluster)" >&2
+           exec kubectl --context {{cluster}} -n jenkins-ps3-k8s exec -it jenkins-ps3-k8s-0 -c jenkins -- bash ;;
+    esac
     read -r region id <<< "$(just _ssm-resolve {{inst}})"
     echo "session -> {{inst}} ($id, $region)" >&2
     exec aws ssm start-session --target "$id" --region "$region"
 
-# One-shot root command on a master via SSM RunCommand; prints status,
-# stdout and stderr when the invocation finishes.
+# One-shot root command on a master; SSM RunCommand for EC2 masters, kubectl
+# exec for in-cluster ones. Prints status, stdout and stderr.
 # Usage: just ssm-run pmm 'systemctl status jenkins | head -5'
 ssm-run inst cmd: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
+    case "{{inst}}" in
+      ps3) exec kubectl --context {{cluster}} -n jenkins-ps3-k8s exec jenkins-ps3-k8s-0 -c jenkins -- bash -c {{quote(cmd)}} ;;
+    esac
     read -r region id <<< "$(just _ssm-resolve {{inst}})"
     params=$(python3 -c 'import json,sys; print(json.dumps({"commands": [sys.argv[1]]}))' {{quote(cmd)}})
     cid=$(aws ssm send-command --region "$region" --instance-ids "$id" \
