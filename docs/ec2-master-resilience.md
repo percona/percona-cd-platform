@@ -109,12 +109,13 @@ JVM args`.
 ### 3. Plugin version drift
 
 The rehydrate code and the `LABEL_TEMPLATE_NAME` label were added in
-`v103.percona.22`. The nine production masters still on
-`v103.percona.16` / `.20` / `.21` do not have either, so even if the
-flag is set, the `@Initializer` class does not exist and the immediate
-cleanup is not deferred.
+`v103.percona.22`. Since 2026-06-10 the fleet runs a uniform
+`v103.percona.28`, so this failure class is dormant today. It returns
+whenever a master falls behind `v103.percona.22`: without the
+`@Initializer` class the flag is ignored and the immediate cleanup is
+not deferred.
 
-Fix is a fleet plugin upgrade; tracked separately.
+A lagging master needs the fleet plugin upgrade rolled to it.
 
 ### 4. Cloud config rename or drift
 

@@ -12,10 +12,10 @@
 # The TF module runs Jenkins on plain :8080 with no master-side TLS, so this
 # cut is EKS-fronted like ps3: TLS terminates at the jenkins-masters
 # ALB, reached over cross-region VPC peering on :8080. It also folds in the
-# resilience workstreams sequenced to land here: init.groovy.d auto-loading
-#, MAX_SURVIVABILITY + Hetzner rehydration, and the
-# Graviton ARM EC2 Fleet fallback. EIP/Route53 stay TRUE through
-# the cutover and flip to false at the Window-1 DNS step.
+# resilience workstreams sequenced to land here: init.groovy.d auto-loading,
+# MAX_SURVIVABILITY + Hetzner rehydration, and the Graviton ARM EC2 Fleet
+# fallback. EIP/Route53 stayed TRUE through the cutover and flipped to false
+# at the Window-1 DNS step.
 
 module "ps80" {
   source    = "./modules/jenkins-master"

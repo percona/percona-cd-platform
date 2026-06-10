@@ -97,8 +97,8 @@ module "pxc" {
   # resources/jenkins-masters/pxc/init.groovy.d/ is uploaded by Terraform and
   # pulled at boot, self-healing a fresh-volume rebuild. cloud.groovy is
   # simplified to pxc's used worker labels (map-driven, gp3 volumes),
-  # htz.cloud.groovy is a slim 1-x64 + 1-aarch64 skeleton (Hetzner is unused on
-  # pxc but the plugin stays for easy future templates), ec2FleetCloud points at
+  # htz.cloud.groovy carries the standard fleet Hetzner template set (x64 +
+  # CAX aarch64, same shape as the other masters), ec2FleetCloud points at
   # the Graviton ASG. `jenkins iac deploy` stays the no-restart hot-reload path.
   init_groovy_files = {
     for f in fileset("${path.module}/../resources/jenkins-masters/pxc/init.groovy.d", "*.groovy") :

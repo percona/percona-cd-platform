@@ -74,10 +74,11 @@ extract`) JSON-parses `.bearer_token` before use.
   so the inner Alloy never sees the secret.
 - **ALB CIDR allowlist** (`alb.ingress.kubernetes.io/inbound-cidrs`)
   remains the second, independent layer. It is intentionally empty by
-  default in `resources/addons/alloy-gateway/values.yaml` and is slated
-  to populate from a cluster-secret annotation (the 9 EC2 master EIPs
-  plus 3 cluster NAT-GW EIPs) in a follow-up. Bearer is the active gate
-  today; CIDR is the planned defence-in-depth layer.
+  default in `resources/addons/alloy-gateway/values.yaml`. The original
+  plan to populate it from the 9 master EIPs died with the EIP removal
+  (masters now egress from dynamic public IPv4s); an allowlist needs a
+  stable-egress design (NAT or pinned egress IPs) first. Bearer is the
+  active gate today; CIDR stays the planned defence-in-depth layer.
 
 Bearer rotation is a single Secrets Manager update plus
 `systemctl reload alloy` on each master and a rolling restart of the
@@ -147,7 +148,9 @@ The trust boundary is the loopback bind, not Jenkins ACLs.
 End-to-end push pipeline live on every master. `Percona-Lab/jenkins-pipelines`
 PR #4037 (commit 83adb97) codified `alloy.service` + `amazon-ssm-agent` + the
 scoped `AlloyGatewayBearerRead` IAM policy on every `jenkins-<inst>-master`
-role via CFN (9 masters) and Terraform (`pxb.cd`).
+role via CFN (9 masters) and Terraform (`pxb.cd`). The split has since
+inverted: the jenkins-master module carries the same policy for the 8 TF
+masters and only `pg.cd` remains CFN.
 
 Verified against Mimir / Loki via `scripts/check-master-ingest.sh`: each
 master pushes ~180 datapoints per 3 hours on `hetzner_api_rate_limit_remaining`
@@ -166,13 +169,15 @@ secret rotation is a `systemctl restart alloy` away.
 
 ### Rotation forcing pattern
 
-When a CFN change-set updates the `LaunchTemplate` version without forcing
-SpotFleet replacement (e.g., userData-only diff), `aws ec2 terminate-instances`
-on the active master triggers SpotFleet to re-launch on the new template.
-The EIP follows automatically -- DNS stays stable. PXB Terraform uses the
-legacy `aws_spot_fleet_request.launch_specification`, where the userData
-hash change auto-forces replacement on `tofu apply` (no `terraform taint`
-needed).
+On `pg.cd` (the one remaining CFN spot master), a change-set that updates the
+`LaunchTemplate` version without forcing SpotFleet replacement (e.g., a
+userData-only diff) needs `aws ec2 terminate-instances` on the active master;
+SpotFleet re-launches on the new template and the EIP follows automatically,
+so DNS stays stable. The 8 TF masters run on-demand `aws_instance` with
+`ignore_changes = [user_data, ami]`: a userData or AMI diff only bumps the
+launch-template version and lands on the NEXT instance replacement, never on
+a plain apply (no `terraform taint` needed). Their DNS is ALB-fronted and
+does not track instance IPs.
 
 ## Phase pointers
 

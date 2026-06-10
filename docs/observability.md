@@ -126,9 +126,10 @@ External Secrets Operator. The `SecretString` value is JSON
 `dataFrom: extract`, `scripts/verify-observability.sh`) JSON-parses
 `.bearer_token` before use. The second layer, the **ALB CIDR allowlist**
 (`alb.ingress.kubernetes.io/inbound-cidrs`), is also valued: it is
-empty by default in `resources/addons/alloy-gateway/values.yaml` and is
-slated to populate from a cluster-secret annotation (the 9 EC2 master
-EIPs plus 3 cluster NAT-GW EIPs) in a follow-up. See
+empty by default in `resources/addons/alloy-gateway/values.yaml`. The
+original populate-from-master-EIPs plan died with the EIP removal
+(masters egress from dynamic public IPv4s); an allowlist needs a
+stable-egress design first. See
 [ADR 0013](adr/0013-push-from-masters-with-nginx-bearer.md) and
 [`jenkins-fleet-scrape.md`](jenkins-fleet-scrape.md) for the master-side
 push config.

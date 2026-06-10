@@ -5,8 +5,8 @@
 // Uniform multi-SKU fallback path with ps3 (sibling PR 4126) and ps80
 // (post-PS-11206 cutover follow-up).
 //
-// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the CFN-managed
-// jenkins-ps57-master role by the standalone TF block in
+// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the
+// module-managed jenkins-ps57-master role by the standalone TF block in
 // terraform/master-ps57.tf (jenkins-arm-fleet module). The plugin uses the
 // master IAM instance profile (`awsCredentialsId = ""`).
 //
