@@ -32,6 +32,18 @@ module "pmm" {
   jenkins_package_version = "2.541.3"
   cache_bucket_name       = "pmm-build-cache"
 
+  # The CFN-era live worker role had grown beyond its template out-of-band:
+  # the Packer amazon-ebs set (pmm3-ami nightly + release-candidate builds
+  # run Packer on workers with instance-profile credentials only), an ECR
+  # read policy for Dagger engine pulls, and AmazonSSMManagedInstanceCore.
+  # The cutover recreated the role template-shaped and broke the RC build at
+  # ec2:DescribeRegions; these args restore the live shape.
+  worker_ami_builder = true
+  worker_ecr_read    = true
+  extra_worker_managed_policies = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+  ]
+
   # Retained CFN data volume vol-00d7246f9eeb1fb72 is 200 GiB gp3 in
   # us-east-2b (already the module default type, so the tofu import is a
   # zero-diff adopt).

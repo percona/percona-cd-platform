@@ -40,6 +40,13 @@ module "psmdb" {
   worker_role_legacy_naming = true
   extra_subnet_a            = true
 
+  # The CFN-era live worker role carried CloudWatchAgentServerPolicy
+  # out-of-band; the cutover recreated the role template-shaped and dropped
+  # it. Restore the live shape.
+  extra_worker_managed_policies = [
+    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+  ]
+
   # On-demand to end the spot reclamations. c7i-flex.2xlarge (8 vCPU /
   # 16 GB) matches the live master's type and clears its 8 GB JVM heap.
   purchasing_option       = "on-demand"
