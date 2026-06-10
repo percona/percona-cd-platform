@@ -83,6 +83,19 @@ module "pmm" {
     "vadim.yalovets",
   ]
 
+  # The 6-CIDR fleet baseline (module default) plus the pmm QA engineer's
+  # address. This is the "pmm differs" delta the module variable description
+  # references; codified so an apply does not strip the live rule.
+  ssh_allowed_cidrs = [
+    "46.149.86.84/32",
+    "54.214.47.252/32",
+    "54.214.47.254/32",
+    "154.192.11.141/32",
+    "176.37.55.60/32",
+    "188.163.20.103/32",
+    "213.159.239.48/32",
+  ]
+
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-pmm-amzn2-init-config). Content moved byte-identically off the
   # live master's EBS copy; cloud.groovy's netMap subnet IDs are patched to
