@@ -19,6 +19,13 @@ Spot-interrupt readiness audit for a Jenkins master.
 
 Exits non-zero if anything is missing.
 
+[`runbook.py`](runbook.py)
+Gated runbook automations behind `just runbook`. One subcommand per
+common operation: `template-change <inst>` is fully automated (clean
+origin/main gate, plan-scope gate allowing only that master's
+init-config S3 objects, apply, live evaluate via the jenkins CLI),
+the rest are guided step-runners with per-step confirmation.
+
 [`check-master-alloy-mimir.py`](check-master-alloy-mimir.py)
 Verify every active master ships metrics to Mimir via Alloy. Enumerates the
 master set dynamically from repo source-of-truth (k8s instances dir,

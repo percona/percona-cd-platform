@@ -207,6 +207,12 @@ zizmor:
 check-versions:
     uv run --with pyyaml --with python-hcl2 python3 scripts/check_versions.py
 
+# Gated runbook automations (docs/runbooks/common-operations.md).
+# `just runbook` lists subcommands: automated ones enforce their gates
+# mechanically, guided ones confirm each step before running it.
+runbook *ARGS:
+    uv run --no-project python3 scripts/runbook.py {{ARGS}}
+
 # Verify every active master (k8s / tf-managed / cf-managed) is shipping metrics
 # to Mimir via Alloy. Masters enumerated dynamically from repo source-of-truth;
 # per-master freshness read from the in-cluster Mimir query-frontend. Read-only.

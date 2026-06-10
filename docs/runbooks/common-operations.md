@@ -1,7 +1,11 @@
 # Common operations
 
 The day-to-day changes, ranked by how often they actually happened in the
-last year of fleet history, each with its procedure in this repo. The
+last year of fleet history, each with its procedure in this repo.
+Several are automated: `just runbook` lists the subcommands, where the
+automated ones enforce these procedures' gates mechanically
+(`scripts/runbook.py`) and the guided ones step through with
+confirmations. The
 golden rule throughout: config changes never replace instances, and
 instance changes are announced first.
 
