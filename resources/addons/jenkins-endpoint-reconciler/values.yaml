@@ -55,6 +55,10 @@ hosts:
     region: eu-west-1
     tag: jenkins-rel
     port: 8080
+  - name: cloud
+    region: eu-west-1
+    tag: jenkins-cloud
+    port: 8080
 
 resources:
   requests:
