@@ -1,108 +1,125 @@
 # Common operations
 
-The day-to-day changes, ranked by how often they actually happened in the
-last year of fleet history, each with its procedure in this repo.
-Several are automated: `just runbook` lists the subcommands, where the
-automated ones enforce these procedures' gates mechanically
-(`scripts/runbook.py`) and the guided ones step through with
-confirmations. The
-golden rule throughout: config changes never replace instances, and
-instance changes are announced first.
+Day-to-day changes in frequency order. Start at the table, jump to the
+section. Golden rule: config changes never replace instances, and
+anything that replaces an instance is announced in #opensource-jenkins
+first (builds in flight die).
 
-## Change a worker template on an EC2 master
+| Change | Edit | Impact | Run |
+|--------|------|--------|-----|
+| Worker template (label, AMI, type, init script) | `resources/jenkins-masters/<inst>/init.groovy.d/` | none, config only | `just runbook template-change <inst>` |
+| Worker template on ps3-k8s | `resources/jenkins/clouds-catalog/` | none, JCasC hot-reload | `argocd app sync jenkins-ps3-k8s` |
+| Resize or retype a master | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook master-resize` |
+| Bump Jenkins core | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook core-bump` |
+| Engineer SSH key | `terraform/master-<inst>.tf` | at next replacement | `just runbook ssh-key` |
+| Port or SSH allow-list | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
+| Graviton fleet size or types | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
 
-The most common operation by far: add a distro label, bump a worker AMI,
-swap instance types, or extend the agent init script.
+`just runbook` lists the subcommands. `template-change` enforces the
+gates below mechanically, the others confirm each step.
 
-1. Edit the master's config under
-   `resources/jenkins-masters/<inst>/init.groovy.d/`:
-   `cloud.groovy` for classic EC2 templates (labels, AMIs, types, init
-   script), `htz.cloud.groovy` for Hetzner templates,
-   `ec2FleetCloud.groovy` for the Graviton fleet wiring, `matrix.groovy`
-   for matrix-job label axes. On `cloud` the file is `cloud.groovy.tftpl`,
-   keep the `${...}` template variables intact.
-2. PR, merge, then `just tf-plan && just tf-apply`. The plan shows only
-   S3 object updates for that master's init-config bucket. No instance
-   resources change.
-3. Propagation: the SSM association re-syncs the bucket to disk within
-   30 minutes, and the script takes effect at the next JVM start. For
-   immediate effect on the live controller, evaluate it in place:
-   `jenkins admin -i <inst> groovy -f <file>` (init.groovy.d is boot-only
-   by itself).
-4. Verify: run a probe build on the changed label, or check the template
-   inventory with the jenkins CLI.
+## Worker template on an EC2 master
 
-If a probe build sits in the queue with "doesn't have label", the label
-is usually fine and the worker simply cannot launch. The EC2 plugin
-reacts to new demand within seconds, so check the spot requests next:
-`aws ec2 describe-spot-instance-requests` in the master's region. A
-`price-too-low` status means the template's spot bid is below the
-current market and the request waits indefinitely (no on-demand
-fallback unless the template enables it). Probe with a label whose
-template has spot headroom, or rely on the controller-side inventory
-check above.
+The most common change by far.
 
-## The same change on the in-cluster master
+1. Edit under `resources/jenkins-masters/<inst>/init.groovy.d/`:
+   - `cloud.groovy`: EC2 templates (labels, AMIs, types, init script).
+     On `cloud` the file is `cloud.groovy.tftpl`, keep `${...}` intact.
+   - `htz.cloud.groovy`: Hetzner templates.
+   - `ec2FleetCloud.groovy`: Graviton fleet wiring.
+   - `matrix.groovy`: matrix-job label axes.
+2. PR, merge.
+3. `just runbook template-change <inst> [--file F]`. It requires a clean
+   checkout of origin/main, plans, refuses any change beyond that
+   master's init-config S3 objects, applies, and evaluates the file on
+   the live JVM. No instance resources change.
+4. Verify: probe build on the changed label, or template inventory via
+   the jenkins CLI.
 
-ps3-k8s does not use init.groovy.d for clouds. Edit the shared catalog
-under `resources/jenkins/clouds-catalog/` (per-master overlay
-`masters/ps3.yaml`), run `just clouds-render-check`, merge, then sync
-manually inside a window: `argocd app sync jenkins-ps3-k8s`
+How the change propagates:
+
+- S3 is canonical. The apply updates the bucket, nothing else.
+- The live evaluate in step 3 is what makes it active now. Skipped, the
+  change waits for the next instance replacement (boot re-fetches S3 to
+  disk).
+- A plain JVM restart re-runs the disk copy, which is stale until a
+  replacement or a resync. Only masters that set
+  `init_groovy_sync_schedule` get a periodic S3-to-disk resync
+  (currently `cloud`, every 30 minutes).
+
+Probe build parked on "doesn't have label": the label is fine, the
+worker cannot launch. The EC2 plugin reacts to demand within seconds,
+so check `aws ec2 describe-spot-instance-requests` in the master's
+region next. `price-too-low` means the template's spot bid is under the
+current market and the request waits forever (no on-demand fallback
+unless the template enables it). Probe with a label whose template has
+spot headroom.
+
+## Worker template on the in-cluster master
+
+ps3-k8s has no init.groovy.d. Edit the catalog under
+`resources/jenkins/clouds-catalog/` (overlay `masters/ps3.yaml`), run
+`just clouds-render-check`, merge, then sync inside a window:
+`argocd app sync jenkins-ps3-k8s`
 ([ADR 0025](../adr/0025-singleton-controller-rollout-gating.md)). JCasC
-hot-reloads clouds without a pod restart.
+hot-reloads clouds, no pod restart.
 
 ## Resize or retype a master
 
-Edit `on_demand_instance_type` in `terraform/master-<inst>.tf`, plan,
-announce in #opensource-jenkins, apply. The instance is replaced: the
-identity volume detaches and reattaches to the new instance, and the web
-path converges through the endpoint reconciler within about a minute of
-the new instance serving :8080. Builds in flight do not survive a
-replacement, schedule it like a restart.
+`just runbook master-resize`, or by hand:
 
-## Bump Jenkins core on a master
+1. Announce in #opensource-jenkins. The instance is replaced, builds in
+   flight die.
+2. Edit `on_demand_instance_type` in `terraform/master-<inst>.tf`, PR,
+   merge.
+3. `just tf-plan` (expect one replace, the identity volume re-attaches),
+   then `just tf-apply`.
+4. The web path converges through the endpoint reconciler about a
+   minute after the new instance serves :8080.
 
-`jenkins_package_version` in `terraform/master-<inst>.tf`. The version
-lands in user-data, so the apply replaces the instance, treat it exactly
-like a resize (window plus announcement). Plugins are separate:
-fleet-wide plugin rollout is operator-driven on the EC2 masters and
-image-driven on ps3-k8s (the locked manifest in `images/jenkins/`).
+## Bump Jenkins core
 
-## Add or remove an engineer's SSH key
+`just runbook core-bump`. Same announce-and-replace flow:
+`jenkins_package_version` in `terraform/master-<inst>.tf` lands in
+user-data, so the apply replaces the instance. Plugins are separate:
+operator-driven on the EC2 masters, image-driven on ps3-k8s
+(`images/jenkins/`).
 
-`ssh_key_engineers` in `terraform/master-<inst>.tf`. Keys are fetched at
-boot from percona.com, so the change takes effect at the next instance
-replacement, not immediately. For urgent removal, also delete the key
-from `/home/ec2-user/.ssh/authorized_keys` over SSM on the running
-master ([`master-shell-access.md`](master-shell-access.md)).
+## Engineer SSH keys
 
-## Open a port or change the SSH allow-list
+`just runbook ssh-key`. Edit `ssh_key_engineers` in
+`terraform/master-<inst>.tf`. Keys are fetched from percona.com at
+boot, so the change takes effect at the next instance replacement.
+Urgent removal: also delete the key from
+`/home/ec2-user/.ssh/authorized_keys` over SSM
+([`master-shell-access.md`](master-shell-access.md)).
+
+## Ports and SSH allow-list
 
 `ssh_allowed_cidrs` (operator :22 sources) and `extra_http_ingress`
-(additional port/CIDR pairs) in `terraform/master-<inst>.tf`. Codify any
-hand-added emergency rule the same day, the next apply strips manual SG
-edits.
+(port/CIDR pairs) in `terraform/master-<inst>.tf`. Plan and apply, in
+place. Codify any hand-added emergency SG rule the same day, the next
+apply strips manual edits.
 
-## Change Graviton fleet capacity or types
+## Graviton fleet capacity or types
 
-The `jenkins-arm-fleet` module call in the same `master-<inst>.tf`:
-`max_size`, `instance_types`. Plan and apply update the ASG in place,
-running workers are untouched.
+`max_size` and `instance_types` on the `jenkins-arm-fleet` module call
+in `terraform/master-<inst>.tf`. Plan and apply update the ASG in
+place, running workers are untouched.
 
 ## After any change
 
-- `just check-master-alloy` confirms every controller still ships
-  telemetry.
-- A probe build on the touched label is the only real proof for template
+- `just check-master-alloy`: every controller still ships telemetry.
+- Probe build on the touched label: the only real proof for template
   work.
-- `tofu plan` back to "No changes" is the convergence check after any
+- `just tf-plan` back to "No changes": the convergence check after any
   out-of-band hotfix.
 
-## What deliberately is not here
+## Not here
 
-EKS and addon operations ([`eks-upgrade.md`](eks-upgrade.md),
+EKS and addons ([`eks-upgrade.md`](eks-upgrade.md),
 [`mng-label-taint-changes.md`](mng-label-taint-changes.md)), recovery
-procedures ([`disaster-recovery.md`](disaster-recovery.md),
-[`argocd-admin-recovery.md`](argocd-admin-recovery.md)), onboarding a new
-host ([`add-jenkins-host.md`](add-jenkins-host.md)), and the account
-reapers ([`cleanup-reapers.md`](cleanup-reapers.md)).
+([`disaster-recovery.md`](disaster-recovery.md),
+[`argocd-admin-recovery.md`](argocd-admin-recovery.md)), onboarding a
+new host ([`add-jenkins-host.md`](add-jenkins-host.md)), and the
+account reapers ([`cleanup-reapers.md`](cleanup-reapers.md)).
