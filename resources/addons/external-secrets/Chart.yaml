@@ -5,5 +5,5 @@ description: External Secrets Operator — sync from AWS Secrets Manager into K8
 type: application
 dependencies:
   - name: external-secrets
-    version: 0.20.x
+    version: 2.5.0
     repository: https://charts.external-secrets.io
