@@ -1,7 +1,7 @@
 apiVersion: v2
 name: grafana
 version: 1.0.0
-appVersion: "12.3.1"
+appVersion: "12.3.6"
 description: Standalone Grafana with OIDC SSO (via Authentik) and LGTM datasources.
 dependencies:
   - name: grafana
