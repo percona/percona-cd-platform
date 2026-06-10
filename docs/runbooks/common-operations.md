@@ -32,6 +32,16 @@ swap instance types, or extend the agent init script.
 4. Verify: run a probe build on the changed label, or check the template
    inventory with the jenkins CLI.
 
+If a probe build sits in the queue with "doesn't have label", the label
+is usually fine and the worker simply cannot launch. The EC2 plugin
+reacts to new demand within seconds, so check the spot requests next:
+`aws ec2 describe-spot-instance-requests` in the master's region. A
+`price-too-low` status means the template's spot bid is below the
+current market and the request waits indefinitely (no on-demand
+fallback unless the template enables it). Probe with a label whose
+template has spot headroom, or rely on the controller-side inventory
+check above.
+
 ## The same change on the in-cluster master
 
 ps3-k8s does not use init.groovy.d for clouds. Edit the shared catalog
