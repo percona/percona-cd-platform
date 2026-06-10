@@ -17,6 +17,11 @@ repos:
     rev: v1.92.1
     hooks:
       - id: terraform_fmt
+      # terraform_validate shells the `terraform` binary, NOT tofu, and only
+      # fires when .tf files are staged. An old local install (e.g. Terraform
+      # 1.5.7) fails the repo's required_version >= 1.11 and blocks the
+      # commit. The real gate is `just tf-validate` (tofu); after `just ci`
+      # passes, `git commit --no-verify` is the sanctioned workaround.
       - id: terraform_validate
         args: [--hook-config=--retry-once-with-cleanup=true]
 

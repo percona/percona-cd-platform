@@ -18,7 +18,7 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 - **Public repo:** no AWS account IDs / ARNs / secrets in `.tfvars` or values files. All sensitive bits flow via `var.account_id`, cluster-secret annotations, or AWS Secrets Manager → External Secrets Operator.
 - **TLS policy:** every ALB Ingress sets `alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` (AWS's recommended default since 2025-09 — TLS 1.3+1.2 only, post-quantum hybrid key exchange, forward-secrecy-only ciphers). Defaults allow TLS 1.0/1.1.
 - **Shared ALB:** every Jenkins host Ingress carries `alb.ingress.kubernetes.io/group.name: jenkins-cd`.
-- **Pre-commit + CI:** `just ci` is the gate. Same set runs on PR. If the local pre-commit git-hook is broken (e.g. an `InvalidManifestError` from a corrupted hook cache that survives `pre-commit clean`), run `just ci` directly and commit with `--no-verify` — the hook plumbing is the broken part, not the checks. Never use `--no-verify` to skip a *failing* check.
+- **Pre-commit + CI:** `just ci` is the gate. Same set runs on PR. If the local pre-commit git-hook is broken (e.g. an `InvalidManifestError` from a corrupted hook cache that survives `pre-commit clean`), run `just ci` directly and commit with `--no-verify` — the hook plumbing is the broken part, not the checks. Second known-broken mode: the `terraform_validate` hook shells the `terraform` binary (not tofu) and only fires when `.tf` files are staged; an old local install (Terraform 1.5.7 vs `required_version >= 1.11`) blocks the commit even though `just tf-validate` passes — same remedy, real gates then `--no-verify`. Never use `--no-verify` to skip a *failing* check.
 - **Terraform only via `just tf-*`.** The justfile is the single TF entrypoint; no raw `tofu`, no `cd terraform`. Recipes: `tf-plan` (writes `tfplan`), `tf-apply` (applies the saved `tfplan`, never auto-approve — `tf-apply-now` is removed), `tf-state-backup` before risky applies, `tf-state-versioning-check`, `tf-plan-masters` (PLAN-ONLY; `-target`/`-exclude` are plan-only, no `tf-apply-masters`).
 - **`AWS_PROFILE` from env, never baked.** AWS-touching recipes require it and fail loudly if unset. Do NOT set `aws_profile` in `terraform/local.auto.tfvars` (that file is local/gitignored; `providers.tf` falls through to the SDK chain when the var is empty — setting it there reintroduces the profile split-brain).
 - **Terraform conventions are gated.** The file-naming grammar, per-team `# Owner:` banners, and comment rules (no copyright headers, no `CLAUDE.md` refs, no Jira ticket IDs in comments) live in [`terraform/CLAUDE.md`](terraform/CLAUDE.md), enforced fail-closed by `scripts/check_conventions.py` — part of `just ci` (standalone: `just tf-conventions`). Run it whenever working on terraform.
@@ -78,7 +78,14 @@ distributors + canary queries, Grafana). Default master `ps3`,
 Fleet-wide ingest spot-check from the cluster side (no SSH). Port-forwards
 `mimir-query-frontend` + `loki-query-frontend`. Reports per-master series
 count, sample freshness, metric cardinality, Loki line count. Exits non-zero
-if any expected master is missing from Mimir.
+if any expected master is missing from Mimir. Master list is hardcoded in
+the script.
+
+`scripts/check-master-alloy-mimir.py` (`just check-master-alloy`)
+Every-active-master Mimir-via-Alloy freshness gate. Enumerates the master
+set dynamically from repo source-of-truth (k8s / tf-managed / cf-managed)
+so the expected list cannot rot as the fleet changes; STALE/MISSING exits
+non-zero.
 
 `scripts/check-master-spot-readiness.sh [<inst>]`
 Spot-interrupt readiness audit (SpotFleet + Capacity Rebalancing, cron +

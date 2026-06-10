@@ -80,6 +80,9 @@ tf-fmt-check:
 tf-conventions:
     uv run python3 scripts/check_conventions.py
 
+# The real validate gate (tofu). The pre-commit terraform_validate hook
+# shells the `terraform` binary instead and may fail on an old local
+# install — see .pre-commit-config.yaml.
 tf-validate: tf-init
     tofu -chdir=terraform validate
 

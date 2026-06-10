@@ -157,6 +157,11 @@ master pushes ~180 datapoints per 3 hours on `hetzner_api_rate_limit_remaining`
 (one sample per 60s scrape), 10/10 series present, fail counter 0 across the
 fleet, log volume tracking each master's actual Jenkins activity.
 
+Ongoing fleet freshness is gated by `just check-master-alloy`
+(`scripts/check-master-alloy-mimir.py`), which keys on the same gauge but
+derives the expected master set from repo source-of-truth, so the "10/10"
+count cannot silently rot as masters come and go.
+
 ### Auth model (push pipeline)
 
 Bearer secret value at `percona-ci-platform/alloy-gateway/bearer` is JSON

@@ -25,6 +25,14 @@ the CI `tofu` job); the repo-root `CLAUDE.md` carries the platform-wide rules.
    shape (full TF master, fleet-only against a CFN master, or ps3's
    fleet-remnant). When a CFN master migrates, its fleet file grows the
    master module under the same name; pmm lands as `master-pmm.tf`.
+   Before cutover, diff the LIVE worker/master roles
+   (`aws iam list-role-policies` + `list-attached-role-policies` +
+   `get-role-policy` per inline name) against the CFN template: live roles
+   carry out-of-band grants the template never listed (pmm's loss broke
+   Packer AMI builds at `ec2:DescribeRegions`), and the module recreates
+   the declared shape only. Carry deltas via `worker_ami_builder`,
+   `worker_ecr_read`, `extra_worker_managed_policies`,
+   `extra_master_managed_policies`.
 6. **Addresses, `modules/` dir names, and `resources/addons/` basenames are
    contract surfaces** — state keys, `source` paths, namespaces, and
    Pod-Identity bindings hang off them. Never rename cosmetically. File

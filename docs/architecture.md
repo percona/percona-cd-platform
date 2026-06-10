@@ -103,7 +103,11 @@ The volume IS the master's identity; the compute around it is disposable.
 - **EC2 masters (8):** one EBS data volume per master
   (`module.<host>.aws_ebs_volume.data` in `terraform/master-<host>.tf`),
   carried over from the CloudFormation era via `tofu import` during each
-  cutover. It holds jobs, credentials, plugins, and `init.groovy.d`;
+  cutover. Cutovers must also reproduce the LIVE (not template) IAM shape
+  of the worker and master roles; out-of-band grants are carried via the
+  module's `worker_ami_builder` / `worker_ecr_read` /
+  `extra_worker_managed_policies` toggles. It holds jobs, credentials,
+  plugins, and `init.groovy.d`;
   user-data attaches and mounts it at boot, so instance replacement is
   routine and the volume persists. EBS is AZ-bound: the volume pins the
   master's AZ (`az_index` must match it, load-bearing on every

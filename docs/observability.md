@@ -181,6 +181,15 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 - [Mimir restore](runbooks/restore-mimir.md) — recovering blocks from S3 versioning.
 - [Grafana SAML cutover](runbooks/grafana-saml-cutover.md) — flipping on Duo SSO.
 
+## Verifying ingest
+
+- `just check-master-alloy` — every-active-master Mimir-via-Alloy freshness
+  gate; enumerates the master set dynamically from repo source-of-truth.
+- `scripts/check-master-ingest.sh` — per-master Mimir + Loki detail (series,
+  freshness, cardinality, log lines); hardcoded master list.
+- `scripts/verify-observability.sh [<inst>]` — full push-pipeline walk for
+  one master (Alloy systemd, ALB + bearer, gateway, Mimir/Loki, Grafana).
+
 ## Related decisions
 
 - [ADR 0010 — distributed LGTM](adr/0010-distributed-lgtm.md) (this stack)
