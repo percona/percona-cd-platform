@@ -15,7 +15,9 @@ and reconciled from this repo; there are no manual cluster changes.
   and one per `resources/jenkins/master/instances/*` dir. No manual `kubectl`.
 - Jenkins masters serve on `*.cd.percona.com` in two modes: EKS-fronted EC2
   (ALB, in-cluster NGINX, cross-region VPC peering, an EndpointSlice
-  reconciler) or in-cluster StatefulSet.
+  reconciler) or in-cluster StatefulSet. Hostnames resolve to the ALB
+  (HTTPS only); a shell goes through SSM
+  ([runbook](docs/runbooks/master-shell-access.md)).
 - Repo CI is lint + validate only; `ci-gate` is the single required check and
   `just ci` mirrors it locally.
 - The repo is public: no account IDs, ARNs, or secrets in committed files.
@@ -53,6 +55,7 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 | Compute tiers, MNG vs Karpenter reasoning | [ADR 0017](docs/adr/0017-cluster-tier-taxonomy-and-lgtm-pinning.md) |
 | Observability push pipeline | [`docs/observability.md`](docs/observability.md) |
 | EC2 master connectivity and resilience | [`docs/connectivity.md`](docs/connectivity.md), [`docs/ec2-master-resilience.md`](docs/ec2-master-resilience.md) |
+| Shell access to the masters (`just ssh`, SSM) | [`docs/runbooks/master-shell-access.md`](docs/runbooks/master-shell-access.md) |
 | Account cleanup reapers | [`docs/runbooks/cleanup-reapers.md`](docs/runbooks/cleanup-reapers.md) |
 | Bootstrap, recovery, upgrades | [`docs/runbooks/`](docs/runbooks/) |
 | Every past design decision | [`docs/adr/`](docs/adr/) |
