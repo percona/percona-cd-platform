@@ -25,13 +25,17 @@ installed locally; `ssm-run` does not.
 |---|---|---|
 | `just ssh <inst>` / `just ssm <inst>` | Default. Interactive shell, no inbound :22 | AWS creds + session-manager-plugin |
 | `just ssm-run <inst> '<cmd>'` | One-shot commands, scripting, no TTY | AWS creds only |
-| `ssh <EIP>` | SSM unavailable, or file transfer with scp/rsync | Your key on the master + your IP on the :22 allow-list |
+| `ssh <public IP>` | SSM unavailable, or file transfer with scp/rsync | Your key on the master + your IP on the :22 allow-list |
 | `kubectl exec` | ps3 only (in-cluster controller) | Cluster access (`just kubeconfig`) |
 
-## Direct SSH (the EIP path)
+## Direct SSH (the dynamic-IP path)
 
-Every EC2 master keeps an Elastic IP (`just ssh` prints it as PUBLIC-IP). Port
-22 is open only to the allow-list in the `jenkins-master` module
+The masters carry no Elastic IPs: each gets a subnet-auto-assigned public
+IPv4 that CHANGES on every instance rotation or stop/start, so never pin
+anything to it; discover the current one with `just ssh` (the PUBLIC-IP
+column). The exceptions are pxc (keeps an EIP for an inbound JNLP agent
+pinned to it) and pg (still CFN, the EIP terminates its TLS). Port 22 is
+open only to the allow-list in the `jenkins-master` module
 (`ssh_allowed_cidrs`, default is the 6-CIDR fleet baseline; per-master deltas
 are set in that master's `terraform/master-<inst>.tf`). Engineer keys are
 provisioned from `ssh_key_engineers` in the same file.
