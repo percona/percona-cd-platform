@@ -23,7 +23,13 @@ module "cloud" {
 
   hostname                = "cloud.cd.percona.com"
   short_name              = "jenkins-cloud"
-  team                    = "cloud"
+  # Deliberately NOT the bare value "cloud": the cloud team's hourly
+  # deleteOrphaned* Lambda suite (eu-west-3) terminates any running instance
+  # tagged team=cloud without a delete-cluster-after-hours TTL tag, assuming
+  # it is an orphaned OpenShift test cluster. It killed the first TF master
+  # within the hour. cloud-cd keeps per-team cost attribution while staying
+  # outside that reaper's match.
+  team                    = "cloud-cd"
   vpc_cidr                = "10.177.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
@@ -109,7 +115,10 @@ module "cloud_arm_fleet" {
   providers = { aws = aws.eu-west-1 }
 
   short_name                   = "jenkins-cloud"
-  team                         = "cloud"
+  # cloud-cd, not "cloud": see the master module's team comment (the
+  # OpenShift orphan reaper matches team=cloud instances, including Graviton
+  # fleet workers mid-build).
+  team                         = "cloud-cd"
   vpc_id                       = module.cloud.vpc_id
   subnet_ids                   = module.cloud.subnet_ids
   worker_instance_profile_name = module.cloud.worker_instance_profile_name
