@@ -202,7 +202,7 @@ zizmor:
 
 # ---------- helpers ----------
 check-versions:
-    uv run --with pyyaml python3 scripts/check_versions.py
+    uv run --with pyyaml --with python-hcl2 python3 scripts/check_versions.py
 
 # Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
 # is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
