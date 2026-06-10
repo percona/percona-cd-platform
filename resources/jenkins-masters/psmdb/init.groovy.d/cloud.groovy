@@ -503,7 +503,10 @@ labelMap['min-noble-x64']     = ''
 labelMap['psmdb']             = ''
 labelMap['psmdb-bionic']      = ''
 
-labelMap['docker-64gb-aarch64']  = 'docker-32gb-aarch64'
+// The Graviton fleet (ec2FleetCloud.groovy) is the sole docker-32gb-aarch64
+// provider; the classic template serves only its own label so the two clouds
+// never race on the same queued builds (same retirement rel and cloud carry).
+labelMap['docker-64gb-aarch64']  = ''
 labelMap['min-al2023-aarch64']   = ''
 labelMap['min-jammy-aarch64']    = ''
 labelMap['min-noble-aarch64']    = ''

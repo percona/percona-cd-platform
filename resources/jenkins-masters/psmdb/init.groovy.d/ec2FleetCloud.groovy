@@ -3,11 +3,13 @@
 // Registers the diversified Graviton EC2 Fleet (ASG-backed via the ec2-fleet
 // plugin) as a Jenkins Cloud serving the `docker-32gb-aarch64` label on psmdb.
 // Uniform multi-SKU fallback path with ps3/ps57/ps80/pxc. psmdb has real
-// aarch64 demand today (PSMDB / PBM / mlink), so this Fleet is its diversified
-// spot-capacity backstop alongside the classic EC2 + Hetzner CAX paths.
+// aarch64 demand today (PSMDB / PBM / mlink), and this Fleet is the SOLE
+// provider of that label: the classic EC2 template (docker-64gb-aarch64)
+// serves only its own label, and the Hetzner CAX templates serve
+// docker-aarch64, never docker-32gb-aarch64.
 //
-// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the CFN-managed
-// jenkins-psmdb-master role by the standalone TF block in
+// IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the
+// module-managed jenkins-psmdb-master role by the standalone TF block in
 // terraform/master-psmdb.tf (jenkins-arm-fleet module) in percona-cd-platform.
 // The plugin uses the master IAM instance profile (`awsCredentialsId = ""`).
 //
