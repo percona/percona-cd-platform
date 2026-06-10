@@ -41,11 +41,25 @@ and reconciled from this repo; there are no manual cluster changes.
 just ci                # local lint + validate (mirrors the PR gate)
 just tf-plan           # TF plan (writes tfplan)
 just tf-apply          # apply the saved tfplan; never auto-approve
+just ssh               # list the running Jenkins masters; just ssh <inst> opens a shell
 ```
 
 `AWS_PROFILE` must be exported in your shell; AWS-touching recipes fail loudly
 without it. Back up state before risky applies (`just tf-state-backup`). State
 bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
+
+### Tool requirements
+
+| Tool | Used for |
+|---|---|
+| [`just`](https://github.com/casey/just) | The single entrypoint; every workflow below is a recipe |
+| [OpenTofu](https://opentofu.org/) (`tofu`) | All terraform operations (version pin at the top of the [`justfile`](justfile)) |
+| AWS CLI v2 | Every AWS-touching recipe; SSO login via `aws sso login` |
+| [session-manager-plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) | Interactive `just ssh <inst>` sessions (one-shot `just ssm-run` works without it) |
+| `kubectl` | Cluster access (`just kubeconfig`), ps3 shell |
+| [`uv`](https://github.com/astral-sh/uv) | Python script gates and lambda tests inside `just ci` |
+| Docker (buildx) | `just build-image` only |
+| trivy, yamllint, actionlint, zizmor, kubeconform | The `just ci` lint set; version pins at the top of the justfile (helm is fetched and sha-verified automatically) |
 
 ## Where the details are
 
