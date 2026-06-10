@@ -18,8 +18,8 @@ logger.info("Cloud init started")
 Jenkins jenkins = Jenkins.getInstance()
 
 netMap = [:]
-netMap['eu-west-1b'] = 'subnet-04221bb8f6d0aeeff'
-netMap['eu-west-1c'] = 'subnet-0b9a1fd4ba5296a8b'
+netMap['eu-west-1b'] = 'subnet-06f280c65ccb5070c' // TF VPC vpc-0051d3c81a0092919
+netMap['eu-west-1c'] = 'subnet-0d1d9c4f2cbe48185' // TF VPC vpc-0051d3c81a0092919
 
 imageMap = [:]
 imageMap['eu-west-1a.docker']                = 'ami-05247819264504af0'
