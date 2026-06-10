@@ -6,7 +6,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 
 | Topic | Doc |
 |---|---|
-| Architecture overview | [`architecture.md`](architecture.md) |
+| Architecture: layered views, failure domains, decisions, open questions | [`architecture.md`](architecture.md) |
 | PoC history & lessons | [`poc-history.md`](poc-history.md), [`lessons-from-poc.md`](lessons-from-poc.md) |
 
 ## Subsystems
@@ -33,7 +33,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 | Topic | Doc |
 |---|---|
 | TLS strategy | [`tls-strategy.md`](tls-strategy.md) |
-| Connectivity | [`connectivity.md`](connectivity.md) |
+| Connectivity: address plan, peering, request paths, SGs, DNS | [`connectivity.md`](connectivity.md) |
 
 ## Runbooks
 

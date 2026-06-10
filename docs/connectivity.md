@@ -41,7 +41,7 @@ single NAT gateway in us-east-1a.
 
 ## Peering mesh
 
-Strict hub and spoke, nine peerings, all defined one-per-master-file:
+Strict hub and spoke ([VPC peering](https://docs.aws.amazon.com/vpc/latest/peering/what-is-vpc-peering.html)), nine peerings, all defined one-per-master-file:
 
 - Requester is always the hub (us-east-1). Accepter uses the master
   region's provider alias. Name tag
@@ -51,7 +51,7 @@ Strict hub and spoke, nine peerings, all defined one-per-master-file:
   nodes. No peering routes exist on public route tables.
 - Master-side route is the VPC's single route table:
   `10.220.0.0/16 -> pcx`.
-- No spoke-to-spoke peering exists. Masters cannot reach one another
+- No spoke-to-spoke peering exists, and peering is [non-transitive](https://docs.aws.amazon.com/vpc/latest/peering/invalid-peering-configurations.html). Masters cannot reach one another
   privately.
 - Special cases: the ps3 peering targets its worker-substrate VPC (the
   in-cluster controller reaches Graviton workers through it). pmm has an
@@ -84,23 +84,28 @@ Mechanics worth knowing:
   variable upstream, so it re-resolves at runtime instead of pinning the
   IP at startup. It injects `Host: <host>.cd.percona.com`, X-Forwarded
   headers, WebSocket upgrade, and a 3600 s read timeout.
-- The reconciler CronJob runs every minute (staleness bound), discovers the
-  master via `ec2:DescribeInstances` filtered on
-  `tag:iit-billing-tag=<short_name>` + `running` in the master's region, and
-  writes the EndpointSlice. The tag scheme is uniform: the module sets
-  `iit-billing-tag` to its `short_name` on every master. The filter value
-  is `jenkins-<host>` everywhere except pmm, whose short_name stays
-  `jenkins-pmm-amzn2`. The value is inherited from its CloudFormation stack
-  name and kept deliberately, because the string also names the IAM roles,
-  the instance profile, the init-config bucket, and the billing tag, and
-  renaming live identities during a cutover buys nothing
-  (`terraform/master-pmm.tf` records the decision). Zero
-  matches writes an empty slice (the proxy serves the 503 page). Multiple
-  matches are TCP-probed on :8080 and the newest *serving* instance wins.
-  If none serve, the existing slice is kept so a ghost can never blackhole
-  ingress. AWS access is a Pod Identity role holding bare
-  `ec2:DescribeInstances`. Cluster access is a namespace-scoped Role over
-  EndpointSlices.
+- The reconciler CronJob runs every minute (staleness bound). It discovers
+  the master via `ec2:DescribeInstances` filtered on
+  `tag:iit-billing-tag=<short_name>` + `running` in the master's region,
+  then writes the
+  [EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
+  behind the
+  [selectorless Service](https://kubernetes.io/docs/concepts/services-networking/service/#services-without-selectors).
+  Zero matches writes an empty slice (the proxy serves the 503 page).
+  Multiple matches are TCP-probed on :8080 and the newest *serving*
+  instance wins. If none serve, the existing slice is kept so a ghost can
+  never blackhole ingress. AWS access is an
+  [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
+  role holding bare `ec2:DescribeInstances`. Cluster access is a
+  namespace-scoped Role over EndpointSlices.
+- The discovery tag scheme is uniform: the module sets `iit-billing-tag`
+  to its `short_name` on every master. The filter value is
+  `jenkins-<host>` everywhere except pmm, whose short_name stays
+  `jenkins-pmm-amzn2`. The value is inherited from its CloudFormation
+  stack name and kept deliberately, because the string also names the IAM
+  roles, the instance profile, the init-config bucket, and the billing
+  tag, and renaming live identities during a cutover buys nothing
+  (`terraform/master-pmm.tf` records the decision).
 - Legacy fallback: `origin-<host>` records in `terraform/origins.tf`
   render only when targets are supplied. The discovered map is empty at
   head, so none exist by default.
@@ -171,8 +176,8 @@ degrades web access and observability, not running builds.
   the engineers whose public keys boot user-data fetches from
   percona.com into `ec2-user`'s authorized_keys. The list is per master in
   `terraform/master-<host>.tf` and changes take effect at instance
-  replacement, so key removal is not immediate. Tool-driven access (EC2
-  Instance Connect style: a temporary :22 rule plus an ephemeral pushed
+  replacement, so key removal is not immediate. Tool-driven access ([EC2
+  Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-overview.html) style: a temporary :22 rule plus an ephemeral pushed
   key) is gated by AWS IAM rather than the static list.
 - The world-open :80/:443 predates the ALB fronting and carries an explicit
   lock-down note in the module. Tightening it is pending the pg migration.
@@ -191,14 +196,14 @@ degrades web access and observability, not running builds.
 - The EKS hub egresses through a single NAT gateway (us-east-1a) and keeps
   interface endpoints for `ecr.api`, `ecr.dkr`, `sts`, and `ec2`. The S3
   gateway endpoint serves the private route tables.
-- Shell access is SSM Session Manager (the agent dials out on :443 with no inbound
+- Shell access is [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) (the agent dials out on :443 with no inbound
   required). Direct SSH exists only inside `ssh_allowed_cidrs`
   ([`runbooks/master-shell-access.md`](runbooks/master-shell-access.md)).
 
 ## DNS ownership
 
 - Zone `cd.percona.com` is looked up, never created, by this repo.
-- external-dns owns every friendly hostname (sources Ingress + Service,
+- [external-dns](https://kubernetes-sigs.github.io/external-dns/latest/) owns every friendly hostname (sources Ingress + Service,
   `policy: sync`, `txtOwnerId: percona-ci-platform`, scoped to the one
   zone).
 - Terraform owns only the ACM validation records and the dormant

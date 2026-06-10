@@ -141,7 +141,7 @@ the observability push receivers ride the separate `jenkins-cd` group, so
 master rule churn cannot break platform ingress. Neither ALB is
 hand-managed: the **AWS Load Balancer Controller** provisions and reconciles
 both from Kubernetes Ingress objects. One Ingress per host carries the host
-rule. The `group.name` annotation merges Ingresses into their shared ALB,
+rule. The [`group.name` annotation](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/ingress/annotations/) merges Ingresses into their shared ALB,
 and external-dns publishes the records. Each group name materializes as
 exactly one ALB, so the cell runs two load balancers in total. An Ingress
 that declared no group would get a dedicated ALB of its own, which is why
@@ -158,7 +158,7 @@ proven itself.
 
 **Mode B: proxied EC2.** A shared in-cluster NGINX proxies over cross-region
 VPC peering to the controller's private IP. The hop exists because ALB
-target groups with `target-type: ip` can only point at addresses inside the
+target groups with [`target-type: ip`](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html) can only point at addresses inside the
 cluster VPC, and the masters live in five other regions. The NGINX
 Deployment is a stateless data-plane proxy (plain nginx, no Jenkins role),
 distinct from the AWS Load Balancer Controller, which is control plane only.
