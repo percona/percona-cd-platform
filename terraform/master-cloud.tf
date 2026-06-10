@@ -34,7 +34,11 @@ module "cloud" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
-  cache_bucket_name       = "cloud-build-cache"
+  # cloud workers have no S3 build cache: the CFN-era default named
+  # cloud-build-cache, a bucket this account never created and that exists
+  # today under a foreign AWS account. Granting on an externally-owned name
+  # invites confused-deputy writes; null drops the dead worker IAM grant.
+  cache_bucket_name = null
 
   # Retained CFN data volume vol-077265221bc0180b3 is 100 GiB gp2 in
   # eu-west-1b. ebs_type must be gp2 (not the module default gp3) so the
