@@ -273,7 +273,9 @@ ssh inst="": _require-aws-profile
     set -euo pipefail
     if [ -n "{{inst}}" ]; then exec just ssm {{inst}}; fi
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-    for region in us-east-2 us-west-1 us-west-2 eu-west-1 eu-central-1; do
+    regions=(us-east-2 us-west-1 us-west-2 eu-west-1 eu-central-1)
+    pids=()
+    for region in "${regions[@]}"; do
       ( aws ec2 describe-instances --region "$region" \
           --filters 'Name=tag:iit-billing-tag,Values=jenkins-*' 'Name=instance-state-name,Values=running' \
           --query 'Reservations[].Instances[].[Tags[?Key==`iit-billing-tag`]|[0].Value,InstanceId,PrivateIpAddress,PublicIpAddress]' \
@@ -281,14 +283,19 @@ ssh inst="": _require-aws-profile
             inst=$1; sub(/^jenkins-/,"",inst); sub(/-amzn2$/,"",inst);
             print inst, r, $2, $3, ($4=="None"?"-":$4)
           }' > "$tmp/$region" ) &
+      pids+=($!)
     done
-    wait
+    fail=0
+    for i in "${!pids[@]}"; do
+      wait "${pids[$i]}" || { echo "WARNING: ${regions[$i]} query failed; listing is incomplete" >&2; fail=1; }
+    done
     { echo "INSTANCE REGION INSTANCE-ID PRIVATE-IP PUBLIC-IP"
       sort "$tmp"/*
       echo "ps3 us-east-1 in-cluster:jenkins-ps3-k8s-0 - -"
     } | column -t
     echo >&2
     echo "usage: just ssh <instance> | just ssm-run <instance> '<cmd>'  (ps3: kubectl exec)" >&2
+    [ "$fail" -eq 0 ]
 
 # Interactive shell on a master. EC2 masters go through SSM; in-cluster (k8s)
 # masters exec into the controller pod. Usage: just ssm pmm | just ssm ps3
@@ -299,12 +306,14 @@ ssm inst: _require-aws-profile
       ps3) echo "exec -> jenkins-ps3-k8s-0 (in-cluster)" >&2
            exec kubectl --context {{cluster}} -n jenkins-ps3-k8s exec -it jenkins-ps3-k8s-0 -c jenkins -- bash ;;
     esac
-    read -r region id <<< "$(just _ssm-resolve {{inst}})"
+    vals="$(just _ssm-resolve {{inst}})"
+    read -r region id <<< "$vals"
     echo "session -> {{inst}} ($id, $region)" >&2
     exec aws ssm start-session --target "$id" --region "$region"
 
-# One-shot root command on a master; SSM RunCommand for EC2 masters, kubectl
-# exec for in-cluster ones. Prints status, stdout and stderr.
+# One-shot command on a master. SSM RunCommand runs it as root on EC2
+# masters; kubectl exec runs it as the container user (jenkins, not root) on
+# in-cluster ones. Prints status, stdout and stderr.
 # Usage: just ssm-run pmm 'systemctl status jenkins | head -5'
 ssm-run inst cmd: _require-aws-profile
     #!/usr/bin/env bash
@@ -312,7 +321,8 @@ ssm-run inst cmd: _require-aws-profile
     case "{{inst}}" in
       ps3) exec kubectl --context {{cluster}} -n jenkins-ps3-k8s exec jenkins-ps3-k8s-0 -c jenkins -- bash -c {{quote(cmd)}} ;;
     esac
-    read -r region id <<< "$(just _ssm-resolve {{inst}})"
+    vals="$(just _ssm-resolve {{inst}})"
+    read -r region id <<< "$vals"
     params=$(python3 -c 'import json,sys; print(json.dumps({"commands": [sys.argv[1]]}))' {{quote(cmd)}})
     cid=$(aws ssm send-command --region "$region" --instance-ids "$id" \
       --document-name AWS-RunShellScript --parameters "$params" \
