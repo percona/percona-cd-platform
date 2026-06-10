@@ -21,8 +21,8 @@ module "cloud" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.eu-west-1 }
 
-  hostname                = "cloud.cd.percona.com"
-  short_name              = "jenkins-cloud"
+  hostname   = "cloud.cd.percona.com"
+  short_name = "jenkins-cloud"
   # Deliberately NOT the bare value "cloud": the cloud team's hourly
   # deleteOrphaned* Lambda suite (eu-west-3) terminates any running instance
   # tagged team=cloud without a delete-cluster-after-hours TTL tag, assuming
@@ -114,7 +114,7 @@ module "cloud_arm_fleet" {
   source    = "./modules/jenkins-arm-fleet"
   providers = { aws = aws.eu-west-1 }
 
-  short_name                   = "jenkins-cloud"
+  short_name = "jenkins-cloud"
   # cloud-cd, not "cloud": see the master module's team comment (the
   # OpenShift orphan reaper matches team=cloud instances, including Graviton
   # fleet workers mid-build).
