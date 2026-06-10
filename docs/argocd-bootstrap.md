@@ -1,8 +1,18 @@
 # ArgoCD bootstrap
 
-How GitOps starts on this platform: Terraform installs ArgoCD, hands it the
-cloud facts it cannot know, and applies one root Application. Everything
-after that point reconciles from git. This is the
+How GitOps starts on this platform. Terraform does three things: it
+installs ArgoCD, it records the AWS-side values the charts in git will
+need, and it applies one root Application. Everything after that point
+reconciles from git.
+
+The middle step exists because of a simple gap: the Helm charts need real
+AWS identifiers (IAM role ARNs with generated suffixes, the ACM
+certificate ARN, S3 bucket and SQS queue names, the account ID), and none
+of them can live in git. They only exist after Terraform creates them,
+they change if the infrastructure is recreated, and some of them must stay
+out of a public repository. So Terraform writes them onto a Kubernetes
+Secret in the cluster, and ArgoCD templates them into chart values from
+there. That handoff is the whole trick. This is the
 [GitOps Bridge](https://github.com/gitops-bridge-dev/gitops-bridge) pattern,
 hand-rolled rather than consumed as a module (the upstream repos have been
 dormant since mid-2024, and the pattern is about fifty lines of Terraform).
