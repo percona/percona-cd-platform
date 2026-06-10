@@ -40,6 +40,15 @@ module "cloud" {
   # invites confused-deputy writes; null drops the dead worker IAM grant.
   cache_bucket_name = null
 
+  # The CFN-era live worker role carried an OpenShift ECR-access inline
+  # policy and CloudWatchAgentServerPolicy out-of-band; the cutover
+  # recreated the role template-shaped and dropped both. Restore the live
+  # shape (ECR reconstructed read-only; widen only on a concrete denial).
+  worker_ecr_read = true
+  extra_worker_managed_policies = [
+    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+  ]
+
   # Retained CFN data volume vol-077265221bc0180b3 is 100 GiB gp2 in
   # eu-west-1b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in

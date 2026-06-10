@@ -332,12 +332,83 @@ data "aws_iam_policy_document" "worker" {
       ]
     }
   }
+
+  # Packer amazon-ebs lifecycle (worker_ami_builder): the builder launches a
+  # temp instance with a temp keypair, snapshots it into an AMI, and tears
+  # everything down, all under the worker's instance-profile credentials.
+  # DescribeRegions is Packer's first call (region validation), so a missing
+  # grant fails the build before anything launches. Tag and DescribeInstances
+  # actions ride the base EC2Tags statement.
+  dynamic "statement" {
+    for_each = var.worker_ami_builder ? [1] : []
+    content {
+      sid    = "AmiBuilder"
+      effect = "Allow"
+      actions = [
+        "ec2:AttachVolume",
+        "ec2:CancelSpotInstanceRequests",
+        "ec2:CopyImage",
+        "ec2:CreateImage",
+        "ec2:CreateKeyPair",
+        "ec2:CreateSnapshot",
+        "ec2:CreateVolume",
+        "ec2:DeleteKeyPair",
+        "ec2:DeleteSnapshot",
+        "ec2:DeleteVolume",
+        "ec2:DeregisterImage",
+        "ec2:DescribeImages",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeRegions",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVolumes",
+        "ec2:DetachVolume",
+        "ec2:ModifyImageAttribute",
+        "ec2:ModifyInstanceAttribute",
+        "ec2:RegisterImage",
+        "ec2:RequestSpotInstances",
+        "ec2:RunInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  # Private-ECR read + public-ECR auth (worker_ecr_read).
+  # sts:GetServiceBearerToken is required alongside
+  # ecr-public:GetAuthorizationToken for authenticated public-gallery pulls.
+  dynamic "statement" {
+    for_each = var.worker_ecr_read ? [1] : []
+    content {
+      sid    = "EcrRead"
+      effect = "Allow"
+      actions = [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:DescribeImages",
+        "ecr:DescribeRepositories",
+        "ecr:GetAuthorizationToken",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr-public:GetAuthorizationToken",
+        "sts:GetServiceBearerToken",
+      ]
+      resources = ["*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "worker" {
   name   = local.worker_name
   role   = aws_iam_role.worker.id
   policy = data.aws_iam_policy_document.worker.json
+}
+
+resource "aws_iam_role_policy_attachment" "worker_extra" {
+  for_each   = toset(var.extra_worker_managed_policies)
+  role       = aws_iam_role.worker.name
+  policy_arn = each.value
 }
 
 resource "aws_iam_instance_profile" "worker" {

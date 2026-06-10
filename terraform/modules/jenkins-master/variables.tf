@@ -98,6 +98,24 @@ variable "extra_master_managed_policies" {
   default     = []
 }
 
+variable "extra_worker_managed_policies" {
+  description = "Extra AWS managed policy ARNs for the worker role. The CFN-era live roles carried CloudWatchAgentServerPolicy (cloud, psmdb) and AmazonSSMManagedInstanceCore (pmm) attached out-of-band; the CFN template never listed them, so the cutover recreation dropped them."
+  type        = list(string)
+  default     = []
+}
+
+variable "worker_ami_builder" {
+  description = "Grant the worker role the Packer amazon-ebs lifecycle (temp instance, keypair, image, snapshot, volume, region validation). pmm's nightly and release-candidate AMI jobs run Packer on workers with instance-profile credentials only; the grant lived on the CFN-era live role out-of-band."
+  type        = bool
+  default     = false
+}
+
+variable "worker_ecr_read" {
+  description = "Grant the worker role private-ECR read plus public-ECR auth token (authenticated pulls lift rate limits). Restores the CFN-era out-of-band grants: pmm Dagger engine pulls, cloud OpenShift image access."
+  type        = bool
+  default     = false
+}
+
 variable "extra_master_inline_policies" {
   description = "Extra inline policies for the master role. Each entry is { name, json }."
   type = list(object({
