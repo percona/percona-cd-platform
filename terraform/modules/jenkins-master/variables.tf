@@ -2,9 +2,9 @@
 # ps3-shaped master: AL2023, java-17, jenkins 2.541.3, master on :8080
 # only, 100GiB gp2 in the region's second AZ, SpotFleet with
 # capacityOptimized, SQS termination wired in, external-dns owning DNS.
-# Per-master quirks (psmdb subnets/naming, pmm JWorkerUser, pxc plugin
-# hook, etc.) are exposed as toggles rather than normalised during the
-# CF -> TF flip; convergence is tracked separately.
+# Per-master quirks (psmdb subnets/naming, pmm Packer/ECR worker IAM,
+# pxc plugin hook, etc.) are exposed as toggles rather than normalised
+# during the CF -> TF flip; convergence is tracked separately.
 
 # ----- Required -----
 
@@ -190,7 +190,7 @@ variable "extra_subnet_a" {
 }
 
 variable "create_worker_user" {
-  description = "Create an IAM User (JWorkerUser). Reserved and fail-closed unimplemented in main.tf; no master sets it."
+  description = "Create an IAM User (CFN-era JWorkerUser). Vestigial and fail-closed unimplemented in main.tf; the pmm user was deleted keyless at cutover and job-level grants live on the worker role (worker_ami_builder / worker_ecr_read / extra_worker_managed_policies). No master sets it."
   type        = bool
   default     = false
 }

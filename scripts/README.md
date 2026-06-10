@@ -19,10 +19,21 @@ Spot-interrupt readiness audit for a Jenkins master.
 
 Exits non-zero if anything is missing.
 
+[`check-master-alloy-mimir.py`](check-master-alloy-mimir.py)
+Verify every active master ships metrics to Mimir via Alloy. Enumerates the
+master set dynamically from repo source-of-truth (k8s instances dir,
+`master-*.tf` with/without the jenkins-master module -> k8s / tf-managed /
+cf-managed) and reads per-master freshness of
+`hetzner_api_rate_limit_remaining` from the in-cluster Mimir query-frontend.
+`--max-age <s>`, `--json`; STALE/MISSING exits non-zero. Run via
+`just check-master-alloy`.
+
 [`check-master-ingest.sh`](check-master-ingest.sh)
 Per-master Mimir + Loki ingest probe via in-cluster query-frontends.
 Reports series count, sample freshness, metric cardinality, Loki line count.
-Use for fleet-wide observability spot-checks without SSH.
+Use for fleet-wide observability spot-checks without SSH. The master list is
+hardcoded (`EXPECTED_MASTERS` in the script); `check-master-alloy-mimir.py`
+derives it dynamically — pair them.
 
 [`verify-observability.sh`](verify-observability.sh)
 Per-master end-to-end LGTM push pipeline walk: master-side Alloy systemd,

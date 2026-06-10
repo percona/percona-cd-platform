@@ -298,7 +298,9 @@ resource "aws_iam_role" "worker" {
   tags               = local.base_tags
 }
 
-# EC2 tag perms always; S3 cache only when caller passes cache_bucket_name.
+# EC2 tag perms always; conditional extras per caller: S3 cache
+# (cache_bucket_name), Packer amazon-ebs lifecycle (worker_ami_builder),
+# ECR read + public-ECR auth (worker_ecr_read).
 data "aws_iam_policy_document" "worker" {
   statement {
     sid    = "EC2Tags"
@@ -591,7 +593,11 @@ resource "aws_iam_role_policy_attachment" "spot_fleet_tagging" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
 }
 
-# pmm's JWorkerUser. Toggle reserved; permissions not yet authored.
+# Vestigial. The CFN-era pmm stack defined a JWorkerUser IAM user, but it was
+# deleted at cutover with zero access keys (nothing consumed it; pmm's jobs
+# run on instance-profile credentials, with the AMI-build and ECR grants
+# restored on the worker ROLE via worker_ami_builder / worker_ecr_read). The
+# toggle stays fail-closed so no master recreates a long-lived-key user.
 resource "aws_iam_user" "worker" {
   count = var.create_worker_user ? 1 : 0
   name  = "${var.short_name}-worker-user"
@@ -600,7 +606,7 @@ resource "aws_iam_user" "worker" {
   lifecycle {
     precondition {
       condition     = !var.create_worker_user
-      error_message = "create_worker_user=true is not implemented; author pmm's JWorkerUser permissions against the upstream CF template first."
+      error_message = "create_worker_user=true is intentionally unimplemented; grant job-level permissions on the worker role (worker_ami_builder / worker_ecr_read / extra_worker_managed_policies) instead of an IAM user."
     }
   }
 }
