@@ -90,7 +90,11 @@ Mechanics worth knowing:
   writes the EndpointSlice. The tag scheme is uniform: the module sets
   `iit-billing-tag` to its `short_name` on every master. The filter value
   is `jenkins-<host>` everywhere except pmm, whose short_name stays
-  `jenkins-pmm-amzn2`, inherited from its CloudFormation stack name. Zero
+  `jenkins-pmm-amzn2`. The value is inherited from its CloudFormation stack
+  name and kept deliberately, because the string also names the IAM roles,
+  the instance profile, the init-config bucket, and the billing tag, and
+  renaming live identities during a cutover buys nothing
+  (`terraform/master-pmm.tf` records the decision). Zero
   matches writes an empty slice (the proxy serves the 503 page). Multiple
   matches are TCP-probed on :8080 and the newest *serving* instance wins.
   If none serve, the existing slice is kept so a ghost can never blackhole
