@@ -32,7 +32,36 @@ Terraform owns exactly three cluster-facing resources, in strict order
 3. **`kubectl_manifest.argocd_root_app`**: applies
    `argocd-bootstrap/root-app.yaml` verbatim. Depends on the Secret.
 
-After step 3, Terraform stops touching the cluster. ArgoCD is
+The chain, and the ownership boundary it creates:
+
+```mermaid
+flowchart TB
+    subgraph tf["Terraform owns (runs at apply time)"]
+        helm["1: helm_release argocd<br/>chart pinned in versions.tf"]
+        secret["2: cluster Secret<br/>28 annotations carry the AWS facts"]
+        root["3: root Application<br/>argocd-bootstrap/root-app.yaml"]
+        helm --> secret --> root
+    end
+
+    subgraph gitops["ArgoCD owns (continuous reconcile from git)"]
+        proj["AppProject platform<br/>+ deny sync window"]
+        as1["ApplicationSet addons"]
+        as2["ApplicationSet jenkins-masters"]
+        apps1["22 addon apps<br/>auto-sync, prune, selfHeal"]
+        apps2["1 in-cluster master app<br/>manual sync only"]
+        as1 --> apps1
+        as2 --> apps2
+    end
+
+    root -- "syncs projects/ + applicationsets/" --> proj
+    root --> as1
+    root --> as2
+    secret -. "annotations become Helm values" .-> as1
+    secret -. "annotations become Helm values" .-> as2
+```
+
+The diagram shows ownership, not network paths. After step 3, Terraform
+stops touching the cluster. ArgoCD is
 Terraform-installed rather than self-managed because of the bring-up
 chicken-and-egg: its OIDC config and Ingress live in chart values that must
 exist before any addon can sync. Self-managing ArgoCD later is a known
@@ -127,6 +156,26 @@ sync in a window still works. Each new in-cluster master must be added to
 that list by name, never as a glob (a glob would freeze the
 jenkins-ingress and reconciler addons too). Rollout gating rationale:
 [ADR 0025](adr/0025-singleton-controller-rollout-gating.md).
+
+The split is easiest to see in motion. One merge, two outcomes:
+
+```mermaid
+sequenceDiagram
+    participant Eng as Engineer
+    participant Git as main branch
+    participant CD as ArgoCD
+    participant Addon as Addon app
+    participant Master as jenkins-ps3-k8s
+
+    Eng->>Git: merge (after ci-gate + review)
+    CD->>Git: poll, about every 3 minutes
+    CD->>Addon: auto-sync (prune, selfHeal)
+    Addon-->>CD: Synced and Healthy
+    CD->>Master: marks OutOfSync only
+    Note over Master: deny sync window holds it
+    Eng->>CD: argocd app sync jenkins-ps3-k8s
+    CD->>Master: manual sync applies in a window
+```
 
 ## CRDs and ordering
 
