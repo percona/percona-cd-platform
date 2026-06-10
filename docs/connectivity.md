@@ -86,8 +86,11 @@ Mechanics worth knowing:
   headers, WebSocket upgrade, and a 3600 s read timeout.
 - The reconciler CronJob runs every minute (staleness bound), discovers the
   master via `ec2:DescribeInstances` filtered on
-  `tag:iit-billing-tag=<tag>` + `running` in the master's region (pmm uses
-  the legacy `jenkins-pmm-amzn2` tag), and writes the EndpointSlice. Zero
+  `tag:iit-billing-tag=<short_name>` + `running` in the master's region, and
+  writes the EndpointSlice. The tag scheme is uniform: the module sets
+  `iit-billing-tag` to its `short_name` on every master. The filter value
+  is `jenkins-<host>` everywhere except pmm, whose short_name stays
+  `jenkins-pmm-amzn2`, inherited from its CloudFormation stack name. Zero
   matches writes an empty slice (the proxy serves the 503 page). Multiple
   matches are TCP-probed on :8080 and the newest *serving* instance wins.
   If none serve, the existing slice is kept so a ghost can never blackhole
