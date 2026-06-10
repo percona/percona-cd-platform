@@ -59,6 +59,10 @@ hosts:
     region: eu-west-1
     tag: jenkins-cloud
     port: 8080
+  - name: pmm
+    region: us-east-2
+    tag: jenkins-pmm-amzn2
+    port: 8080
 
 resources:
   requests:

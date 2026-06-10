@@ -150,7 +150,9 @@ variable "jenkins_hosts" {
     # friendly `<host>.cd.percona.com` flips from EC2 to the ALB;
     # `origin-<host>.cd.percona.com` keeps pointing at the EC2 master so
     # the proxy upstream stays reachable through cutover.
-    pmm = { mode = "proxy", upstream_origin = "origin-pmm.cd.percona.com" }
+    # pmm upstream discovered by the in-cluster jenkins-endpoint-reconciler
+    # (EndpointSlice over cross-region peering), like the other EC2 masters.
+    pmm = { mode = "proxy" }
     # ps80 upstream is discovered by the in-cluster jenkins-endpoint-reconciler
     # (EndpointSlice over cross-region peering), not an origin-<host> record.
     # Re-add upstream_origin only for a Mode B fallback.

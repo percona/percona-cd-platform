@@ -94,6 +94,14 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: cloud.cd.percona.com
+  - name: pmm
+    # EndpointSlice kept in sync with the live pmm master private IP by the
+    # jenkins-endpoint-reconciler over the us-east-2 <-> us-east-1 peering
+    # (the EC2 tag is the legacy jenkins-pmm-amzn2).
+    upstream: jenkins-pmm.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: pmm.cd.percona.com
 
 ingress:
   # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`
