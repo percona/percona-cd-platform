@@ -142,7 +142,10 @@ master rule churn cannot break platform ingress. Neither ALB is
 hand-managed: the **AWS Load Balancer Controller** provisions and reconciles
 both from Kubernetes Ingress objects. One Ingress per host carries the host
 rule; the `group.name` annotation merges Ingresses into their shared ALB,
-and external-dns publishes the records. Host rules and group definitions are
+and external-dns publishes the records. Each group name materializes as
+exactly one ALB, so the cell runs two load balancers in total; an Ingress
+that declared no group would get a dedicated ALB of its own, which is why
+every Ingress here carries one. Host rules and group definitions are
 therefore code: `resources/addons/jenkins-ingress/` (its values file is the
 canonical description of the `jenkins-masters` group) and the per-addon
 Ingress annotations for `jenkins-cd`; onboarding a host is
