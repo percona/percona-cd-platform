@@ -97,6 +97,16 @@ resource "aws_vpc_endpoint" "s3" {
 
 data "aws_region" "current" {}
 
+# Gateway endpoint policy is a defense-in-depth FILTER, not the access-control
+# layer: a Gateway endpoint intercepts ALL same-region S3 traffic from the VPC,
+# so any action it omits is denied fleet-wide regardless of IAM. IAM (the master
+# role, the worker roles, percona-openshift-user) is the real control. An
+# action-scoped list silently 403s workloads needing other S3 ops (e.g.
+# openshift-install destroy emptying a versioned bucket needs
+# s3:ListBucketVersions). Allow all S3 actions and let IAM scope per principal.
+# Resource stays "*" on purpose: workers legitimately read cross-account public
+# buckets (AL2023 package mirrors, OpenShift/Red Hat release images), which an
+# aws:ResourceOrgID/ResourceAccount restriction would break. See docs/adr/0033.
 data "aws_iam_policy_document" "s3_endpoint" {
   statement {
     effect = "Allow"
@@ -104,15 +114,7 @@ data "aws_iam_policy_document" "s3_endpoint" {
       type        = "*"
       identifiers = ["*"]
     }
-    actions = [
-      "s3:ListBucket",
-      "s3:GetObject",
-      "s3:GetObjectAcl",
-      "s3:PutObject",
-      "s3:PutObjectAcl",
-      "s3:DeleteObject",
-      "s3:AbortMultipartUpload",
-    ]
+    actions   = ["s3:*"]
     resources = ["*"]
   }
 }
