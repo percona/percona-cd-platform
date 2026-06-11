@@ -13,11 +13,11 @@ LogQL stream), so they render in a timeseries panel with a
 prometheus datasource declaration; targets still hit Loki. This
 is the standard Grafana pattern for `rate({...} [1m])` from Loki.
 
-Master template variable defaults to ps3.cd while it is the only
-Jenkins instance pushing logs into Loki via per-master Alloy.
-The variable resolves via `label_values({master=~".+"}, master)`,
-so additional masters appear automatically once they are wired
-up to the alloy-gateway.
+Master template variable defaults to ps3-k8s (the in-cluster
+controller's push label, ADR 0013 A2). The variable resolves via
+`label_values({master=~".+"}, master)`, so every master shipping
+logs through alloy-gateway (fleet-wide since 2026-05-10) appears
+automatically.
 */}}
 apiVersion: v1
 kind: ConfigMap

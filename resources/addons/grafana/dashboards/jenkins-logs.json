@@ -339,8 +339,8 @@
       {
         "current": {
           "selected": false,
-          "text": "ps3.cd",
-          "value": "ps3.cd"
+          "text": "ps3-k8s",
+          "value": "ps3-k8s"
         },
         "datasource": {
           "type": "loki",

@@ -1,0 +1,61 @@
+{{/*
+Recording rules for the master uptime probes. The Alloy DS
+`mimir.rules.kubernetes "ruler"` component discovers PrometheusRule
+resources cluster-wide with empty selectors and syncs them to the Mimir
+ruler, where they evaluate against the probe_* series (this addon's Probe
+CRs) and the hetzner_* series the masters push through alloy-gateway.
+
+Rules within a group evaluate sequentially per cycle, so the chained
+references below are safe. Alert rules are deliberately deferred until
+probe flap behaviour has been observed (see Chart.yaml).
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: jenkins-uptime
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: jenkins-uptime
+    app.kubernetes.io/component: rules
+spec:
+  groups:
+    - name: jenkins-uptime.rules
+      rules:
+        - record: jenkins:master_http_up
+          expr: max by (master, path) (probe_success{job=~"jenkins-uptime-(internal|external)"})
+        # The subquery (max_over_time over timestamp()) keeps the freshness
+        # series emitting for 24h after a master's push stops (the raw series
+        # go stale after 5m); staleness must not silently hide a dead push
+        # pipeline. 5m resolution still recovers the exact last-sample
+        # timestamp because each step's staleness lookback covers the gap.
+        - record: jenkins:master_last_push_age_seconds
+          expr: time() - max by (master) (max_over_time(timestamp(hetzner_api_rate_limit_remaining)[24h:5m]))
+        - record: jenkins:master_push_fresh
+          expr: jenkins:master_last_push_age_seconds < bool 300
+        # Healthy = internal AND external probe up AND pushing metrics.
+        # Each path is required explicitly (not min over whatever paths
+        # happen to exist) so a Probe whose series disappears entirely
+        # drops the master from this rule (absent, the fleet count turns
+        # red) instead of letting the surviving path report a false
+        # healthy. External-only masters (no peering Service) are
+        # exempted from the internal requirement, derived from the
+        # values inventory.
+        {{- $externalOnly := list }}
+        {{- range .Values.masters }}
+        {{- if not .internal }}
+        {{- $externalOnly = append $externalOnly .master }}
+        {{- end }}
+        {{- end }}
+        - record: jenkins:master_healthy
+          expr: |
+            (
+                (jenkins:master_http_up{path="external"} == bool 1)
+              * on (master)
+                (jenkins:master_http_up{path="internal"} == bool 1)
+            {{- if $externalOnly }}
+              or
+                sum by (master) (jenkins:master_http_up{path="external",master=~"{{ join "|" $externalOnly }}"} == bool 1)
+            {{- end }}
+            )
+            * on (master)
+            jenkins:master_push_fresh

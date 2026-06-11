@@ -1,0 +1,18 @@
+apiVersion: v2
+name: jenkins-uptime
+version: 0.1.0
+description: |
+  Jenkins-master uptime monitoring — a blackbox-exporter probes every
+  master's /login on two paths: internal (the per-master Services in
+  jenkins-ingress, straight over the VPC peering, isolating master health
+  from ALB/NGINX) and external (https://<inst>.cd.percona.com, the true
+  user path, which also yields TLS cert expiry). The Probe CRs are
+  discovered by the Alloy DS prometheus.operator.probes component and the
+  recording rules sync to the Mimir ruler via mimir.rules.kubernetes —
+  this addon plugs into both hooks with zero Alloy changes. Alert rules
+  are deliberately deferred until probe flap behaviour has been observed.
+type: application
+dependencies:
+  - name: prometheus-blackbox-exporter
+    version: 11.11.0
+    repository: https://prometheus-community.github.io/helm-charts

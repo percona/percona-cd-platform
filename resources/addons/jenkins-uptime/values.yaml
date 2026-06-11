@@ -1,0 +1,101 @@
+# jenkins-uptime — synthetic uptime probing for the Jenkins masters.
+#
+# One blackbox-exporter Deployment probes every master's /login on two
+# paths, distinguished by the `path` label on the resulting series:
+#
+#   internal  http://jenkins-<inst>.jenkins-ingress.svc:8080/login
+#             straight to the master over the VPC peering (the Services
+#             the jenkins-endpoint-reconciler maintains), with the Host
+#             header the jenkins-ingress NGINX would set. Isolates master
+#             health from the ALB/ingress chain.
+#   external  https://<inst>.cd.percona.com/login
+#             the true user path: DNS -> public ALB -> jenkins-ingress
+#             NGINX -> peering -> master. Also yields TLS cert expiry
+#             (probe_ssl_earliest_cert_expiry).
+#
+# internal up + external down => ingress/ALB problem, not the master.
+
+prometheus-blackbox-exporter:
+  # Stable Service name consumed by the Probe CRs' prober.url.
+  fullnameOverride: blackbox-exporter
+  priorityClassName: platform-default
+  config:
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          # /login answers 200 anonymously on every master; quiet-down or
+          # a booting Jenkins answers 503, which must count as down.
+          valid_status_codes: [200]
+          follow_redirects: true
+          preferred_ip_protocol: ip4
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# One entry per master. `master` matches the push-pipeline label convention
+# (`<inst>.cd` for EC2/CFN masters, `ps3-k8s` for the in-cluster controller)
+# so the recording rules can join probe_success with hetzner_* push
+# freshness on (master). `internal` targets the per-master Services the
+# jenkins-endpoint-reconciler writes (its values.yaml is the source of
+# truth for that set); a master without `internal` gets the external probe
+# only. pg is still CloudFormation-managed with no peering Service.
+masters:
+  - name: ps80
+    master: ps80.cd
+    internal: http://jenkins-ps80.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: ps80.cd.percona.com
+    external: https://ps80.cd.percona.com/login
+  - name: ps57
+    master: ps57.cd
+    internal: http://jenkins-ps57.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: ps57.cd.percona.com
+    external: https://ps57.cd.percona.com/login
+  - name: pxb
+    master: pxb.cd
+    internal: http://jenkins-pxb.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: pxb.cd.percona.com
+    external: https://pxb.cd.percona.com/login
+  - name: pxc
+    master: pxc.cd
+    internal: http://jenkins-pxc.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: pxc.cd.percona.com
+    external: https://pxc.cd.percona.com/login
+  - name: psmdb
+    master: psmdb.cd
+    internal: http://jenkins-psmdb.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: psmdb.cd.percona.com
+    external: https://psmdb.cd.percona.com/login
+  - name: rel
+    master: rel.cd
+    internal: http://jenkins-rel.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: rel.cd.percona.com
+    external: https://rel.cd.percona.com/login
+  - name: cloud
+    master: cloud.cd
+    internal: http://jenkins-cloud.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: cloud.cd.percona.com
+    external: https://cloud.cd.percona.com/login
+  - name: pmm
+    master: pmm.cd
+    internal: http://jenkins-pmm.jenkins-ingress.svc.cluster.local:8080/login
+    hostHeader: pmm.cd.percona.com
+    external: https://pmm.cd.percona.com/login
+  # In-cluster controller: probe the chart's Service directly; the external
+  # probe goes through its own ALB host ingress (ADR 0027).
+  - name: ps3
+    master: ps3-k8s
+    internal: http://jenkins-ps3-k8s.jenkins-ps3-k8s.svc.cluster.local:8080/login
+    hostHeader: ps3.cd.percona.com
+    external: https://ps3.cd.percona.com/login
+  - name: pg
+    master: pg.cd
+    external: https://pg.cd.percona.com/login
+
+probe:
+  interval: 30s
+  scrapeTimeout: 15s  # > module timeout (10s), < interval

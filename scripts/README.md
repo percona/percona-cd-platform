@@ -47,6 +47,15 @@ Per-master end-to-end LGTM push pipeline walk: master-side Alloy systemd,
 ALB + bearer, alloy-gateway pods, Mimir distributor + canary, Loki ring +
 canary, Grafana. Pair with `check-master-ingest.sh` for fleet-wide.
 
+[`check-uptime-queries.py`](check-uptime-queries.py)
+Validate every jenkins-uptime PromQL query against Mimir (ADR 0031): the
+PrometheusRule recording-rule exprs (live from the cluster when deployed,
+else rendered via `helm template`) plus every Jenkins Uptime dashboard
+panel expr and its template-variable query. Auto-detects pre-deploy
+(addon series may be empty, source series must exist) vs post-deploy
+(everything must return series). Parse errors or unexpectedly empty
+results exit non-zero.
+
 ## Cluster-facing
 
 [`verify-karpenter.sh`](verify-karpenter.sh)
