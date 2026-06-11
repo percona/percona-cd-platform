@@ -168,7 +168,7 @@ are retained as defense-in-depth for any abrupt instance loss:
    is also persisted to disk so a restart does not stampede a still-sick
    datacenter.
 
-The readiness audit `scripts/check-master-spot-readiness.sh` walks every
+The readiness audit `just check-master-spot-readiness <inst>` walks every
 moving piece (SpotFleet config, cron, graceful-stop.sh + flock, JVM args,
 Secrets Manager + api-admin auth probe). Run it before declaring a master
 ready to absorb an interrupt.

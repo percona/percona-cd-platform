@@ -186,9 +186,11 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 - `just check-master-alloy` — every-active-master Mimir-via-Alloy freshness
   gate; enumerates the master set dynamically from repo source-of-truth.
 - `just check-master-ingest` — per-master Mimir + Loki detail (series,
-  freshness, cardinality, log lines); hardcoded master list.
+  freshness, cardinality, log lines); same dynamic master enumeration.
 - `just verify-observability [<inst>]` — full push-pipeline walk for
   one master (Alloy systemd, ALB + bearer, gateway, Mimir/Loki, Grafana).
+- `just check-uptime-queries` — every jenkins-uptime PromQL (recording
+  rules + dashboard panels) parses and returns series against Mimir.
 
 ## Related decisions
 
