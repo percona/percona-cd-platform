@@ -1,0 +1,27 @@
+{{/*
+AWS load balancer dashboard (ADR 0034).
+
+Wraps dashboards/aws-alb.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it; the `grafana_folder` annotation lands it in a new
+"AWS" folder. Fed by the cloudwatch-exporter addon (YACE): the
+aws_applicationelb_* / aws_networkelb_* gauges hold the newest 5-min
+CloudWatch bucket, so panel exprs divide by 300 instead of rate().
+The in-cluster row reads LBC controller-runtime counters and the
+loki.source.kubernetes_events stream. Datasource UIDs `mimir` and
+`loki` are bound to the datasources block in values.yaml.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-aws-alb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "AWS"
+data:
+  aws-alb.json: |-
+{{ .Files.Get "dashboards/aws-alb.json" | indent 4 }}
