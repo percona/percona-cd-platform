@@ -65,9 +65,14 @@ jenkins:
             - name: alloy-metrics-data
               mountPath: /tmp/alloy
             # Read-only home mount so the sidecar can tail the
-            # percona-jenkins-stats build-events log on the PVC.
+            # percona-jenkins-stats build-events log on the PVC. The subPath
+            # must match the controller's persistence.subPath (the restored
+            # EBS home lives under ps3.cd.percona.com/ inside the PVC);
+            # without it the sidecar sees the PVC root and the events file
+            # path resolves to nothing.
             - name: jenkins-home
               mountPath: /var/jenkins_home
+              subPath: ps3.cd.percona.com
               readOnly: true
 
     ingress:
