@@ -22,6 +22,7 @@ Chart.yaml is cross-checked; a mismatch is reported as DRIFT.
 
 Run via: just check-versions  (uv supplies pyyaml + python-hcl2)
 """
+
 from __future__ import annotations
 
 import glob
@@ -32,7 +33,8 @@ import sys
 import urllib.request
 from dataclasses import dataclass
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from cdpctl._repo import http_json, load_yaml, repo_root
+
 UA = {"User-Agent": "percona-cd-platform-check-versions"}
 
 # The only non-derivable lookups. These are NOT version pins - they map a pin's
@@ -63,7 +65,8 @@ def _clean(s) -> str:
 def gh_latest(owner_repo: str, prefix: str | None = None) -> str:
     out = subprocess.check_output(
         ["gh", "api", f"repos/{owner_repo}/releases?per_page=40"],
-        stderr=subprocess.DEVNULL, timeout=30,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
     )
     for rel in json.loads(out):
         if rel.get("draft") or rel.get("prerelease"):
@@ -79,6 +82,7 @@ def gh_latest(owner_repo: str, prefix: str | None = None) -> str:
 
 def helm_latest(repo_url: str, chart: str) -> str:
     import yaml
+
     url = f"{repo_url.rstrip('/')}/index.yaml"
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=25) as r:
         idx = yaml.safe_load(r)
@@ -92,8 +96,7 @@ def helm_latest(repo_url: str, chart: str) -> str:
 def tf_registry_latest(kind: str, addr: str) -> str:
     # kind: "modules" (ns/name/provider) | "providers" (ns/name)
     url = f"https://registry.terraform.io/v1/{kind}/{addr}"
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=25) as r:
-        return json.load(r).get("version", "?")
+    return http_json(url, headers=UA, timeout=25).get("version", "?")
 
 
 def _safe(fn, *a) -> str:
@@ -105,14 +108,13 @@ def _safe(fn, *a) -> str:
 
 # ---------- pin readers ----------
 def _yaml(path: str):
-    import yaml
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
+    return load_yaml(path) or {}
 
 
 def read_versions_tf():
     import hcl2
-    with open(f"{ROOT}/terraform/versions.tf") as f:
+
+    with open(f"{repo_root()}/terraform/versions.tf") as f:
         d = hcl2.load(f)
 
     def specs(m):  # drop hcl2 __comments__/__is_block__ metadata, keep real entries
@@ -122,31 +124,36 @@ def read_versions_tf():
     rp = specs(_first(tf["required_providers"]))
     providers = {k: (_clean(v["source"]), _clean(v["version"])) for k, v in rp.items()}
     loc = _first(d["locals"])
-    modules = {k: (_clean(v["source"]), _clean(v["version"])) for k, v in specs(loc["modules"]).items()}
-    charts = {k: (_clean(v["repo"]), _clean(v["name"]), _clean(v["ver"])) for k, v in specs(loc["charts"]).items()}
+    modules = {
+        k: (_clean(v["source"]), _clean(v["version"])) for k, v in specs(loc["modules"]).items()
+    }
+    charts = {
+        k: (_clean(v["repo"]), _clean(v["name"]), _clean(v["ver"]))
+        for k, v in specs(loc["charts"]).items()
+    }
     return _clean(tf["required_version"]), providers, modules, charts
 
 
 def read_chart_deps():
     out = []  # (name, version, repo, source_label)
-    paths = sorted(glob.glob(f"{ROOT}/resources/addons/*/Chart.yaml"))
-    paths.append(f"{ROOT}/resources/jenkins/master/Chart.yaml")
+    paths = sorted(glob.glob(f"{repo_root()}/resources/addons/*/Chart.yaml"))
+    paths.append(f"{repo_root()}/resources/jenkins/master/Chart.yaml")
     for p in paths:
         if not os.path.exists(p):
             continue
-        label = os.path.relpath(p, ROOT)
-        for dep in (_yaml(p).get("dependencies") or []):
+        label = os.path.relpath(p, repo_root())
+        for dep in _yaml(p).get("dependencies") or []:
             out.append((dep["name"], dep["version"], dep["repository"], label))
     return out
 
 
 def read_image_pins():
     out = []  # (label, tag, gh_repo)
-    g = _yaml(f"{ROOT}/resources/addons/grafana/values.yaml")
+    g = _yaml(f"{repo_root()}/resources/addons/grafana/values.yaml")
     tag = g.get("grafana", {}).get("image", {}).get("tag")
     if tag:
         out.append(("image/grafana", str(tag), IMAGE_GH["grafana"]))
-    a = _yaml(f"{ROOT}/resources/addons/authentik/values.yaml")
+    a = _yaml(f"{repo_root()}/resources/addons/authentik/values.yaml")
     tag = a.get("authentik", {}).get("global", {}).get("image", {}).get("tag")
     if tag:
         out.append(("image/authentik", str(tag), IMAGE_GH["authentik"]))
@@ -155,7 +162,7 @@ def read_image_pins():
 
 def read_precommit():
     out = []  # (owner_repo, rev)
-    for r in _yaml(f"{ROOT}/.pre-commit-config.yaml").get("repos", []):
+    for r in _yaml(f"{repo_root()}/.pre-commit-config.yaml").get("repos", []):
         if r.get("repo") != "local" and r.get("rev"):
             out.append((r["repo"].split("github.com/", 1)[-1].rstrip("/"), r["rev"]))
     return out
@@ -177,7 +184,7 @@ def cmp_exact(pinned: str, latest: str) -> str:
     return "OK" if _norm(pinned) == _norm(latest) else "BUMP"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     try:
         req_ver, providers, modules, charts = read_versions_tf()
     except Exception as e:
@@ -208,7 +215,9 @@ def main() -> int:
             latest = _safe(helm_latest, repo, name)
         versions = h["versions"]
         if len(versions) > 1:
-            drift.append(f"{name}: " + "; ".join(f"{v} <- {', '.join(s)}" for v, s in versions.items()))
+            drift.append(
+                f"{name}: " + "; ".join(f"{v} <- {', '.join(s)}" for v, s in versions.items())
+            )
             rows.append(Row(f"chart/{name}", "/".join(versions), latest, "DRIFT", "MULTIPLE"))
             continue
         ver = next(iter(versions))
@@ -225,7 +234,15 @@ def main() -> int:
     for k, (source, constraint) in sorted(providers.items()):
         latest = _safe(tf_registry_latest, "providers", source)
         rows.append(Row(f"tf-provider/{k}", constraint, latest, "INFO", "versions.tf"))
-    rows.append(Row("opentofu", req_ver, _norm(_safe(gh_latest, "opentofu/opentofu", "v")), "INFO", "versions.tf"))
+    rows.append(
+        Row(
+            "opentofu",
+            req_ver,
+            _norm(_safe(gh_latest, "opentofu/opentofu", "v")),
+            "INFO",
+            "versions.tf",
+        )
+    )
 
     # Container image tags pinned in values.yaml.
     for label, tag, gh_repo in read_image_pins():
@@ -235,9 +252,15 @@ def main() -> int:
     # Pre-commit hook repos.
     for owner_repo, rev in read_precommit():
         latest = _safe(gh_latest, owner_repo)
-        rows.append(Row(f"pre-commit/{owner_repo.split('/')[-1]}", _norm(rev),
-                        _norm(latest) if latest not in ("?", "ERR") else latest,
-                        cmp_exact(rev, latest), ".pre-commit-config.yaml"))
+        rows.append(
+            Row(
+                f"pre-commit/{owner_repo.split('/')[-1]}",
+                _norm(rev),
+                _norm(latest) if latest not in ("?", "ERR") else latest,
+                cmp_exact(rev, latest),
+                ".pre-commit-config.yaml",
+            )
+        )
 
     # ---------- print ----------
     w = max((len(r.component) for r in rows), default=20) + 2
@@ -262,14 +285,27 @@ def main() -> int:
     else:
         try:
             out = subprocess.check_output(
-                ["aws", "eks", "describe-cluster-versions", "--region", "us-east-1", "--output", "json"],
-                stderr=subprocess.DEVNULL, timeout=30,
+                [
+                    "aws",
+                    "eks",
+                    "describe-cluster-versions",
+                    "--region",
+                    "us-east-1",
+                    "--output",
+                    "json",
+                ],
+                stderr=subprocess.DEVNULL,
+                timeout=30,
             )
-            print(f"{'K8S':<7} {'STATUS':<22} {'PATCH':<10} {'EOS-STD':<12} {'EOS-EXT':<12} DEFAULT")
+            print(
+                f"{'K8S':<7} {'STATUS':<22} {'PATCH':<10} {'EOS-STD':<12} {'EOS-EXT':<12} DEFAULT"
+            )
             for cv in json.loads(out).get("clusterVersions", []):
-                print(f"{cv['clusterVersion']:<7} {cv['versionStatus']:<22} "
-                      f"{cv['kubernetesPatchVersion']:<10} {cv['endOfStandardSupportDate'][:10]:<12} "
-                      f"{cv['endOfExtendedSupportDate'][:10]:<12} {cv.get('defaultVersion', False)}")
+                print(
+                    f"{cv['clusterVersion']:<7} {cv['versionStatus']:<22} "
+                    f"{cv['kubernetesPatchVersion']:<10} {cv['endOfStandardSupportDate'][:10]:<12} "
+                    f"{cv['endOfExtendedSupportDate'][:10]:<12} {cv.get('defaultVersion', False)}"
+                )
         except Exception as e:
             print(f"  AWS EKS query failed: {e}")
 

@@ -21,8 +21,8 @@ Asserts, fail-closed:
      tofu fmt keeps the repo on line comments) and a `#`/`//` inside a quoted
      string (false-positive risk).
 
-Credential-free, stdlib-only. Run from the repo root:
-  python3 scripts/check_conventions.py
+Credential-free, stdlib-only (CI runs it on a bare interpreter via
+`PYTHONPATH=src python3 -m cdpctl conventions`). Run via: just tf-conventions
 """
 
 from __future__ import annotations
@@ -31,8 +31,7 @@ import pathlib
 import re
 import sys
 
-REPO = pathlib.Path(__file__).resolve().parents[1]
-TF_ROOT = REPO / "terraform"
+from cdpctl._repo import repo_root
 
 OWNERS = {
     "platform",
@@ -75,23 +74,25 @@ TICKET_RE = re.compile(r"\b(?:PS|PKG|PXB|PG)-\d+\b")
 TEAM_ARG_RE = re.compile(r'^\s*team\s*=\s*"([a-z0-9-]+)"')
 
 
-def banner_files() -> list[pathlib.Path]:
-    return sorted(TF_ROOT.glob("*.tf")) + sorted(TF_ROOT.glob("modules/*/main.tf"))
+def banner_files(tf_root: pathlib.Path) -> list[pathlib.Path]:
+    return sorted(tf_root.glob("*.tf")) + sorted(tf_root.glob("modules/*/main.tf"))
 
 
-def all_tf_files() -> list[pathlib.Path]:
+def all_tf_files(tf_root: pathlib.Path) -> list[pathlib.Path]:
     return [
         p
-        for p in sorted(TF_ROOT.rglob("*.tf"))
+        for p in sorted(tf_root.rglob("*.tf"))
         if ".terraform" not in p.parts and "_oneoff" not in p.parts
     ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    repo = pathlib.Path(repo_root())
+    tf_root = repo / "terraform"
     errors: list[str] = []
 
-    for path in banner_files():
-        rel = path.relative_to(REPO)
+    for path in banner_files(tf_root):
+        rel = path.relative_to(repo)
         first = path.read_text().splitlines()[0] if path.read_text() else ""
         m = BANNER_RE.match(first)
         if not m:
@@ -99,7 +100,9 @@ def main() -> int:
             continue
         owner = m.group(1)
         if owner not in OWNERS:
-            errors.append(f"{rel}:1  unknown owner {owner!r} (allowed: {', '.join(sorted(OWNERS))})")
+            errors.append(
+                f"{rel}:1  unknown owner {owner!r} (allowed: {', '.join(sorted(OWNERS))})"
+            )
         inst_match = re.match(r"master-([a-z0-9]+)\.tf$", path.name)
         if inst_match:
             inst = inst_match.group(1)
@@ -116,13 +119,17 @@ def main() -> int:
                     if (m := TEAM_ARG_RE.match(line))
                 ]
                 if not team_args:
-                    errors.append(f'{rel}  no `team = "..."` module argument (expected {want_tag!r})')
+                    errors.append(
+                        f'{rel}  no `team = "..."` module argument (expected {want_tag!r})'
+                    )
                 for n, got in team_args:
                     if got != want_tag:
-                        errors.append(f"{rel}:{n}  team {got!r} but instance {inst!r} must tag team={want_tag!r}")
+                        errors.append(
+                            f"{rel}:{n}  team {got!r} but instance {inst!r} must tag team={want_tag!r}"
+                        )
 
-    for path in all_tf_files():
-        rel = path.relative_to(REPO)
+    for path in all_tf_files(tf_root):
+        rel = path.relative_to(repo)
         for n, line in enumerate(path.read_text().splitlines(), start=1):
             if "Copyright" in line:
                 errors.append(f"{rel}:{n}  `Copyright` line (no copyright headers in IaC)")
@@ -135,9 +142,11 @@ def main() -> int:
             # (a CI gate) keeps this repo on line comments anyway.
             markers = [m for m in (line.find("#"), line.find("//")) if m != -1]
             if markers:
-                hit = TICKET_RE.search(line[min(markers):])
+                hit = TICKET_RE.search(line[min(markers) :])
                 if hit:
-                    errors.append(f"{rel}:{n}  ticket ID {hit.group(0)} in comment (keep IDs out of .tf comments)")
+                    errors.append(
+                        f"{rel}:{n}  ticket ID {hit.group(0)} in comment (keep IDs out of .tf comments)"
+                    )
 
     if errors:
         print(f"check_conventions: {len(errors)} violation(s)")
@@ -145,7 +154,9 @@ def main() -> int:
             print(f"  {e}")
         return 1
 
-    print(f"check_conventions: OK ({len(banner_files())} banners, {len(all_tf_files())} files scanned)")
+    print(
+        f"check_conventions: OK ({len(banner_files(tf_root))} banners, {len(all_tf_files(tf_root))} files scanned)"
+    )
     return 0
 
 
