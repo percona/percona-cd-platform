@@ -82,6 +82,18 @@ def plan_changes(plan: dict) -> list[tuple[str, list[str]]]:
     return out
 
 
+def scope_violations(
+    changes: list[tuple[str, list[str]]], inst: str
+) -> list[tuple[str, list[str]]]:
+    """Plan-scope gate: only that master's init-config S3 objects may update."""
+    expected_prefix = f"module.{inst}.aws_s3_object.init_config"
+    return [
+        (a, acts)
+        for a, acts in changes
+        if not (a.startswith(expected_prefix) and acts == ["update"])
+    ]
+
+
 def evaluate_live(inst: str, src: str, assume_yes: bool):
     if shutil.which("jenkins") is None:
         print("jenkins CLI not found. Either wait for the 30 min SSM sync plus the")
@@ -111,12 +123,7 @@ def rb_template_change(args):
     gate_clean_main()
     plan = tf_plan()
     changes = plan_changes(plan)
-    expected_prefix = f"module.{inst}.aws_s3_object.init_config"
-    bad = [
-        (a, acts)
-        for a, acts in changes
-        if not (a.startswith(expected_prefix) and acts == ["update"])
-    ]
+    bad = scope_violations(changes, inst)
     if not changes:
         print("Plan is empty: the merged change is already applied. Nothing to do.")
     elif bad:

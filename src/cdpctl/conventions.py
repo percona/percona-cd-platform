@@ -27,11 +27,26 @@ Credential-free, stdlib-only (CI runs it on a bare interpreter via
 
 from __future__ import annotations
 
+import argparse
 import pathlib
 import re
+import subprocess
 import sys
 
 from cdpctl._repo import repo_root
+
+# scripts/ is FROZEN (ADR 0031): new automation lands as a cdpctl subcommand
+# under src/cdpctl/, never as a loose script. Symmetric fail-closed allowlist:
+# every tracked scripts/ path must be listed here, and every entry must still
+# exist (a stale entry fails too, so ports and deletions shrink the list in
+# the same PR).
+ALLOWED_SCRIPTS = {
+    "README.md",
+    # Boot-fetched by every EC2 master via a commit-SHA-pinned raw URL in
+    # terraform/modules/jenkins-master/user-data.sh.tftpl; must not move.
+    "install-master-observability.sh",
+}
+ALLOWED_DIR_PREFIXES = ("karpenter-tests/",)  # fixtures for cdpctl verify-karpenter
 
 OWNERS = {
     "platform",
@@ -86,10 +101,36 @@ def all_tf_files(tf_root: pathlib.Path) -> list[pathlib.Path]:
     ]
 
 
+def check_scripts_allowlist(repo: pathlib.Path) -> list[str]:
+    """The scripts/ freeze. `git ls-files` is deliberate: untracked local
+    scratch never fails `just ci`; the gate fires the moment a file is staged
+    (and always in CI, which sees only tracked files)."""
+    out = subprocess.check_output(["git", "ls-files", "--", "scripts"], cwd=repo, text=True)
+    tracked = {line[len("scripts/") :] for line in out.splitlines() if line.strip()}
+    errors: list[str] = []
+    for path in sorted(tracked):
+        if path in ALLOWED_SCRIPTS or path.startswith(ALLOWED_DIR_PREFIXES):
+            continue
+        errors.append(
+            f"scripts/{path}  not in the scripts/ allowlist: new automation lands as a "
+            "cdpctl subcommand under src/cdpctl/ (scripts/README.md). A script genuinely "
+            "pending port needs an ALLOWED_SCRIPTS entry plus a scripts/README.md row."
+        )
+    for entry in sorted(ALLOWED_SCRIPTS):
+        if entry not in tracked:
+            errors.append(
+                f"scripts/ allowlist entry {entry!r} no longer exists: remove it from "
+                "ALLOWED_SCRIPTS in src/cdpctl/conventions.py."
+            )
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
+    argparse.ArgumentParser(prog="cdpctl conventions", description=__doc__).parse_args(argv)
     repo = pathlib.Path(repo_root())
     tf_root = repo / "terraform"
     errors: list[str] = []
+    errors.extend(check_scripts_allowlist(repo))
 
     for path in banner_files(tf_root):
         rel = path.relative_to(repo)
@@ -155,7 +196,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"check_conventions: OK ({len(banner_files(tf_root))} banners, {len(all_tf_files(tf_root))} files scanned)"
+        f"check_conventions: OK ({len(banner_files(tf_root))} banners, "
+        f"{len(all_tf_files(tf_root))} files scanned, scripts/ allowlist clean)"
     )
     return 0
 
