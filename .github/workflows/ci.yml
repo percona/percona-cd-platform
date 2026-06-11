@@ -164,7 +164,7 @@ jobs:
         run: scripts/jenkins-chart-render-check.sh
 
   lambda-pytest:
-    name: cleanup-lambda tests
+    name: cleanup-lambda + reconciler tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Pure-Python + moto, no AWS credentials. Uses setup-python + pip to match
@@ -181,7 +181,7 @@ jobs:
       - name: install test deps
         run: pip install -r terraform/lambdas/tests/requirements.txt
       - name: pytest
-        run: python -m pytest terraform/lambdas/tests
+        run: python -m pytest terraform/lambdas/tests images/jenkins-endpoint-reconciler
 
   ci-gate:
     name: ci-gate

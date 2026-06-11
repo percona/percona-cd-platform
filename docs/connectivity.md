@@ -92,9 +92,10 @@ Mechanics worth knowing:
   behind the
   [selectorless Service](https://kubernetes.io/docs/concepts/services-networking/service/#services-without-selectors).
   Zero matches writes an empty slice (the proxy serves the 503 page).
-  Multiple matches are TCP-probed on :8080 and the newest *serving*
-  instance wins. If none serve, the existing slice is kept so a ghost can
-  never blackhole ingress. AWS access is an
+  Every match, including a sole one, is TCP-probed on :8080 and the newest
+  *serving* instance wins, so a still-booting master is never routed to
+  before Jenkins listens. If none serve, the existing slice is kept so a
+  ghost can never blackhole ingress. AWS access is an
   [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
   role holding bare `ec2:DescribeInstances`. Cluster access is a
   namespace-scoped Role over EndpointSlices.

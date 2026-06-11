@@ -4,7 +4,10 @@
 For each host in HOSTS_JSON, this script:
   1. Calls ec2:DescribeInstances tag-filtered by `iit-billing-tag=<tag>`
      and `instance-state-name=running` in the host's region.
-  2. Writes an EndpointSlice `jenkins-<name>` in TARGET_NAMESPACE pointing
+  2. TCP-probes every candidate on the Jenkins port; only a serving
+     instance's IP is ever written (newest serving wins a multi-match, a
+     none-serving result leaves the existing EndpointSlice untouched).
+  3. Writes an EndpointSlice `jenkins-<name>` in TARGET_NAMESPACE pointing
      at the discovered private IP. The matching ClusterIP Service (managed
      by the same Helm chart) selectors nothing, so the EndpointSlice is
      the only way pods are advertised — the reconciler is its sole writer.
@@ -53,17 +56,21 @@ def discover_master_ip(region: str, tag_value: str, port: int) -> tuple[str | No
       (None, True)   no running instance -> write an empty slice (the master is
                      down; the proxy 503 page is the correct steady state during
                      a SpotFleet replacement).
-      (None, False)  ambiguous: more than one instance carries the tag and we
-                     cannot single out a serving master -> KEEP the existing
-                     EndpointSlice, do NOT overwrite. A worker that shares the
-                     master's iit-billing-tag, or a cancelled-spot-fleet ghost,
-                     must never be able to blackhole the master's ingress.
+      (None, False)  no candidate serves Jenkins -> KEEP the existing
+                     EndpointSlice, do NOT overwrite. Covers a multi-match
+                     where a worker shares the master's iit-billing-tag (or a
+                     cancelled-spot-fleet ghost), and a sole instance that is
+                     still booting. Neither may blackhole or capture the
+                     master's ingress.
 
-    With >1 match, ips[0] is non-deterministic, so disambiguate by which instance
-    actually serves Jenkins on :port, breaking ties toward the newest launch (a
-    freshly replaced master over a lingering serving ghost). The health probe is
-    the primary signal, not launch time, because a worker can be newer than the
-    master.
+    Every candidate is probed on :port before its IP is written, so written
+    endpoints are ready-by-construction: a sole just-launched instance gets no
+    traffic until Jenkins listens, and a transient probe failure against a
+    healthy master keeps the current (identical) slice instead of wiping it.
+    With >1 serving match, ips[0] is non-deterministic, so prefer the newest
+    launch (a freshly replaced master over a lingering serving ghost). The
+    health probe is the primary signal, not launch time, because a worker can
+    be newer than the master.
     """
     ec2 = boto3.client("ec2", region_name=region)
     resp = ec2.describe_instances(
@@ -80,13 +87,11 @@ def discover_master_ip(region: str, tag_value: str, port: int) -> tuple[str | No
     ]
     if not insts:
         return None, True
-    if len(insts) == 1:
-        return insts[0][0], True
 
     live = [(ip, lt) for ip, lt in insts if _serves_jenkins(ip, port)]
     if not live:
         log.error(
-            "tag=%s in %s matched %d instances (%s) but none serve :%s; "
+            "tag=%s in %s matched %d instance(s) (%s) but none serve :%s; "
             "leaving EndpointSlice unchanged",
             tag_value, region, len(insts), [ip for ip, _ in insts], port,
         )
@@ -94,10 +99,11 @@ def discover_master_ip(region: str, tag_value: str, port: int) -> tuple[str | No
 
     live.sort(key=lambda t: t[1], reverse=True)  # newest first
     chosen = live[0][0]
-    log.warning(
-        "tag=%s in %s matched %d instances; %d serve :%s; selected newest serving -> %s",
-        tag_value, region, len(insts), len(live), port, chosen,
-    )
+    if len(insts) > 1:
+        log.warning(
+            "tag=%s in %s matched %d instances; %d serve :%s; selected newest serving -> %s",
+            tag_value, region, len(insts), len(live), port, chosen,
+        )
     return chosen, True
 
 
