@@ -40,6 +40,10 @@ COMMANDS: dict[str, tuple[str, str]] = {
         "cdpctl.fork_locks",
         "auto-bump the fork plugin lock to latest .percona. releases",
     ),
+    "uptime-queries": (
+        "cdpctl.uptime_queries",
+        "validate the jenkins-uptime PromQL queries against Mimir",
+    ),
 }
 
 

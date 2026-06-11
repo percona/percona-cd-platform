@@ -25,6 +25,7 @@ too.
 | `just verify-karpenter` | `verify-karpenter` | `verify_karpenter.py` | Karpenter scale-up/down/disruption phases (fixtures in `karpenter-tests/`) |
 | `just helm-render` | `helm-render-check` | `helm_render.py` | Controller chart values reach the `jenkins` subchart (CI gate) |
 | `just refresh-fork-locks` / `check-fork-locks` | `fork-locks [--check]` | `fork_locks.py` | Fork plugin lock auto-bump, sha256 + MANIFEST verified |
+| `just check-uptime-queries` | `uptime-queries` | `uptime_queries.py` | jenkins-uptime PromQL set validated against Mimir (rules + dashboard) |
 
 `cdpctl --help` prints the same census. `just cdpctl-install` puts `cdpctl` on
 PATH as an editable uv tool. `just cdp-lint` (ruff + ty) and `just cdp-test`

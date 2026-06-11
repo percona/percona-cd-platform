@@ -416,6 +416,11 @@ check-master-spot-readiness *ARGS: _require-aws-profile
 verify-observability *ARGS: _require-aws-profile
     uv run --locked cdpctl verify-observability {{ARGS}}
 
+# Validate the jenkins-uptime PromQL set (recording rules + dashboard panels)
+# against Mimir. Pass-through: --url, --pre, --post, --json, --llm.
+check-uptime-queries *ARGS:
+    uv run --locked cdpctl uptime-queries {{ARGS}}
+
 # Install cdpctl onto PATH (~/.local/bin) as an editable uv tool tracking this
 # checkout; code edits are live. Re-run after dependency changes.
 cdpctl-install:
