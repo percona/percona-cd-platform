@@ -454,12 +454,12 @@
     {
       "id": 7,
       "type": "stat",
-      "title": "Read p99",
+      "title": "Read p99 (1h)",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Query-frontend p99 over the user-facing query routes. What Grafana Explore users actually feel.",
+      "description": "Query-frontend p99 over the user-facing query routes, computed over the last hour of reads. What Grafana Explore users actually feel. Reads are sporadic here (log queries, not continuous traffic), hence the wide window.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -489,7 +489,8 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "s",
+          "noValue": "no reads in 1h"
         },
         "overrides": []
       },
@@ -517,7 +518,7 @@
             "uid": "mimir"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(loki_request_duration_seconds_bucket{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(loki_request_duration_seconds_bucket{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\"}[1h])))",
           "instant": false,
           "range": true,
           "refId": "A"
@@ -792,7 +793,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Per-route p99 on the query frontend. query_range vs labels vs series fail differently (chunk fetch vs index); the split localizes read pain.",
+      "description": "Per-route p99 on the query frontend. query_range vs labels vs series fail differently (chunk fetch vs index); the split localizes read pain. Points are sparse because reads are sporadic.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -826,7 +827,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "always",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1336,7 +1337,7 @@
             "uid": "mimir"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(rate(loki_request_duration_seconds_count{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\", status_code=~\"5..|error\"}[$__rate_interval])) or vector(0)) / sum(rate(loki_request_duration_seconds_count{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\"}[$__rate_interval]))",
+          "expr": "100 * (sum(rate(loki_request_duration_seconds_count{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\", status_code=~\"5..|error\"}[$__rate_interval])) or vector(0)) / (sum(rate(loki_request_duration_seconds_count{job=\"loki/loki-query-frontend\", route=~\"loki_api_v1_query|loki_api_v1_query_range|loki_api_v1_series|loki_api_v1_labels|loki_api_v1_label_values|loki_api_v1_label_name_values|loki_api_v1_index_stats\"}[$__rate_interval])) > 0) or vector(0)",
           "instant": false,
           "range": true,
           "refId": "B",
@@ -1550,7 +1551,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "Flat zero when healthy. Any blip is the memberlist/ring pathology that has previously wedged this stack (see ADR 0014).",
+      "description": "Flat zero when healthy. The per-ring breakdown (target B) only draws when a member actually leaves ACTIVE. Any blip is the memberlist/ring pathology that has previously wedged this stack (see ADR 0014).",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -1628,10 +1629,22 @@
             "uid": "mimir"
           },
           "editorMode": "code",
-          "expr": "max by (name, state) (loki_ring_members{state!=\"ACTIVE\"})",
+          "expr": "sum(loki_ring_members{state!=\"ACTIVE\"})",
           "instant": false,
           "range": true,
           "refId": "A",
+          "legendFormat": "non-ACTIVE members"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "editorMode": "code",
+          "expr": "max by (name, state) (loki_ring_members{state!=\"ACTIVE\"}) > 0",
+          "instant": false,
+          "range": true,
+          "refId": "B",
           "legendFormat": "{{name}} {{state}}"
         },
         {
@@ -1643,7 +1656,7 @@
           "expr": "sum(increase(loki_ingester_autoforget_unhealthy_ingesters_total[$__rate_interval]))",
           "instant": false,
           "range": true,
-          "refId": "B",
+          "refId": "C",
           "legendFormat": "ingester autoforget events"
         }
       ]
@@ -1802,7 +1815,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "always",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2127,7 +2140,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "description": "Separates index-lookup slowness from chunk-fetch slowness, the two halves of every slow LogQL query.",
+          "description": "Separates index-lookup slowness from chunk-fetch slowness, the two halves of every slow LogQL query. Points are sparse because reads are sporadic.",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -2161,7 +2174,7 @@
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "showPoints": "never",
+                "showPoints": "always",
                 "spanNulls": false,
                 "stacking": {
                   "group": "A",
@@ -2359,7 +2372,7 @@
                 "uid": "mimir"
               },
               "editorMode": "code",
-              "expr": "sum(rate(loki_ingester_wal_corruptions_total[$__rate_interval]))",
+              "expr": "sum(rate(loki_ingester_wal_corruptions_total[$__rate_interval])) or vector(0)",
               "instant": false,
               "range": true,
               "refId": "D",
@@ -2838,7 +2851,7 @@
             "type": "prometheus",
             "uid": "mimir"
           },
-          "description": "Three sawtooth lines that should never climb. Retention silently not running is an S3-cost incident (ADR 0015).",
+          "description": "Sawtooth lines that should never climb. Retention is currently DISABLED in this Loki (no retention config), so its timestamp metric stays 0 and the line is guarded out; it appears automatically if retention is ever enabled. Without the guard it plotted time()-0, an epoch-sized age in years.",
           "gridPos": {
             "h": 8,
             "w": 8,
@@ -2931,7 +2944,7 @@
                 "uid": "mimir"
               },
               "editorMode": "code",
-              "expr": "time() - max(loki_compactor_apply_retention_last_successful_run_timestamp_seconds)",
+              "expr": "time() - max(loki_compactor_apply_retention_last_successful_run_timestamp_seconds > 0)",
               "instant": false,
               "range": true,
               "refId": "B",
