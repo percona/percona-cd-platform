@@ -22,6 +22,24 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "clouds": ("cdpctl.clouds", "render/apply/check the agent-clouds catalog (ADR 0029)"),
     "conventions": ("cdpctl.conventions", "terraform conventions + scripts/ allowlist gate"),
     "versions": ("cdpctl.versions", "pinned versions vs upstream latest"),
+    "ingest": ("cdpctl.ingest", "per-master Mimir + Loki ingest probe"),
+    "spot-readiness": ("cdpctl.spot_readiness", "spot-interrupt readiness audit for a master"),
+    "verify-observability": (
+        "cdpctl.verify_observability",
+        "per-master LGTM push-pipeline walk (deepest check)",
+    ),
+    "verify-karpenter": (
+        "cdpctl.verify_karpenter",
+        "Karpenter scale-up/down/disruption validation phases",
+    ),
+    "helm-render-check": (
+        "cdpctl.helm_render",
+        "controller chart values reach the jenkins subchart (CI gate)",
+    ),
+    "fork-locks": (
+        "cdpctl.fork_locks",
+        "auto-bump the fork plugin lock to latest .percona. releases",
+    ),
 }
 
 
