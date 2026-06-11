@@ -367,8 +367,9 @@ Unsettled points, listed here so they are visible. Each graduates to a
 Proposed ADR when picked up.
 
 - **Mode B plumbing.** The reconciler loop is eventually consistent (up to
-  about a minute of proxied 503s on instance replacement, and multi-match is
-  handled by probing and preferring the newest serving instance). Options:
+  about a minute of proxied 503s on instance replacement; every candidate,
+  including a sole match, is TCP-probed, the newest serving instance wins,
+  and a none-serving result keeps the previous slice). Options:
   a stable ENI per master (the endpoint never changes and the reconciler
   retires), event-driven reconciliation (EventBridge instance-state
   events), or accepting the minute because Mode A eventually deletes the
