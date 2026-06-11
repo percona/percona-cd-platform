@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import os
 import socket
 import subprocess
@@ -35,6 +34,7 @@ import sys
 import time
 import urllib.parse
 
+from cdpctl import _stage
 from cdpctl._repo import http_json, repo_root
 
 CONTEXT = "percona-ci-platform"
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         default=600,
         help="seconds since last sample before a master is STALE (default 600)",
     )
-    ap.add_argument("--json", action="store_true", help="JSON output")
+    _stage.add_output_flags(ap)
     args = ap.parse_args(argv)
 
     masters = enumerate_masters()
@@ -175,19 +175,26 @@ def main(argv: list[str] | None = None) -> int:
 
     extra = sorted(set(series) - {m["label"] for m in masters})
 
-    if args.json:
-        print(json.dumps({"masters": rows, "unexpected_senders": extra}, indent=2))
-    else:
-        order = {"k8s": 0, "tf-managed": 1, "cf-managed": 2}
-        rows.sort(key=lambda r: (order.get(r["arch"], 9), r["inst"]))
-        w = max((len(str(r["label"])) for r in rows), default=12) + 2
-        print(f"{'ARCH':<11} {'MASTER':<{w}} {'STATUS':<8} {'SERIES':<7} AGE_S")
-        for r in rows:
-            print(
-                f"{r['arch']:<11} {r['label']:<{w}} {r['status']:<8} "
-                f"{str(r['series']) if r['series'] is not None else '-':<7} "
-                f"{r['age_s'] if r['age_s'] is not None else '-'}"
-            )
+    order = {"k8s": 0, "tf-managed": 1, "cf-managed": 2}
+    rows.sort(key=lambda r: (order.get(r["arch"], 9), r["inst"]))
+    mode = _stage.output_mode(args)
+    table = [
+        [
+            r["arch"],
+            r["label"],
+            r["status"],
+            r["series"] if r["series"] is not None else "-",
+            r["age_s"] if r["age_s"] is not None else "-",
+        ]
+        for r in rows
+    ]
+    _stage.emit_rows(
+        ["arch", "master", "status", "series", "age_s"],
+        table,
+        mode,
+        json_payload={"masters": rows, "unexpected_senders": extra},
+    )
+    if mode == "human":
         ok = sum(r["status"] == "OK" for r in rows)
         print(
             f"\n{ok}/{len(rows)} masters delivering to Mimir via Alloy (threshold {args.max_age}s)"

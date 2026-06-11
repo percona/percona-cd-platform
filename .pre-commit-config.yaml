@@ -61,7 +61,7 @@ repos:
       # the shared catalog and free of YAML anchors/aliases (JCasC SnakeYAML caps at 50).
       - id: clouds-render-check
         name: clouds-catalog drift + no-alias check (ADR 0029)
-        entry: uv run --with pyyaml python3 scripts/render-clouds.py check ps3
+        entry: uv run --locked cdpctl clouds check ps3
         language: system
         pass_filenames: false
-        files: ^(resources/jenkins/clouds-catalog/|resources/jenkins/master/instances/.*/values\.yaml|scripts/render-clouds\.py)
+        files: ^(resources/jenkins/clouds-catalog/|resources/jenkins/master/instances/.*/values\.yaml|src/cdpctl/|pyproject\.toml|uv\.lock)
