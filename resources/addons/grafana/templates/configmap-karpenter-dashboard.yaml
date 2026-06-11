@@ -1,0 +1,44 @@
+{{/*
+Karpenter overview dashboard (repo-owned, replaces gnetId 22171 r5).
+
+Wraps dashboards/karpenter-overview.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it (sidecar.dashboards block in values.yaml,
+searchNamespace=ALL). The `grafana_folder` annotation is single-segment
+(no slashes) because foldersFromFilesStructure treats `/` as nesting
+(see the PR #63/#64 folder-explosion notes in values.yaml).
+
+The JSON pins UID kubernetes-autoscaling-mixin-kover-jkwq (the
+kubernetes-autoscaling-mixin identity the gnetId import carried) so
+existing links keep resolving. Per the UID-collision lesson in
+values.yaml, the gnetId entry is removed in the same change and the
+stale /var/lib/grafana/dashboards/platform-karpenter/karpenter-overview.json
+must be pruned from the PVC post-merge, or the duplicate UID blocks
+this import.
+
+Differences from the upstream mixin r5: datasource pinned to uid mimir
+(was bound to whatever datasource is default), Health & Activity row
+added (interruptions, nodeclaim lifecycle, disruption pipeline, cost,
+cluster-state sync), pod-limit sums zero-guarded (an absent daemonset
+CPU-limit series swallowed the whole sum), permanently-blank limit
+columns dropped from the Node Pools table, node utilization gauges run
+to 150% instead of clamping real >100% values, zero-information pies
+(region/arch/os are single-valued here) and the self-referential
+dashboard-links dropdown removed, refIds assigned to every target.
+Every query is validated against live Mimir by
+scripts/check-dashboard-queries.py; run it after any panel edit.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-karpenter-overview
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "Karpenter"
+data:
+  karpenter-overview.json: |-
+{{ .Files.Get "dashboards/karpenter-overview.json" | indent 4 }}

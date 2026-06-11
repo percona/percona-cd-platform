@@ -397,43 +397,46 @@ grafana:
           allowUiUpdates: true
           options:
             path: /var/lib/grafana/dashboards/jenkins
-  # gnetId selection notes:
-  #   mimir-overview    17607 r13 (Grafana Labs official, auto-published
-  #     from grafana/mimir's `operations/mimir-mixin-compiled/dashboards/`.
-  #     Queries `cortex_distributor_received_samples_total`,
-  #     `cortex_request_duration_seconds_*`. Note: depends on mimir-mixin
-  #     recording rules; without those rules loaded into Mimir the panels
-  #     will be sparse. Tracking rule import as a follow-up).
-  #   karpenter-overview 22171 r5 (adinhodovic karpenter-mixin, v1.0+
-  #     metric surface with `karpenter_nodepools_*` / `karpenter_nodeclaims_*`
-  #     / `nodepool=` label. Replaces the stale 16237 which predates
-  #     Karpenter v1).
-  # Tempo and the Loki Grafana-Labs mixin do NOT publish to grafana.com.
-  # Loading those operational dashboards needs a ConfigMap path (drop the
-  # JSON under resources/addons/grafana/dashboards/ with grafana_dashboard=1
-  # label). Tracked separately.
-  # mimir-overview was a gnetId 17607 r13 import here. It now ships via
-  # the ConfigMap-provisioned upstream `Mimir / Overview` from the
-  # mimir-mixin bundle (resources/addons/grafana/templates/configmap-
-  # mimir-mixin-dashboards.yaml). Both share UID
-  # ffcd83628d7d4b5a03d1cafd159e6c9c so we keep only the ConfigMap one,
-  # because it ships the full sibling-dashboard set and its inline
-  # cross-links resolve.
-  # loki-operational was a gnetId 17781 r1 import here (third-party
-  # "Loki Metrics Dashboard" by frankfegert; the Grafana Labs Loki mixin
-  # is NOT published on grafana.com). It now ships repo-owned as
-  # `Loki / Golden Signals` via templates/configmap-loki-golden-signals-
-  # dashboard.yaml (folder "Loki"), keeping the imported dashboard's UID
-  # 1b8931fc-ad08-492b-9651-ac98cd9decad so existing links survive. Per
-  # the UID-collision lesson above, the gnetId entry was removed and the
-  # stale /var/lib/grafana/dashboards/platform-lgtm/loki-operational.json
-  # must be pruned from the PVC post-merge; the platform-lgtm provider
-  # (disableDeletion: false) then garbage-collects the old DB row. Every
-  # panel query is validated against live Mimir by
-  # scripts/check-dashboard-queries.py.
-  dashboards:
-    platform-karpenter:
-      karpenter-overview:
-        gnetId: 22171
-        revision: 5
-        datasource: Mimir
+# gnetId selection notes:
+#   mimir-overview    17607 r13 (Grafana Labs official, auto-published
+#     from grafana/mimir's `operations/mimir-mixin-compiled/dashboards/`.
+#     Queries `cortex_distributor_received_samples_total`,
+#     `cortex_request_duration_seconds_*`. Note: depends on mimir-mixin
+#     recording rules; without those rules loaded into Mimir the panels
+#     will be sparse. Tracking rule import as a follow-up).
+# Tempo and the Loki Grafana-Labs mixin do NOT publish to grafana.com.
+# Loading those operational dashboards needs a ConfigMap path (drop the
+# JSON under resources/addons/grafana/dashboards/ with grafana_dashboard=1
+# label). Tracked separately.
+# mimir-overview was a gnetId 17607 r13 import here. It now ships via
+# the ConfigMap-provisioned upstream `Mimir / Overview` from the
+# mimir-mixin bundle (resources/addons/grafana/templates/configmap-
+# mimir-mixin-dashboards.yaml). Both share UID
+# ffcd83628d7d4b5a03d1cafd159e6c9c so we keep only the ConfigMap one,
+# because it ships the full sibling-dashboard set and its inline
+# cross-links resolve.
+# loki-operational was a gnetId 17781 r1 import here (third-party
+# "Loki Metrics Dashboard" by frankfegert; the Grafana Labs Loki mixin
+# is NOT published on grafana.com). It now ships repo-owned as
+# `Loki / Golden Signals` via templates/configmap-loki-golden-signals-
+# dashboard.yaml (folder "Loki"), keeping the imported dashboard's UID
+# 1b8931fc-ad08-492b-9651-ac98cd9decad so existing links survive. Per
+# the UID-collision lesson above, the gnetId entry was removed and the
+# stale /var/lib/grafana/dashboards/platform-lgtm/loki-operational.json
+# must be pruned from the PVC post-merge; the platform-lgtm provider
+# (disableDeletion: false) then garbage-collects the old DB row. Every
+# panel query is validated against live Mimir by
+# scripts/check-dashboard-queries.py.
+# karpenter-overview was a gnetId 22171 r5 import here (adinhodovic
+# kubernetes-autoscaling-mixin, chosen over the stale 16237 which
+# predates Karpenter v1). It now ships repo-owned as
+# `Karpenter / Overview` via templates/configmap-karpenter-dashboard.yaml
+# (folder "Karpenter"), keeping UID
+# kubernetes-autoscaling-mixin-kover-jkwq so existing links survive, with
+# the mixin's broken exprs fixed and Karpenter activity/cost/health
+# panels added. Same post-merge step as the others: prune the stale
+# /var/lib/grafana/dashboards/platform-karpenter/karpenter-overview.json
+# from the PVC so the platform-karpenter provider garbage-collects the
+# old row. That was the LAST gnetId entry, so the `dashboards:` block is
+# gone and the chart no longer renders the download-dashboards init
+# container at all (it is gated on `.Values.dashboards`).
