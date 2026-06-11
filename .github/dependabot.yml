@@ -15,6 +15,17 @@
 # Weekly + grouped: one PR per ecosystem per week, not one per dependency.
 version: 2
 updates:
+  # The cdpctl uv project (pyproject.toml + uv.lock): pyyaml/hcl2 runtime pins
+  # and the dev toolchain (pytest, ruff, ty).
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      cdpctl:
+        patterns: ["*"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

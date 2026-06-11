@@ -54,13 +54,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
 
       - name: refresh lock to latest fork releases
         id: refresh
         run: |
-          scripts/refresh-fork-locks.sh
+          uv run --locked cdpctl fork-locks
           if git diff --quiet -- images/jenkins/percona-plugins.lock.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No fork-lock changes."

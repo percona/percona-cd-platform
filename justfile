@@ -31,10 +31,10 @@ default: help
 help:
     @just --list
 
-ci: lint validate
+ci: lint validate cdp-test
     @echo "✅ ci passed"
 
-lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor
+lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor cdp-lint
 
 validate: tf-validate manifest-validate helm-render clouds-render-check lambda-test
 
@@ -42,7 +42,7 @@ validate: tf-validate manifest-validate helm-render clouds-render-check lambda-t
 # Mirrors the `cleanup-lambda tests` CI job (moto, credential-free). Runtime
 # pin matches terraform/locals.tf cleanup_lambda_runtime.
 lambda-test:
-    uv run --python 3.14 --with-requirements terraform/lambdas/tests/requirements.txt \
+    uv run --no-project --python 3.14 --with-requirements terraform/lambdas/tests/requirements.txt \
       python -m pytest terraform/lambdas/tests
 
 # Tail a reaper's dry-run/real decisions. Usage: just lambda-logs ec2-cleanup [since]
@@ -54,7 +54,7 @@ lambda-logs name since="1h": _require-aws-profile
 # Reads the env var directly (no {{...}} interpolation) so its value is never
 # evaluated as shell source. A dependency of every AWS-touching recipe.
 _require-aws-profile:
-    @: "${AWS_PROFILE:?AWS_PROFILE must be exported (e.g. export AWS_PROFILE=percona-dev-admin); do NOT set aws_profile in local.auto.tfvars}"
+    @: "${AWS_PROFILE:?AWS_PROFILE must be exported ; do NOT set aws_profile in local.auto.tfvars}"
 
 # ---------- terraform / opentofu ----------
 # Offline init — no backend, no credentials, no -upgrade (matches CI's
@@ -74,11 +74,10 @@ tf-fmt-check:
     tofu fmt -recursive -check -diff
 
 # Conventions gate for terraform/ (Owner banners, no copyright / CLAUDE.md /
-# ticket-ID comments) — rules in terraform/CLAUDE.md. Credential-free.
-# Run via `uv run` for a consistent interpreter with the other script gates;
-# the script itself is stdlib-only (no --with deps).
+# ticket-ID comments) plus the scripts/ allowlist — rules in terraform/CLAUDE.md.
+# Credential-free and stdlib-only (CI runs it without the project env).
 tf-conventions:
-    uv run python3 scripts/check_conventions.py
+    uv run --locked cdpctl conventions
 
 # The real validate gate (tofu). The pre-commit terraform_validate hook
 # shells the `terraform` binary instead and may fail on an old local
@@ -174,7 +173,7 @@ manifest-validate:
 # pool). Mirrors the .github/workflows/ci.yml `helm` job; uses a pinned,
 # sha-verified helm cached under .cache/.
 helm-render: _helm
-    PATH="$(pwd)/.cache/helm:$PATH" scripts/jenkins-chart-render-check.sh
+    PATH="$(pwd)/.cache/helm:$PATH" uv run --locked cdpctl helm-render-check
 
 # Download + sha256-verify the pinned helm into .cache/helm (idempotent,
 # arch-detected). Pins mirror .github/workflows/ci.yml.
@@ -205,25 +204,25 @@ zizmor:
 
 # ---------- helpers ----------
 check-versions:
-    uv run --with pyyaml --with python-hcl2 python3 scripts/check_versions.py
+    uv run --locked cdpctl versions
 
 # Gated runbook automations (docs/runbooks/common-operations.md, lands with
 # the docs PR). `just runbook` lists subcommands: automated ones enforce
 # their gates mechanically, guided ones confirm each step before running it.
 runbook *ARGS:
-    uv run --no-project python3 scripts/runbook.py {{ARGS}}
+    uv run --locked cdpctl runbook {{ARGS}}
 
 # Verify every active master (k8s / tf-managed / cf-managed) is shipping metrics
 # to Mimir via Alloy. Masters enumerated dynamically from repo source-of-truth;
 # per-master freshness read from the in-cluster Mimir query-frontend. Read-only.
 # Pass-through args: --max-age <s>, --json.
 check-master-alloy *ARGS:
-    uv run --no-project python3 scripts/check-master-alloy-mimir.py {{ARGS}}
+    uv run --locked cdpctl alloy {{ARGS}}
 
 # Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
 # is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
 clouds-render-check:
-    uv run --with pyyaml python3 scripts/render-clouds.py check ps3
+    uv run --locked cdpctl clouds check ps3
 
 # Bootstrap S3 state bucket (one-time, manual on first apply)
 bootstrap-state:
@@ -347,7 +346,7 @@ ssm-run inst cmd: _require-aws-profile
 # Systematic before/during/after harness for scale-up + scale-down.
 # Plan: ~/.claude/plans/hashed-shimmying-crane.md.
 verify-karpenter *ARGS: _require-aws-profile
-    scripts/verify-karpenter.sh {{ARGS}}
+    uv run --locked cdpctl verify-karpenter {{ARGS}}
 
 # ---------- ArgoCD UI port-forward (browser) ----------
 argocd-ui:
@@ -384,11 +383,43 @@ build-image name tag="0.1.0": _require-aws-profile
 # build+smoke-validates and opens a PR (no auto-merge). Local run rewrites the file
 # only; commit + PR are the CI job's responsibility.
 refresh-fork-locks:
-    scripts/refresh-fork-locks.sh
+    uv run --locked cdpctl fork-locks
 
 # Report-only probe: exit 3 if a newer fork release is available, no file changes.
 check-fork-locks:
-    scripts/refresh-fork-locks.sh --check
+    uv run --locked cdpctl fork-locks --check
+
+# ---------- cdpctl (the central CLI package; ADR 0031) ----------
+# All recipes use `uv run --locked`: never re-locks, fails loud if uv.lock is
+# stale (dep bumps go through an explicit `uv lock`).
+
+# Lint + type-check the package (ruff format/check + ty).
+cdp-lint:
+    uv run --locked ruff format --check src tests
+    uv run --locked ruff check src tests
+    uv run --locked ty check src
+
+# Unit tests for the package (pure functions plus the repo as a fixture; no
+# kube/AWS access needed).
+cdp-test:
+    uv run --locked pytest -q --cov=cdpctl --cov-report=term-missing:skip-covered tests
+
+# Per-master Mimir + Loki ingest probe. Pass-through: --lookback, --json, --csv.
+check-master-ingest *ARGS:
+    uv run --locked cdpctl ingest {{ARGS}}
+
+# Spot-interrupt readiness audit. Usage: just check-master-spot-readiness [inst|i-...]
+check-master-spot-readiness *ARGS: _require-aws-profile
+    uv run --locked cdpctl spot-readiness {{ARGS}}
+
+# Deepest per-master LGTM push-pipeline walk. Usage: just verify-observability [inst]
+verify-observability *ARGS: _require-aws-profile
+    uv run --locked cdpctl verify-observability {{ARGS}}
+
+# Install cdpctl onto PATH (~/.local/bin) as an editable uv tool tracking this
+# checkout; code edits are live. Re-run after dependency changes.
+cdpctl-install:
+    uv tool install --editable --force .
 
 # ---------- pre-commit ----------
 pre-commit-install:

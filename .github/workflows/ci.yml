@@ -47,9 +47,11 @@ jobs:
       - name: tofu fmt -check
         run: tofu fmt -recursive -check -diff
       # Conventions gate: Owner banners, no copyright/CLAUDE.md/ticket-ID
-      # comments in .tf — see terraform/CLAUDE.md. Stdlib-only.
-      - name: terraform conventions
-        run: python3 scripts/check_conventions.py
+      # comments in .tf (terraform/CLAUDE.md) + the scripts/ allowlist freeze
+      # (ADR 0031). Stdlib-only, so it runs on the bare system python with no
+      # project env (cdpctl.cli dispatches lazily).
+      - name: terraform conventions + scripts allowlist
+        run: PYTHONPATH=src python3 -m cdpctl conventions
       # init + validate share the provider cache, so they stay in one job
       # (job filesystems do not persist between jobs).
       - name: tofu init -backend=false
@@ -135,13 +137,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: '3.12'
-      - name: pip install pyyaml
-        run: pip install pyyaml
+          enable-cache: true
       - name: render-clouds drift + no-alias check
-        run: python scripts/render-clouds.py check ps3
+        run: uv run --locked cdpctl clouds check ps3
 
   helm-render:
     name: jenkins chart render-check
@@ -160,15 +160,19 @@ jobs:
       # Render the per-instance Jenkins controller chart and assert the values
       # reach the `jenkins` subchart (image / Retain PVC / ALB group / JNLP
       # listener / node-pool pin). Guards the jenkins:-scoping regression.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
       - name: jenkins chart render-check
-        run: scripts/jenkins-chart-render-check.sh
+        run: uv run --locked cdpctl helm-render-check
 
   lambda-pytest:
     name: cleanup-lambda tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Pure-Python + moto, no AWS credentials. Uses setup-python + pip to match
-    # the `yaml` job (astral-sh/setup-uv is not in the zizmor ref-pin allowlist).
+    # Pure-Python + moto, no AWS credentials. Stays on setup-python + pip: the
+    # lambda test env is pinned to the Lambda runtime python and its own
+    # requirements.txt, independent of the root cdpctl uv project.
     steps:
       - uses: actions/checkout@v6
         with:
@@ -182,6 +186,28 @@ jobs:
         run: pip install -r terraform/lambdas/tests/requirements.txt
       - name: pytest
         run: python -m pytest terraform/lambdas/tests
+
+  cdpctl:
+    name: cdpctl lint + tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The central CLI package (ADR 0031): ruff format/check, ty, pytest, all
+    # from the committed uv.lock (--locked never re-resolves).
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+      - name: ruff format --check
+        run: uv run --locked ruff format --check src
+      - name: ruff check
+        run: uv run --locked ruff check src
+      - name: ty check
+        run: uv run --locked ty check src
+      - name: pytest
+        run: uv run --locked pytest -q --cov=cdpctl --cov-report=term-missing:skip-covered tests
 
   ci-gate:
     name: ci-gate
@@ -197,6 +223,7 @@ jobs:
       - clouds-catalog-drift
       - helm-render
       - lambda-pytest
+      - cdpctl
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
