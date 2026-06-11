@@ -153,7 +153,7 @@ Roughly four steps:
 
 | Failure mode | Recovery |
 |---|---|
-| App can't reach Authentik (Authentik down) | Apps with a local-admin emergency path: `kubectl exec` into the app pod, reset local password, `kubectl port-forward` to log in. Grafana: `grafana-cli admin reset-admin-password <pw>`. ArgoCD: see ArgoCD's local admin password Secret. |
+| App can't reach Authentik (Authentik down) | Apps with a local-admin emergency path: `kubectl exec` into the app pod, reset local password, `kubectl port-forward` to log in. Grafana: both the login form and basic auth are disabled in values (`auth.disable_login_form`, `auth.basic.enabled: false`), so first revert one of them via GitOps, then `grafana-cli admin reset-admin-password <pw>` and log in through a port-forward. ArgoCD: re-enable the local admin per [argocd-admin-recovery](runbooks/argocd-admin-recovery.md). |
 | Authentik admin locked out (akadmin password lost) | TF: `tofu taint random_password.authentik_bootstrap_password && tofu apply`, force ESO sync, restart authentik-server. Bootstrap migration sets the new password on next boot. |
 | Authentik admin API token lost | Same shape with `random_password.authentik_bootstrap_token`. |
 | Duo SP record drift (cert rotation, ACS URL change) | Coordinate with IT-Ops (`@zan` on Slack). SP entityID + ACS URL stay as defined in `templates/blueprint-grafana.yaml` and `docs/runbooks/authentik-bootstrap.md`. |

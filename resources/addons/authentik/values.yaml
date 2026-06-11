@@ -81,6 +81,20 @@ authentik:
       enabled: true
       minAvailable: 0
 
+    # The image already runs as its own user 1000, this pins it and
+    # blocks escalation. readOnlyRootFilesystem deliberately NOT set:
+    # authentik writes tmp/media paths and it is untested here.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+
     ingress:
       enabled: true
       ingressClassName: alb
@@ -107,6 +121,17 @@ authentik:
 
   worker:
     replicas: 1
+    # Same hardening rationale as server above.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
 
   # Mount our declarative bootstrap blueprints into the worker so it
   # reconciles each consumer's OAuth2 Provider + Application on every
