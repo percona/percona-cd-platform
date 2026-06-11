@@ -39,8 +39,10 @@ this page is the operator's tour.
                                           │
    alloy (DaemonSet)   -- LGTM-only since ADR 0016 (no Prom agent, no kps Alertmanager)
    ────────────────────
-   ServiceMonitor / PodMonitor scrape (incl. kube-state-metrics + prometheus-node-exporter) ─► Mimir
+   ServiceMonitor / PodMonitor scrape (incl. kube-state-metrics, prometheus-node-exporter,
+                  cloudwatch-exporter = YACE polling AWS LB CloudWatch metrics, ADR 0034) ─► Mimir
    pod logs    ─► Loki distributor
+   k8s events  ─► Loki distributor (loki.source.kubernetes_events, namespace-sharded)
    OTLP traces ─► Tempo distributor
 
 
@@ -62,7 +64,7 @@ this page is the operator's tour.
 | 2 | external-secrets (with ClusterSecretStore) | `resources/addons/external-secrets/` |
 | 3 | karpenter | `resources/addons/karpenter/` |
 | 4 | mimir, loki, tempo | `resources/addons/{mimir,loki,tempo}/` |
-| 5 | alloy DaemonSet (scrape + logs + traces), kube-state-metrics, prometheus-node-exporter, prometheus-operator-crds | `resources/addons/alloy/`, `kube-state-metrics/`, `prometheus-node-exporter/`, `prometheus-operator-crds/` |
+| 5 | alloy DaemonSet (scrape + logs + events + traces), kube-state-metrics, prometheus-node-exporter, prometheus-operator-crds, cloudwatch-exporter (YACE, AWS LB metrics), jenkins-uptime (blackbox-exporter + Probes) | `resources/addons/alloy/`, `kube-state-metrics/`, `prometheus-node-exporter/`, `prometheus-operator-crds/`, `cloudwatch-exporter/`, `jenkins-uptime/` |
 | 6 | grafana, alloy-gateway | `resources/addons/grafana/`, `alloy-gateway/` |
 
 Order matters: Mimir/Loki/Tempo must be running before Alloy can ship
@@ -196,3 +198,5 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 - [ADR 0006 — kube-prometheus-stack-only](adr/0006-kube-prometheus-stack-over-mimir.md) (superseded)
 - [ADR 0008 — managed NG for stateful workloads](adr/0008-managed-ng-for-stateful-system-workloads.md)
 - [ADR 0009 — scrape vs remote_write for Jenkins fleet](adr/0009-scrape-vs-remote-write-for-jenkins-fleet.md)
+- [ADR 0031 — in-cluster synthetic probing for Jenkins masters](adr/0031-in-cluster-synthetic-probing-for-jenkins-masters.md)
+- [ADR 0034 — CloudWatch exporter for AWS load balancer metrics](adr/0034-cloudwatch-exporter-for-aws-lb-metrics.md)
