@@ -22,6 +22,12 @@ saml:
   enabled: "false"
   idpMetadataB64: ""
 
+# Consumed by templates/networkpolicies.yaml: the cluster VPC range that
+# ALB target ENIs and kubelet probe traffic originate from
+# (terraform/vpc.tf, var.vpc_cidr).
+networkPolicy:
+  vpcCidr: 10.220.0.0/16
+
 # Subchart values. The dependency `authentik` is the official chart at
 # https://charts.goauthentik.io which bundles the Bitnami Postgres chart
 # (image switched upstream to docker.io/library/postgres after the Bitnami
@@ -173,6 +179,11 @@ authentik:
           value: obs-state
           effect: NoSchedule
       priorityClassName: platform-stateful-high
+      # The chart's own NetworkPolicy allows 5432 from every pod in the
+      # cluster, which would union-defeat the scoped set in
+      # templates/networkpolicies.yaml (k8s policies are additive allows).
+      networkPolicy:
+        enabled: false
 
   # Bundled Bitnami Redis — Authentik's task queue + cache. Single
   # master, no auth (cluster-internal). Persistence off; if Redis dies,
