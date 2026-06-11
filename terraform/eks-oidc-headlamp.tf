@@ -20,8 +20,10 @@
 #     provider client_id `headlamp` (blueprint-headlamp.yaml). Headlamp's
 #     own verifier also checks aud == client_id, so both agree on `headlamp`.
 #   - groups_claim `groups` must be present IN the id_token (not just
-#     userinfo); the Authentik provider sets include_claims_in_id_token and
-#     binds an explicit `groups` scope mapping to guarantee this.
+#     userinfo). The Authentik provider sets include_claims_in_id_token, and
+#     the bound default `profile` scope mapping carries the `groups` claim
+#     (no separate groups scope exists, see blueprint-headlamp.yaml
+#     property_mappings).
 #   - groups_prefix `oidc:` is a security control: it namespaces OIDC groups
 #     so a token cannot claim a privileged built-in group (e.g.
 #     `system:masters`) and inherit cluster-admin. The RBAC bindings in the

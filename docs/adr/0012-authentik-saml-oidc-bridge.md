@@ -128,13 +128,13 @@ trip is confirmed, the form is disabled. Recovery moves to in-pod
 
 ## Consequences
 
-- **Operational surface**: one new namespace (`authentik`), four new
-  pods (server + worker + bundled Postgres + bundled Redis), one new
-  ALB Ingress rule (joins existing `jenkins-cd` group, no new LB), one
-  new Secrets Manager bundle with eight `random_password` keys (secret_key,
-  bootstrap password + token, PG password, and the Grafana / ArgoCD /
-  Headlamp OIDC client secrets).
-- **Secrets persist in Terraform state.** The eight `random_password` values
+- **Operational surface**: one new namespace (`authentik`), three new
+  pods (server + worker + bundled Postgres, no Redis in the 2026.x chart),
+  one new ALB Ingress rule (joins existing `jenkins-cd` group, no new LB),
+  one new Secrets Manager bundle with seven `random_password` keys
+  (secret_key, bootstrap password + token, PG password, and the
+  Grafana / ArgoCD / Headlamp OIDC client secrets).
+- **Secrets persist in Terraform state.** The seven `random_password` values
   are written into `aws_secretsmanager_secret_version.authentik_config` via
   `secret_string`, so they land in plaintext in the OpenTofu state file
   (mitigated by the encrypted, access-locked S3 backend, not eliminated). The

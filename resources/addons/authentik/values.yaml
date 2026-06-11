@@ -1,6 +1,7 @@
-# Authentik — SAML SP to Duo (HD-30780), OIDC IdP to Grafana (and later
-# Jenkins masters, ArgoCD UI). Bridge architecture per
-# docs/adr/0012-authentik-bridge.md (forthcoming).
+# Authentik: SAML SP to Duo (HD-30780), OIDC IdP to Grafana, ArgoCD, and
+# Headlamp. Jenkins masters stay on native GitHub OAuth and never touch this
+# path (docs/adr/0019). Bridge architecture per
+# docs/adr/0012-authentik-saml-oidc-bridge.md.
 #
 # Why Authentik (not Authelia, not Grafana SAML directly):
 #   - Grafana OSS lacks SAML — Enterprise-only feature.
@@ -22,17 +23,18 @@ saml:
   idpMetadataB64: ""
 
 # Subchart values. The dependency `authentik` is the official chart at
-# https://charts.goauthentik.io which bundles Bitnami Postgres + Redis.
+# https://charts.goauthentik.io which bundles the Bitnami Postgres chart
+# (image switched upstream to docker.io/library/postgres after the Bitnami
+# catalog freeze). The 2026.x chart has no Redis dependency.
 authentik:
   global:
-    # Pull all four runtime secrets from the ESO-synced k8s Secret
+    # Pull all seven runtime secrets from the ESO-synced k8s Secret
     # `authentik-config` (sourced from AWS Secrets Manager
     # percona-ci-platform/authentik/config — see terraform/authentik.tf).
-    # Keys exposed: AUTHENTIK_SECRET_KEY, AUTHENTIK_BOOTSTRAP_PASSWORD,
-    # AUTHENTIK_POSTGRESQL__PASSWORD, AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET.
-    # The first three are consumed by Authentik directly; the fourth is
-    # for the Grafana OIDC client (set up post-deploy via Authentik UI
-    # or the API; tracked in docs/runbooks/authentik-bootstrap.md).
+    # Key-by-key consumer map lives in the header of
+    # templates/external-secret-config.yaml: secret_key, bootstrap
+    # password + token, PG password, and the three OIDC client secrets
+    # (Grafana / ArgoCD / Headlamp, resolved via !Env in the blueprints).
     envFrom:
       - secretRef:
           name: authentik-config
