@@ -92,6 +92,14 @@ install_software() {
     # paws/SSM (no inbound SSH), and SSM is the only OS access path.
     retry yum -y install amazon-ssm-agent
     systemctl enable --now amazon-ssm-agent
+
+    # ec2-instance-connect is also absent on the minimal AMI. Installing it adds
+    # the sshd AuthorizedKeysCommand so engineers can push a short-lived key via
+    # EC2 Instance Connect instead of relying only on the static
+    # ssh_key_engineers entries. It works over the SSM tunnel (AWS-StartSSHSession
+    # to localhost:22), so it needs no inbound :22, and coexists with the static
+    # AuthorizedKeysFile (sshd tries the file, then the command).
+    retry yum -y install ec2-instance-connect
 }
 
 volume_state() {
