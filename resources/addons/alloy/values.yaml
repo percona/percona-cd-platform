@@ -57,6 +57,23 @@ alloy:
           }
         }
 
+        // === Logs: Kubernetes Events ===
+        //
+        // Cluster events (LBC Ingress/Service reconciles, scheduling,
+        // OOMKills, probe failures) are otherwise invisible in Loki.
+        // Namespace-sharded across the DS pods via clustering (consistent
+        // hashing); a reshard may re-deliver recent events, bounded by the
+        // 1h event TTL. json log_format so LogQL `| json` parses fields.
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/loki/loki.source.kubernetes_events/
+        loki.source.kubernetes_events "events" {
+          log_format = "json"
+          forward_to = [loki.write.default.receiver]
+          clustering {
+            enabled = true
+          }
+        }
+
         // OTLP receiver for in-cluster apps that emit traces. App pods
         // configure OTEL_EXPORTER_OTLP_ENDPOINT to the headless DaemonSet
         // service so spans land on the local node's Alloy.

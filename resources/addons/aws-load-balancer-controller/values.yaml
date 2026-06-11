@@ -28,3 +28,10 @@ aws-load-balancer-controller:
       operator: Equal
       value: "true"
       effect: NoSchedule
+
+  # Reconcile / webhook / AWS-API metrics from the controller's :8080
+  # metrics port. The chart creates the metrics Service + ServiceMonitor;
+  # the Alloy DS servicemonitors discovery scrapes it with zero extra
+  # wiring. Upstream default is off, which left the controller unscraped.
+  serviceMonitor:
+    enabled: true
