@@ -63,6 +63,19 @@ tag at connect time, so it survives instance rotation (the ID is never pinned).
 After this, ordinary `ssh`/`scp`/`rsync` against the hostname just work,
 including existing scripts that already call `ssh user@<inst>.cd.percona.com`.
 
+**You still need an SSH key for this path.** SSM only carries the transport
+(it replaces reaching port 22); SSH itself still authenticates, so `ec2-user`'s
+`authorized_keys` must contain the public half of whatever `IdentityFile` you
+point at. Two keys work: the shared `percona-jenkins.pem`, or your own key if
+its public half is provisioned in the master's `ssh_key_engineers`
+(`terraform/master-<inst>.tf`) — set `IdentityFile` to that key instead. There
+is no keyless option here: EC2 Instance Connect (ephemeral keys) does NOT work,
+because the `ec2-instance-connect` agent is not installed on the masters.
+
+The pure-shell paths above (`just ssh` / `just ssm` / `just ssm-run`) need NO
+key at all — they run as the SSM `ssm-user` (root via `sudo`). The key is only
+needed when you want `scp`/`rsync`/`ssh` file transfer.
+
 ```sshconfig
 # ~/.ssh/config  (psmdb; swap region + tag for another master)
 Host psmdb.cd.percona.com
