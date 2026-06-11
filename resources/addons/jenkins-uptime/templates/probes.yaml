@@ -32,7 +32,11 @@ spec:
         # blackbox-exporter >= v0.24: the `hostname` query parameter sets
         # the Host header, mirroring the jenkins-ingress NGINX
         # `proxy_set_header Host` so one shared module covers every master.
-        - targetLabel: __param_hostname
+        # `action: replace` is the CRD default; declared explicitly so the
+        # rendered manifest matches the server-defaulted live object and
+        # ArgoCD does not report a permanent OutOfSync diff.
+        - action: replace
+          targetLabel: __param_hostname
           replacement: {{ .hostHeader | quote }}
 {{- end }}
 ---
