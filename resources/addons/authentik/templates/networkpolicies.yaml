@@ -1,0 +1,101 @@
+{{/*
+Default-deny for the authentik namespace, then the four flows the bridge
+actually uses:
+
+  - intra-namespace: server + worker + bootstrap Job to Postgres (5432),
+    bootstrap Job to authentik-server (9000). One namespace-wide allow
+    instead of per-label rules because the Job carries only a
+    component=bootstrap label.
+  - ALB to server pods on 9000/9443 (target-type ip sends straight to
+    pod IPs from ALB ENIs inside the VPC; kubelet liveness probes come
+    from node IPs in the same range).
+  - DNS to kube-dns for every pod (the Job resolves the in-cluster
+    service name).
+  - HTTPS out for server + worker only (Duo metadata fetch). The
+    bootstrap Job and Postgres get no internet egress.
+
+The bundled Postgres chart's own NetworkPolicy is disabled in values
+(it allows 5432 from every pod in the cluster, which would union-defeat
+this set; k8s NetworkPolicies are additive allows).
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-allow-intra-namespace
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-server-ingress-vpc
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik
+      app.kubernetes.io/component: server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.vpcCidr }}
+      ports:
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 9443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-egress-dns
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: authentik-egress-https
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
