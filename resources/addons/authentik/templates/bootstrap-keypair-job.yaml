@@ -52,9 +52,21 @@ spec:
           operator: Equal
           value: obs-state
           effect: NoSchedule
+      # The curl image already runs as user 100 (group 101), this pins
+      # it and blocks escalation.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: upload-keypair
           image: curlimages/curl:8.20.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           env:
             - name: AUTHENTIK_BASE_URL
               value: http://authentik-server.{{ .Release.Namespace }}.svc.cluster.local

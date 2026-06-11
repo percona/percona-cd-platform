@@ -135,13 +135,14 @@ trip is confirmed, the form is disabled. Recovery moves to in-pod
   (secret_key, bootstrap password + token, PG password, and the
   Grafana / ArgoCD / Headlamp OIDC client secrets).
 - **Secrets persist in Terraform state.** The seven `random_password` values
-  are written into `aws_secretsmanager_secret_version.authentik_config` via
-  `secret_string`, so they land in plaintext in the OpenTofu state file
-  (mitigated by the encrypted, access-locked S3 backend, not eliminated). The
-  modern fix is the provider's write-only arguments (`secret_string_wo` +
-  `secret_string_wo_version`, available on the pinned aws provider) which keep
-  the value out of state; deferred, worth doing when the auth bundle is next
-  touched.
+  land in the OpenTofu state file (mitigated by the encrypted,
+  access-locked S3 backend, not eliminated). Since 2026-06-11 the bundle
+  itself is pushed via the provider's write-only arguments
+  (`secret_string_wo` + `secret_string_wo_version`), so the rendered JSON
+  copy stays out of state and rotation taints must bump the version
+  argument. The individual `random_password` results remain in state;
+  removing those too needs ephemeral resources, tracked in
+  [security-review-2026-06-11.md](../security-review-2026-06-11.md).
 - **SP record management is centralized.** One SP record at Duo, one
   cert pair, one ACS URL. SP cert rotation = one HD JSM Change Request,
   not N.

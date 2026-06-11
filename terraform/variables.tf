@@ -255,11 +255,26 @@ variable "authentik_saml_enabled" {
 
     Replaces the prior var.grafana_saml_enabled — Grafana OSS lacks
     SAML support, so the SAML SP role moved to Authentik (which
-    front-doors Grafana via OIDC). See docs/adr/0012-authentik-bridge.md
-    (forthcoming) for the architecture rationale.
+    front-doors Grafana via OIDC). See
+    docs/adr/0012-authentik-saml-oidc-bridge.md for the architecture
+    rationale.
   EOT
   type        = bool
   default     = false
+}
+
+variable "authentik_secret_breakglass_arns" {
+  description = <<-EOT
+    Extra IAM principal ARN patterns allowed to GetSecretValue on the
+    Authentik secret bundle besides the ESO pod-identity role
+    (aws:PrincipalArn StringNotLike patterns, `*` wildcards allowed).
+    Keep empty in normal operation. The deny in
+    aws_secretsmanager_secret_policy.authentik_config covers
+    GetSecretValue only, so an administrator can always lift a lockout
+    by editing the resource policy itself.
+  EOT
+  type        = list(string)
+  default     = []
 }
 
 variable "lgtm_push_hostnames" {
