@@ -23,6 +23,18 @@ jenkins:
     # (extraObjects below); volumes via persistence.volumes; master=ps3-k8s (ADR
     # 0013 A2 / CLAUDE.md #11). No probes, so a sidecar failure never gates the
     # controller's readiness.
+    #
+    # javaOpts is a scalar override, so the values-base.yaml value is replicated
+    # here verbatim plus the percona-jenkins-stats build-events path:
+    # /var/log/jenkins does not exist in the container image, while
+    # /var/jenkins_home/logs is jenkins-writable, lives on the PVC, and is
+    # tailed read-only by the alloy-metrics sidecar below.
+    javaOpts: >-
+      -Xms3072m -Xmx4096m -Xss4m -server
+      -Djava.awt.headless=true
+      -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600
+      -Dhetzner.rehydrate.enabled=true -Dhetzner.rehydrate.grace-period-minutes=5
+      -Dpercona.stats.events-file=/var/jenkins_home/logs/build-events.log
     sidecars:
       additionalSidecarContainers:
         - name: alloy-metrics
@@ -52,6 +64,11 @@ jenkins:
               readOnly: true
             - name: alloy-metrics-data
               mountPath: /tmp/alloy
+            # Read-only home mount so the sidecar can tail the
+            # percona-jenkins-stats build-events log on the PVC.
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+              readOnly: true
 
     ingress:
       # Serve the REAL host ps3.cd.percona.com directly from the chart's PRIMARY
@@ -7156,6 +7173,18 @@ jenkins:
             forward_to      = [prometheus.remote_write.mimir.receiver]
           }
 
+          // Loopback scrape of the percona-jenkins-stats plugin's /percona-stats
+          // endpoint (same loopback-only gate; the plugin serves its OWN registry,
+          // so the two endpoints carry disjoint metric families).
+          prometheus.scrape "percona_stats" {
+            targets = [{
+              __address__      = "127.0.0.1:8080",
+              __metrics_path__ = "/percona-stats/",
+            }]
+            scrape_interval = "60s"
+            forward_to      = [prometheus.remote_write.mimir.receiver]
+          }
+
           prometheus.remote_write "mimir" {
             endpoint {
               url     = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
@@ -7167,5 +7196,27 @@ jenkins:
             external_labels = {
               cluster = "percona-ci-platform",
               master  = "ps3-k8s",
+            }
+          }
+
+          // Build events: one JSON line per completed build, written by the
+          // percona-jenkins-stats plugin onto the PVC and shipped to the
+          // in-cluster Loki distributor with the fleet label schema
+          // (component="builds"); mirrors the EC2 masters' per-master Alloy
+          // shape so dashboards query one schema fleet-wide.
+          loki.source.file "build_events" {
+            targets = [{
+              __path__  = "/var/jenkins_home/logs/build-events.log",
+              master    = "ps3-k8s",
+              fleet     = "percona-jenkins",
+              role      = "master",
+              component = "builds",
+            }]
+            forward_to = [loki.write.loki.receiver]
+          }
+
+          loki.write "loki" {
+            endpoint {
+              url = "http://loki-distributor.loki.svc.cluster.local:3100/loki/api/v1/push"
             }
           }
