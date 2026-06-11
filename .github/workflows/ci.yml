@@ -48,7 +48,7 @@ jobs:
         run: tofu fmt -recursive -check -diff
       # Conventions gate: Owner banners, no copyright/CLAUDE.md/ticket-ID
       # comments in .tf (terraform/CLAUDE.md) + the scripts/ allowlist freeze
-      # (ADR 0031). Stdlib-only, so it runs on the bare system python with no
+      # (ADR 0032). Stdlib-only, so it runs on the bare system python with no
       # project env (cdpctl.cli dispatches lazily).
       - name: terraform conventions + scripts allowlist
         run: PYTHONPATH=src python3 -m cdpctl conventions
@@ -191,7 +191,7 @@ jobs:
     name: cdpctl lint + tests
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # The central CLI package (ADR 0031): ruff format/check, ty, pytest, all
+    # The central CLI package (ADR 0032): ruff format/check, ty, pytest, all
     # from the committed uv.lock (--locked never re-resolves).
     steps:
       - uses: actions/checkout@v6

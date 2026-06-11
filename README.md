@@ -29,9 +29,10 @@ and reconciled from this repo; there are no manual cluster changes.
 | [`terraform/`](terraform/) | AWS substrate; conventions in [`terraform/CLAUDE.md`](terraform/CLAUDE.md) (file-naming grammar, per-team `# Owner:` banners, tags); reusable modules with their own READMEs ([jenkins-arm-fleet](terraform/modules/jenkins-arm-fleet/README.md), [jenkins-arm-standalone](terraform/modules/jenkins-arm-standalone/README.md), [scheduled-lambda](terraform/modules/scheduled-lambda/README.md)); pins in [`versions.tf`](terraform/versions.tf) |
 | [`argocd-bootstrap/`](argocd-bootstrap/) | Root Application, ApplicationSets, AppProject |
 | [`resources/addons/`](resources/addons/) | One dir = one ArgoCD Application (observability, ingress, SSO, ...) |
-| [`resources/jenkins/`](resources/jenkins/) | In-cluster master chart, per-instance values, clouds catalog (rendered by [`scripts/render-clouds.py`](scripts/render-clouds.py), drift-gated in CI) |
+| [`resources/jenkins/`](resources/jenkins/) | In-cluster master chart, per-instance values, clouds catalog (rendered by `cdpctl clouds`, drift-gated in CI) |
 | [`images/`](images/) | Container images (controller bundle and friends), built by GitHub Actions |
-| [`scripts/`](scripts/) | Verification and render tooling; catalog in [`scripts/README.md`](scripts/README.md) |
+| [`src/cdpctl/`](src/cdpctl/) | The `cdpctl` operational CLI (uv package); the justfile dispatches into it ([ADR 0032](docs/adr/0032-central-python-cli-package.md)) |
+| [`scripts/`](scripts/) | Frozen (allowlist-gated); dispatcher map in [`scripts/README.md`](scripts/README.md) |
 | [`docs/`](docs/) | [Architecture](docs/architecture.md), [ADRs](docs/adr/), [runbooks](docs/runbooks/); everything indexed in [`docs/README.md`](docs/README.md) |
 | [`justfile`](justfile) | The single entrypoint for CI and every `tofu` operation |
 
@@ -48,6 +49,26 @@ just ssh               # list the running Jenkins masters; just ssh <inst> opens
 without it. Back up state before risky applies (`just tf-state-backup`). State
 bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 
+### cdpctl
+
+Operational tooling is one uv-managed CLI, `cdpctl`, wrapped by the just
+recipes above (`just runbook`, `just check-master-alloy`, ...). Three ways to
+run it:
+
+```sh
+# No install: through the project env (what every just recipe does).
+uv run --locked cdpctl --help
+
+# From a clone: editable install onto PATH (~/.local/bin); edits are live.
+just cdpctl-install
+
+# No clone: install straight from GitHub.
+uv tool install git+https://github.com/percona/percona-cd-platform.git
+```
+
+Dependencies are locked (`uv.lock`); bump them with `uv lock` in a PR, never
+ad hoc.
+
 ### Tool requirements
 
 | Tool | Used for |
@@ -57,7 +78,7 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 | AWS CLI v2 | Every AWS-touching recipe; SSO login via `aws sso login` |
 | [session-manager-plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) | Interactive `just ssh <inst>` sessions (one-shot `just ssm-run` works without it) |
 | `kubectl` | Cluster access (`just kubeconfig`), ps3 shell |
-| [`uv`](https://github.com/astral-sh/uv) | Python script gates and lambda tests inside `just ci` |
+| [`uv`](https://github.com/astral-sh/uv) | The `cdpctl` package (gates, verifiers, runbooks) and lambda tests inside `just ci` |
 | Docker (buildx) | `just build-image` only |
 | trivy, yamllint, actionlint, zizmor, kubeconform | The `just ci` lint set; version pins at the top of the justfile (helm is fetched and sha-verified automatically) |
 
@@ -77,9 +98,9 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 ## Contributing
 
 - `just ci` must pass before PR; pre-commit hooks approximate it ([`.pre-commit-config.yaml`](.pre-commit-config.yaml) — its `terraform_validate` hook shells the `terraform` binary, not tofu; `just tf-validate` is the real gate).
-- Terraform changes follow [`terraform/CLAUDE.md`](terraform/CLAUDE.md), gated fail-closed by [`scripts/check_conventions.py`](scripts/check_conventions.py) (part of `just ci`).
+- Terraform changes follow [`terraform/CLAUDE.md`](terraform/CLAUDE.md), gated fail-closed by `cdpctl conventions` (part of `just ci`).
 - Propose architecture changes in [`docs/adr/`](docs/adr/) first.
-- Version pins live in [`terraform/versions.tf`](terraform/versions.tf); run [`scripts/check_versions.py`](scripts/check_versions.py) before bumping.
+- Version pins live in [`terraform/versions.tf`](terraform/versions.tf); run `just check-versions` before bumping.
 - Commit format: `type(scope): subject`. No AI footers.
 
 ## License

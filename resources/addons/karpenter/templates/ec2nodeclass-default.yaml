@@ -72,7 +72,7 @@ spec:
 
   # Tags propagated onto every Karpenter-launched EC2 instance AND its EBS
   # volumes. iit-billing-tag + PerconaKeep are MANDATORY — without them, the
-  # percona-dev-admin cleanup Lambdas reap nodes after 10 min and volumes
+  # account cleanup Lambdas reap nodes after 10 min and volumes
   # daily. See CLAUDE.md item #7 and docs/eks-hardening.md.
   tags:
     iit-billing-tag: percona-ci-platform

@@ -35,7 +35,7 @@ import sys
 
 from cdpctl._repo import repo_root
 
-# scripts/ is FROZEN (ADR 0031): new automation lands as a cdpctl subcommand
+# scripts/ is FROZEN (ADR 0032): new automation lands as a cdpctl subcommand
 # under src/cdpctl/, never as a loose script. Symmetric fail-closed allowlist:
 # every tracked scripts/ path must be listed here, and every entry must still
 # exist (a stale entry fails too, so ports and deletions shrink the list in

@@ -67,7 +67,7 @@ the substrate, and the cross-region peering is re-pointed at it.
 - **1 `removed{}` block (`destroy = false`)** forgets the EC2 `JENKINS_HOME`
   volume `vol-06ce3f52efb4d163f` from state **without destroying it**. The volume
   carries `prevent_destroy` + `PerconaKeep=True`, so it detaches to `available`
-  and survives both the apply and the daily `percona-dev-admin` volume-cleanup
+  and survives both the apply and the daily `<your-profile>` volume-cleanup
   Lambda (which only reaps `available` volumes missing that tag).
 - Everything else in `module.ps3` (spot fleet request, launch template, master
   IAM role + SGs, init bucket, SQS) is master-only and is **destroyed** when the
@@ -94,13 +94,13 @@ data volume will survive it**:
 
 ```sh
 # 1. Confirm the data volume detaches, not deletes, on terminate.
-AWS_PROFILE=percona-dev-admin aws ec2 describe-instances --region eu-west-1 \
+aws ec2 describe-instances --region eu-west-1 \
   --instance-ids i-0ebc45a55ec7098d7 \
   --query 'Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/xvdj`].Ebs.[VolumeId,DeleteOnTermination]'
 # Expect: vol-06ce... , False   (DeleteOnTermination=false on the data volume)
 
 # 2. Only then terminate. The lingering ENI clears, the SG destroy unblocks.
-AWS_PROFILE=percona-dev-admin aws ec2 terminate-instances --region eu-west-1 \
+aws ec2 terminate-instances --region eu-west-1 \
   --instance-ids i-0ebc45a55ec7098d7
 ```
 
@@ -112,13 +112,13 @@ check of the data volume so a teardown can never delete the real home.
 
 ```sh
 # Data volume retained and detached (not deleted, not in-use).
-AWS_PROFILE=percona-dev-admin aws ec2 describe-volumes --region eu-west-1 \
+aws ec2 describe-volumes --region eu-west-1 \
   --volume-ids vol-06ce3f52efb4d163f \
   --query 'Volumes[0].[State,Tags[?Key==`PerconaKeep`].Value|[0]]'
 # Expect: available , True
 
 # The ARM Graviton ASG survived the re-parent (still desired/min/max intact).
-AWS_PROFILE=percona-dev-admin aws autoscaling describe-auto-scaling-groups \
+aws autoscaling describe-auto-scaling-groups \
   --region eu-west-1 --auto-scaling-group-names jenkins-ps3-arm-graviton \
   --query 'AutoScalingGroups[0].[AutoScalingGroupName,MinSize,MaxSize]'
 
@@ -127,7 +127,7 @@ curl -sI https://ps3.cd.percona.com/login | grep -iE 'HTTP/|x-jenkins'
 # Expect: HTTP/2 200 and an x-jenkins: header.
 
 # The EC2 master is gone.
-AWS_PROFILE=percona-dev-admin aws ec2 describe-instances --region eu-west-1 \
+aws ec2 describe-instances --region eu-west-1 \
   --instance-ids i-0ebc45a55ec7098d7 \
   --query 'Reservations[].Instances[].State.Name'
 # Expect: terminated

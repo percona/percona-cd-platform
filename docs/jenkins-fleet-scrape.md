@@ -51,7 +51,7 @@ Bearer in the `Authorization` header. One token, shared across the fleet,
 stored in AWS Secrets Manager at
 `percona-ci-platform/alloy-gateway/bearer`. The `SecretString` value is
 JSON `{"bearer_token":"..."}` (not plain string); every consumer
-(master-side fetcher, `scripts/verify-observability.sh`, ESO `dataFrom:
+(master-side fetcher, `cdpctl verify-observability`, ESO `dataFrom:
 extract`) JSON-parses `.bearer_token` before use.
 
 - **Master side**: systemd `alloy.service` invokes
@@ -152,13 +152,13 @@ role via CFN (9 masters) and Terraform (`pxb.cd`). The split has since
 inverted: the jenkins-master module carries the same policy for the 8 TF
 masters and only `pg.cd` remains CFN.
 
-Verified against Mimir / Loki via `scripts/check-master-ingest.sh`: each
+Verified against Mimir / Loki via `just check-master-ingest`: each
 master pushes ~180 datapoints per 3 hours on `hetzner_api_rate_limit_remaining`
 (one sample per 60s scrape), 10/10 series present, fail counter 0 across the
 fleet, log volume tracking each master's actual Jenkins activity.
 
 Ongoing fleet freshness is gated by `just check-master-alloy`
-(`scripts/check-master-alloy-mimir.py`), which keys on the same gauge but
+(`cdpctl alloy`), which keys on the same gauge but
 derives the expected master set from repo source-of-truth, so the "10/10"
 count cannot silently rot as masters come and go.
 

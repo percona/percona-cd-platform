@@ -59,7 +59,7 @@ variable "permissions_policy_json" {
 }
 
 variable "tags" {
-  description = "Tags merged onto every resource. Pass `local.tags` from the root so the percona-dev-admin cleanup tags (iit-billing-tag, PerconaKeep=True) flow through -- PerconaKeep keeps the reaper from deleting its own backing resources."
+  description = "Tags merged onto every resource. Pass `local.tags` from the root so the account's cleanup tags (iit-billing-tag, PerconaKeep=True) flow through -- PerconaKeep keeps the reaper from deleting its own backing resources."
   type        = map(string)
 }
 

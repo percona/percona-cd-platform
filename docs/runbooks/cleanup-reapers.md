@@ -1,6 +1,6 @@
 # Operating the cleanup reapers (volume + EC2)
 
-Two scheduled AWS Lambda reapers keep the `percona-dev-admin` account tidy by
+Two scheduled AWS Lambda reapers keep the dev account tidy by
 deleting resources that lack the mandatory cleanup tags. This runbook is how an
 operator deploys them, reads their dry-run decisions, arms them for live
 deletion, protects resources from them, and pauses or rolls them back.
@@ -34,7 +34,7 @@ All tunables (schedules, `dry_run`, EKS skip regex, volume age floor) live in th
 
 ## First deploy and dry-run bake-in
 
-Export `AWS_PROFILE` first (`export AWS_PROFILE=percona-dev-admin`). Terraform
+Export `AWS_PROFILE` first (`export AWS_PROFILE=<your-profile>`). Terraform
 goes only through the `just tf-*` recipes; never raw `tofu`, never a CLI `-var`.
 
 ### Step 1 -- plan and apply

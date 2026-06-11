@@ -8,7 +8,7 @@ timed out`. This runbook is the maintainer path to a shell.
 ## TL;DR
 
 ```sh
-export AWS_PROFILE=percona-dev-admin
+export AWS_PROFILE=<your-profile>
 just ssh                       # list the reachable masters (live from AWS)
 just ssh pmm                   # interactive shell via SSM Session Manager
 just ssm-run pmm 'df -h /mnt'  # one-shot root command, prints the output

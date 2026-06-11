@@ -33,7 +33,7 @@
 # Blast radius if a workflow's OIDC token leaks before it expires (15 min
 # default):
 #   - Attacker can launch ONE `c7g.4xlarge` in eu-central-1 carrying the
-#     mandatory cleanup tags (so the percona-dev-admin Lambdas will reap
+#     mandatory cleanup tags (so the account's cleanup Lambdas will reap
 #     it within 10 min if the workflow's own terminate step doesn't fire).
 #   - Attacker can terminate ONLY instances that already carry both
 #     `iit-billing-tag=percona-server-gha-fallback` and
@@ -85,7 +85,7 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
       values   = ["c7g.4xlarge"]
     }
 
-    # Mandatory cleanup tags. Without these, the percona-dev-admin cleanup
+    # Mandatory cleanup tags. Without these, the account's cleanup
     # Lambdas terminate the instance (and later delete its volume);
     # enforcing at the IAM layer is belt-and-suspenders -- the workflow
     # physically cannot launch an instance that would be Lambda-killed.

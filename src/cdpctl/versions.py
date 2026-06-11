@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n=== EKS supported versions (aws eks describe-cluster-versions) ===")
     if not os.environ.get("AWS_PROFILE"):
         # AWS_PROFILE comes from the environment, never baked (repo convention).
-        print("  (set AWS_PROFILE to query, e.g. export AWS_PROFILE=percona-dev-admin)")
+        print("  (set AWS_PROFILE to query, e.g. export AWS_PROFILE=<your-profile>)")
     else:
         try:
             out = subprocess.check_output(

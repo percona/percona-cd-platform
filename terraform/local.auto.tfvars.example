@@ -11,7 +11,7 @@
 # split-brain: a tfvars value silently overrides the env var inside `tofu`, so
 # `AWS_PROFILE=X just tf-plan` would plan against profile Y. Leave it unset and
 # providers.tf falls through to the SDK default chain (the AWS_PROFILE you export).
-#   export AWS_PROFILE=percona-dev-admin   # in your shell, NOT here.
+#   export AWS_PROFILE=<your-profile>      # in your shell, NOT here.
 
 # Override only if you want a different region or hostname for a fork/dev cluster.
 #aws_region        = "us-east-1"

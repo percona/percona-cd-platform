@@ -33,7 +33,7 @@ variable "permissions_policy_json" {
 }
 
 variable "tags" {
-  description = "Tags merged into the IAM role + policy. Pass `local.tags` from the root module so the percona-dev-admin cleanup tags (`iit-billing-tag`, `PerconaKeep`) flow through."
+  description = "Tags merged into the IAM role + policy. Pass `local.tags` from the root module so the account's cleanup tags (`iit-billing-tag`, `PerconaKeep`) flow through."
   type        = map(string)
 }
 

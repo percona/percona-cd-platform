@@ -123,7 +123,7 @@ value at AWS Secrets Manager
 External Secrets Operator. The `SecretString` value is JSON
 `{"bearer_token":"..."}` (not a plain string) — every consumer
 (master-side `/usr/local/bin/alloy-fetch-token`, ESO
-`dataFrom: extract`, `scripts/verify-observability.sh`) JSON-parses
+`dataFrom: extract`, `cdpctl verify-observability`) JSON-parses
 `.bearer_token` before use. The second layer, the **ALB CIDR allowlist**
 (`alb.ingress.kubernetes.io/inbound-cidrs`), is also valued: it is
 empty by default in `resources/addons/alloy-gateway/values.yaml`. The
@@ -185,9 +185,9 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 
 - `just check-master-alloy` — every-active-master Mimir-via-Alloy freshness
   gate; enumerates the master set dynamically from repo source-of-truth.
-- `scripts/check-master-ingest.sh` — per-master Mimir + Loki detail (series,
+- `just check-master-ingest` — per-master Mimir + Loki detail (series,
   freshness, cardinality, log lines); hardcoded master list.
-- `scripts/verify-observability.sh [<inst>]` — full push-pipeline walk for
+- `just verify-observability [<inst>]` — full push-pipeline walk for
   one master (Alloy systemd, ALB + bearer, gateway, Mimir/Loki, Grafana).
 
 ## Related decisions

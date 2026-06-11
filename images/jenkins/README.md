@@ -55,7 +55,7 @@ the lock records the release sha, not a local build).
 ## Keeping the forks current: recorded-pin auto-bump
 
 The lock is a **recorded pin**, not a float: the build always fetches an exact,
-sha-verified version. `scripts/refresh-fork-locks.sh` is what moves the pin
+sha-verified version. `cdpctl fork-locks` (`just refresh-fork-locks`) is what moves the pin
 forward. For each entry it derives the GitHub repo from the entry's own `url`,
 lists that repo's releases (public, so no token needed to list), keeps only
 non-draft, non-prerelease tags carrying a `.percona.` version, picks the highest

@@ -60,7 +60,7 @@ variable "tags" {
 }
 
 variable "team" {
-  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Allowed values: the Owner set enforced by scripts/check_conventions.py."
+  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Allowed values: the Owner set enforced by cdpctl conventions."
   type        = string
   default     = "platform"
 }

@@ -232,7 +232,7 @@ variable "tags" {
 }
 
 variable "team" {
-  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Per-master values are validated by scripts/check_conventions.py against its instance map; cloud tags team=cloud-cd to stay outside the cloud team's orphan-cleanup lambdas (docs/runbooks/cleanup-reapers.md)."
+  description = "Owning product team, recorded in the `team` tag on every resource this module creates and every instance/volume it spawns at runtime. Per-master values are validated by cdpctl conventions against its instance map; cloud tags team=cloud-cd to stay outside the cloud team's orphan-cleanup lambdas (docs/runbooks/cleanup-reapers.md)."
   type        = string
   default     = "platform"
 }

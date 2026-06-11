@@ -24,7 +24,7 @@ kubectl --context percona-ci-platform -n authentik rollout status deploy/authent
 Then verify discovery + apply succeeded:
 
 ```bash
-TOK=$(aws --profile percona-dev-admin --region us-east-1 \
+TOK=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
       secretsmanager get-secret-value \
       --secret-id percona-ci-platform/authentik/config \
       --query SecretString --output text \
@@ -118,7 +118,7 @@ Headlamp currently consumes that slot via `terraform/eks-oidc-headlamp.tf` (`aws
 To swap the association out (control-plane mutation; takes ~10-40 minutes):
 
 ```bash
-aws --profile percona-dev-admin --region us-east-1 eks \
+aws --profile "$AWS_PROFILE" --region us-east-1 eks \
   disassociate-identity-provider-config \
   --cluster-name percona-ci-platform \
   --identity-provider-config type=oidc,name=authentik-headlamp
@@ -137,10 +137,10 @@ curl -s -H "Authorization: Bearer $TOK" \
   | python3 -m json.tool | head -40
 
 # 2. (k8s-consuming providers) end-to-end at the apiserver
-EP=$(aws --profile percona-dev-admin --region us-east-1 \
+EP=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
      eks describe-cluster --name percona-ci-platform \
      --query 'cluster.endpoint' --output text)
-CS=$(aws --profile percona-dev-admin --region us-east-1 \
+CS=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
      secretsmanager get-secret-value \
      --secret-id percona-ci-platform/authentik/config \
      --query SecretString --output text \
@@ -158,7 +158,7 @@ A 201 with `username: 'oidc:'` (or `oidc:<email>` for a real user token) means t
 
 ```bash
 START=$(( ($(date +%s) - 120) * 1000 ))
-aws --profile percona-dev-admin --region us-east-1 logs filter-log-events \
+aws --profile "$AWS_PROFILE" --region us-east-1 logs filter-log-events \
   --log-group-name /aws/eks/percona-ci-platform/cluster \
   --log-stream-name-prefix kube-apiserver-1 \
   --start-time "$START" --filter-pattern 'authentication.go' --limit 6 \

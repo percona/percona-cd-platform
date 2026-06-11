@@ -31,7 +31,7 @@ Used to sign every id_token. OIDC clients (Headlamp via the EKS external OIDC as
 2. **Swap the signing key on every OAuth2 provider that uses the old cert.** Three to update: `headlamp-provider`, `grafana-provider`, `argocd-provider`. Either via the UI (*Providers -> select -> change `signing_key` -> save*) or the API:
 
    ```bash
-   TOK=$(aws --profile percona-dev-admin --region us-east-1 \
+   TOK=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
          secretsmanager get-secret-value \
          --secret-id percona-ci-platform/authentik/config \
          --query SecretString --output text \
@@ -60,7 +60,7 @@ Used to sign every id_token. OIDC clients (Headlamp via the EKS external OIDC as
 4. **Verify** that new tokens are signed with the new cert AND that the EKS apiserver still accepts them end-to-end:
 
    ```bash
-   CS=$(aws --profile percona-dev-admin --region us-east-1 \
+   CS=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
         secretsmanager get-secret-value \
         --secret-id percona-ci-platform/authentik/config \
         --query SecretString --output text \
@@ -75,7 +75,7 @@ Used to sign every id_token. OIDC clients (Headlamp via the EKS external OIDC as
    echo "$IDT" | cut -d. -f1 | base64 -d 2>/dev/null; echo
 
    # apiserver accepts -> 201
-   EP=$(aws --profile percona-dev-admin --region us-east-1 \
+   EP=$(aws --profile "$AWS_PROFILE" --region us-east-1 \
         eks describe-cluster --name percona-ci-platform \
         --query 'cluster.endpoint' --output text)
    curl -s -o /dev/null -w 'HTTP %{http_code}\n' -k -X POST \

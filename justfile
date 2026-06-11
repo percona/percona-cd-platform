@@ -389,7 +389,7 @@ refresh-fork-locks:
 check-fork-locks:
     uv run --locked cdpctl fork-locks --check
 
-# ---------- cdpctl (the central CLI package; ADR 0031) ----------
+# ---------- cdpctl (the central CLI package; ADR 0032) ----------
 # All recipes use `uv run --locked`: never re-locks, fails loud if uv.lock is
 # stale (dep bumps go through an explicit `uv lock`).
 

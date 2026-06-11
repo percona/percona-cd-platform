@@ -60,7 +60,7 @@ curl -fsS http://localhost:8080/ingester/ring | grep -E 'state":"(LEAVING|PENDIN
 kill $PF 2>/dev/null
 
 # 3. Master-side push queue depth (Mimir only; gate at <50%)
-./scripts/check-master-ingest.sh
+just check-master-ingest
 
 # 4. PV zone (confirm the migration is actually needed for this PVC)
 PVC=$(kubectl -n $NS get sts ${NS}-${COMP} -o jsonpath='{.spec.volumeClaimTemplates[0].metadata.name}')-${NS}-${COMP}-0
@@ -208,8 +208,8 @@ kubectl -n argocd get application $APP -o jsonpath='{.status.sync.status}'; echo
 ### Step 11 — Verify ingest resumes
 
 ```sh
-./scripts/check-master-ingest.sh
-./scripts/verify-observability.sh --skip-master
+just check-master-ingest
+just verify-observability --skip-master
 ```
 
 Move to the next component only after these pass.

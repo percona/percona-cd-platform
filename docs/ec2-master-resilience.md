@@ -34,7 +34,7 @@ to disconnect them cleanly.
 
 ## Operational check
 
-`scripts/check-master-spot-readiness.sh <inst>` walks every moving piece
+`just check-master-spot-readiness <inst>` walks every moving piece
 (SpotFleet config, cron daemon + watcher, graceful-stop.sh + flock,
 JVM args, Secrets Manager fetch, api-admin auth probe). Exit 0 means
 the master will respond correctly; non-zero shows which stage failed.
@@ -192,6 +192,6 @@ applies.
 
 ## See also
 
-- [`check-master-spot-readiness.sh`](../scripts/check-master-spot-readiness.sh) — the operational audit
+- `cdpctl spot-readiness` — the operational audit
 - [`adr/0013-push-from-masters-with-nginx-bearer.md`](adr/0013-push-from-masters-with-nginx-bearer.md) — alloy push pipeline (parallel resilience story for observability)
 - `Percona/percona-jenkins` skill (private) and `Percona/percona-hetzner` skill — fleet-wide ops notes for the masters

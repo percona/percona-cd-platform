@@ -285,7 +285,7 @@ variable "lgtm_push_hostnames" {
 variable "tags" {
   description = <<-EOT
     Default tags for every taggable AWS resource. Two of these are required by
-    the percona-dev-admin account's cleanup reapers (this repo,
+    the account's cleanup reapers (this repo,
     ec2-cleanup.tf / volume-cleanup.tf) — do not drop them:
 
     - `iit-billing-tag` — the EC2 reaper terminates instances missing a valid

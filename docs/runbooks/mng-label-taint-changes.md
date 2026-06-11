@@ -54,7 +54,7 @@ For each MNG you touched, run:
 # map; same shape for taints. To find the current MNG name, use:
 #   aws eks list-nodegroups --cluster-name percona-ci-platform --region us-east-1
 
-AWS_PROFILE=percona-dev-admin aws eks update-nodegroup-config \
+aws eks update-nodegroup-config \
   --region us-east-1 \
   --cluster-name percona-ci-platform \
   --nodegroup-name <nodegroup-name> \
@@ -65,7 +65,7 @@ AWS_PROFILE=percona-dev-admin aws eks update-nodegroup-config \
 The response carries an `update.id`. Poll it until `status: Successful`:
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws eks describe-update \
+aws eks describe-update \
   --region us-east-1 \
   --name percona-ci-platform \
   --nodegroup-name <nodegroup-name> \
@@ -83,7 +83,7 @@ tofu state still reflects the pre-update values. Refresh:
 # Raw-tofu exception: refresh-only + a targeted plan are intentionally NOT
 # exposed as `just` recipes (the justfile entrypoint forbids -auto-approve and
 # keeps -target plan-only; see CLAUDE.md). Run them directly here, with
-# AWS_PROFILE exported (export AWS_PROFILE=percona-dev-admin).
+# AWS_PROFILE exported (export AWS_PROFILE=<your-profile>).
 tofu -chdir=terraform apply -refresh-only -auto-approve
 tofu -chdir=terraform plan -target='module.eks.module.eks_managed_node_group["<mng-name>"]'
 # Expect: "No changes. Your infrastructure matches the configuration."

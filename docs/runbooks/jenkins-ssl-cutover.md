@@ -38,7 +38,7 @@ Out of scope:
 
 - `jenkins-ingress` addon deployed (`kubectl get app -n argocd jenkins-ingress` reports `Synced Healthy`).
 - Dedicated `jenkins-masters` ALB live (`k8s-jenkinsmasters-049b9e6405`).
-- Operator has `percona-dev-admin` AWS credentials.
+- Operator has `<your-profile>` AWS credentials.
 - Operator can `kubectl` against `percona-ci-platform`.
 - Operator can reach the master via EC2 Instance Connect Endpoint (`paws ec2 ssh <host>`); the per-master SSH /32 is being retired.
 - `<host>` is registered in `var.jenkins_hosts` and has its upstream
@@ -80,7 +80,7 @@ Keep `:443` and `:80` open to `0.0.0.0/0` in this PR so the current
 openresty path stays usable during cutover.
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
+aws cloudformation update-stack \
   --region <region> --stack-name jenkins-<host> \
   --template-body file://IaC/<host>.cd/JenkinsStack.yml \
   --capabilities CAPABILITY_NAMED_IAM
@@ -89,7 +89,7 @@ AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
 Verify the live SG has the new rule:
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws ec2 describe-security-groups \
+aws ec2 describe-security-groups \
   --region <region> \
   --filters Name=vpc-id,Values=<vpc-id> Name=group-name,Values=HTTP \
   --query 'SecurityGroups[0].IpPermissions[?FromPort==`8080`]'
@@ -128,18 +128,18 @@ on the next deploy. Force a replacement to redeploy the server now
 rather than waiting:
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
+aws cloudformation update-stack \
   --region <region> --stack-name jenkins-<host> \
   --template-body file://IaC/<host>.cd/JenkinsStack.yml \
   --capabilities CAPABILITY_NAMED_IAM
 
 # After UPDATE_COMPLETE, terminate the running master to force the
 # SpotFleet to launch a fresh instance with the new user-data:
-INSTANCE_ID=$(AWS_PROFILE=percona-dev-admin aws ec2 describe-instances \
+INSTANCE_ID=$(aws ec2 describe-instances \
   --region <region> \
   --filters Name=vpc-id,Values=<vpc-id> Name=instance-state-name,Values=running \
   --query 'Reservations[0].Instances[0].InstanceId' --output text)
-AWS_PROFILE=percona-dev-admin aws ec2 terminate-instances \
+aws ec2 terminate-instances \
   --region <region> --instance-ids $INSTANCE_ID
 ```
 
@@ -209,7 +209,7 @@ to the ALB. ps3 example: PR #4086.
 After CODEOWNERS approval + merge:
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
+aws cloudformation update-stack \
   --region <region> --stack-name jenkins-<host> \
   --template-body file://IaC/<host>.cd/JenkinsStack.yml \
   --capabilities CAPABILITY_NAMED_IAM
@@ -235,7 +235,7 @@ CIDR reached via the peering, see prerequisite above) and the unchanged
 SSH /32 allowlist on `SSHSecurityGroup`.
 
 ```sh
-AWS_PROFILE=percona-dev-admin aws cloudformation update-stack \
+aws cloudformation update-stack \
   --region <region> --stack-name jenkins-<host> \
   --template-body file://IaC/<host>.cd/JenkinsStack.yml \
   --capabilities CAPABILITY_NAMED_IAM

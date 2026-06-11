@@ -67,10 +67,10 @@ curl -s http://localhost:8080/ingester/ring | grep -E 'LEAVING|PENDING'   # must
 kill $PF
 
 # Ingest still flowing from all 10 masters
-./scripts/check-master-ingest.sh
+just check-master-ingest
 
 # End-to-end pipeline
-./scripts/verify-observability.sh --skip-master
+just verify-observability --skip-master
 
 # Snapshot the orphan inventory (save for audit trail)
 kubectl get pvc -A -o wide > /tmp/pvc-before-sweep.txt
@@ -120,7 +120,7 @@ needed.
 The `gp3-monitoring-1a-retain` and `gp3-jenkins-1a-retain` StorageClasses
 use `reclaimPolicy: Retain`. They also tag EBS volumes with
 `PerconaKeep=True` via `tagSpecification_*`, which **blocks the
-percona-dev-admin cleanup Lambda**. Released PVs on these SCs need an
+<your-profile> cleanup Lambda**. Released PVs on these SCs need an
 explicit `aws ec2 delete-volume`.
 
 ```sh
@@ -136,7 +136,7 @@ done
 PV=pvc-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 VOL=$(kubectl get pv $PV -o jsonpath='{.spec.csi.volumeHandle}')
 kubectl delete pv $PV
-aws ec2 delete-volume --volume-id $VOL --profile percona-dev-admin --region us-east-1
+aws ec2 delete-volume --volume-id $VOL --profile <your-profile> --region us-east-1
 ```
 
 ## Verification
@@ -152,10 +152,10 @@ kubectl get pv | awk '$5=="Released"'                                           
 kubectl get pods -n mimir; kubectl get pods -n loki; kubectl get pods -n tempo
 
 # Ingest still flowing
-./scripts/check-master-ingest.sh
+just check-master-ingest
 
 # AWS EBS volume count dropped
-aws ec2 describe-volumes --profile percona-dev-admin --region us-east-1 \
+aws ec2 describe-volumes --profile <your-profile> --region us-east-1 \
   --filters "Name=tag:kubernetes.io/cluster/percona-ci-platform,Values=owned" \
   --query 'length(Volumes)'
 
@@ -177,7 +177,7 @@ for vol in $(kubectl get pvc -n mimir -o jsonpath='{range .items[?(@.metadata.na
   | xargs -I{} kubectl get pv {} -o jsonpath='{.spec.csi.volumeHandle}{"\n"}'); do
   aws ec2 create-snapshot --volume-id $vol --description "pre-sweep $(date +%F)" \
     --tag-specifications "ResourceType=snapshot,Tags=[{Key=iit-billing-tag,Value=lgtm-sweep},{Key=PerconaKeep,Value=False}]" \
-    --profile percona-dev-admin --region us-east-1
+    --profile <your-profile> --region us-east-1
 done
 ```
 

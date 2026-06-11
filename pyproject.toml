@@ -1,4 +1,4 @@
-# cdpctl: the central operational CLI for this repo (ADR 0031). The justfile
+# cdpctl: the central operational CLI for this repo (ADR 0032). The justfile
 # dispatches to it via `uv run --locked cdpctl <sub>`; uv.lock is the single
 # source of dependency truth (update only via an explicit `uv lock`).
 [project]

@@ -7,7 +7,7 @@ the runbook below. State locking uses native S3 conditional writes
 object next to the state file.
 
 **Already done (2026-04-30):** `s3://terraform-state-storage-percona-ci-platform`
-exists in the `percona-dev-admin` account, `us-east-1`.
+exists in the dev account, `us-east-1`.
 
 ## Recreate
 

@@ -1,6 +1,6 @@
 # Default class — multi-AZ, gp3, Delete on PVC delete.
 # tagSpecification_* propagates tags onto the AWS EBS volume — required so the
-# percona-dev-admin volume-cleanup Lambda doesn't reap "available" volumes
+# account volume-cleanup Lambda doesn't reap "available" volumes
 # (it checks for the PerconaKeep tag). iit-billing-tag handles billing rollup.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass

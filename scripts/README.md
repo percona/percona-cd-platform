@@ -1,90 +1,51 @@
 # scripts/
 
-Operational helpers for the EKS-hosted CI platform.
+This directory is frozen ([ADR 0032](../docs/adr/0032-central-python-cli-package.md)).
+Operational automation lives in the `cdpctl` package (`src/cdpctl/`), a
+uv-managed project the justfile dispatches into. The freeze is enforced by
+`cdpctl conventions` in `just ci`: a new file here fails CI unless it is
+allowlisted in `src/cdpctl/conventions.py`, and a stale allowlist entry fails
+too.
 
-Read-only by default. Most expect `AWS_PROFILE=percona-dev-admin` and a
-kubeconfig with the `percona-ci-platform` context.
+## The dispatcher map
 
-## Master-facing
+`just` is the human entry point; every recipe wraps `uv run --locked cdpctl
+<subcommand>`. `uv.lock` is the single dependency truth (bump via `uv lock`).
 
-[`check-master-spot-readiness.sh`](check-master-spot-readiness.sh)
-Spot-interrupt readiness audit for a Jenkins master.
+| just recipe | cdpctl subcommand | module | what it does |
+|---|---|---|---|
+| `just runbook ...` | `runbook` | `runbook.py` | Gated runbook automations (template-change AUTOMATED, master-resize / core-bump / ssh-key GUIDED) |
+| `just check-master-alloy` | `alloy` | `alloy.py` | Every active master ships metrics to Mimir via Alloy (dynamic fleet enumeration) |
+| `just clouds-render-check` | `clouds check ps3` | `clouds.py` | Agent-clouds catalog render / apply / drift gate (ADR 0029) |
+| `just tf-conventions` | `conventions` | `conventions.py` | Terraform conventions + the scripts/ allowlist freeze (stdlib-only) |
+| `just check-versions` | `versions` | `versions.py` | Pinned versions vs upstream latest (advisory) |
+| `just check-master-ingest` | `ingest` | `ingest.py` | Per-master Mimir + Loki ingest probe |
+| `just check-master-spot-readiness` | `spot-readiness` | `spot_readiness.py` | Spot-interrupt readiness audit for one master |
+| `just verify-observability` | `verify-observability` | `verify_observability.py` | Deepest per-master LGTM push-pipeline walk |
+| `just verify-karpenter` | `verify-karpenter` | `verify_karpenter.py` | Karpenter scale-up/down/disruption phases (fixtures in `karpenter-tests/`) |
+| `just helm-render` | `helm-render-check` | `helm_render.py` | Controller chart values reach the `jenkins` subchart (CI gate) |
+| `just refresh-fork-locks` / `check-fork-locks` | `fork-locks [--check]` | `fork_locks.py` | Fork plugin lock auto-bump, sha256 + MANIFEST verified |
 
-- SpotFleet has Capacity Rebalancing + pinned to `$Latest`
-- SSM agent online, cloud-init done
-- `crond` active, `terminate-check` cron installed and firing
-- `jenkins-graceful-stop.sh` present with `flock` guard, `jq` available
-- JVM has the rehydrate flag (eks_observability profile)
-- Secrets Manager fetch + api-admin auth probe from loopback
+`cdpctl --help` prints the same census. `just cdpctl-install` puts `cdpctl` on
+PATH as an editable uv tool. `just cdp-lint` (ruff + ty) and `just cdp-test`
+(pytest) gate the package in `just ci`.
 
-Exits non-zero if anything is missing.
+## What still lives here
 
-[`runbook.py`](runbook.py)
-Gated runbook automations behind `just runbook`. One subcommand per
-common operation: `template-change <inst>` is fully automated (clean
-origin/main gate, plan-scope gate allowing only that master's
-init-config S3 objects, apply, live evaluate via the jenkins CLI),
-the rest are guided step-runners with per-step confirmation.
-
-[`check-master-alloy-mimir.py`](check-master-alloy-mimir.py)
-Verify every active master ships metrics to Mimir via Alloy. Enumerates the
-master set dynamically from repo source-of-truth (k8s instances dir,
-`master-*.tf` with/without the jenkins-master module -> k8s / tf-managed /
-cf-managed) and reads per-master freshness of
-`hetzner_api_rate_limit_remaining` from the in-cluster Mimir query-frontend.
-`--max-age <s>`, `--json`; STALE/MISSING exits non-zero. Run via
-`just check-master-alloy`.
-
-[`check-master-ingest.sh`](check-master-ingest.sh)
-Per-master Mimir + Loki ingest probe via in-cluster query-frontends.
-Reports series count, sample freshness, metric cardinality, Loki line count.
-Use for fleet-wide observability spot-checks without SSH. The master list is
-hardcoded (`EXPECTED_MASTERS` in the script); `check-master-alloy-mimir.py`
-derives it dynamically — pair them.
-
-[`verify-observability.sh`](verify-observability.sh)
-Per-master end-to-end LGTM push pipeline walk: master-side Alloy systemd,
-ALB + bearer, alloy-gateway pods, Mimir distributor + canary, Loki ring +
-canary, Grafana. Pair with `check-master-ingest.sh` for fleet-wide.
-
-[`check-uptime-queries.py`](check-uptime-queries.py)
-Validate every jenkins-uptime PromQL query against Mimir (ADR 0031): the
-PrometheusRule recording-rule exprs (live from the cluster when deployed,
-else rendered via `helm template`) plus every Jenkins Uptime dashboard
-panel expr and its template-variable query. Auto-detects pre-deploy
-(addon series may be empty, source series must exist) vs post-deploy
-(everything must return series). Parse errors or unexpectedly empty
-results exit non-zero.
-
-## Cluster-facing
-
-[`verify-karpenter.sh`](verify-karpenter.sh)
-Before / during / after validation of Karpenter scale-up, scale-down, and
-disruption behavior. Phase-based (`--phase scaleup-small | scaledown-empty
-| all | ...`). Fixtures in [`karpenter-tests/`](karpenter-tests/).
-
-[`verify-lgtm-cutover.sh`](verify-lgtm-cutover.sh)
-Cluster-side LGTM-only migration validation: ruler sync, ALB bearer gate,
-worker provisioning telemetry, dashboards, kps removal. The `worker` phase
-triggers a real Jenkins build.
-
-## Inventory
-
-[`check_versions.py`](check_versions.py)
-Version drift check for pinned tools, charts, AWS CLI. Run before bumping
-`terraform/versions.tf` or addon chart pins.
-
-## Master-side install
-
-[`install-master-observability.sh`](install-master-observability.sh)
-Bootstrapped on each EC2 Jenkins master from the TF user-data (SHA-pinned).
-Installs amazon-ssm-agent + Grafana Alloy with an `ExecStartPre` that
-fetches the alloy-gateway bearer token from AWS Secrets Manager. Idempotent.
-Not invoked locally; lives here so platform changes to the gateway and the
-master-side installer land in one diff.
+| file | why it cannot move |
+|---|---|
+| `install-master-observability.sh` | Runs ON each EC2 master at boot, fetched via a commit-SHA-pinned raw URL in `terraform/modules/jenkins-master/user-data.sh.tftpl`. Not invoked locally. |
+| `karpenter-tests/*.yaml` | kubectl fixtures consumed by `cdpctl verify-karpenter`. New fixtures are fine; they ride the directory allowlist. |
 
 ## Conventions
 
-- **Exit codes:** `0` all green, `1` at least one FAIL, `2` precondition missing.
-- **Output:** PASS / FAIL / SKIP rows per stage, summary at end. ANSI on TTY.
-- **Master argument:** shortname (`ps3`, `pxb`, ...) or instance id (`i-...`).
+- Most subcommands expect `AWS_PROFILE=<your-profile>` and a kubeconfig
+  with the `percona-ci-platform` context; the justfile guards the AWS ones.
+- Verifiers print two-space `PASS` / `FAIL` / `SKIP` rows (ANSI only on a
+  TTY) and exit 0 clean, 1 on failures, 2 on missing tools or bad usage.
+- Special exits: `cdpctl runbook` gates fail with 3 (`GATE FAILED`),
+  `cdpctl fork-locks --check` exits 3 when a bump is available.
+- Read-only by default. The exceptions: `runbook` applies gated tofu changes,
+  `clouds apply` rewrites an instance values file, `fork-locks` (without
+  `--check`) rewrites the lock, `verify-karpenter` creates and deletes test
+  workloads on the cluster.
