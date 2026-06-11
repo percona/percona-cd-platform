@@ -81,3 +81,16 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - Addon: `resources/addons/jenkins-ingress/`
 - Per-master IaC: `Percona-Lab/jenkins-pipelines/IaC/<host>.cd/JenkinsStack.yml`
 - Origin record machinery: `terraform/origins.tf` + `terraform/variables.tf` (`jenkins_hosts`, `jenkins_origin_targets`)
+
+## Amendments
+
+### 2026-06-10: Authentik consumer set grew beyond Grafana
+
+The consequence above ("An Authentik outage hits Grafana only, never
+Jenkins") described the 2026-05 state. ArgoCD (`terraform/argocd.tf`
+`oidc.config`) and Headlamp ([ADR 0022](0022-headlamp-web-kubernetes-ui.md),
+EKS OIDC association) now also authenticate through Authentik. An Authentik
+outage today takes out SSO for Grafana, ArgoCD, and Headlamp. The Jenkins
+half of the claim still holds: masters keep native GitHub OAuth, and
+Authentik is not in their login path. Each consumer keeps a local
+break-glass path ([authentication.md](../authentication.md#recovery-paths)).
