@@ -68,6 +68,19 @@ Cluster-side LGTM-only migration validation: ruler sync, ALB bearer gate,
 worker provisioning telemetry, dashboards, kps removal. The `worker` phase
 triggers a real Jenkins build.
 
+[`check-dashboard-queries.py`](check-dashboard-queries.py)
+Validate every PromQL expr in any Grafana dashboard JSON (path or URL)
+against live Mimir. Walks panels including collapsed rows, resolves the
+dashboard's own template variables by running their queries, then runs
+each target as an instant query: `OK` / `EMPTY (metric absent)` /
+`EMPTY (selector)` / `ERROR`, with `--allow-empty` / `--allow-empty-ref`
+for panels legitimately empty when healthy (discards, 5xx overlays).
+Generic sibling of `check-uptime-queries.py` (which also covers the
+jenkins-uptime recording rules and pre/post-deploy modes). Spawns its own
+port-forward unless `--prom-url` is given. Run after any dashboard edit;
+the gnetId-17781 kill-list evidence and the `Loki / Golden Signals` gate
+both came from this script. Run via `uv run scripts/check-dashboard-queries.py`.
+
 ## Inventory
 
 [`check_versions.py`](check_versions.py)
