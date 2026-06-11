@@ -30,6 +30,18 @@ module "psmdb" {
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
 
+  # Baseline 6-CIDR fleet allowlist plus an operator's :22 source CIDR;
+  # codified so an apply does not strip the live rule (matches the pmm pattern).
+  ssh_allowed_cidrs = [
+    "46.149.86.84/32",
+    "54.214.47.252/32",
+    "54.214.47.254/32",
+    "176.37.55.60/32",
+    "188.163.20.103/32",
+    "213.159.239.48/32",
+    "86.127.231.233/32",
+  ]
+
   # Retained CFN data volume vol-090299a14ad3da940 is 300 GiB gp2 in
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in
