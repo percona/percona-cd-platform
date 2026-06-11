@@ -91,18 +91,18 @@ def fetch(
             n, status, err = fut.result()
             if status == "processed":
                 processed += 1
-                click.echo(f"  ✓ {n}")
+                click.echo(f"  ok {n}")
             elif status == "skipped":
                 skipped += 1
             elif status == "tombstone":
                 tombstoned += 1
-                click.echo(f"  ⚠ {n} tombstone: {err}")
+                click.echo(f"  warn {n} tombstone: {err}")
             else:
                 errored += 1
-                click.echo(f"  ✗ {n} error: {err}", err=True)
+                click.echo(f"  fail {n} error: {err}", err=True)
 
     click.echo(
-        f"\ndone — processed={processed} skipped={skipped} "
+        f"\ndone: processed={processed} skipped={skipped} "
         f"tombstoned={tombstoned} errored={errored}"
     )
 
