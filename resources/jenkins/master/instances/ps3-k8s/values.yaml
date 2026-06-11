@@ -7204,14 +7204,26 @@ jenkins:
           // in-cluster Loki distributor with the fleet label schema
           // (component="builds"); mirrors the EC2 masters' per-master Alloy
           // shape so dashboards query one schema fleet-wide.
-          loki.source.file "build_events" {
-            targets = [{
+          //
+          // local.file_match (re-scans every sync period) instead of a static
+          // loki.source.file target: with a static target, an alloy that
+          // starts before the plugin writes the first event finds no file and
+          // PERMANENTLY skips the source ("failed to create source,
+          // skipping") -- exactly what happened on the first pod roll, where
+          // the sidecar came up 30s before the first completed build created
+          // the file. file_match also tracks the rotation cycle.
+          local.file_match "build_events" {
+            path_targets = [{
               __path__  = "/var/jenkins_home/logs/build-events.log",
               master    = "ps3-k8s",
               fleet     = "percona-jenkins",
               role      = "master",
               component = "builds",
             }]
+          }
+
+          loki.source.file "build_events" {
+            targets    = local.file_match.build_events.targets
             forward_to = [loki.write.loki.receiver]
           }
 
