@@ -231,8 +231,10 @@ def substitute(expr: str, variables: dict[str, list[str]]) -> tuple[str, list[st
             return "|".join(vals)
         if len(vals) == 1:
             return vals[0]
-        # multi-value default / :regex - regex alternation
-        return "(" + "|".join(re.escape(v) for v in vals) + ")"
+        # multi-value default / :regex - regex alternation. PromQL string
+        # literals use Go escaping, so the regex backslash itself must be
+        # doubled (master=~"ps3\.cd" is a parse error; Grafana emits ps3\\.cd).
+        return "(" + "|".join(re.escape(v).replace("\\", "\\\\") for v in vals) + ")"
 
     return FMT_RE.sub(repl, expr), unresolved
 
