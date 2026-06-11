@@ -16,7 +16,7 @@ too.
 |---|---|---|---|
 | `just runbook ...` | `runbook` | `runbook.py` | Gated runbook automations (template-change AUTOMATED, master-resize / core-bump / ssh-key GUIDED) |
 | `just check-master-alloy` | `alloy` | `alloy.py` | Every active master ships metrics to Mimir via Alloy (dynamic fleet enumeration) |
-| `just clouds-render-check` | `clouds check ps3` | `clouds.py` | Agent-clouds catalog render / apply / drift gate (ADR 0029) |
+| `just clouds-render-check` | `clouds check` (all catalog hosts) | `clouds.py` | Agent-clouds catalog render / apply / drift gate (ADR 0029) |
 | `just tf-conventions` | `conventions` | `conventions.py` | Terraform conventions + the scripts/ allowlist freeze (stdlib-only) |
 | `just check-versions` | `versions` | `versions.py` | Pinned versions vs upstream latest (advisory) |
 | `just check-master-ingest` | `ingest` | `ingest.py` | Per-master Mimir + Loki ingest probe |

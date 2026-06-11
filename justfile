@@ -222,7 +222,7 @@ check-master-alloy *ARGS:
 # Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
 # is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
 clouds-render-check:
-    uv run --locked cdpctl clouds check ps3
+    uv run --locked cdpctl clouds check
 
 # Bootstrap S3 state bucket (one-time, manual on first apply)
 bootstrap-state:

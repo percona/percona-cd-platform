@@ -262,8 +262,23 @@ def cmd_check(host):
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cdpctl clouds", description=__doc__)
     ap.add_argument("cmd", nargs="?", default="check", choices=("render", "apply", "check"))
-    ap.add_argument("host", nargs="?", default="ps3", choices=sorted(hosts()))
+    ap.add_argument(
+        "host",
+        nargs="?",
+        choices=sorted(hosts()),
+        help="catalog host; omitted = every catalog host (check only). The catalog "
+        "covers IN-CLUSTER masters (JCasC clouds); EC2 masters deliver clouds via "
+        "init.groovy.d and the runbook instead",
+    )
     args = ap.parse_args(argv)
+    if args.cmd == "check" and args.host is None:
+        # Every overlay in the catalog: a future in-cluster master joins the
+        # gate by existing, with no CI edit to remember.
+        for host in sorted(hosts()):
+            cmd_check(host)
+        return 0
+    if args.host is None:
+        ap.error(f"{args.cmd} needs an explicit host (one of: {', '.join(sorted(hosts()))})")
     {"render": cmd_render, "apply": cmd_apply, "check": cmd_check}[args.cmd](args.host)
     return 0
 

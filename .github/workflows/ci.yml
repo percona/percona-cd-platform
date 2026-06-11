@@ -141,7 +141,7 @@ jobs:
         with:
           enable-cache: true
       - name: render-clouds drift + no-alias check
-        run: uv run --locked cdpctl clouds check ps3
+        run: uv run --locked cdpctl clouds check
 
   helm-render:
     name: jenkins chart render-check
