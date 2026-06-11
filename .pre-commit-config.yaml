@@ -5,8 +5,15 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+      # Helm templates are Go-templated YAML, not plain YAML: {{/* ... */}}
+      # headers misparse as flow mappings and the authentik blueprints use
+      # custom !Find / !Env tags. Same exclusion and rationale as the
+      # yamllint ignore in .yamllint.yaml; `helm template` + ArgoCD are the
+      # real syntax gate. check-yaml only fires on edit, which is why
+      # long-untouched template files never surfaced this.
       - id: check-yaml
         args: [--allow-multiple-documents]
+        exclude: ^resources/addons/[^/]+/templates/
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: detect-private-key
