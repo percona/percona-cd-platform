@@ -131,19 +131,28 @@ rsync -avz -e ssh psmdb.cd.percona.com:/tmp/artifacts/ ./artifacts/
 
 ## Direct SSH to the public IP (last resort)
 
-Use this only when SSM is unavailable. The masters carry no Elastic IPs: each
-gets a subnet-auto-assigned public IPv4 that CHANGES on every instance rotation
-or stop/start, so never pin anything to it; discover the current one with
-`just ssh` (the PUBLIC-IP column). The exceptions are pxc (keeps an EIP for an
-inbound JNLP agent pinned to it) and pg (still CFN, the EIP terminates its TLS).
+Use this only when SSM is unavailable. The SSM paths above do not use inbound
+port 22 at all (the on-box agent dials out, and ssh runs to `localhost:22`
+inside the tunnel), so they bypass the security group. This fallback is the only
+path that needs port 22 open from the internet.
 
-Port 22 is open only to the allow-list in the `jenkins-master` module
-(`ssh_allowed_cidrs`, default is the 6-CIDR fleet baseline; per-master deltas
-are set in that master's `terraform/master-<inst>.tf`). Engineer keys come from
-`ssh_key_engineers` in the same file (same keys as the SSM file-transfer path).
+Two separate things are at play here, do not conflate them:
 
-If your IP changed, add it to `ssh_allowed_cidrs` via PR; do not hand-edit the
-security group. A manual rule is stripped by the next `tofu apply`.
+- **The master's public IP** (where you connect TO) is dynamic. The masters
+  carry no Elastic IPs, so each gets a subnet-auto-assigned public IPv4 that
+  CHANGES on every instance rotation or stop/start. Never pin anything to it;
+  discover the current one with `just ssh` (the PUBLIC-IP column). The exceptions
+  are pxc (keeps an EIP for an inbound JNLP agent pinned to it) and pg (still
+  CFN, the EIP terminates its TLS).
+- **`ssh_allowed_cidrs`** is the list of SOURCE IPs (yours) allowed to reach
+  port 22. It is the SG ingress allow-list, unrelated to the master's own
+  dynamic IP. Default is the 6-CIDR fleet baseline; per-master deltas are set in
+  that master's `terraform/master-<inst>.tf`.
+
+Engineer keys come from `ssh_key_engineers` in the same file (the same keys as
+the SSM file-transfer path). If your IP changed, add it to `ssh_allowed_cidrs`
+via PR; do not hand-edit the security group, a manual rule is stripped by the
+next `tofu apply`.
 
 ## Background
 
