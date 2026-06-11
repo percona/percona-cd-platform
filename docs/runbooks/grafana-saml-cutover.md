@@ -1,5 +1,14 @@
 # Grafana SAML/Duo cutover runbook
 
+> **Superseded (2026-05-07).** This runbook describes the retired direct
+> Grafana-SAML path. `var.grafana_saml_enabled` no longer exists
+> (`terraform/variables.tf` replaced it with `var.authentik_saml_enabled`),
+> and Grafana OSS cannot terminate SAML. Duo SSO reaches Grafana through
+> the Authentik bridge instead:
+> [ADR 0012](../adr/0012-authentik-saml-oidc-bridge.md),
+> [authentik-bootstrap.md](authentik-bootstrap.md). Kept for HD-30780
+> history only.
+
 [HD-30780](https://perconadev.atlassian.net/browse/HD-30780) is the IT Ops
 ticket that configures Duo SSO for `grafana.cd.percona.com` and creates the
 two access groups `grafana_cd_users` (Viewer) and `grafana_cd_admins` (Admin).

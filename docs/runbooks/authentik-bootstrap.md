@@ -10,14 +10,18 @@ secrets. The original UI walk-through has been retired — see git history
 
 | Resource | Manifest | Purpose |
 |---|---|---|
-| `authentik-config` Secret | `templates/external-secret-config.yaml` | ESO splits the AWS Secrets Manager JSON bundle (`percona-ci-platform/authentik/config`) into 5 keys: `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, `AUTHENTIK_BOOTSTRAP_TOKEN`, `AUTHENTIK_POSTGRESQL__PASSWORD`, `AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET` |
+| `authentik-config` Secret | `templates/external-secret-config.yaml` | ESO splits the AWS Secrets Manager JSON bundle (`percona-ci-platform/authentik/config`) into 7 keys: `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, `AUTHENTIK_BOOTSTRAP_TOKEN`, `AUTHENTIK_POSTGRESQL__PASSWORD`, and the `AUTHENTIK_OIDC_{GRAFANA,ARGOCD,HEADLAMP}_CLIENT_SECRET` trio |
 | `authentik-saml` Secret + `authentik-saml-idp` ConfigMap | `templates/external-secret-saml.yaml` | SP signing keypair (cert + private_key) and Duo IdP metadata XML |
-| `authentik-blueprint-grafana` ConfigMap | `templates/blueprint-grafana.yaml` | Declarative blueprint mounted into the worker — declares the Duo SAML Source `duo-saml`, the SAML groups Property Mapping `duo-groups-to-authentik`, the Grafana OAuth2 Provider `grafana`, and the Grafana Application |
+| `authentik-blueprint-{grafana,argocd,headlamp}` ConfigMaps | `templates/blueprint-*.yaml` | Declarative blueprints mounted into the worker, one per consumer. The grafana one also carries the shared pieces: the Duo SAML Source `duo-saml`, the group Property Mapping `duo-group-strip-dn`, and the identification-stage patch. Each declares its consumer's OAuth2 Provider + Application |
 | `authentik-bootstrap-keypair` Job | `templates/bootstrap-keypair-job.yaml` | ArgoCD PostSync hook that uploads the SP keypair from `authentik-saml` into Authentik's `CertificateKeyPair` API as `duo-saml-sp`. Idempotent (GET by name first). The blueprint references it via `!Find` |
 
-Adding Jenkins / ArgoCD UI as further OIDC clients = appending two
-entries (provider + application) to `templates/blueprint-grafana.yaml`
-and a new ExternalSecret for the new `client_secret`.
+Adding a further OIDC client = a new `templates/blueprint-<consumer>.yaml`
+ConfigMap (provider + application), a `random_password` key in
+`terraform/authentik.tf`, the matching entry in
+`templates/external-secret-config.yaml`, and the ConfigMap name appended to
+`blueprints.configMaps` in `values.yaml`. ArgoCD and Headlamp followed this
+pattern. See `docs/runbooks/authentik-blueprint-ops.md` for the apply gotchas
+(worker restart required).
 
 ## Verification — healthy install
 
@@ -60,11 +64,14 @@ curl -sI https://grafana.cd.percona.com/login/generic_oauth | grep -i ^location
 Group → role mapping in `resources/addons/grafana/values.yaml`:
 ```
 contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin'
-  || contains(groups[*], 'grafana_cd_users') && 'Editor'
+  || contains(groups[*], 'percona') && 'Viewer'
   || 'Viewer'
 ```
 `GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS` gates entry to `grafana_cd_admins
-grafana_cd_users` only — non-members are denied at the OIDC step.
+percona`. The `percona` Viewer leg is an accepted bootstrap risk (every
+Duo-authenticated employee can read all dashboards and Loki datasources).
+[authentication.md](../authentication.md) is canonical for the mapping and
+the risk status. The proper close is a dedicated `grafana_cd_users` group.
 
 Both consumers now run SSO-only:
 
