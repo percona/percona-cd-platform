@@ -398,13 +398,6 @@ grafana:
           options:
             path: /var/lib/grafana/dashboards/jenkins
   # gnetId selection notes:
-  #   loki-operational  17781 r1  (third-party "Loki Metrics Dashboard"
-  #     by frankfegert; the Grafana Labs Loki mixin is NOT published on
-  #     grafana.com, so this is the best gnet-fetchable option. Queries
-  #     `loki_distributor_lines_received_total`, `loki_request_duration_
-  #     seconds_bucket`, `loki_ingester_streams_created_total`. Avoids
-  #     deprecated names like `log_messages_total` and `cortex_prometheus_*`
-  #     that the older 13407 had).
   #   mimir-overview    17607 r13 (Grafana Labs official, auto-published
   #     from grafana/mimir's `operations/mimir-mixin-compiled/dashboards/`.
   #     Queries `cortex_distributor_received_samples_total`,
@@ -426,12 +419,19 @@ grafana:
   # ffcd83628d7d4b5a03d1cafd159e6c9c so we keep only the ConfigMap one,
   # because it ships the full sibling-dashboard set and its inline
   # cross-links resolve.
+  # loki-operational was a gnetId 17781 r1 import here (third-party
+  # "Loki Metrics Dashboard" by frankfegert; the Grafana Labs Loki mixin
+  # is NOT published on grafana.com). It now ships repo-owned as
+  # `Loki / Golden Signals` via templates/configmap-loki-golden-signals-
+  # dashboard.yaml (folder "Loki"), keeping the imported dashboard's UID
+  # 1b8931fc-ad08-492b-9651-ac98cd9decad so existing links survive. Per
+  # the UID-collision lesson above, the gnetId entry was removed and the
+  # stale /var/lib/grafana/dashboards/platform-lgtm/loki-operational.json
+  # must be pruned from the PVC post-merge; the platform-lgtm provider
+  # (disableDeletion: false) then garbage-collects the old DB row. Every
+  # panel query is validated against live Mimir by
+  # scripts/check-dashboard-queries.py.
   dashboards:
-    platform-lgtm:
-      loki-operational:
-        gnetId: 17781
-        revision: 1
-        datasource: Mimir
     platform-karpenter:
       karpenter-overview:
         gnetId: 22171

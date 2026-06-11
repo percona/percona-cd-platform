@@ -1,0 +1,38 @@
+{{/*
+Loki golden-signals dashboard (repo-owned, replaces gnetId 17781 r1).
+
+Wraps dashboards/loki-golden-signals.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it (sidecar.dashboards block in values.yaml,
+searchNamespace=ALL). The `grafana_folder` annotation is single-segment
+(no slashes) because foldersFromFilesStructure treats `/` as nesting
+(see the PR #63/#64 folder-explosion notes in values.yaml).
+
+The JSON pins UID 1b8931fc-ad08-492b-9651-ac98cd9decad, the identity
+Grafana minted when the old init-container-downloaded gnetId 17781
+dashboard was first imported, so existing links and bookmarks keep
+resolving. Per the UID-collision lesson in values.yaml
+(sidecar.dashboards.provider comment), the gnetId entry is removed in
+the same change and the stale
+/var/lib/grafana/dashboards/platform-lgtm/loki-operational.json must be
+pruned from the PVC post-merge, or the duplicate UID blocks this import.
+
+Layout: golden signals first (header stats, Latency, Traffic, Errors,
+Saturation rows uncollapsed), component drill-downs collapsed below.
+Every panel query is validated against live Mimir by
+scripts/check-dashboard-queries.py; run it after any panel edit.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-loki-golden-signals
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "Loki"
+data:
+  loki-golden-signals.json: |-
+{{ .Files.Get "dashboards/loki-golden-signals.json" | indent 4 }}
