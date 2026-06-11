@@ -156,6 +156,11 @@ resource "helm_release" "argocd" {
           "alb.ingress.kubernetes.io/healthcheck-path" = "/healthz"
           "alb.ingress.kubernetes.io/healthcheck-port" = "traffic-port"
           "alb.ingress.kubernetes.io/success-codes"    = "200"
+          # Access logs for the whole jenkins-cd ALB. Set on this one group
+          # member only: AWS LBC merges load-balancer-attributes across the
+          # IngressGroup and rejects conflicting values. Bucket + policy in
+          # alb-access-logs.tf.
+          "alb.ingress.kubernetes.io/load-balancer-attributes" = "access_logs.s3.enabled=true,access_logs.s3.bucket=${aws_s3_bucket.alb_logs.id},access_logs.s3.prefix=jenkins-cd"
         }
       }
     }

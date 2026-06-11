@@ -158,9 +158,10 @@ who else can reach that same unauthenticated-transport surface.
 
 ### N6: ALB front-door hygiene (LOW)
 
-On the shared `jenkins-cd` ALB: access logs disabled (no request-level
-audit of the SSO front door), `routing.http.drop_invalid_header_fields`
-disabled, no WAF (F3). TLS posture itself is strong
+On the shared `jenkins-cd` ALB: access logs now enabled (delivered to
+`${cluster_name}-alb-logs`, `terraform/alb-access-logs.tf`). Still open on
+that ALB: `routing.http.drop_invalid_header_fields` disabled and no WAF
+(F3). TLS posture itself is strong
 (`ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`, 443-only with ssl-redirect).
 
 ### N7: `secret_string_wo` is now actionable (INFO)
