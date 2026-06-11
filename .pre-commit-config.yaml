@@ -23,14 +23,12 @@ repos:
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.92.1
     hooks:
+      # fmt only. terraform_validate is intentionally NOT used: it shells the
+      # `terraform` binary, and an old local install (e.g. Terraform 1.5.7)
+      # fails the repo's required_version >= 1.11 and blocks every .tf commit
+      # with bogus errors. Validation runs via the local `tofu-validate` hook
+      # below (tofu, the same binary and gate as `just ci`).
       - id: terraform_fmt
-      # terraform_validate shells the `terraform` binary, NOT tofu, and only
-      # fires when .tf files are staged. An old local install (e.g. Terraform
-      # 1.5.7) fails the repo's required_version >= 1.11 and blocks the
-      # commit. The real gate is `just tf-validate` (tofu); after `just ci`
-      # passes, `git commit --no-verify` is the sanctioned workaround.
-      - id: terraform_validate
-        args: [--hook-config=--retry-once-with-cleanup=true]
 
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
@@ -52,6 +50,12 @@ repos:
   # with `just ci`. A manifest-less remote repo here breaks loading of ALL hooks.
   - repo: local
     hooks:
+      - id: tofu-validate
+        name: opentofu validate (mirrors `just tf-validate`)
+        entry: just tf-validate
+        language: system
+        pass_filenames: false
+        files: ^terraform/.*\.tf$
       - id: trivy-config
         name: trivy config scan (mirrors `just tf-trivy`)
         entry: just tf-trivy
