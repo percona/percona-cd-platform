@@ -1,0 +1,17 @@
+apiVersion: v2
+name: cloudwatch-exporter
+version: 0.1.0
+description: |
+  CloudWatch -> Mimir exporter for the platform's load balancers (the
+  jenkins-cd + jenkins-masters ALBs and the jenkins-ps3-k8s agent NLB).
+  Wraps prometheus-community's YACE (yet-another-cloudwatch-exporter),
+  NOT the older Java prometheus-cloudwatch-exporter chart. Discovery is
+  tag-based via the Resource Groups Tagging API; the ServiceMonitor rides
+  the Alloy DS servicemonitors discovery (zero Alloy changes) and AWS
+  credentials come from the EKS Pod Identity association bound to the
+  cloudwatch-exporter SA (terraform/iam-cloudwatch-exporter.tf). ADR 0034.
+type: application
+dependencies:
+  - name: prometheus-yet-another-cloudwatch-exporter
+    version: 0.45.0
+    repository: https://prometheus-community.github.io/helm-charts
