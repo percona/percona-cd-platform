@@ -1,0 +1,182 @@
+# cloudwatch-exporter — YACE exporting the platform load balancers'
+# CloudWatch metrics into Mimir. See ADR 0034.
+#
+# What it watches (tag-based discovery, us-east-1):
+#
+#   AWS/ApplicationELB  the two LBC-created ALBs, matched on the LBC tag
+#                       elbv2.k8s.aws/cluster=percona-ci-platform:
+#                       jenkins-cd (platform front door: authentik, grafana,
+#                       argocd, headlamp, alloy-gateway push receivers) and
+#                       jenkins-masters (all Jenkins master hostnames).
+#   AWS/NetworkELB      the jenkins-ps3-k8s agent NLB (inbound JNLP). Created
+#                       by the legacy in-tree cloud provider, so it carries
+#                       kubernetes.io/cluster/percona-ci-platform=owned and
+#                       NO elbv2.k8s.aws/* tags. If that Service ever moves
+#                       to LBC management, the searchTags key below changes
+#                       to service.k8s.aws/stack.
+#
+# Read-path semantics (matters for every dashboard/rule on these series):
+#   - Values are GAUGES holding the newest complete 300s CloudWatch bucket.
+#     Never rate()/increase() them; per-second rate is <series> / 300.
+#   - Samples carry scrape time (addCloudwatchTimestamp false), so values
+#     lag reality by 5-12 min (delay + period + exporter/scrape cadence).
+#     Mimir's out_of_order_time_window stays 0.
+#   - The ServiceMonitor scrapes the exporter's in-memory cache; AWS is hit
+#     only every scraping-interval (300s). Cost is a fixed function of the
+#     metric list: ~85-95 GetMetricData metrics per cycle, $6-8/month.
+#
+# IAM: EKS Pod Identity association on the cloudwatch-exporter SA
+# (terraform/iam-cloudwatch-exporter.tf + pod-identity.tf). No SA
+# annotations: Pod Identity binds via the association, unlike IRSA.
+
+prometheus-yet-another-cloudwatch-exporter:
+  fullnameOverride: yace
+
+  # Single replica by design: YACE has no leader election or sharding, so a
+  # second replica doubles the CloudWatch API spend and duplicates every
+  # series (differing only in pod/instance labels). The data is minutes
+  # delayed anyway; a reschedule gap is invisible.
+  replicaCount: 1
+
+  serviceAccount:
+    create: true
+    name: cloudwatch-exporter
+
+  priorityClassName: platform-default
+
+  serviceMonitor:
+    enabled: true
+    # Scrapes the cached registry (no AWS calls); 60s keeps the 5m PromQL
+    # staleness window comfortably fed between 300s cache refreshes.
+    interval: 60s
+    timeout: 10s
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+  securityContext:
+    capabilities:
+      drop: ["ALL"]
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+
+  # Skip the helm-test connection Pod; ArgoCD does not run test hooks.
+  testConnection: false
+
+  # The Pod Identity agent does not inject AWS_REGION; per-job regions +
+  # sts-region cover YACE itself, this covers any residual SDK default.
+  extraEnv:
+    - name: AWS_REGION
+      value: us-east-1
+
+  extraArgs:
+    # Explicit default: the decoupled AWS scrape cadence. Keep equal to the
+    # job-level period below; a smaller period would silently skip buckets
+    # (only the newest datapoint per cycle is exported).
+    scraping-interval: 300
+
+  # Rendered to /config/config.yml; any change rolls the pod via the chart's
+  # checksum/config annotation. MUST stay a literal block string: the chart
+  # pipes .Values.config through tpl, which requires a string, and a YAML
+  # map fails the helm render.
+  config: |-
+    apiVersion: v1alpha1
+    # Regional STS endpoint; also serves GetCallerIdentity (account_id label).
+    sts-region: us-east-1
+    discovery:
+      # Keys must be namespaces and must match a job type below (aliases
+      # hard-fail config load). Each listed tag becomes tag_<key> on every
+      # metric of that namespace; the _info series carries ALL tags anyway.
+      exportedTagsOnMetrics:
+        AWS/ApplicationELB: [ingress.k8s.aws/stack]
+        AWS/NetworkELB: [kubernetes.io/service-name]
+      jobs:
+        # ALB traffic, LoadBalancer-level only (exact dimension-set match;
+        # without it every metric fans out per-AZ and per-TG too).
+        - type: AWS/ApplicationELB
+          regions: [us-east-1]
+          searchTags:
+            # Key is exact + case-sensitive; value is an UNANCHORED Go
+            # regex, hence the anchors. Matches ALBs and their TGs.
+            - key: elbv2.k8s.aws/cluster
+              value: ^percona-ci-platform$
+          # period == scraping-interval so each cycle exports exactly the
+          # newest complete 5-min bucket; delay 120 keeps the window off
+          # the still-filling bucket (CloudWatch publishes ALB datapoints
+          # up to ~2 min late). delay costs nothing.
+          period: 300
+          length: 300
+          delay: 120
+          # Counters export 0 instead of NaN over quiet periods so
+          # threshold exprs keep working.
+          nilToZero: true
+          dimensionNameRequirements: [LoadBalancer]
+          metrics:
+            - {name: RequestCount, statistics: [Sum]}
+            - {name: HTTPCode_ELB_4XX_Count, statistics: [Sum]}
+            - {name: HTTPCode_ELB_5XX_Count, statistics: [Sum]}
+            - {name: HTTPCode_Target_2XX_Count, statistics: [Sum]}
+            - {name: HTTPCode_Target_4XX_Count, statistics: [Sum]}
+            - {name: HTTPCode_Target_5XX_Count, statistics: [Sum]}
+            # No-traffic latency must read NaN, not a fake 0s that would
+            # poison averages and percentiles.
+            - {name: TargetResponseTime, statistics: [Average, p95, p99], nilToZero: false}
+            - {name: ActiveConnectionCount, statistics: [Sum]}
+            - {name: NewConnectionCount, statistics: [Sum]}
+            - {name: RejectedConnectionCount, statistics: [Sum]}
+            - {name: TargetConnectionErrorCount, statistics: [Sum]}
+            - {name: ClientTLSNegotiationErrorCount, statistics: [Sum]}
+            - {name: TargetTLSNegotiationErrorCount, statistics: [Sum]}
+            - {name: ProcessedBytes, statistics: [Sum]}
+            - {name: ConsumedLCUs, statistics: [Average]}
+        # ALB target-group health. Min is the robust unhealthy signal for
+        # ALB (AWS guidance), Max the early warning; collecting both stats
+        # for both metrics serves ALB and NLB conventions alike.
+        - type: AWS/ApplicationELB
+          regions: [us-east-1]
+          searchTags:
+            - key: elbv2.k8s.aws/cluster
+              value: ^percona-ci-platform$
+          period: 300
+          length: 300
+          delay: 120
+          dimensionNameRequirements: [LoadBalancer, TargetGroup]
+          metrics:
+            - {name: HealthyHostCount, statistics: [Minimum, Maximum]}
+            - {name: UnHealthyHostCount, statistics: [Minimum, Maximum]}
+        # NLB traffic (jenkins-ps3-k8s inbound JNLP path).
+        - type: AWS/NetworkELB
+          regions: [us-east-1]
+          searchTags:
+            - key: kubernetes.io/cluster/percona-ci-platform
+              value: ^owned$
+          period: 300
+          length: 300
+          delay: 120
+          nilToZero: true
+          dimensionNameRequirements: [LoadBalancer]
+          metrics:
+            - {name: ActiveFlowCount, statistics: [Average]}
+            - {name: NewFlowCount, statistics: [Sum]}
+            - {name: ProcessedBytes, statistics: [Sum]}
+            - {name: TCP_Client_Reset_Count, statistics: [Sum]}
+            - {name: TCP_ELB_Reset_Count, statistics: [Sum]}
+            - {name: TCP_Target_Reset_Count, statistics: [Sum]}
+        # NLB target health.
+        - type: AWS/NetworkELB
+          regions: [us-east-1]
+          searchTags:
+            - key: kubernetes.io/cluster/percona-ci-platform
+              value: ^owned$
+          period: 300
+          length: 300
+          delay: 120
+          dimensionNameRequirements: [LoadBalancer, TargetGroup]
+          metrics:
+            - {name: HealthyHostCount, statistics: [Minimum, Maximum]}
+            - {name: UnHealthyHostCount, statistics: [Minimum, Maximum]}

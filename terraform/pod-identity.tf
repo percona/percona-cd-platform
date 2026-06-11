@@ -1,5 +1,5 @@
 # Owner: platform
-# Nine Pod Identity associations for the in-cluster addons that need AWS IAM:
+# Ten Pod Identity associations for the in-cluster addons that need AWS IAM:
 #
 #   alb-controller        aws-load-balancer-controller / aws-load-balancer-controller
 #   external-dns          external-dns / external-dns
@@ -11,6 +11,8 @@
 #                         (policy in iam-jenkins-endpoint-reconciler.tf)
 #   jenkins-controller    EC2-plugin provisioning for the in-cluster master
 #                         (policy in iam-jenkins-controller.tf)
+#   cloudwatch-exporter   read-only CloudWatch metrics + tag discovery for
+#                         YACE (policy in iam-cloudwatch-exporter.tf)
 #   karpenter             handled by karpenter-prereqs.tf (the eks//modules/karpenter
 #                         submodule creates its own association inline)
 #
@@ -320,6 +322,39 @@ module "pod_identity_jenkins_controller" {
       cluster_name    = module.eks.cluster_name
       namespace       = "jenkins-ps3-k8s"
       service_account = "jenkins"
+    }
+  }
+
+  tags = local.tags
+}
+
+# ---------------------------------------------------------------------------
+# cloudwatch-exporter (YACE) — exports AWS/ApplicationELB + AWS/NetworkELB
+# CloudWatch metrics for the platform's load balancers into Mimir
+# (resources/addons/cloudwatch-exporter/). Policy in
+# iam-cloudwatch-exporter.tf. See ADR 0034.
+# ---------------------------------------------------------------------------
+
+module "pod_identity_cloudwatch_exporter" {
+  source  = local.modules.pod_identity.source
+  version = local.modules.pod_identity.version
+
+  # IAM-side short name kept under the 38-char `name_prefix` cap on
+  # aws_iam_role ("${local.cluster_name}-cloudwatch-exporter" would be 39);
+  # the K8s-side namespace + SA keep the descriptive name since Pod
+  # Identity binds on (cluster, namespace, sa), not on the IAM role label.
+  name = "${local.cluster_name}-yace"
+  additional_policy_arns = {
+    cloudwatch_read = aws_iam_policy.cloudwatch_exporter.arn
+  }
+
+  associations = {
+    main = {
+      cluster_name = module.eks.cluster_name
+      # Namespace matches the ApplicationSet path basename, i.e. the
+      # addon dir resources/addons/cloudwatch-exporter/.
+      namespace       = "cloudwatch-exporter"
+      service_account = "cloudwatch-exporter"
     }
   }
 

@@ -78,6 +78,14 @@ locals {
       name = "prometheus-blackbox-exporter"
       ver  = "11.11.0"
     }
+    # CloudWatch -> Mimir exporter for the platform load balancers
+    # (resources/addons/cloudwatch-exporter, ADR 0034). YACE, not the
+    # older Java prometheus-cloudwatch-exporter chart.
+    prometheus_yet_another_cloudwatch_exporter = {
+      repo = "https://prometheus-community.github.io/helm-charts"
+      name = "prometheus-yet-another-cloudwatch-exporter"
+      ver  = "0.45.0"
+    }
     # LGTM stack — distributed-mode pins. Versions verified live via
     # `helm search repo grafana/<chart> --versions | head -2` on 2026-05-06.
     mimir_distributed = {
