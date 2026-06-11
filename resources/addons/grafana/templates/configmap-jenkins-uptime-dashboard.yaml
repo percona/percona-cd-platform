@@ -1,0 +1,26 @@
+{{/*
+Jenkins master uptime dashboard (ADR 0031).
+
+Wraps dashboards/jenkins-uptime.json in a ConfigMap labelled
+`grafana_dashboard: "1"` so the Grafana sidecar discovers and
+auto-imports it; the `grafana_folder` annotation lands it in the
+"Jenkins" folder next to the Hetzner plugin and Jenkins logs
+dashboards. Fed by the jenkins-uptime addon: probe_* series from the
+blackbox-exporter Probe CRs plus the jenkins:* recording rules the
+Mimir ruler evaluates. Datasource UID `mimir` is bound to the
+datasources block in values.yaml.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-jenkins-uptime
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: lgtm
+    app.kubernetes.io/component: dashboard
+  annotations:
+    grafana_folder: "Jenkins"
+data:
+  jenkins-uptime.json: |-
+{{ .Files.Get "dashboards/jenkins-uptime.json" | indent 4 }}

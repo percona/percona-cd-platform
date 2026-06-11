@@ -29,17 +29,22 @@ alloy:
         }
 
         // PS-10997 Phase 2.5b: align in-cluster Jenkins log labels with
-        // the metric label schema. Pods in namespace=jenkins-<inst> are
-        // the in-cluster Jenkins masters (today: jenkins-ps3-k8s; later
-        // ps57-k8s / ps80-k8s as the EKS migration progresses). Inject
-        // a master label so LogQL queries can use {master=~"$master"}
-        // identically to PromQL across the dashboard variable.
+        // the metric label schema. Pods in namespace=jenkins-<inst>-k8s
+        // are the in-cluster Jenkins controllers (today: jenkins-ps3-k8s;
+        // later ps57-k8s / ps80-k8s as the EKS migration progresses).
+        // Inject a master label so LogQL queries can use {master=~"$master"}
+        // identically to PromQL across the dashboard variable. The -k8s
+        // suffix requirement (matching the ADR 0013 A2 label convention)
+        // keeps the jenkins-* utility namespaces (jenkins-ingress,
+        // jenkins-endpoint-reconciler, jenkins-uptime) out of the master
+        // label space; a bare jenkins-(.+) used to mint master="ingress"
+        // and master="endpoint-reconciler" from their pod logs.
         loki.relabel "jenkins_master" {
           forward_to = [loki.write.default.receiver]
 
           rule {
             source_labels = ["namespace"]
-            regex         = "jenkins-(.+)"
+            regex         = "jenkins-(.+-k8s)"
             target_label  = "master"
             replacement   = "$1"
           }
@@ -235,8 +240,9 @@ alloy:
         //
         // Watch every PrometheusRule cluster-wide and POST it to Mimir's
         // ruler API (/api/v1/rules/<namespace>) under tenant `percona-ci`.
-        // Empty selectors match everything (no committed PrometheusRule
-        // instances live in main today; consumers add them as needed).
+        // Empty selectors match everything. Committed instances today:
+        // the mimir-mixin + kubernetes-mixin recording rules in the mimir
+        // addon and the jenkins-uptime rules; consumers add more as needed.
         //
         // Doc: grafana.com/docs/alloy/latest/reference/components/mimir/mimir.rules.kubernetes/
         mimir.rules.kubernetes "ruler" {

@@ -70,6 +70,14 @@ locals {
       name = "prometheus-node-exporter"
       ver  = "4.55.0"
     }
+    # Synthetic HTTP probing of the Jenkins masters (resources/addons/
+    # jenkins-uptime). Probe CRs ride the Alloy DS probes discovery; the
+    # exporter itself is stateless.
+    prometheus_blackbox_exporter = {
+      repo = "https://prometheus-community.github.io/helm-charts"
+      name = "prometheus-blackbox-exporter"
+      ver  = "11.11.0"
+    }
     # LGTM stack — distributed-mode pins. Versions verified live via
     # `helm search repo grafana/<chart> --versions | head -2` on 2026-05-06.
     mimir_distributed = {

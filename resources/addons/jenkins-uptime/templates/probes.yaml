@@ -1,0 +1,60 @@
+{{/*
+Two Probe CRs per master (external-only when `internal` is absent). The
+Alloy DS prometheus.operator.probes component discovers Probe resources
+cluster-wide with no selectors and pushes the probe_* series to Mimir;
+jobName becomes the `job` label (jenkins-uptime-internal | -external).
+*/}}
+{{- range .Values.masters }}
+{{- if .internal }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: jenkins-{{ .name }}-internal
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: jenkins-uptime
+spec:
+  jobName: jenkins-uptime-internal
+  interval: {{ $.Values.probe.interval }}
+  scrapeTimeout: {{ $.Values.probe.scrapeTimeout }}
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.{{ $.Release.Namespace }}.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - {{ .internal | quote }}
+      labels:
+        master: {{ .master | quote }}
+        path: internal
+      relabelingConfigs:
+        # blackbox-exporter >= v0.24: the `hostname` query parameter sets
+        # the Host header, mirroring the jenkins-ingress NGINX
+        # `proxy_set_header Host` so one shared module covers every master.
+        - targetLabel: __param_hostname
+          replacement: {{ .hostHeader | quote }}
+{{- end }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: jenkins-{{ .name }}-external
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: jenkins-uptime
+spec:
+  jobName: jenkins-uptime-external
+  interval: {{ $.Values.probe.interval }}
+  scrapeTimeout: {{ $.Values.probe.scrapeTimeout }}
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.{{ $.Release.Namespace }}.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - {{ .external | quote }}
+      labels:
+        master: {{ .master | quote }}
+        path: external
+{{- end }}
