@@ -16,12 +16,14 @@ Run from anywhere; paths are resolved relative to this script's repo.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
 
 import yaml
 
+from cdpctl import _stage
 from cdpctl._repo import load_yaml, repo_root
 
 
@@ -231,32 +233,38 @@ def cloud_shape(clouds):
     return out
 
 
-def cmd_check(host):
+def cmd_check(host, st=None):
+    standalone = st is None
+    if standalone:
+        st = _stage.Stages()
     rendered = render_configscript(host)
     aliases = re.findall(r"(?:^|\s)[&*]id\d+\b", rendered)
     if aliases:
-        print(
-            f"DRIFT [{host}]: configScript emits {len(aliases)} YAML anchors/aliases; "
-            f"JCasC (SnakeYAML) caps aliases at 50 and the reload fails. The dumper must ignore_aliases."
+        st.fail(
+            host,
+            f"configScript emits {len(aliases)} YAML anchors/aliases; JCasC (SnakeYAML) "
+            "caps aliases at 50 and the reload fails. The dumper must ignore_aliases",
         )
-        sys.exit(1)
+        if standalone:
+            sys.exit(1)
+        return
     gen = yaml.safe_load(detpl(rendered))["jenkins"]["clouds"]
     com = yaml.safe_load(detpl(committed_configscript(host)))["jenkins"]["clouds"]
     if cloud_shape(gen) != cloud_shape(com):
-        print(
-            f"DRIFT [{host}] cloud set differs:\n"
-            f"  generated {cloud_shape(gen)}\n  committed {cloud_shape(com)}"
+        st.fail(
+            host, f"cloud set differs: generated {cloud_shape(gen)} committed {cloud_shape(com)}"
         )
-        sys.exit(1)
+        if standalone:
+            sys.exit(1)
+        return
     d = diff(com, gen)
     if d:
-        print(f"DRIFT [{host}] {len(d)} field diffs between catalog and committed configScript:")
-        print("\n".join(d[:40]))
-        sys.exit(1)
-    print(
-        f"OK [{host}]: committed {hosts()[host]['configScript']} is in sync with the catalog "
-        f"({cloud_shape(gen)})."
-    )
+        st.fail(host, f"{len(d)} field diffs between catalog and committed configScript")
+        st.echo("\n".join(d[:40]))
+        if standalone:
+            sys.exit(1)
+        return
+    st.ok(host, f"{hosts()[host]['configScript']} in sync with the catalog {cloud_shape(gen)}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,16 +278,24 @@ def main(argv: list[str] | None = None) -> int:
         "covers IN-CLUSTER masters (JCasC clouds); EC2 masters deliver clouds via "
         "init.groovy.d and the runbook instead",
     )
+    _stage.add_output_flags(ap)
     args = ap.parse_args(argv)
-    if args.cmd == "check" and args.host is None:
-        # Every overlay in the catalog: a future in-cluster master joins the
-        # gate by existing, with no CI edit to remember.
-        for host in sorted(hosts()):
-            cmd_check(host)
-        return 0
+    mode = _stage.output_mode(args)
+    if args.cmd == "check":
+        # Every overlay in the catalog (or one host): a future in-cluster
+        # master joins the gate by existing, with no CI edit to remember.
+        st = _stage.Stages(quiet=(mode != "human"))
+        targets = [args.host] if args.host else sorted(hosts())
+        for host in targets:
+            cmd_check(host, st)
+        if mode == "json":
+            print(json.dumps(st.envelope(hosts=targets), indent=2))
+        elif mode == "llm":
+            st.emit_llm()
+        return st.exit_code()
     if args.host is None:
         ap.error(f"{args.cmd} needs an explicit host (one of: {', '.join(sorted(hosts()))})")
-    {"render": cmd_render, "apply": cmd_apply, "check": cmd_check}[args.cmd](args.host)
+    {"render": cmd_render, "apply": cmd_apply}[args.cmd](args.host)
     return 0
 
 

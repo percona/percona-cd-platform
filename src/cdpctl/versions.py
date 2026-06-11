@@ -25,6 +25,7 @@ Run via: just check-versions  (uv supplies pyyaml + python-hcl2)
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -33,6 +34,7 @@ import sys
 import urllib.request
 from dataclasses import dataclass
 
+from cdpctl import _stage
 from cdpctl._repo import http_json, load_yaml, repo_root
 
 UA = {"User-Agent": "percona-cd-platform-check-versions"}
@@ -185,6 +187,10 @@ def cmp_exact(pinned: str, latest: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="cdpctl versions", description=__doc__)
+    _stage.add_output_flags(ap)
+    args = ap.parse_args(argv)
+    mode = _stage.output_mode(args)
     try:
         req_ver, providers, modules, charts = read_versions_tf()
     except Exception as e:
@@ -262,52 +268,66 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
-    # ---------- print ----------
-    w = max((len(r.component) for r in rows), default=20) + 2
-    print(f"{'COMPONENT':<{w}} {'PINNED':<18} {'LATEST':<18} {'STATUS':<7} SOURCE")
-    for r in rows:
-        print(f"{r.component:<{w}} {r.pinned:<18} {r.latest:<18} {r.status:<7} {r.source}")
-
+    # ---------- emit ----------
+    table = [[r.component, r.pinned, r.latest, r.status, r.source] for r in rows]
     counts: dict[str, int] = {}
     for r in rows:
         counts[r.status] = counts.get(r.status, 0) + 1
-    print("\nsummary: " + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
-    if drift:
-        print("\nDRIFT - same chart pinned to different versions across files:")
-        for d in drift:
-            print(f"  {d}")
+    _stage.emit_rows(
+        ["component", "pinned", "latest", "status", "source"],
+        table,
+        mode,
+        json_payload={
+            "components": [r.__dict__ for r in rows],
+            "summary": counts,
+            "drift": drift,
+        },
+    )
+    if mode == "human":
+        print("\nsummary: " + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+        if drift:
+            print("\nDRIFT - same chart pinned to different versions across files:")
+            for d in drift:
+                print(f"  {d}")
 
-    # ---------- EKS supported versions (advisory) ----------
-    print("\n=== EKS supported versions (aws eks describe-cluster-versions) ===")
-    if not os.environ.get("AWS_PROFILE"):
-        # AWS_PROFILE comes from the environment, never baked (repo convention).
-        print("  (set AWS_PROFILE to query, e.g. export AWS_PROFILE=<your-profile>)")
-    else:
-        try:
-            out = subprocess.check_output(
-                [
-                    "aws",
-                    "eks",
-                    "describe-cluster-versions",
-                    "--region",
-                    "us-east-1",
-                    "--output",
-                    "json",
-                ],
-                stderr=subprocess.DEVNULL,
-                timeout=30,
-            )
-            print(
-                f"{'K8S':<7} {'STATUS':<22} {'PATCH':<10} {'EOS-STD':<12} {'EOS-EXT':<12} DEFAULT"
-            )
-            for cv in json.loads(out).get("clusterVersions", []):
-                print(
-                    f"{cv['clusterVersion']:<7} {cv['versionStatus']:<22} "
-                    f"{cv['kubernetesPatchVersion']:<10} {cv['endOfStandardSupportDate'][:10]:<12} "
-                    f"{cv['endOfExtendedSupportDate'][:10]:<12} {cv.get('defaultVersion', False)}"
+        # ---------- EKS supported versions (advisory, human mode only) ----------
+        print("\n=== EKS supported versions (aws eks describe-cluster-versions) ===")
+        if not os.environ.get("AWS_PROFILE"):
+            # AWS_PROFILE comes from the environment, never baked (repo convention).
+            print("  (export AWS_PROFILE to include this section)")
+        else:
+            try:
+                out = subprocess.check_output(
+                    [
+                        "aws",
+                        "eks",
+                        "describe-cluster-versions",
+                        "--region",
+                        "us-east-1",
+                        "--output",
+                        "json",
+                    ],
+                    stderr=subprocess.DEVNULL,
+                    timeout=30,
                 )
-        except Exception as e:
-            print(f"  AWS EKS query failed: {e}")
+                eks_rows = [
+                    [
+                        cv["clusterVersion"],
+                        cv["versionStatus"],
+                        cv["kubernetesPatchVersion"],
+                        cv["endOfStandardSupportDate"][:10],
+                        cv["endOfExtendedSupportDate"][:10],
+                        cv.get("defaultVersion", False),
+                    ]
+                    for cv in json.loads(out).get("clusterVersions", [])
+                ]
+                print(
+                    _stage.render_table(
+                        ["k8s", "status", "patch", "eos-std", "eos-ext", "default"], eks_rows
+                    )
+                )
+            except Exception as e:
+                print(f"  AWS EKS query failed: {e}")
 
     return 0
 

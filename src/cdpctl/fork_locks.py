@@ -43,6 +43,7 @@ import urllib.request
 import zipfile
 from typing import NoReturn
 
+from cdpctl import _stage
 from cdpctl._repo import repo_root
 
 
@@ -128,7 +129,10 @@ def _verify_hpi(tmp: str, plugin_id: str, version: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cdpctl fork-locks", description=__doc__)
     ap.add_argument("--check", action="store_true", help="report only; exit 3 if a bump exists")
+    _stage.add_output_flags(ap)
     args = ap.parse_args(argv)
+    mode = _stage.output_mode(args)
+    table: list[list[str]] = []
 
     lock_path = os.path.join(repo_root(), "images/jenkins/percona-plugins.lock.json")
     allow_prerelease = os.environ.get("ALLOW_PRERELEASE", "0") == "1"
@@ -159,10 +163,10 @@ def main(argv: list[str] | None = None) -> int:
         # Strict-newer gate: skip equality AND any case where the lock is already
         # >= the newest published release (manual pin ahead must not downgrade).
         if latest == cur or max(cur, latest, key=version_key) != latest:
-            print(f"UP-TO-DATE {plugin_id} {cur}")
+            table.append([plugin_id, cur, latest, "UP-TO-DATE"])
             continue
 
-        print(f"BUMP {plugin_id} {cur} -> {latest}")
+        table.append([plugin_id, cur, latest, "BUMP"])
         changed = True
         if args.check:
             continue
@@ -206,15 +210,30 @@ def main(argv: list[str] | None = None) -> int:
         with open(lock_path, "w", encoding="utf-8") as f:
             json.dump(lock, f, indent=2)
             f.write("\n")
-        print(f"  locked {plugin_id} {latest} sha256={sha}")
+        if mode == "human":
+            print(f"  locked {plugin_id} {latest} sha256={sha}")
 
+    _stage.emit_rows(
+        ["plugin", "locked", "latest", "status"],
+        table,
+        mode,
+        json_payload={
+            "check_only": args.check,
+            "changed": changed,
+            "plugins": [
+                {"plugin": p_, "locked": lo, "latest": la, "status": st_}
+                for p_, lo, la, st_ in table
+            ],
+        },
+    )
     if args.check:
         if changed:
-            print("refresh-fork-locks: bump available (--check)")
+            if mode == "human":
+                print("\nbump available (--check)")
             return 3
-        print("refresh-fork-locks: up to date")
         return 0
-    print("refresh-fork-locks: lock updated" if changed else "refresh-fork-locks: no changes")
+    if mode == "human":
+        print("\nlock updated" if changed else "\nno changes")
     return 0
 
 

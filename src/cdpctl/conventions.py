@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 
+from cdpctl import _stage
 from cdpctl._repo import repo_root
 
 # scripts/ is FROZEN (ADR 0032): new automation lands as a cdpctl subcommand
@@ -126,7 +127,10 @@ def check_scripts_allowlist(repo: pathlib.Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    argparse.ArgumentParser(prog="cdpctl conventions", description=__doc__).parse_args(argv)
+    ap = argparse.ArgumentParser(prog="cdpctl conventions", description=__doc__)
+    _stage.add_output_flags(ap)
+    args = ap.parse_args(argv)
+    mode = _stage.output_mode(args)
     repo = pathlib.Path(repo_root())
     tf_root = repo / "terraform"
     errors: list[str] = []
@@ -189,17 +193,32 @@ def main(argv: list[str] | None = None) -> int:
                         f"{rel}:{n}  ticket ID {hit.group(0)} in comment (keep IDs out of .tf comments)"
                     )
 
-    if errors:
+    if mode == "json":
+        import json
+
+        print(
+            json.dumps(
+                {
+                    "banners": len(banner_files(tf_root)),
+                    "files_scanned": len(all_tf_files(tf_root)),
+                    "violations": errors,
+                },
+                indent=2,
+            )
+        )
+    elif mode == "llm":
+        for e in errors:
+            print(e)
+    elif errors:
         print(f"check_conventions: {len(errors)} violation(s)")
         for e in errors:
             print(f"  {e}")
-        return 1
-
-    print(
-        f"check_conventions: OK ({len(banner_files(tf_root))} banners, "
-        f"{len(all_tf_files(tf_root))} files scanned, scripts/ allowlist clean)"
-    )
-    return 0
+    else:
+        print(
+            f"check_conventions: OK ({len(banner_files(tf_root))} banners, "
+            f"{len(all_tf_files(tf_root))} files scanned, scripts/ allowlist clean)"
+        )
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

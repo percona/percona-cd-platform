@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
 
     mode = _stage.output_mode(args)
     if mode == "human":
-        print(f"lookback={args.lookback} tenant={TENANT}\n")
+        print(f"lookback={args.lookback} tenant={TENANT}", file=sys.stderr)
     rows = [
         [
             str(r["master"]),

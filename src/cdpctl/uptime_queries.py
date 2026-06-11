@@ -175,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     if out_mode == "human":
         print(
             f"mode={'post-deploy' if deployed else 'pre-deploy'} "
-            f"rules-from={rules_src} tenant={TENANT}\n"
+            f"rules-from={rules_src} tenant={TENANT}",
+            file=sys.stderr,
         )
 
     checks = [(f"rule {n}", e) for n, e in rules] + dashboard_queries()
