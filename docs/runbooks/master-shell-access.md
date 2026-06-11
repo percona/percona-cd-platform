@@ -25,7 +25,7 @@ installed locally; `ssm-run` does not.
 |---|---|---|
 | `just ssh <inst>` / `just ssm <inst>` | Default. Interactive shell, no inbound :22 | AWS creds + session-manager-plugin |
 | `just ssm-run <inst> '<cmd>'` | One-shot commands, scripting, no TTY | AWS creds only |
-| `ssh` / `scp` / `rsync` over SSM | File transfer, or existing scripts that call `ssh`/`scp` | AWS creds + session-manager-plugin + your key on the master |
+| `ssh` / `scp` / `rsync` over SSM | File transfer, or existing scripts that call `ssh`/`scp` | AWS creds + session-manager-plugin + a local SSH key (EC2 Instance Connect, no provisioning) |
 | `ssh <public IP>` | SSM unavailable, last resort | Your key on the master + your IP on the :22 allow-list |
 | `kubectl exec` | ps3 only (in-cluster controller) | Cluster access (`just kubeconfig`) |
 
@@ -55,21 +55,29 @@ through an `AWS-StartSSHSession`.
 - `export AWS_PROFILE=percona-dev-admin` with an active SSO session.
 - [session-manager-plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
   installed locally.
-- An SSH key trusted by the master (see [Authentication](#3-authentication)).
+- A local SSH key (any key works via EC2 Instance Connect, no provisioning; see
+  [Authentication](#3-authentication)).
 
 ### 2. ssh_config block
+
+This block routes the connection through SSM and, by default, pushes a
+short-lived key via EC2 Instance Connect at connect time, so **any local key
+works with no provisioning**. It resolves the instance by billing tag, so it
+survives instance rotation.
 
 ```sshconfig
 # ~/.ssh/config  (psmdb; swap region + tag for another master)
 Host psmdb.cd.percona.com
   User ec2-user
-  IdentityFile ~/.ssh/id_rsa          # your own engineer key; pem only as fallback
+  IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   ProxyCommand sh -c 'ID=$(aws ec2 describe-instances --region us-west-2 \
-    --filters "Name=tag:iit-billing-tag,Values=jenkins-psmdb" "Name=instance-state-name,Values=running" \
-    --query "Reservations[].Instances[].InstanceId" --output text); \
+      --filters "Name=tag:iit-billing-tag,Values=jenkins-psmdb" "Name=instance-state-name,Values=running" \
+      --query "Reservations[].Instances[].InstanceId" --output text); \
+    aws ec2-instance-connect send-ssh-public-key --region us-west-2 --instance-id "$ID" \
+      --instance-os-user ec2-user --ssh-public-key "file://$HOME/.ssh/id_ed25519.pub" >/dev/null; \
     exec aws ssm start-session --target "$ID" --region us-west-2 \
       --document-name AWS-StartSSHSession --parameters portNumber=%p'
 ```
@@ -81,28 +89,25 @@ Region and tag per master: pmm `us-east-2`/`jenkins-pmm-amzn2`; psmdb, ps80, pxb
 ### 3. Authentication
 
 SSM only carries the transport (it replaces reaching port 22); SSH still
-authenticates, so `ec2-user`'s `authorized_keys` must contain the public half of
-whatever `IdentityFile` you point at.
+authenticates. Two ways to satisfy it:
 
-- **Prefer your own key.** If its public half is provisioned (see below), point
-  `IdentityFile` at it and you never touch the shared `percona-jenkins.pem`. The
-  pem is only the fallback when your key is not yet provisioned.
-- **No keyless option.** EC2 Instance Connect (ephemeral keys) does NOT work:
-  the `ec2-instance-connect` agent is not installed on the masters.
-- **Key type matters.** Only the exact provisioned key works (an `ed25519` key
-  is rejected if only your `id_rsa` was added).
+- **EC2 Instance Connect (the block above, recommended).** The
+  `send-ssh-public-key` step pushes a 60-second ephemeral key to `ec2-user`, so
+  no `authorized_keys` provisioning is needed and any local key works. It is
+  IAM-gated (`ec2-instance-connect:SendSSHPublicKey`) and every push is logged in
+  CloudTrail. Requires the `ec2-instance-connect` package, installed fleet-wide
+  and baked into user-data so it survives rebuilds (ADR 0032).
+- **Static key (drop the EIC line).** If your key's public half is already in the
+  master's `ssh_key_engineers`, remove the `send-ssh-public-key` line and point
+  `IdentityFile` at that key; the shared `percona-jenkins.pem` is the fallback.
+  `ssh_key_engineers` is set per master in `terraform/master-<inst>.tf` (declared
+  in `terraform/modules/jenkins-master/variables.tf`); user-data writes the keys
+  into `authorized_keys` on the next boot. Note the key TYPE must match exactly.
+  Check yours is present:
 
-Check your key is provisioned before relying on it:
-
-```sh
-just ssm-run psmdb 'grep -qF "$(cut -d" " -f2 ~/.ssh/id_rsa.pub)" /home/ec2-user/.ssh/authorized_keys && echo provisioned || echo MISSING'
-```
-
-If it prints `MISSING`, add your public key via PR (or use the shared pem in the
-meantime). Engineer keys are set per master in the `ssh_key_engineers = [ ... ]`
-list of that master's module call in `terraform/master-<inst>.tf` (the variable
-is declared in `terraform/modules/jenkins-master/variables.tf`); the module's
-user-data writes them into `ec2-user`'s `authorized_keys` on the next boot.
+  ```sh
+  just ssm-run psmdb 'grep -qF "$(cut -d" " -f2 ~/.ssh/id_rsa.pub)" /home/ec2-user/.ssh/authorized_keys && echo provisioned || echo MISSING'
+  ```
 
 > The pure-shell paths (`just ssh` / `just ssm` / `just ssm-run`) need NO key at
 > all; they run as the SSM `ssm-user` (root via `sudo`). A key is only needed
