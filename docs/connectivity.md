@@ -236,9 +236,9 @@ mechanical, not conventional.
   does not own, such as the CloudFormation-era `pg.cd` entry or anything
   predating the platform, are invisible to it and cannot be clobbered.
 - Terraform owns only the ACM validation records and the dormant
-  `origin-<host>` fallbacks. The module's own EIP A-record path is disabled
-  on every master (`create_route53_record = false`), so no master ever
-  publishes its raw address.
+  `origin-<host>` fallbacks. The jenkins-master module creates no public
+  DNS records (its dormant EIP A-record toggle was removed once external-dns
+  owned every `*.cd` name), so no master ever publishes its raw address.
 
 ## EIP policy
 

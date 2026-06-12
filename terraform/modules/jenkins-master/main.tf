@@ -647,16 +647,6 @@ resource "aws_ebs_volume" "data" {
   }
 }
 
-# Off by default; ps3's hostname is external-dns owned. Requires create_eip.
-resource "aws_route53_record" "master" {
-  count   = var.create_route53_record && var.create_eip ? 1 : 0
-  zone_id = var.route53_zone_id
-  name    = var.hostname
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.master[0].public_ip]
-}
-
 # Spot-interruption SQS + EventBridge rule. psmdb opts out via the toggle.
 resource "aws_sqs_queue" "termination" {
   count = var.create_termination_queue ? 1 : 0

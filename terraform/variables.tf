@@ -50,7 +50,7 @@ variable "grafana_hostname" {
 }
 
 variable "route53_zone_name" {
-  description = "Public hosted zone for *.cd.percona.com (Z1H0AFAU7N8IMC)."
+  description = "Public hosted zone for *.cd.percona.com. The zone ID is data-resolved (data.aws_route53_zone.main)."
   type        = string
   default     = "cd.percona.com"
 }
@@ -60,7 +60,7 @@ variable "access_entries" {
     Additional EKS access entries, merged ON TOP of the committed baseline
     (local.base_access_entries in eks.tf, the dynamically resolved IAM
     Identity Center AdministratorAccess role). Day-to-day cluster admin needs
-    no entry here. Use for break-glass or extra principals only; the public
+    no entry here. Use for break-glass or extra principals only. The public
     repo never carries IAM ARNs, so populate this in
     `terraform/local.auto.tfvars` (gitignored) when needed. Example:
 
@@ -98,9 +98,9 @@ variable "api_public_access_cidrs" {
   description = <<-EOT
     Additive override for the EKS public API allowlist. The baseline lives in
     SSM parameter /<cluster_name>/allowlist/eks-api (StringList, see
-    terraform/allowlists.tf and docs/runbooks/operator-allowlists.md),
-    amended via `just allowlist-set`. Leave this empty in normal operation;
-    set it in `terraform/local.auto.tfvars` (gitignored) only for emergency
+    terraform/allowlists.tf and docs/runbooks/eks-api-access.md),
+    amended via `just allowlist-set`. Leave this empty in normal operation.
+    Set it in `terraform/local.auto.tfvars` (gitignored) only for emergency
     access while the parameter catches up. The non-empty guarantee lives on
     the parameter's postcondition.
 

@@ -9,7 +9,7 @@
 # ----- Required -----
 
 variable "hostname" {
-  description = "Public FQDN, e.g. ps3.cd.percona.com. Drives JENKINS_HOST and the optional Route53 record."
+  description = "Public FQDN, e.g. ps3.cd.percona.com. Drives JENKINS_HOST."
   type        = string
 }
 
@@ -48,13 +48,12 @@ variable "master_profile" {
   }
 }
 
-# ----- Optional with sensible defaults -----
-
 variable "master_key_name" {
-  description = "Existing EC2 key pair for the master."
+  description = "Existing EC2 key pair for the master. An environment fact. Callers pass it explicitly (no default in a public module)."
   type        = string
-  default     = "percona-jenkins"
 }
+
+# ----- Optional with sensible defaults -----
 
 variable "az_index" {
   description = "AZ index for the master subnet + EBS. CF used 1 (B); keep at 1 unless pinned elsewhere."
@@ -151,18 +150,6 @@ variable "create_eip" {
   description = "Create a stable EIP. Only pxc keeps true (test-chaos-vm inbound JNLP pins to its EIP); the rest of the fleet is EIP-less, with the subnet auto-assigning a dynamic public IPv4 and user-data skipping associate-address."
   type        = bool
   default     = false
-}
-
-variable "create_route53_record" {
-  description = "Create the public A record. ps3=false (external-dns owns it)."
-  type        = bool
-  default     = false
-}
-
-variable "route53_zone_id" {
-  description = "Hosted zone ID when create_route53_record=true."
-  type        = string
-  default     = "Z1H0AFAU7N8IMC"
 }
 
 variable "jenkins_package_version" {

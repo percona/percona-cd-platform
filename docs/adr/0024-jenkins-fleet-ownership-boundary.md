@@ -20,7 +20,7 @@ Every fleet artifact belongs to exactly one of five layers (four control-plane o
 | AWS substrate | Terraform (OpenTofu) | VPC / peering / SGs, EKS + node groups, IAM + Pod Identity, ACM, ECR, KMS, S3; per-master EC2 / spot-fleet; the EBS DATA volume (`prevent_destroy`) | anything inside the cluster, Jenkins app config, DNS records |
 | In-cluster workloads | ArgoCD / Helm | addons, `jenkins-ingress` NGINX, EndpointSlice reconciler, Karpenter NodePools, FUTURE in-cluster controllers | the AWS substrate beneath them, Jenkins app config |
 | Jenkins app config | JCasC + Git | clouds (EC2 / Hetzner), agent templates + labels, jobs, security realm; `init.groovy.d` *content* | the substrate, the delivery mechanism |
-| Master DNS | external-dns | `*.cd` records (module sets `create_route53_record = false`) | anything else |
+| Master DNS | external-dns | `*.cd` records (the module's dormant Route53 toggle was removed; it creates no records) | anything else |
 | Runtime state | EBS + Secrets Manager | build history, credentials, plugins (today); backed by snapshots | config that belongs in Git |
 
 Governing principle: keep the irreplaceable EBS residue as small as possible. Plugins shift to a baked image, config to JCasC/Git, secrets to Secrets Manager, large artifacts to S3, so the volume converges to history-only.
@@ -53,7 +53,7 @@ Any Terraform reaching into a higher layer that is NOT one of these three is a b
 
 ## Verification
 
-- `git grep` in `terraform/` for `aws_route53_record` scoped to a master host returns nothing; the module sets `create_route53_record = false` and external-dns owns `*.cd`.
+- `git grep` in `terraform/` for `aws_route53_record` scoped to a master host returns nothing. The module has no record resource (the dormant toggle was removed) and external-dns owns `*.cd`.
 - The only Terraform that references ArgoCD Applications is the bootstrap root (the GitOps-bridge handoff), not individual addons.
 - Each master's `init.groovy.d` content lives in Git (`resources/jenkins-masters/<inst>/init.groovy.d/`); Terraform references it only as an S3 upload + IAM read grant.
 - `just ci` passes (fmt, validate, trivy, kubeconform).

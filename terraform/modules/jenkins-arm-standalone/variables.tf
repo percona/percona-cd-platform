@@ -15,9 +15,8 @@ variable "cache_bucket_name" {
 }
 
 variable "key_name" {
-  description = "EC2 key pair for workers; the ec2-fleet plugin SSH launcher uses the matching Jenkins credential."
+  description = "EC2 key pair for workers. The ec2-fleet plugin SSH launcher uses the matching Jenkins credential. An environment fact, passed by the caller (no default in a public module)."
   type        = string
-  default     = "percona-jenkins"
 }
 
 variable "instance_types" {

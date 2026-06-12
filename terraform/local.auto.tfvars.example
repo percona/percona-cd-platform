@@ -22,7 +22,7 @@
 # OPTIONAL, additive override for the EKS public-API allowlist
 # (docs/eks-hardening.md #2). The baseline lives in SSM parameter
 # /<cluster>/allowlist/eks-api, managed via `just allowlist-set` (see
-# docs/runbooks/operator-allowlists.md). Set this only for emergency access
+# docs/runbooks/eks-api-access.md). Set this only for emergency access
 # while the parameter catches up; 0.0.0.0/0 is rejected by validation.
 #api_public_access_cidrs = [
 #  "198.51.100.5/32", # emergency operator egress
