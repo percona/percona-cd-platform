@@ -158,8 +158,8 @@ jobs:
           tar -xzf helm.tgz linux-amd64/helm
           sudo mv linux-amd64/helm /usr/local/bin/
       # Render the per-instance Jenkins controller chart and assert the values
-      # reach the `jenkins` subchart (image / Retain PVC / ALB group / JNLP
-      # listener / node-pool pin). Guards the jenkins:-scoping regression.
+      # reach the `jenkins` subchart (image / Retain PVC / ALB group / ClusterIP
+      # agent Service / node-pool pin). Guards the jenkins:-scoping regression.
       - name: jenkins chart render-check
         run: scripts/jenkins-chart-render-check.sh
 

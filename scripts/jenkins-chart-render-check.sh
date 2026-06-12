@@ -7,7 +7,7 @@
 #
 # Renders values-base.yaml alone, then base + each instances/<host> and each
 # _disabled/<host> overlay, and asserts the controller actually came up as OUR
-# image on the dedicated node pool with the Retain PVC + JNLP listener.
+# image on the dedicated node pool with the Retain PVC + ClusterIP agent Service.
 #
 # Run from the repo root:  scripts/jenkins-chart-render-check.sh
 set -euo pipefail
@@ -36,7 +36,8 @@ render_check() {
     echo "  FAIL [$name]: persistence not wired (no Retain SC and no *-jenkins-home existingClaim)"; fail=1
   fi
   assert "$name" 'group.name: jenkins-masters'               "$out"  # shared ALB group
-  assert "$name" 'name: agent-listener'                      "$out"  # inbound JNLP listener for EC2/Hetzner agents
+  assert "$name" 'name: agent-listener'                      "$out"  # agent Service port wiring (listener dark; clouds connect via SSH)
+  refute "$name" 'type: LoadBalancer'                       "$out"  # no internet-facing agent NLB regression
   assert "$name" 'workload.percona.com/tier: jenkins-master' "$out"  # pinned to the dedicated node pool
   refute "$name" 'image: "jenkins/jenkins'                   "$out"  # upstream-default controller image must NOT win
   if [ "$fail" -eq 0 ]; then echo "  ok [$name]"; fi
