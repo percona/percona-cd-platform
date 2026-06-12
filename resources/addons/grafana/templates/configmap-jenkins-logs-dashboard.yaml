@@ -7,17 +7,19 @@ auto-imports it (sidecar.dashboards block in values.yaml,
 searchNamespace=ALL). The `grafana_folder` annotation puts it in
 the Jenkins folder alongside the Hetzner plugin metrics dashboard.
 
-LogQL only: every panel queries the Loki datasource. Volume and
-error-rate panels are surfaced as a metric query (rate over a
-LogQL stream), so they render in a timeseries panel with a
-prometheus datasource declaration; targets still hit Loki. This
-is the standard Grafana pattern for `rate({...} [1m])` from Loki.
+Mostly LogQL: volume and error-rate panels are surfaced as a
+metric query (rate over a LogQL stream), so they render in a
+timeseries panel; targets still hit Loki. This is the standard
+Grafana pattern for `rate({...} [1m])` from Loki. The one
+exception is the build-activity panel, which queries the
+hetzner_jenkins_real_busy_executors gauge from Mimir because
+build start/finish markers live only in per-build console logs
+that are never shipped to Loki.
 
-Master template variable defaults to ps3-k8s (the in-cluster
-controller's push label, ADR 0013 A2). The variable resolves via
-`label_values({master=~".+"}, master)`, so every master shipping
-logs through alloy-gateway (fleet-wide since 2026-05-10) appears
-automatically.
+Master template variable defaults to All. The variable resolves
+via `label_values({master=~".+"}, master)`, so every master
+shipping logs through alloy-gateway (fleet-wide since 2026-05-10)
+appears automatically.
 */}}
 apiVersion: v1
 kind: ConfigMap
