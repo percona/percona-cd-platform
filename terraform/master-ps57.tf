@@ -49,8 +49,8 @@ module "ps57" {
   # EKS-fronted like ps80: DNS is external-dns -> ALB -> private IP over
   # peering, admin is paws/SSM, EIP-less (outbound rides the auto-assigned
   # public IP from the public subnet's MapPublicIpOnLaunch + 0.0.0.0/0 -> IGW).
-  create_eip            = false
-  create_route53_record = false
+  create_eip      = false
+  master_key_name = "percona-jenkins"
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",

@@ -47,8 +47,8 @@ module "ps80" {
   # ps3: outbound (Hetzner + AWS APIs) rides the auto-assigned public IP from
   # the public subnet's MapPublicIpOnLaunch=true + 0.0.0.0/0 -> IGW. Releasing
   # the EIP needs the instance replaced so it picks up an auto-assigned IP.
-  create_eip            = false
-  create_route53_record = false
+  create_eip      = false
+  master_key_name = "percona-jenkins"
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",

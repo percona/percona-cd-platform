@@ -13,7 +13,7 @@
 #      (dynamic IAM lookup, no ARN literals) merged with var.access_entries
 #      overrides (no implicit creator grant).
 #   2. endpoint_public_access_cidrs from the SSM-backed allowlist
-#      (allowlists.tf; no public-unrestricted).
+#      (allowlists.tf, no public-unrestricted).
 #   3. enabled_log_types = ["audit", "authenticator", "api"] → CloudWatch.
 #   9. create_kms_key = true → customer-managed CMK for envelope encryption.
 #  10. metadata_options on each NG → IMDSv2 required, hop-limit 1 (Pod Identity removes
@@ -71,7 +71,7 @@ module "eks" {
 
   # Hardening #2 — public endpoint allowlisted; private endpoint also enabled so
   # in-VPC traffic never leaves AWS. The baseline allowlist is SSM-resolved
-  # (allowlists.tf); var.api_public_access_cidrs adds emergency overrides only.
+  # (allowlists.tf). var.api_public_access_cidrs adds emergency overrides only.
   endpoint_public_access       = true
   endpoint_private_access      = true
   endpoint_public_access_cidrs = local.eks_api_allowed_cidrs

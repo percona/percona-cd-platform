@@ -62,8 +62,8 @@ module "pxb" {
   # IP from the public subnet's MapPublicIpOnLaunch + 0.0.0.0/0 -> IGW). The old
   # A -> EIP record is destroyed via the legacy state so external-dns publishes
   # pxb.cd -> ALB.
-  create_eip            = false
-  create_route53_record = false
+  create_eip      = false
+  master_key_name = "percona-jenkins"
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",

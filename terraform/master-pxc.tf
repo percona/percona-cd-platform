@@ -58,8 +58,8 @@ module "pxc" {
   # this EIP as the inbound-agent host so the agent connects transparently. REMOVE
   # when test-chaos-vm is retired or moved to WebSocket: set create_eip=false,
   # delete jnlpHost.groovy + the EIP retain, then -replace the instance.
-  create_eip            = true
-  create_route53_record = false
+  create_eip      = true
+  master_key_name = "percona-jenkins"
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",

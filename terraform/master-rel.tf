@@ -53,8 +53,8 @@ module "rel" {
   # peering, admin via SSM (`just ssh`). EIP-less like ps80/ps57/pxb: the
   # subnet auto-assigns a dynamic public IPv4 for outbound, discovered live
   # via `just ssh` when direct ssh is needed.
-  create_eip            = false
-  create_route53_record = false
+  create_eip      = false
+  master_key_name = "percona-jenkins"
 
   extra_master_managed_policies = [
     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",

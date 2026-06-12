@@ -154,7 +154,7 @@ tf-plan-masters: _require-aws-profile
 # Source of truth for the EKS API allowlist (and future operator allowlists).
 # Values live only in SSM Parameter Store (CloudTrail-audited), never in git.
 # A put changes nothing live until `just tf-plan && just tf-apply`.
-# Ops: docs/runbooks/operator-allowlists.md. Decision: docs/adr/0036.
+# Ops: docs/runbooks/eks-api-access.md. Decision: docs/adr/0036.
 allowlist-show: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail

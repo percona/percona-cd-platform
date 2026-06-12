@@ -7,11 +7,11 @@
 # value, amended with `just allowlist-set` (PutParameter is CloudTrail
 # audited) followed by `just tf-plan` + `just tf-apply`. The resolved CIDRs
 # land in the private S3-backed state via this read, like the resources they
-# feed; that is accepted. Ops: docs/runbooks/operator-allowlists.md.
+# feed. That is accepted. Ops: docs/runbooks/eks-api-access.md.
 # Decision: docs/adr/0036-operator-allowlists-in-ssm-and-dynamic-sso-access-entry.md.
 #
 # Parameters are StringList in the cluster region. Today only the EKS API
-# allowlist lives here; the master break-glass :22 allowlist
+# allowlist lives here. The master break-glass :22 allowlist
 # (/<cluster>/allowlist/master-ssh) is the planned second tenant once its
 # CIDR owners are confirmed (docs/adr/0032 keeps that path break-glass only).
 #
