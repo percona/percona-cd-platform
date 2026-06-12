@@ -116,6 +116,21 @@ stays available by reverting the value (GitOps) or `grafana-cli admin
 reset-admin-password` + port-forward, as documented in
 [authentication.md](authentication.md#recovery-paths).
 
+**Status update (2026-06-12): remediated, then deliberately reversed.**
+Basic auth was disabled per this finding, which surfaced the second half of
+the problem: with `disable_login_form`, Grafana 12 also disables password
+session login, so the local admin had NO API surface at all. The
+provisioning-reload hook 401ed for weeks and admin automation (folder
+cleanup, the ADR 0035 permissions phase) was impossible. PR #220 re-enabled
+basic auth with compensating controls that change the risk profile this
+finding described: the credential is no longer the chart-random Secret but a
+32-char value pinned in Secrets Manager
+(`percona-ci-platform/grafana/admin`, ESO -> `admin.existingSecret`), the
+in-DB password was reset to match, Grafana's login lockout bounds brute
+force, and browser sign-in remains Duo + Authentik only. Residual risk:
+an internet-reachable admin API guarded by one strong secret; revisit if
+the B2 SM resource policy or an IP allowlist on the ALB lands.
+
 ### N2: dead `redis:` values block, and a retired finding class (INFO)
 
 The 2026.x authentik chart has no Redis dependency (verified in the chart
@@ -192,8 +207,9 @@ touch, per the ADR.
 1. **E1** default-deny NetworkPolicy for `authentik` (then `argocd`,
    `grafana`, LGTM namespaces). Unchanged as #1 since May, and it bounds
    N5 too. eks-hardening #16.
-2. **N1** disable Grafana basic auth. One values line, closes an
-   internet-reachable admin path.
+2. **N1** ~~disable Grafana basic auth~~ remediated 2026-06-11, reversed
+   2026-06-12 with a pinned credential instead (see the N1 status update);
+   the residual is tracked there.
 3. **B2 + B3** SM resource policy (ESO role + break-glass only) and a
    GetSecretValue alarm for any other principal.
 4. **E3** securityContext for server/worker (+ N5, the bootstrap Job) in
