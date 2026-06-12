@@ -329,8 +329,8 @@ module "pod_identity_jenkins_controller" {
 }
 
 # ---------------------------------------------------------------------------
-# cloudwatch-exporter (YACE) — exports AWS/ApplicationELB + AWS/NetworkELB
-# CloudWatch metrics for the platform's load balancers into Mimir
+# cloudwatch-exporter (YACE) — exports AWS/ApplicationELB CloudWatch
+# metrics for the platform's ALBs into Mimir
 # (resources/addons/cloudwatch-exporter/). Policy in
 # iam-cloudwatch-exporter.tf. See ADR 0034.
 # ---------------------------------------------------------------------------

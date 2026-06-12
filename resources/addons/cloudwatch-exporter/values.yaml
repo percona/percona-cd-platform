@@ -8,12 +8,6 @@
 #                       jenkins-cd (platform front door: authentik, grafana,
 #                       argocd, headlamp, alloy-gateway push receivers) and
 #                       jenkins-masters (all Jenkins master hostnames).
-#   AWS/NetworkELB      the jenkins-ps3-k8s agent NLB (inbound JNLP). Created
-#                       by the legacy in-tree cloud provider, so it carries
-#                       kubernetes.io/cluster/percona-ci-platform=owned and
-#                       NO elbv2.k8s.aws/* tags. If that Service ever moves
-#                       to LBC management, the searchTags key below changes
-#                       to service.k8s.aws/stack.
 #
 # Read-path semantics (matters for every dashboard/rule on these series):
 #   - Values are GAUGES holding the newest complete 300s CloudWatch bucket.
@@ -23,7 +17,7 @@
 #     Mimir's out_of_order_time_window stays 0.
 #   - The ServiceMonitor scrapes the exporter's in-memory cache; AWS is hit
 #     only every scraping-interval (300s). Cost is a fixed function of the
-#     metric list: ~160-170 GetMetricData metrics per cycle, $12-15/month
+#     metric list: ~150-155 GetMetricData metrics per cycle, $11-13/month
 #     (per-TG traffic job included; it scales with target-group count).
 #
 # IAM: EKS Pod Identity association on the cloudwatch-exporter SA
@@ -100,7 +94,6 @@ prometheus-yet-another-cloudwatch-exporter:
         # ALB it names the master host and on jenkins-cd the platform
         # service; the per-TG dashboard panels aggregate by it.
         AWS/ApplicationELB: [ingress.k8s.aws/stack, ingress.k8s.aws/resource]
-        AWS/NetworkELB: [kubernetes.io/service-name]
       jobs:
         # ALB traffic, LoadBalancer-level only (exact dimension-set match;
         # without it every metric fans out per-AZ and per-TG too).
@@ -167,37 +160,6 @@ prometheus-yet-another-cloudwatch-exporter:
           searchTags:
             - key: elbv2.k8s.aws/cluster
               value: ^percona-ci-platform$
-          period: 300
-          length: 300
-          delay: 120
-          dimensionNameRequirements: [LoadBalancer, TargetGroup]
-          metrics:
-            - {name: HealthyHostCount, statistics: [Minimum, Maximum]}
-            - {name: UnHealthyHostCount, statistics: [Minimum, Maximum]}
-        # NLB traffic (jenkins-ps3-k8s inbound JNLP path).
-        - type: AWS/NetworkELB
-          regions: [us-east-1]
-          searchTags:
-            - key: kubernetes.io/cluster/percona-ci-platform
-              value: ^owned$
-          period: 300
-          length: 300
-          delay: 120
-          nilToZero: true
-          dimensionNameRequirements: [LoadBalancer]
-          metrics:
-            - {name: ActiveFlowCount, statistics: [Average]}
-            - {name: NewFlowCount, statistics: [Sum]}
-            - {name: ProcessedBytes, statistics: [Sum]}
-            - {name: TCP_Client_Reset_Count, statistics: [Sum]}
-            - {name: TCP_ELB_Reset_Count, statistics: [Sum]}
-            - {name: TCP_Target_Reset_Count, statistics: [Sum]}
-        # NLB target health.
-        - type: AWS/NetworkELB
-          regions: [us-east-1]
-          searchTags:
-            - key: kubernetes.io/cluster/percona-ci-platform
-              value: ^owned$
           period: 300
           length: 300
           delay: 120

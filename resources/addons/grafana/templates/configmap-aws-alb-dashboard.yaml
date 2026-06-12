@@ -5,7 +5,7 @@ Wraps dashboards/aws-alb.json in a ConfigMap labelled
 `grafana_dashboard: "1"` so the Grafana sidecar discovers and
 auto-imports it; the `grafana_folder` annotation lands it in a new
 "AWS" folder. Fed by the cloudwatch-exporter addon (YACE): the
-aws_applicationelb_* / aws_networkelb_* gauges hold the newest 5-min
+aws_applicationelb_* gauges hold the newest 5-min
 CloudWatch bucket, so panel exprs divide by 300 instead of rate().
 The in-cluster row reads LBC controller-runtime counters and the
 loki.source.kubernetes_events stream. Datasource UIDs `mimir` and

@@ -41,3 +41,9 @@ Two consequences for consumers:
 
 - The per-TG series reuse the LB-level metric names, so LB-level reads must scope with `dimension_TargetGroup=""` and per-TG reads with `dimension_TargetGroup!=""`, or aggregations double-count. The `aws-alb` dashboard does both.
 - Per-rule traffic stays out of reach (CloudWatch publishes no per-rule ALB metrics), but every listener rule on these ALBs is a host-header forward to its own TG, so the per-TG split carries the same information. Per-request forensics still belong to the access-log path.
+
+## Amendment (2026-06-12) — NetworkELB scope removed
+
+Watching the jenkins-ps3-k8s agent NLB revealed it was dead infrastructure: the in-cluster controllers run with `JCasC.defaultConfig: false`, which drops the chart's only `jenkins.slaveAgentPort` wiring, so the inbound listener was disabled (`slaveAgentPort: -1`), every ps3 cloud connects agents via SSH, and the NLB sat at 0 healthy targets with zero flows for as long as this exporter watched it. The agent Service is now ClusterIP (`resources/jenkins/master/values-base.yaml`), the NLB is gone, and with it both AWS/NetworkELB discovery jobs and the `kubernetes.io/service-name` tag export. Cost drops to ~150-155 GetMetricData metrics per cycle.
+
+If an in-cluster master ever needs an inbound agent, WebSocket over the existing HTTPS ALB is the preferred transport; reviving an NLB would also mean re-adding the NetworkELB jobs here, since nothing else watches that namespace.
