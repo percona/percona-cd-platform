@@ -29,7 +29,7 @@ module "ps80" {
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
   cache_bucket_name       = "ps-build-cache"
-  ebs_size                = 200
+  ebs_size                = 300
 
   purchasing_option = "on-demand"
   # 4 vCPU / 8 GB: the master JVM is -Xms3072m -Xmx4096m, so a 4 GB box
