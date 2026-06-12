@@ -25,8 +25,9 @@ audience-first. Constraints that shape it:
 - Grafana OSS has no OIDC team sync (Enterprise feature). Folder ACLs will be
   teams plus folder permissions managed as code through the Grafana API or the
   Terraform provider. That requires a pinned admin credential
-  (`admin.existingSecret` via ESO), which is a named follow-up; the live
-  chart-generated admin password has rotated past the persisted value.
+  (`admin.existingSecret` via ESO), which landed 2026-06-12 together with the
+  basic-auth decision recorded in the security-review-2026-06-11 N1 status
+  update.
 - Only two groups exist today: `grafana_cd_admins` (GrafanaAdmin) and
   `percona` (Viewer, all Perconians). Groups are provisioned upstream in
   FreeIPA/Duo by IT-Ops, not in this repo; the `grafana_cd_users` group named
@@ -69,11 +70,13 @@ gnetId retirement and only kept empty folders alive.
 - Folder moves are pure annotation edits; the provisioner re-folders
   dashboards on the next sidecar sync with no UID churn.
 - Empty folder rows are not garbage-collected by provisioning. The
-  reorganization leaves seven empty folders (AWS, Karpenter, Loki,
-  Kubernetes Mixin, Mimir Mixin, Platform / LGTM, Platform / Karpenter) to be
-  deleted once via the UI or, after the admin-credential pin lands, the
-  folders API (precedent: the combined `LGTM + Karpenter` folder, API-deleted
-  2026-05-09).
-- The permissions phase has two prerequisites before any ACL code: the
-  ESO-pinned admin credential, and an IT-Ops request for a platform-tier
-  group. Until then every space remains org-wide Viewer.
+  reorganization left seven empty folders (AWS, Karpenter, Loki,
+  Kubernetes Mixin, Mimir Mixin, Platform / LGTM, Platform / Karpenter);
+  they were deleted via the folders API on 2026-06-12 after the
+  admin-credential pin landed (precedent: the combined `LGTM + Karpenter`
+  folder, API-deleted 2026-05-09).
+- The permissions phase had two prerequisites before any ACL code: the
+  ESO-pinned admin credential (landed 2026-06-12, see
+  security-review-2026-06-11 N1 status update) and an IT-Ops request for a
+  platform-tier group (still open). Until the group exists every space
+  remains org-wide Viewer.
