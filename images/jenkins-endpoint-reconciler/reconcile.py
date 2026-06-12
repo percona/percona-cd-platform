@@ -4,9 +4,10 @@
 For each host in HOSTS_JSON, this script:
   1. Calls ec2:DescribeInstances tag-filtered by `iit-billing-tag=<tag>`
      and `instance-state-name=running` in the host's region.
-  2. TCP-probes every candidate on the Jenkins port; only a serving
-     instance's IP is ever written (newest serving wins a multi-match, a
-     none-serving result leaves the existing EndpointSlice untouched).
+  2. HTTP-probes every candidate on the Jenkins port and requires the
+     X-Jenkins response header; only a real master's IP is ever written
+     (newest serving wins a multi-match, a none-serving result leaves
+     the existing EndpointSlice untouched).
   3. Writes an EndpointSlice `jenkins-<name>` in TARGET_NAMESPACE pointing
      at the discovered private IP. The matching ClusterIP Service (managed
      by the same Helm chart) selectors nothing, so the EndpointSlice is
@@ -20,11 +21,13 @@ next run picks the new IP up.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
-import socket
 import sys
+import urllib.error
+import urllib.request
 
 import boto3
 from kubernetes import client, config
@@ -40,12 +43,37 @@ HOSTS = json.loads(os.environ["HOSTS_JSON"])
 MANAGED_BY = "jenkins-endpoint-reconciler"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Surface 3xx as HTTPError instead of following it. The probe must
+    judge the candidate's own response: following a redirect would let a
+    non-Jenkins listener pass by pointing at a real master elsewhere."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 def _serves_jenkins(ip: str, port: int, timeout: float = 2.0) -> bool:
-    """True if a TCP connection to ip:port succeeds (Jenkins is listening)."""
+    """True if ip:port itself answers HTTP with an X-Jenkins header.
+
+    A bare TCP connect would also accept a worker or a cancelled-spot-fleet
+    ghost that shares the master's iit-billing-tag and happens to listen on
+    the port, letting an impostor capture the master's ingress. Only Jenkins
+    itself sends the X-Jenkins response header, and it sends it on every
+    response (errors and redirects included), so an auth-restricted or
+    still-booting master passes while any other listener is rejected.
+    This is an identity check, not a readiness check, matching the TCP
+    probe's admit-once-listening semantics.
+    """
     try:
-        with socket.create_connection((ip, int(port)), timeout=timeout):
-            return True
-    except OSError:
+        with _opener.open(f"http://{ip}:{port}/login", timeout=timeout) as resp:
+            return resp.headers.get("X-Jenkins") is not None
+    except urllib.error.HTTPError as e:
+        return e.headers.get("X-Jenkins") is not None
+    except (OSError, http.client.HTTPException, ValueError):
+        # Refused / timed out / non-HTTP garbage on the port: not a master.
         return False
 
 
