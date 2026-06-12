@@ -3412,7 +3412,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Hetzner Cloud Plugin",
+  "title": "Jenkins / Hetzner Workers",
   "uid": "hetzner-plugin",
   "version": 2,
   "weekStart": ""

@@ -160,8 +160,9 @@ Two modes, switched via `var.grafana_saml_enabled`:
 
 - **`false` (default day-one)**: chart-generated admin password. Surface
   via `kubectl -n grafana get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d`.
-- **`true`**: SAML/Duo. Admin/Viewer role mapping via group attribute
-  `groups`: `grafana_cd_admins → Admin`, `grafana_cd_users → Viewer`.
+- **`true`**: SAML/Duo. Role mapping via group attribute `groups`:
+  `grafana_cd_admins → GrafanaAdmin`, `percona → Viewer` (the planned
+  `grafana_cd_users` group was never provisioned; see docs/authentication.md).
   Cert/key pulled from Secrets Manager via External Secrets Operator
   (path `${cluster_name}/grafana/saml/{certificate,private_key}`).
 

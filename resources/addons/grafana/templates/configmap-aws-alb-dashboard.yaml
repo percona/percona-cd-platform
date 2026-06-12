@@ -21,7 +21,7 @@ metadata:
     app.kubernetes.io/part-of: lgtm
     app.kubernetes.io/component: dashboard
   annotations:
-    grafana_folder: "AWS"
+    grafana_folder: "Platform"
 data:
   aws-alb.json: |-
 {{ .Files.Get "dashboards/aws-alb.json" | indent 4 }}

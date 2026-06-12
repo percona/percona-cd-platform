@@ -10,8 +10,8 @@ under the 1MiB single-ConfigMap ceiling (the bundle totals ~1.55MiB; the
 biggest single dashboard, mimir-reads.json, is 261KiB). The
 `grafana_dashboard: "1"` label is what the chart's sidecar.dashboards
 block (values.yaml) discovers via searchNamespace=ALL; the
-`grafana_folder: "Platform / LGTM"` annotation files them next to the
-existing Mimir/Loki dashboards.
+`grafana_folder: "Observability"` annotation files them in the
+Observability space next to the Loki dashboard (ADR 0035).
 
 These dashboards are the destination of the inline cross-dashboard links
 in `Mimir / Overview` (panels with markdown like
@@ -43,7 +43,7 @@ metadata:
     # file-based provisioner allocates a fresh folder UID on every k8s-
     # sidecar reconcile (~60s), creating ~21 stale empty "Mimir" folders
     # per cycle. Use a flat label instead. See PR #62 follow-up cleanup.
-    grafana_folder: "Mimir Mixin"
+    grafana_folder: "Observability"
     # mimir-reads.json is 261KiB on its own. With client-side `kubectl apply`
     # the `last-applied-configuration` annotation balloons past Kubernetes'
     # 256KiB per-resource annotation limit and the sync fails with

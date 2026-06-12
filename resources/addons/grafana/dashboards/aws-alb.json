@@ -1,6 +1,6 @@
 {
   "uid": "aws-alb",
-  "title": "AWS Load Balancers",
+  "title": "AWS / Load Balancers",
   "description": "Traffic + target health for the platform ALBs/NLB from CloudWatch via YACE (ADR 0034), plus the in-cluster ALB path.",
   "tags": [
     "aws",

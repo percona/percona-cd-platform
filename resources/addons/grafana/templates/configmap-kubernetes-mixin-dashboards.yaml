@@ -33,7 +33,7 @@ metadata:
     app.kubernetes.io/component: dashboard
     mixin: kubernetes
   annotations:
-    grafana_folder: "Kubernetes Mixin"
+    grafana_folder: "Kubernetes"
     argocd.argoproj.io/sync-options: ServerSideApply=true
 data:
   {{ $base }}.json: |-
