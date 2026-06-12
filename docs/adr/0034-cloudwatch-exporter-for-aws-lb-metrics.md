@@ -32,3 +32,12 @@ Nothing in the stack reads CloudWatch. Grafana has no CloudWatch datasource, Mim
 - **Alloy's `prometheus.exporter.cloudwatch`** (embeds YACE) — zero new workloads, but the IAM grant would widen the shared scraping Alloy's identity, and the clustered DaemonSet would instantiate the exporter per pod (duplicate series, N-fold API spend). A scoped singleton is cleaner.
 - **Java `prometheus-cloudwatch-exporter`** — no tag-based discovery or GetMetricData batching parity; the community consolidated on YACE.
 - **CloudWatch Metric Streams -> Firehose -> Mimir** — 2-3 min latency instead of 5-12, but requires Firehose, a public TLS ingest endpoint, and an alpha OTel receiver for one namespace in one account. Overkill at this scale.
+
+## Amendment (2026-06-12) — per-target-group traffic
+
+The LoadBalancer-only scoping proved too coarse for "which host is hot" questions. The LBC creates one target group per Ingress even when backends share pods, so the TargetGroup dimension maps 1:1 to a master hostname (jenkins-masters ALB) or a platform service (jenkins-cd ALB). A third ApplicationELB discovery job now exports RequestCount, HTTPCode_Target_5XX_Count and TargetResponseTime p95 at `[LoadBalancer, TargetGroup]`, and `ingress.k8s.aws/resource` joins `exportedTagsOnMetrics` as the readable per-TG identity. Cost moves to ~160-170 GetMetricData metrics per cycle ($12-15/month) and now scales with target-group count.
+
+Two consequences for consumers:
+
+- The per-TG series reuse the LB-level metric names, so LB-level reads must scope with `dimension_TargetGroup=""` and per-TG reads with `dimension_TargetGroup!=""`, or aggregations double-count. The `aws-alb` dashboard does both.
+- Per-rule traffic stays out of reach (CloudWatch publishes no per-rule ALB metrics), but every listener rule on these ALBs is a host-header forward to its own TG, so the per-TG split carries the same information. Per-request forensics still belong to the access-log path.
