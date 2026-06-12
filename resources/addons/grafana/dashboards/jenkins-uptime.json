@@ -934,7 +934,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Jenkins Uptime",
+  "title": "Jenkins / Uptime",
   "uid": "jenkins-uptime",
   "version": 1,
   "weekStart": ""

@@ -372,7 +372,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Jenkins Logs",
+  "title": "Jenkins / Logs",
   "uid": "jenkins-logs",
   "version": 1,
   "weekStart": ""
