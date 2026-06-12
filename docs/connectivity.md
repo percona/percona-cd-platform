@@ -170,9 +170,10 @@ degrades web access and observability, not running builds.
 ## Security groups
 
 - Each EC2 master attaches three SGs: the VPC default (intra-VPC worker
-  traffic), `HTTP` (:80/:443 from 0.0.0.0/0, plus :8080 restricted to the
-  EKS VPC CIDR via `extra_http_ingress`), and `SSH` (:22 from
-  `ssh_allowed_cidrs`, a six-CIDR operator baseline, plus one extra on pmm).
+  traffic), `HTTP` (ingress only from `extra_http_ingress`: :8080 from the
+  EKS VPC CIDR over the peering, plus pxc's :50000 JNLP exception), and
+  `SSH` (:22 from `ssh_allowed_cidrs`, a six-CIDR operator baseline, plus
+  one extra on pmm).
 - SSH identity is also code: each master's `ssh_key_engineers` list names
   the engineers whose public keys boot user-data fetches from
   percona.com into `ec2-user`'s authorized_keys. The list is per master in
@@ -180,8 +181,13 @@ degrades web access and observability, not running builds.
   replacement, so key removal is not immediate. Tool-driven access ([EC2
   Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-overview.html) style: a temporary :22 rule plus an ephemeral pushed
   key) is gated by AWS IAM rather than the static list.
-- The world-open :80/:443 predates the ALB fronting and carries an explicit
-  lock-down note in the module. Tightening it is pending the pg migration.
+- The CFN-era world-open :80/:443 ingress was removed from the module once
+  every consumer moved behind the ALB: nothing on a Terraform master listens on
+  those ports (TLS terminates at the ALB, the user-data installs no
+  openresty or certbot). pg, the one CFN-managed master outside this
+  module, still terminates TLS on-box and keeps :80/:443 world-open
+  (Let's Encrypt HTTP-01 renewals plus the openresty OAuth gate) until it
+  migrates.
 - ARM worker SGs allow :22 from their own VPC CIDR (ps3's also from the
   EKS CIDR). Classic-plugin worker SGs are defined in each master's cloud
   config, not in Terraform.

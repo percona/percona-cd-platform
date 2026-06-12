@@ -237,20 +237,14 @@ resource "aws_security_group" "http" {
   description = "HTTP and HTTPS traffic in"
   vpc_id      = aws_vpc.this.id
 
-  # :80/:443 open to 0.0.0.0/0; lock down after every master moves to the ALB.
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
+  # Ingress is solely var.extra_http_ingress: :8080 from the EKS VPC CIDR
+  # over the per-master peering for the jenkins-ingress NGINX, plus rare
+  # per-master extras (pxc :50000 inbound JNLP). The CFN-era world-open
+  # :80/:443 was removed once every consumer of this module moved behind
+  # the ALB: TLS terminates at the ALB and nothing on the master listens
+  # on those ports (user-data installs no openresty or certbot). `name` and
+  # `description` are frozen, changing either forces SG replacement.
+  # See docs/connectivity.md "Security groups".
   dynamic "ingress" {
     for_each = var.extra_http_ingress
     content {

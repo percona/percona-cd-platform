@@ -260,7 +260,7 @@ variable "launch_template_name" {
 }
 
 variable "root_volume_size" {
-  description = "Root EBS volume size in GiB. The al2023-minimal AMI defaults to 2 GiB, which fills during bootstrap (OS + java + jenkins + openresty + dnf cache) and breaks the observability install. JENKINS_HOME lives on the separate data volume, so this covers OS + packages + logs only."
+  description = "Root EBS volume size in GiB. The al2023-minimal AMI defaults to 2 GiB, which fills during bootstrap (OS + java + jenkins + dnf cache) and breaks the observability install. JENKINS_HOME lives on the separate data volume, so this covers OS + packages + logs only."
   type        = number
   default     = 50
 }
