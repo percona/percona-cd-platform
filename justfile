@@ -150,6 +150,40 @@ tf-plan-masters: _require-aws-profile
     echo "planning ${#targets[@]} master/fleet modules"
     tofu -chdir=terraform plan "${targets[@]}"
 
+# ---------- operator allowlists (SSM-backed) ----------
+# Source of truth for the EKS API allowlist (and future operator allowlists).
+# Values live only in SSM Parameter Store (CloudTrail-audited), never in git.
+# A put changes nothing live until `just tf-plan && just tf-apply`.
+# Ops: docs/runbooks/operator-allowlists.md. Decision: docs/adr/0036.
+allowlist-show: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for p in eks-api; do
+      echo "== /{{cluster}}/allowlist/${p}"
+      aws ssm get-parameter --name "/{{cluster}}/allowlist/${p}" \
+        --region "${AWS_REGION:-us-east-1}" \
+        --query Parameter.Value --output text | tr ',' '\n'
+    done
+
+# Usage: just allowlist-set eks-api "198.51.100.5/32,203.0.113.0/24"
+# The value is the FULL comma-separated list, not a delta. The master-ssh
+# allowlist joins the case list when its parameter lands (docs/adr/0036).
+allowlist-set name cidrs: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{name}}" in eks-api) ;; *) echo "unknown allowlist '{{name}}' (expected: eks-api)" >&2; exit 2 ;; esac
+    param="/{{cluster}}/allowlist/{{name}}"
+    echo "current:"
+    aws ssm get-parameter --name "${param}" --region "${AWS_REGION:-us-east-1}" \
+      --query Parameter.Value --output text | tr ',' '\n'
+    echo "new:"
+    tr ',' '\n' <<< "{{cidrs}}"
+    read -r -p "overwrite ${param}? [y/N] " a
+    [ "${a}" = "y" ]
+    aws ssm put-parameter --name "${param}" --type StringList \
+      --value "{{cidrs}}" --overwrite --region "${AWS_REGION:-us-east-1}"
+    echo "saved. Apply it: just tf-plan && just tf-apply"
+
 # ---------- gitops / yaml ----------
 yaml-lint:
     yamllint -s argocd-bootstrap/ resources/ .github/

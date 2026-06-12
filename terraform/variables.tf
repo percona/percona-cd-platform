@@ -57,24 +57,26 @@ variable "route53_zone_name" {
 
 variable "access_entries" {
   description = <<-EOT
-    EKS access entries. Map keyed by entry name -> principal ARN + AWS-managed
-    access policies. Replaces the legacy aws-auth ConfigMap.
-
-    Operators populate this in `terraform/local.auto.tfvars` (gitignored) so
-    the public repo never carries IAM ARNs. Example:
+    Additional EKS access entries, merged ON TOP of the committed baseline
+    (local.base_access_entries in eks.tf, the dynamically resolved IAM
+    Identity Center AdministratorAccess role). Day-to-day cluster admin needs
+    no entry here. Use for break-glass or extra principals only; the public
+    repo never carries IAM ARNs, so populate this in
+    `terraform/local.auto.tfvars` (gitignored) when needed. Example:
 
     access_entries = {
-      anderson = {
-        principal_arn = "arn:aws:iam::<account>:user/anderson.nogueira"
+      breakglass = {
+        principal_arn = "arn:aws:iam::<account>:user/<user>"
         policy_associations = {
           admin = {
-            policy_arn   = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+            policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
             access_scope = { type = "cluster" }
           }
         }
       }
     }
 
+    On key collision the tfvars entry wins (merge order).
     docs/eks-hardening.md item #1.
   EOT
   type = map(object({
@@ -94,18 +96,22 @@ variable "access_entries" {
 
 variable "api_public_access_cidrs" {
   description = <<-EOT
-    Allowlist for the EKS public API endpoint. No default — operators MUST set
-    this in `terraform/local.auto.tfvars` (gitignored) before applying. Public-
-    unrestricted (0.0.0.0/0) defeats the hardening baseline; use the Percona
-    office / VPN CIDRs and any operator-laptop egress IPs.
+    Additive override for the EKS public API allowlist. The baseline lives in
+    SSM parameter /<cluster_name>/allowlist/eks-api (StringList, see
+    terraform/allowlists.tf and docs/runbooks/operator-allowlists.md),
+    amended via `just allowlist-set`. Leave this empty in normal operation;
+    set it in `terraform/local.auto.tfvars` (gitignored) only for emergency
+    access while the parameter catches up. The non-empty guarantee lives on
+    the parameter's postcondition.
 
     docs/eks-hardening.md item #2.
   EOT
   type        = list(string)
+  default     = []
 
   validation {
-    condition     = length(var.api_public_access_cidrs) > 0 && !contains(var.api_public_access_cidrs, "0.0.0.0/0")
-    error_message = "Set at least one CIDR; 0.0.0.0/0 is forbidden by the hardening baseline (docs/eks-hardening.md #2)."
+    condition     = !contains(var.api_public_access_cidrs, "0.0.0.0/0")
+    error_message = "0.0.0.0/0 is forbidden by the hardening baseline (docs/eks-hardening.md #2)."
   }
 }
 
