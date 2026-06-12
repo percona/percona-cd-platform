@@ -1,4 +1,8 @@
 # Owner: platform
+# Operational and derived values only. Version pins live in versions.tf
+# (engine, providers, and the local.modules / local.charts maps), the single
+# pin manifest verified by `just check-versions`. Looking for
+# local.modules.<x>.source? That is versions.tf, not here.
 locals {
   cluster_name = var.cluster_name
   region       = var.aws_region
