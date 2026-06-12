@@ -9,12 +9,49 @@
 #
 # Hardening baked in (see docs/eks-hardening.md):
 #   1. authentication_mode = "API" + enable_cluster_creator_admin_permissions = false
-#      → cluster admin granted only via var.access_entries (no implicit creator grant).
-#   2. endpoint_public_access_cidrs = var.api_public_access_cidrs (no public-unrestricted).
+#      → cluster admin granted via the committed sso_admin baseline below
+#      (dynamic IAM lookup, no ARN literals) merged with var.access_entries
+#      overrides (no implicit creator grant).
+#   2. endpoint_public_access_cidrs from the SSM-backed allowlist
+#      (allowlists.tf; no public-unrestricted).
 #   3. enabled_log_types = ["audit", "authenticator", "api"] → CloudWatch.
 #   9. create_kms_key = true → customer-managed CMK for envelope encryption.
 #  10. metadata_options on each NG → IMDSv2 required, hop-limit 1 (Pod Identity removes
 #      any need for hop=2; pods get IAM via the agent, not the node IMDS).
+
+# Resolves the IAM Identity Center AdministratorAccess permission-set role at
+# plan time, so the baseline cluster-admin entry below carries no principal
+# ARN literal (the repo is public). If Identity Center re-provisions the
+# permission set (new role-name suffix), the next plan resolves the new ARN
+# automatically and replaces the entry. The postcondition requires exactly one
+# match and fails the plan on zero or several.
+data "aws_iam_roles" "sso_admin" {
+  name_regex  = "AWSReservedSSO_AdministratorAccess_.*"
+  path_prefix = "/aws-reserved/sso.amazonaws.com/"
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.arns) == 1
+      error_message = "Expected exactly one AWSReservedSSO_AdministratorAccess_* role under /aws-reserved/sso.amazonaws.com/; found zero or several. Clean up IAM Identity Center provisioning or tighten the regex before applying."
+    }
+  }
+}
+
+locals {
+  # Baseline access entries, always present. var.access_entries extends the
+  # map; on key collision the tfvars-supplied entry wins (merge order).
+  base_access_entries = {
+    sso_admin = {
+      principal_arn = one(data.aws_iam_roles.sso_admin.arns)
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
+}
 
 module "eks" {
   source  = local.modules.eks.source
@@ -26,16 +63,18 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # Hardening #1 — access entries are the only path to cluster admin.
+  # Hardening #1 — access entries are the only path to cluster admin. The
+  # committed sso_admin baseline (above) is merged with tfvars overrides.
   authentication_mode                      = "API"
   enable_cluster_creator_admin_permissions = false
-  access_entries                           = var.access_entries
+  access_entries                           = merge(local.base_access_entries, var.access_entries)
 
   # Hardening #2 — public endpoint allowlisted; private endpoint also enabled so
-  # in-VPC traffic never leaves AWS. var.api_public_access_cidrs is required (no default).
+  # in-VPC traffic never leaves AWS. The baseline allowlist is SSM-resolved
+  # (allowlists.tf); var.api_public_access_cidrs adds emergency overrides only.
   endpoint_public_access       = true
   endpoint_private_access      = true
-  endpoint_public_access_cidrs = var.api_public_access_cidrs
+  endpoint_public_access_cidrs = local.eks_api_allowed_cidrs
 
   # Hardening #3 — control-plane logging.
   enabled_log_types = ["audit", "authenticator", "api"]

@@ -19,23 +19,25 @@
 #argocd_hostname   = "argocd.cd.percona.com"
 #grafana_hostname  = "grafana.cd.percona.com"
 
-# REQUIRED — EKS public-API allowlist (docs/eks-hardening.md #2).
-# Must contain at least one CIDR; 0.0.0.0/0 is rejected by validation.
-# Use Percona office / VPN egress + any operator laptops you allow direct kubectl from.
+# OPTIONAL, additive override for the EKS public-API allowlist
+# (docs/eks-hardening.md #2). The baseline lives in SSM parameter
+# /<cluster>/allowlist/eks-api, managed via `just allowlist-set` (see
+# docs/runbooks/operator-allowlists.md). Set this only for emergency access
+# while the parameter catches up; 0.0.0.0/0 is rejected by validation.
 #api_public_access_cidrs = [
-#  "203.0.113.0/24",  # Percona office
-#  "198.51.100.5/32", # operator laptop via VPN egress
+#  "198.51.100.5/32", # emergency operator egress
 #]
 
-# REQUIRED for cluster admin — access entries (docs/eks-hardening.md #1).
-# enable_cluster_creator_admin_permissions is hardcoded to false; without at
-# least one entry below, no human can `kubectl` against the cluster.
+# OPTIONAL, extra EKS access entries (docs/eks-hardening.md #1), merged on
+# top of the committed baseline: eks.tf resolves the IAM Identity Center
+# AdministratorAccess role dynamically, so day-to-day cluster admin needs no
+# entry here. Add break-glass or extra principals only.
 #access_entries = {
-#  anderson = {
-#    principal_arn = "arn:aws:iam::<account>:user/anderson.nogueira"
+#  breakglass = {
+#    principal_arn = "arn:aws:iam::<account>:user/<user>"
 #    policy_associations = {
 #      admin = {
-#        policy_arn   = "arn:aws:iam::aws:policy/AmazonEKSClusterAdminPolicy"
+#        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 #        access_scope = { type = "cluster" }
 #      }
 #    }
@@ -52,11 +54,8 @@
 #  ps80 = { target = "203.0.113.10",                       type = "A"     }
 #}
 
-# Grafana SAML/Duo (HD-30780). Default false — the cluster boots on
-# local-admin. Flip to true once IT Ops returns the IdP metadata URL AND
-# the SAML cert/key are populated in Secrets Manager at:
-#   ${cluster_name}/grafana/saml/certificate
-#   ${cluster_name}/grafana/saml/private_key
+# Authentik SAML bridge (Duo SSO). Default false, the cluster boots without
+# the bridge. Flip to true once the IdP metadata is populated in SSM at
+# /<cluster>/authentik/saml/idp_metadata.
 # Cutover runbook: docs/runbooks/grafana-saml-cutover.md
-#grafana_saml_enabled      = true
-#grafana_saml_metadata_url = "https://sso.duosecurity.com/saml2/sp/.../metadata"
+#authentik_saml_enabled = true
