@@ -79,10 +79,18 @@ grafana:
     storageClassName: gp3-monitoring-1a-retain
     size: 10Gi
 
-  # Admin password for the local-admin emergency path. Real production
-  # rotates via Secret reference; for now the chart auto-generates.
+  # Local-admin credential pinned via ESO from Secrets Manager
+  # (percona-ci-platform/grafana/admin -> Secret grafana-admin, see
+  # templates/external-secret-admin.yaml). Before this pin the chart
+  # auto-generated a fresh password on every render, so the Secret
+  # drifted from the password persisted in grafana.db at first boot:
+  # the sidecar's provisioning-reload POST 401ed for weeks and the admin
+  # API was unreachable. The live DB password was reset to the pinned
+  # value via the documented grafana-cli break-glass on 2026-06-12.
   admin:
-    existingSecret: ""
+    existingSecret: "grafana-admin"
+    userKey: admin-user
+    passwordKey: admin-password
 
   ingress:
     enabled: true
@@ -132,12 +140,18 @@ grafana:
       # the operator can see they're signing in via SSO (vs an opaque
       # immediate redirect that's hard to diagnose if Authentik 5xxs).
       oauth_auto_login: false
-    # Basic auth defaults to on, which keeps the local `admin` account
-    # reachable from the internet via the HTTP API even with the login
-    # form hidden. Break-glass: revert this to true via GitOps, then use
-    # the reset-admin-password recovery above through a port-forward.
+    # Basic auth re-enabled deliberately (was disabled while the admin
+    # password was chart-random and drifted): the credential is now
+    # ESO-pinned and strong, and Grafana 12 with disable_login_form also
+    # disables password session login, so basic auth is the ONLY
+    # API path for the local admin. It serves the sidecar's
+    # provisioning-reload hook, the folders API, and the future
+    # folder-permissions automation (ADR 0035). Brute force on the
+    # internet-facing ALB is mitigated by Grafana's login lockout and
+    # the 32-char random credential; browser sign-in remains
+    # Duo + Authentik only.
     auth.basic:
-      enabled: false
+      enabled: true
     users:
       auto_assign_org: true
       auto_assign_org_role: Viewer
