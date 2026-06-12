@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Jenkins master log streams from Loki: volume, error rate, exceptions, Hetzner/EC2 provisioning events, build start/finish, live tail. Pulls jenkins.log lines pushed by per-master Grafana Alloy via the alloy-gateway (ADR 0013). Filter by master via the dashboard variable; defaults to ps3.cd while it is the only master wired up.",
+  "description": "Jenkins master log streams from Loki: volume, error rate, exceptions, Hetzner/EC2 provisioning events, build activity, live tail. Pulls jenkins.log lines pushed by per-master Grafana Alloy via the alloy-gateway (ADR 0013); build activity comes from the Hetzner plugin gauge in Mimir. Filter by master via the dashboard variable; all 10 masters ship logs.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -145,13 +145,13 @@
     },
     {
       "id": 3,
-      "title": "Top exceptions (1h)",
+      "title": "Top exceptions",
       "type": "barchart",
       "datasource": {
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Most-seen Java exception class names in the last hour. Captures stacktrace headers via the regexp parser; trims package prefixes for readability. Use the legend to jump into Explore on a specific exception.",
+      "description": "Most-seen Java exception class names in the selected time range. Captures stacktrace headers via the regexp parser; trims package prefixes for readability. Use the legend to jump into Explore on a specific exception.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -183,7 +183,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(15, sum by (exc) (count_over_time({master=~\"$master\"} |~ \"Exception|Error:\" | regexp \"(?P<exc>[A-Z][A-Za-z0-9_]+(Exception|Error))\" [1h])))",
+          "expr": "topk(15, sum by (exc) (count_over_time({master=~\"$master\"} |~ \"Exception|Error:\" | regexp \"(?P<exc>[A-Z][A-Za-z0-9_]+(Exception|Error))\" [$__range])))",
           "queryType": "instant",
           "legendFormat": "{{exc}}",
           "refId": "A"
@@ -192,34 +192,51 @@
     },
     {
       "id": 4,
-      "title": "Build start / finish events",
-      "type": "logs",
+      "title": "Build activity (real busy executors)",
+      "type": "timeseries",
       "datasource": {
-        "type": "loki",
-        "uid": "loki"
+        "type": "prometheus",
+        "uid": "mimir"
       },
-      "description": "Build-lifecycle markers from jenkins.log. Started by user / SCM trigger / timer, plus `Finished: SUCCESS|FAILURE|ABORTED|UNSTABLE` results. Quick way to see which jobs ran during an incident window.",
+      "description": "Busy executors per master, from the patched Hetzner plugin endpoint (zombie-aware: counts only executors whose build is genuinely running). Build start/finish markers (`Started by ...`, `Finished: SUCCESS`) exist only in per-build console logs, which are not shipped to Loki, so jenkins.log cannot show them; this gauge is the build-activity signal the masters actually push today.",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
         "y": 7
       },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 15
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
       "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
-        "enableLogDetails": false,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
       },
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "loki"
+            "type": "prometheus",
+            "uid": "mimir"
           },
-          "expr": "{master=~\"$master\"} |~ \"Started by|Finished:|Triggering a new build of\"",
-          "queryType": "range",
+          "expr": "hetzner_jenkins_real_busy_executors{master=~\"$master\"}",
+          "legendFormat": "{{master}}",
           "refId": "A"
         }
       ]
@@ -339,8 +356,8 @@
       {
         "current": {
           "selected": false,
-          "text": "ps3-k8s",
-          "value": "ps3-k8s"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "loki",
