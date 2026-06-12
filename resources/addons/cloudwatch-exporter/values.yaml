@@ -23,7 +23,8 @@
 #     Mimir's out_of_order_time_window stays 0.
 #   - The ServiceMonitor scrapes the exporter's in-memory cache; AWS is hit
 #     only every scraping-interval (300s). Cost is a fixed function of the
-#     metric list: ~85-95 GetMetricData metrics per cycle, $6-8/month.
+#     metric list: ~160-170 GetMetricData metrics per cycle, $12-15/month
+#     (per-TG traffic job included; it scales with target-group count).
 #
 # IAM: EKS Pod Identity association on the cloudwatch-exporter SA
 # (terraform/iam-cloudwatch-exporter.tf + pod-identity.tf). No SA
@@ -93,7 +94,12 @@ prometheus-yet-another-cloudwatch-exporter:
       # hard-fail config load). Each listed tag becomes tag_<key> on every
       # metric of that namespace; the _info series carries ALL tags anyway.
       exportedTagsOnMetrics:
-        AWS/ApplicationELB: [ingress.k8s.aws/stack]
+        # ingress.k8s.aws/resource is a target group's readable identity
+        # (`<ns>/<ingress>-<service>:<port>`). The LBC creates one TG per
+        # Ingress even when backends share pods, so on the jenkins-masters
+        # ALB it names the master host and on jenkins-cd the platform
+        # service; the per-TG dashboard panels aggregate by it.
+        AWS/ApplicationELB: [ingress.k8s.aws/stack, ingress.k8s.aws/resource]
         AWS/NetworkELB: [kubernetes.io/service-name]
       jobs:
         # ALB traffic, LoadBalancer-level only (exact dimension-set match;
@@ -134,6 +140,25 @@ prometheus-yet-another-cloudwatch-exporter:
             - {name: TargetTLSNegotiationErrorCount, statistics: [Sum]}
             - {name: ProcessedBytes, statistics: [Sum]}
             - {name: ConsumedLCUs, statistics: [Average]}
+        # ALB traffic per target group, minimal metric set on purpose: each
+        # (TG, metric, stat) is one GetMetricData metric per cycle, and 17
+        # TGs x 3 add ~50% to the exporter bill. Dashboards must scope
+        # LB-level reads with dimension_TargetGroup="" and per-TG reads
+        # with dimension_TargetGroup!="" or sums double-count.
+        - type: AWS/ApplicationELB
+          regions: [us-east-1]
+          searchTags:
+            - key: elbv2.k8s.aws/cluster
+              value: ^percona-ci-platform$
+          period: 300
+          length: 300
+          delay: 120
+          nilToZero: true
+          dimensionNameRequirements: [LoadBalancer, TargetGroup]
+          metrics:
+            - {name: RequestCount, statistics: [Sum]}
+            - {name: HTTPCode_Target_5XX_Count, statistics: [Sum]}
+            - {name: TargetResponseTime, statistics: [p95], nilToZero: false}
         # ALB target-group health. Min is the robust unhealthy signal for
         # ALB (AWS guidance), Max the early warning; collecting both stats
         # for both metrics serves ALB and NLB conventions alike.
