@@ -460,6 +460,9 @@ data "aws_iam_policy_document" "master_start_instances" {
       "ec2:DescribeAvailabilityZones",
       "ec2:DescribeSecurityGroups",
       "ec2:DescribeSubnets",
+      # Read by every master's spot-price-auto-updater job to refresh
+      # template spot bid ceilings.
+      "ec2:DescribeSpotPriceHistory",
     ]
     resources = ["*"]
   }

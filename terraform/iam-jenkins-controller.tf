@@ -35,6 +35,7 @@ data "aws_iam_policy_document" "jenkins_controller" {
       "ec2:DescribeAvailabilityZones",
       "ec2:DescribeSecurityGroups",
       "ec2:DescribeSubnets",
+      "ec2:DescribeSpotPriceHistory",
     ]
     resources = ["*"]
   }

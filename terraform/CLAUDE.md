@@ -28,11 +28,13 @@ the CI `tofu` job); the repo-root `CLAUDE.md` carries the platform-wide rules.
    Before cutover, diff the LIVE worker/master roles
    (`aws iam list-role-policies` + `list-attached-role-policies` +
    `get-role-policy` per inline name) against the CFN template: live roles
-   carry out-of-band grants the template never listed (pmm's loss broke
-   Packer AMI builds at `ec2:DescribeRegions`), and the module recreates
-   the declared shape only. Carry deltas via `worker_ami_builder`,
-   `worker_ecr_read`, `extra_worker_managed_policies`,
-   `extra_master_managed_policies`.
+   carry out-of-band grants the template never listed, and the module
+   recreates the declared shape only. Two known losses: pmm's worker role
+   broke Packer AMI builds at `ec2:DescribeRegions`; a hand-attached
+   `ec2:DescribeSpotPriceHistory` policy broke `spot-price-auto-updater`
+   on every recreated master role until the module absorbed the action.
+   Carry deltas via `worker_ami_builder`, `worker_ecr_read`,
+   `extra_worker_managed_policies`, `extra_master_managed_policies`.
 6. **Addresses, `modules/` dir names, and `resources/addons/` basenames are
    contract surfaces** — state keys, `source` paths, namespaces, and
    Pod-Identity bindings hang off them. Never rename cosmetically. File
