@@ -204,8 +204,8 @@ manifest-validate:
 
 # ---------- jenkins controller chart ----------
 # Render the per-instance Jenkins controller chart and assert the values reach
-# the `jenkins` subchart (image / Retain PVC / ALB group / JNLP listener / node
-# pool). Mirrors the .github/workflows/ci.yml `helm` job; uses a pinned,
+# the `jenkins` subchart (image / Retain PVC / ALB group / ClusterIP agent
+# Service / node pool). Mirrors the .github/workflows/ci.yml `helm` job; uses a pinned,
 # sha-verified helm cached under .cache/.
 helm-render: _helm
     PATH="$(pwd)/.cache/helm:$PATH" scripts/jenkins-chart-render-check.sh
