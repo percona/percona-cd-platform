@@ -22,10 +22,19 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Local-only tfvars (per-developer overrides like aws_profile)
+# Local-only tfvars (per-developer overrides) plus any suffixed backup copy
+# (.bak-<timestamp>, .orig, .old). Order matters: gitignore is last-match-wins,
+# so the example negation must stay AFTER the backup pattern, or
+# *.auto.tfvars.* would re-ignore the tracked example file.
 *.auto.tfvars
+*.auto.tfvars.*
 !*.auto.tfvars.example
 backend.hcl
+
+# Local one-off tofu experiment roots (scratch stacks with local state).
+# Standing leak guard: anything durable gets promoted into terraform/ proper
+# via a reviewed PR, as the molecule-tests adoption was (terraform/molecule-tests.tf).
+terraform/_oneoff/
 
 # tflint cache
 .tflint.d/
@@ -50,12 +59,17 @@ secrets/
 *.swp
 *.swo
 *~
+*.bak
+*.bak-*
 
 # Tooling caches
 .pre-commit-cache/
 .tflint-cache/
 .cache/
 node_modules/
+__pycache__/
+*.pyc
+.serena/
 
 # Helm chart deps — `helm dep update` materialises these locally during
 # `helm template`/`helm lint`. ArgoCD does its own dep update at sync time;
