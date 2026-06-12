@@ -18,8 +18,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      # Hard upper bound on the run; well above the ~2s reconcile.
-      activeDeadlineSeconds: 45
+      # Hard upper bound on the run, kept under the 1-minute schedule so a
+      # killed run never collides with the next tick. Healthy probes answer
+      # in ~120ms; the bound covers the worst case of several blackholed
+      # candidates timing out at 2s each across the 8 hosts.
+      activeDeadlineSeconds: 55
       ttlSecondsAfterFinished: 600
       template:
         metadata:
