@@ -124,6 +124,9 @@ def reconcile(host: dict) -> None:
             "labels": {
                 "kubernetes.io/service-name": name,
                 "app.kubernetes.io/managed-by": MANAGED_BY,
+                # EndpointSlice management contract: a unique managed-by value
+                # tells other controllers this slice is not theirs to touch.
+                "endpointslice.kubernetes.io/managed-by": MANAGED_BY,
             },
         },
         "addressType": "IPv4",

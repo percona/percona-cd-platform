@@ -1,4 +1,5 @@
-"""Unit tests for discover_master_ip's probe-gated endpoint selection.
+"""Unit tests for discover_master_ip's probe-gated endpoint selection
+and the EndpointSlice body's managed-by contract labels.
 
 Runs in the ci.yml lambda-pytest job. No kubernetes dependency: the
 module-level `from kubernetes import ...` in reconcile.py is stubbed
@@ -83,3 +84,22 @@ def test_multi_serving_beats_newer_non_serving():
 def test_multi_none_serving_keeps_existing_slice():
     resp = _instances(("10.0.0.1", 0), ("10.0.0.2", 5))
     assert _discover(resp, set()) == (None, False)
+
+
+def test_written_slice_carries_managed_by_contract_labels():
+    # The k8s EndpointSlice contract: manually managed slices must set a
+    # unique endpointslice.kubernetes.io/managed-by so other controllers
+    # know not to touch them.
+    host = {"name": "x", "region": "us-east-1", "tag": "jenkins-x", "port": 8080}
+    api = reconcile.client.DiscoveryV1Api.return_value
+    api.replace_namespaced_endpoint_slice.reset_mock()
+    with mock.patch.object(
+        reconcile, "discover_master_ip", return_value=("10.0.0.1", True)
+    ):
+        reconcile.reconcile(host)
+    body = api.replace_namespaced_endpoint_slice.call_args.args[2]
+    assert body["metadata"]["labels"] == {
+        "kubernetes.io/service-name": "jenkins-x",
+        "app.kubernetes.io/managed-by": "jenkins-endpoint-reconciler",
+        "endpointslice.kubernetes.io/managed-by": "jenkins-endpoint-reconciler",
+    }
