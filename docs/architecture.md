@@ -366,15 +366,13 @@ today's production.
 Unsettled points, listed here so they are visible. Each graduates to a
 Proposed ADR when picked up.
 
-- **Mode B plumbing.** The reconciler loop is eventually consistent (up to
-  about a minute of proxied 503s on instance replacement; every candidate,
-  including a sole match, is TCP-probed, the newest serving instance wins,
-  and a none-serving result keeps the previous slice). Options:
-  a stable ENI per master (the endpoint never changes and the reconciler
-  retires), event-driven reconciliation (EventBridge instance-state
-  events), or accepting the minute because Mode A eventually deletes the
-  whole chain.
-  Investment here trades against the in-cluster timeline.
+- **Mode B plumbing.** Decided in
+  [ADR 0035](adr/0035-endpointslice-reconciler-for-master-discovery.md):
+  the CronJob EndpointSlice reconciler is affirmed over a stable ENI per
+  master, event-driven reconciliation, Consul, and a custom operator. The
+  minute-level convergence is accepted while Mode A retires the chain;
+  EventBridge events remain the upgrade path if the replacement 503
+  window becomes user pain.
 - **In-cluster pace.** What ps3 must demonstrate (restore drill done, while HA
   guards, PDB and preStop drain are still pending per ADR 0025) before a second
   master moves, and which master goes next.
