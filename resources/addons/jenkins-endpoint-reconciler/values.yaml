@@ -11,7 +11,7 @@ schedule: "* * * * *"
 # (terraform/argocd.tf); both fall back for local helm template.
 image:
   repository: percona-cd/jenkins-endpoint-reconciler
-  tag: "0.3.0"
+  tag: "0.4.0"
   pullPolicy: IfNotPresent
 
 # Service account name. Bound to a Pod Identity association in
