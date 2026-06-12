@@ -1,7 +1,7 @@
 {
   "uid": "aws-alb",
   "title": "AWS / Load Balancers",
-  "description": "Traffic + target health for the platform ALBs/NLB from CloudWatch via YACE (ADR 0034), plus the in-cluster ALB path.",
+  "description": "Traffic + target health for the platform ALBs from CloudWatch via YACE (ADR 0034), plus the in-cluster ALB path.",
   "tags": [
     "aws",
     "alb",
@@ -1043,207 +1043,6 @@
       ]
     },
     {
-      "id": 17,
-      "type": "row",
-      "title": "NLB: ps3 inbound agents (JNLP)",
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 60
-      }
-    },
-    {
-      "id": 18,
-      "type": "timeseries",
-      "title": "Flows",
-      "description": "Inbound agent connections to the in-cluster ps3 controller.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 61
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "aws_networkelb_active_flow_count_average",
-          "legendFormat": "active (avg)",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "aws_networkelb_new_flow_count_sum / 300",
-          "legendFormat": "new/s",
-          "refId": "B"
-        }
-      ]
-    },
-    {
-      "id": 19,
-      "type": "timeseries",
-      "title": "TCP resets/s",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 61
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "aws_networkelb_tcp_client_reset_count_sum / 300",
-          "legendFormat": "client",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "aws_networkelb_tcp_elb_reset_count_sum / 300",
-          "legendFormat": "elb",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "aws_networkelb_tcp_target_reset_count_sum / 300",
-          "legendFormat": "target",
-          "refId": "C"
-        }
-      ]
-    },
-    {
-      "id": 20,
-      "type": "timeseries",
-      "title": "NLB target health",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 61
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "max by (dimension_TargetGroup) (aws_networkelb_un_healthy_host_count_maximum)",
-          "legendFormat": "unhealthy max {{dimension_TargetGroup}}",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "expr": "min by (dimension_TargetGroup) (aws_networkelb_healthy_host_count_minimum)",
-          "legendFormat": "healthy min {{dimension_TargetGroup}}",
-          "refId": "B"
-        }
-      ]
-    },
-    {
       "id": 21,
       "type": "row",
       "title": "ALB path in-cluster",
@@ -1252,7 +1051,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 69
+        "y": 60
       }
     },
     {
@@ -1268,7 +1067,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 61
       },
       "fieldConfig": {
         "defaults": {
@@ -1328,7 +1127,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 61
       },
       "fieldConfig": {
         "defaults": {
@@ -1396,7 +1195,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 69
       },
       "options": {
         "showTime": true,

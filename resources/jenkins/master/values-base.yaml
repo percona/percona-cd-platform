@@ -65,14 +65,17 @@ jenkins:
       startupProbe:
         failureThreshold: 120
 
-    # Inbound JNLP listener so external EC2 + Hetzner agents reconnect.
-    # internet-facing because Hetzner agents are outside the VPC.
+    # The inbound TCP agent listener is dark by construction: JCasC
+    # defaultConfig is off (below), which drops the chart's only
+    # jenkins.slaveAgentPort wiring, so the controller boots with the
+    # listener disabled, and every cloud (eC2Fleet, ec2, hetzner) connects
+    # agents via SSH from the controller side anyway. ClusterIP keeps the
+    # chart's agent Service without provisioning an internet-facing NLB
+    # against a closed port (the original LoadBalancer sat at 0 healthy
+    # targets with zero flows). If an inbound agent is ever needed, prefer
+    # WebSocket over the existing HTTPS ALB to reviving the NLB.
     agentListenerPort: 50000
-    agentListenerServiceType: LoadBalancer
-    agentListenerServiceAnnotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: nlb
-      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "iit-billing-tag=percona-ci-platform"
+    agentListenerServiceType: ClusterIP
 
     # Pin the singleton controller to its dedicated on-demand single-AZ node pool
     # (substrate: terraform recreates this node group with the taint). Placement

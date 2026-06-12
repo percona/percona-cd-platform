@@ -162,7 +162,6 @@ the gateway and writes to the Mimir distributor directly. Full design:
 | Hetzner Cloud | Master | Hetzner API (`htz.cd.token`), then SSH as root :22 to the server's **public** address | Hetzner-side, master egress only |
 | pxc inbound JNLP (exception) | Agent (corp DC) | TCP to the retained EIP :50000 | SG rule `40.143.89.204/30 -> :50000`, host pinned by `jnlpHost.groovy` |
 | ps3-k8s Graviton | Controller pod | ASG API via Pod Identity, then SSH :22 to worker private IPs over the EKS-to-ps3 peering | Worker SG allows :22 from the EKS VPC CIDR |
-| ps3-k8s inbound agents | Agent | Internet-facing NLB :50000 (`agentListenerServiceType: LoadBalancer`) | Jenkins JNLP secret |
 
 Build and agent traffic never traverses the ALBs. An EKS-cell outage
 degrades web access and observability, not running builds.
