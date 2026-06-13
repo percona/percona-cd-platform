@@ -1,15 +1,13 @@
 # Owner: platform
-# Access-log bucket for the shared jenkins-cd ALB (the internet-facing
-# SSO + platform-UI front door: authentik, grafana, argocd, headlamp,
-# alloy-gateway). Request-level audit of that front door was absent; the
-# bucket here plus the load-balancer-attributes annotation on the argocd
-# Ingress (argocd.tf) turn it on. The annotation lives on one group member
-# because AWS LBC merges load-balancer-attributes across an IngressGroup
-# and rejects conflicting values, so exactly one member may set it.
+# Access-log bucket for both internet-facing ALBs, one prefix each.
+# The enabling annotation lives on the argocd Ingress (argocd.tf) for
+# jenkins-cd and on the jenkins-ingress addon Ingresses for
+# jenkins-masters.
 #
-# us-east-1 predates the logdelivery service-principal era, so ALB access
-# logs are delivered by the regional ELB service account, resolved at plan
-# time via the aws_elb_service_account data source (no account ID in git).
+# Principal: regional ELB service account via aws_elb_service_account
+# (no account ID in git). Legacy but supported; migrating to the
+# recommended logdelivery.elasticloadbalancing.amazonaws.com principal
+# must revalidate the working jenkins-cd delivery.
 # SSE-S3 (AES256), not the LGTM CMK: ALB log delivery needs the bucket's
 # default encryption to be a key it can use without a per-key grant, and
 # AES256 is the friction-free supported option.
@@ -80,13 +78,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
 data "aws_iam_policy_document" "alb_logs" {
   # ALB log delivery PutObject. Path is fixed by AWS:
-  # <prefix>/AWSLogs/<account-id>/*. The prefix segment (jenkins-cd) keeps
-  # room for a second ALB to log into the same bucket under its own prefix.
+  # <prefix>/AWSLogs/<account-id>/*. One prefix per ALB group.
   statement {
-    sid       = "AllowELBAccountPutObject"
-    effect    = "Allow"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.alb_logs.arn}/jenkins-cd/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    sid     = "AllowELBAccountPutObject"
+    effect  = "Allow"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.alb_logs.arn}/jenkins-cd/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+      "${aws_s3_bucket.alb_logs.arn}/jenkins-masters/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+    ]
 
     principals {
       type        = "AWS"

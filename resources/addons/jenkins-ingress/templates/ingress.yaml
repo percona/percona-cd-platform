@@ -1,8 +1,10 @@
 {{/*
-One Ingress per host. All share `alb.ingress.kubernetes.io/group.name:
-jenkins-cd`, so ALBC collapses them onto the same shared ALB. ACM wildcard
-*.cd.percona.com is discovered by ALBC via SNI -- no per-Ingress
-certificate-arn annotation needed.
+One Ingress per host, all in the jenkins-masters IngressGroup -> one ALB.
+ACM wildcard *.cd.percona.com is matched via SNI, no certificate-arn
+annotation needed. The access-logs annotation renders identically on
+every Ingress here: ALBC requires it to be unique or identical across
+the group. ps3-k8s is a 9th group member without the annotation, which
+is allowed.
 */}}
 {{- range .Values.hosts }}
 apiVersion: networking.k8s.io/v1
@@ -19,6 +21,9 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /-/healthy
     alb.ingress.kubernetes.io/healthcheck-port: '8081'
+    {{- if $.Values.ingress.accessLogs.enabled }}
+    alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket={{ $.Values.ingress.accessLogs.bucket }},access_logs.s3.prefix={{ $.Values.ingress.accessLogs.prefix }}
+    {{- end }}
 spec:
   ingressClassName: alb
   rules:
