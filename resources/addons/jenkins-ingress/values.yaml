@@ -112,3 +112,10 @@ ingress:
   # ACM wildcard *.cd.percona.com is discovered automatically via SNI.
   groupName: jenkins-masters
   sslPolicy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
+  # ALB-wide access logs. Bucket and delivery policy:
+  # terraform/alb-access-logs.tf. Rendered identically on every Ingress
+  # in this chart (ALBC requires unique-or-identical across the group).
+  accessLogs:
+    enabled: true
+    bucket: percona-ci-platform-alb-logs
+    prefix: jenkins-masters
