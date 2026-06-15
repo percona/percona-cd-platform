@@ -107,9 +107,9 @@ Mechanics worth knowing:
   roles, the instance profile, the init-config bucket, and the billing
   tag, and renaming live identities during a cutover buys nothing
   (`terraform/master-pmm.tf` records the decision).
-- Legacy fallback: `origin-<host>` records in `terraform/origins.tf`
-  render only when targets are supplied. The discovered map is empty at
-  head, so none exist by default.
+- Master upstreams are discovered by the in-cluster
+  jenkins-endpoint-reconciler, which writes each `jenkins-<host>` Service
+  EndpointSlice from the live EC2 private IP.
 
 ### Mode A web path (ps3, in-cluster)
 
@@ -234,10 +234,8 @@ mechanical, not conventional.
   creates, updates, or deletes records carrying that stamp. Records it
   does not own, such as the CloudFormation-era `pg.cd` entry or anything
   predating the platform, are invisible to it and cannot be clobbered.
-- Terraform owns only the ACM validation records and the dormant
-  `origin-<host>` fallbacks. The jenkins-master module creates no public
-  DNS records (its dormant EIP A-record toggle was removed once external-dns
-  owned every `*.cd` name), so no master ever publishes its raw address.
+- Terraform owns only the ACM validation records. The jenkins-master module
+  creates no public DNS records, so no master ever publishes its raw address.
 
 ## EIP policy
 

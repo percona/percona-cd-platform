@@ -44,16 +44,6 @@
 #  }
 #}
 
-# Per-host origin records for Mode B Jenkins masters (terraform/origins.tf).
-# Each key matches a host in var.jenkins_hosts where mode = "proxy". The
-# `target` is the existing EC2 Jenkins master's reachable public DNS or IP.
-# Roll out one host at a time as each master is wired into the proxy data
-# path; hosts not listed get no record.
-#jenkins_origin_targets = {
-#  pmm  = { target = "ec2-X-Y-Z.compute-1.amazonaws.com", type = "CNAME" }
-#  ps80 = { target = "203.0.113.10",                       type = "A"     }
-#}
-
 # Authentik SAML bridge (Duo SSO). Default false, the cluster boots without
 # the bridge. Flip to true once the IdP metadata is populated in SSM at
 # /<cluster>/authentik/saml/idp_metadata.

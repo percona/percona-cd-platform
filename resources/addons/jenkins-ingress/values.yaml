@@ -1,27 +1,14 @@
 # Dedicated-ALB SSL termination for Jenkins masters (PS-10945).
 #
-# Architecture: Internet -> ALB (jenkins-masters group, ACM wildcard) ->
-# nginx Pod (this chart) -> AWS EC2 public DNS of the master's EIP.
-# Pods are in the percona-ci-platform VPC, so they satisfy the ALB
-# `target-type: ip` constraint; the upstream traverses the public internet
-# back to the master via its stable EIP DNS name. Acceptable because
-# masters are already public-facing.
+# Internet -> ALB (jenkins-masters group, ACM wildcard via SNI) -> nginx
+# Pod (this chart) -> per-host ClusterIP Service whose EndpointSlice the
+# jenkins-endpoint-reconciler syncs to the master private IP over the
+# cross-region VPC peering. Upstreams are http on :8080. TLS terminates at
+# the ALB.
 #
-# `upstream` must NOT be the same DNS name as the Ingress host -- cutting
-# the public hostname over to the ALB would make nginx resolve its
-# upstream to the ALB itself and loop. Use the `origin-<host>` convention
-# (matches `terraform/origins.tf`): a separate Route53 A-record pointing
-# at the master's EIP. `upstreamHostHeader` is the Host header + SNI sent
-# to the upstream so the master's openresty matches its virtual host and
-# cert.
-#
-# ps3 upstream discovery is handled by the jenkins-endpoint-reconciler
-# CronJob (it writes the EndpointSlice for the Service below), so no
-# `origin-ps3` Route53 record or `jenkins_origin_targets.ps3` is needed.
-#
-# Phase 1 (proxy via openresty): upstream still HTTPS:443. After PR 2 in
-# Percona-Lab/jenkins-pipelines strips openresty and the master SG opens
-# :8080 to the EKS NAT egress IPs, switch to scheme=http, port=8080.
+# `upstream` must differ from the Ingress host, else nginx resolves to the
+# ALB and loops. ps3 is not proxied here (served by the in-cluster ps3-k8s
+# controller, ADR 0027).
 
 image:
   repository: nginx
