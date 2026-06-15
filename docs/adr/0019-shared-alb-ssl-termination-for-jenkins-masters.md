@@ -95,3 +95,31 @@ outage today takes out SSO for Grafana, ArgoCD, and Headlamp. The Jenkins
 half of the claim still holds: masters keep native GitHub OAuth, and
 Authentik is not in their login path. Each consumer keeps a local
 break-glass path ([authentication.md](../authentication.md#recovery-paths)).
+
+### 2026-06-15: Web plane de-pinned to 3 replicas across AZs
+
+The cell-level consequence above ("All 10 master web UIs share a fate domain
+with `percona-ci-platform` EKS") still holds. The narrower zonal exposure under
+it did not: the `jenkins-ingress` NGINX ran 2 replicas, both in us-east-1a,
+because the only Karpenter NodePool the pods tolerated (`default`) is pinned to
+us-east-1a. A single us-east-1a AZ event therefore took the web plane for every
+master, not just the 1a residents.
+
+Fixed by giving the proxy a multi-AZ home of its own:
+
+- A dedicated, tainted `ingress` NodePool spanning us-east-1a/b/c
+  (`resources/addons/karpenter/templates/nodepool-ingress.yaml`): spot-first
+  `t3.medium` with on-demand and gen-7 `large` non-burstable fallbacks. Tainted
+  so the single-AZ `default`-pool tenants (e.g. the Tempo read path) cannot
+  follow the proxy across AZs.
+- `jenkins-ingress` now runs `replicaCount: 3` with a hard
+  `topology.kubernetes.io/zone` spread (`minDomains: 2`, `DoNotSchedule`) plus a
+  required `podAntiAffinity` on `kubernetes.io/hostname`, so the three pods land
+  one per node across distinct AZs. PDB `minAvailable: 2`; rollout `maxSurge: 1`
+  / `maxUnavailable: 0`. A single-AZ or single-node loss now drops at most one
+  replica and the proxy keeps serving.
+
+A whole-cell or whole-region front-door loss is still total for the web plane
+(workers and builds continue, since they never traverse the ALB). The emergency
+bypass for that case is [break-glass-dns.md](../runbooks/break-glass-dns.md).
+PRs cd #235 and #237.
