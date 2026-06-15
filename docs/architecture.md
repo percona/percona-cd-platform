@@ -397,21 +397,24 @@ Proposed ADR when picked up.
 
 ### Compute topology (EKS cell)
 
-Four tiers, each tagged `workload.percona.com/tier` and (where exclusive)
-tainted. Two MNGs + two Karpenter NodePools.
+Five tiers, each tagged `workload.percona.com/tier` and (where exclusive)
+tainted. Two MNGs + three Karpenter NodePools.
 
 | Tier | Capacity | AZ | Hosts |
 |---|---|---|---|
 | `bootstrap` | MNG `system`, on-demand | multi-AZ | ArgoCD, Karpenter, LB controller, external-secrets, external-dns |
 | `obs-state` | MNG `prometheus_system`, on-demand | us-east-1a | Authentik Postgres, Grafana |
 | `lgtm-stateful` | Karpenter NodePool, on-demand | us-east-1a | Mimir, Loki, Tempo ingesters, store-gateway, compactor |
-| `general` | Karpenter NodePool, spot + on-demand | us-east-1a | Stateless LGTM, web frontends, NGINX proxy, reconciler |
+| `general` | Karpenter NodePool, spot + on-demand | us-east-1a | Stateless LGTM, web frontends, reconciler |
+| `ingress` | Karpenter NodePool, spot + on-demand | multi-AZ (1a/1b/1c) | jenkins-ingress NGINX (3 replicas, one per node) |
 
-The Karpenter pools and the `prometheus_system` MNG are pinned to
-us-east-1a for the same reason: their workloads carry EBS volumes that must
-follow the pod, and multi-AZ there would require EFS (not provisioned).
-Only the `bootstrap` MNG is multi-AZ. Everything stateful is on-demand, and
-spot appears only in the `general` pool.
+The `default` and `lgtm-stateful` Karpenter pools and the `prometheus_system`
+MNG are pinned to us-east-1a for the same reason: their workloads carry EBS
+volumes that must follow the pod, and multi-AZ there would require EFS (not
+provisioned). The `bootstrap` MNG and the `ingress` NodePool are multi-AZ (the
+ingress proxy carries no EBS, so it spreads one replica per node across AZs).
+Everything stateful is on-demand, and spot appears in the `general` and
+`ingress` pools.
 
 ### Storage
 

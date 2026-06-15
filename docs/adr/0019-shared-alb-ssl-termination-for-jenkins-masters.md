@@ -81,7 +81,7 @@ The cutover sequence per master is captured in `docs/runbooks/jenkins-ssl-cutove
 - Per-master cutover procedure: `docs/runbooks/jenkins-ssl-cutover.md`
 - Addon: `resources/addons/jenkins-ingress/`
 - Per-master IaC: `Percona-Lab/jenkins-pipelines/IaC/<host>.cd/JenkinsStack.yml`
-- Origin record machinery: `terraform/origins.tf` + `terraform/variables.tf` (`jenkins_hosts`, `jenkins_origin_targets`)
+- Upstream discovery (current): the in-cluster `jenkins-endpoint-reconciler` writes the `jenkins-<host>` Service EndpointSlice ([ADR 0035](0035-endpointslice-reconciler-for-master-discovery.md)). The earlier `origin-<host>` Route53 machinery (`terraform/origins.tf`, `jenkins_origin_targets`) was retired and deleted in #228.
 
 ## Amendments
 
@@ -109,7 +109,7 @@ Fixed by giving the proxy a multi-AZ home of its own:
 
 - A dedicated, tainted `ingress` NodePool spanning us-east-1a/b/c
   (`resources/addons/karpenter/templates/nodepool-ingress.yaml`): spot-first
-  `t3.medium` with on-demand and gen-7 `large` non-burstable fallbacks. Tainted
+  `t3a.medium` (then `t3.medium`) with on-demand and gen-7 `large` non-burstable fallbacks. Tainted
   so the single-AZ `default`-pool tenants (e.g. the Tempo read path) cannot
   follow the proxy across AZs.
 - `jenkins-ingress` now runs `replicaCount: 3` with a hard
@@ -123,3 +123,16 @@ A whole-cell or whole-region front-door loss is still total for the web plane
 (workers and builds continue, since they never traverse the ALB). The emergency
 bypass for that case is [break-glass-dns.md](../runbooks/break-glass-dns.md).
 PRs cd #235 and #237.
+
+### 2026-06-15: origin-<host> upstream mechanism retired (#228)
+
+The `origin-<host>.cd.percona.com` Route53 upstream in the Decision above (the
+diagram hop, the "origin-<host> upstream convention" key choice, and the
+`var.jenkins_origin_targets` override) was already superseded by the 2026-05-18
+EndpointSlice amendment and is now deleted: #228 removed `terraform/origins.tf`,
+the `jenkins_hosts` / `jenkins_origin_targets` variables, and the
+`jenkins_origin_records` output. The proxy upstream is solely the in-cluster
+`jenkins-<host>` Service whose EndpointSlice the `jenkins-endpoint-reconciler`
+writes ([ADR 0035](0035-endpointslice-reconciler-for-master-discovery.md)). Read
+the origin-<host> references in the Decision and "Why an nginx pod" sections as
+historical.

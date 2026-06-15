@@ -5,8 +5,9 @@
 ## Context
 
 The shared ALB needs a TLS certificate covering all 10 Jenkins hostnames plus
-`grafana.cd.percona.com`, `argocd.cd.percona.com`, and the per-master
-`origin-<host>.cd.percona.com` names used by the reverse-proxy data path.
+`grafana.cd.percona.com`, `argocd.cd.percona.com`, and (until #228 retired them)
+the per-master `origin-<host>.cd.percona.com` names then used by the
+reverse-proxy data path.
 
 Two options: AWS Certificate Manager (ACM) or in-cluster cert-manager with a
 public ACME issuer (Let's Encrypt).
