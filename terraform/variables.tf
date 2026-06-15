@@ -294,6 +294,14 @@ variable "fenced_secret_breakglass_arns" {
   EOT
   type        = list(string)
   default     = []
+
+  validation {
+    # A bare "*" as a StringNotLike pattern matches every principal, which
+    # disables the deny entirely. Specific ARN patterns (with `*` wildcards
+    # inside them) are still allowed.
+    condition     = !contains(var.fenced_secret_breakglass_arns, "*")
+    error_message = "fenced_secret_breakglass_arns must not contain a bare \"*\" (it would disable the fence)."
+  }
 }
 
 variable "lgtm_push_hostnames" {

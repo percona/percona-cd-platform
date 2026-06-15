@@ -34,6 +34,7 @@ allow/deny; the returned value is never bound to a name or logged.
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import subprocess
@@ -45,7 +46,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 PROFILE = os.environ.get("AWS_PROFILE")
-ESO_ROLE_SUBSTR = "role/percona-ci-platform-external-secrets-"
+ESO_ROLE_NAME_PREFIX = "role/percona-ci-platform-external-secrets-"
 
 # Classification of the cluster's secrets.
 #   "fenced"   -> must be ESO-role-only (admin DENIED). Asserted hard.
@@ -88,8 +89,19 @@ def account_id() -> str:
 
 
 def _resource_policy(sm, sid: str) -> dict | None:
-    raw = sm.get_resource_policy(SecretId=sid).get("ResourcePolicy")
+    try:
+        raw = sm.get_resource_policy(SecretId=sid).get("ResourcePolicy")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+        raise
     return json.loads(raw) if raw else None
+
+
+def _action_covers_get_secret_value(action: str) -> bool:
+    """IAM-style wildcard match: does this Action string cover GetSecretValue?
+    Catches '*', 'secretsmanager:*', 'secretsmanager:Get*', case-insensitively."""
+    return fnmatch.fnmatchcase("secretsmanager:getsecretvalue", action.lower())
 
 
 def _admin_can_read(sm, sid: str) -> bool:
@@ -127,7 +139,7 @@ def test_no_public_or_cross_account_allow(sm, account_id, sid):
             continue
         actions = st.get("Action", [])
         actions = [actions] if isinstance(actions, str) else actions
-        if not any("GetSecretValue" in a or a == "secretsmanager:*" for a in actions):
+        if not any(_action_covers_get_secret_value(a) for a in actions):
             continue
         principals = st.get("Principal", {})
         vals = []
@@ -151,17 +163,26 @@ def test_fenced_secret_blocks_admin(sm, privileged, sid):
 
 
 @pytest.mark.parametrize("sid", FENCED)
-def test_fenced_secret_allowlist_is_eso_only(sm, sid):
+def test_fenced_secret_allowlist_is_eso_only(sm, account_id, sid):
     pol = _resource_policy(sm, sid)
     assert pol is not None, f"{sid} must carry a resource policy"
     deny = [s for s in pol["Statement"] if s.get("Effect") == "Deny"]
     assert deny, f"{sid}: expected a deny-by-default statement"
-    allowlist = deny[0]["Condition"]["StringNotLike"]["aws:PrincipalArn"]
+    st = deny[0]
+    # full deny-by-default shape, not just the allowlist
+    actions = st.get("Action")
+    actions = [actions] if isinstance(actions, str) else actions
+    assert "secretsmanager:GetSecretValue" in actions, f"{sid}: deny must target GetSecretValue"
+    assert st.get("Principal") == "*", f"{sid}: deny Principal must be '*'"
+    allowlist = st.get("Condition", {}).get("StringNotLike", {}).get("aws:PrincipalArn")
+    assert allowlist is not None, f"{sid}: deny must use StringNotLike on aws:PrincipalArn"
     allowlist = [allowlist] if isinstance(allowlist, str) else allowlist
-    # exactly the ESO role, nothing else -> break-glass allowlist is empty
+    # exactly the in-account ESO role, no wildcard -> break-glass allowlist is empty
     assert len(allowlist) == 1, f"{sid}: break-glass must be empty; allowlist={allowlist}"
-    assert ESO_ROLE_SUBSTR in allowlist[0], (
-        f"{sid}: sole allowed principal must be the ESO role; got {allowlist[0]}")
+    arn = allowlist[0]
+    assert "*" not in arn, f"{sid}: allowlisted principal must not contain a wildcard; got {arn}"
+    assert arn.startswith(f"arn:aws:iam::{account_id}:{ESO_ROLE_NAME_PREFIX}"), (
+        f"{sid}: sole allowed principal must be the in-account ESO role; got {arn}")
 
 
 def test_open_app_creds_have_no_resource_policy(sm):

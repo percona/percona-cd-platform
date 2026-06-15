@@ -13,6 +13,7 @@ docs/security-review-2026-05-07.md). Assertions match tokens that survive
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 
@@ -26,35 +27,54 @@ def _tf(name: str) -> str:
     return (TF_DIR / name).read_text()
 
 
+def _fenced_map(tf: str) -> str:
+    """The body of the `fenced_secrets = { ... }` local, comments excluded."""
+    m = re.search(r"fenced_secrets\s*=\s*\{(.*?)\}", tf, re.DOTALL)
+    assert m, "fenced_secrets map not found in secrets-policies.tf"
+    return "\n".join(
+        ln for ln in m.group(1).splitlines() if not ln.lstrip().startswith("#"))
+
+
+def _policy_block(tf: str) -> str:
+    """From the policy resource declaration to EOF (it is the last resource)."""
+    m = re.search(
+        r'resource\s+"aws_secretsmanager_secret_policy"\s+"fenced".*', tf, re.DOTALL)
+    assert m, "aws_secretsmanager_secret_policy.fenced resource not found"
+    return m.group(0)
+
+
 def test_both_high_value_secrets_are_fenced() -> None:
-    tf = _tf(POLICY)
-    assert "percona-ci-platform/grafana/admin" in tf
-    assert "percona-ci-platform/authentik/saml/private_key" in tf
+    """The two secret names must be VALUES in the fenced_secrets map, not just
+    mentioned in a comment somewhere."""
+    m = _fenced_map(_tf(POLICY))
+    assert re.search(r'=\s*"percona-ci-platform/grafana/admin"', m)
+    assert re.search(r'=\s*"percona-ci-platform/authentik/saml/private_key"', m)
 
 
 def test_public_saml_cert_is_not_fenced() -> None:
     """The certificate half is the public SP cert; fencing it adds no security
-    and would only risk breaking ESO sync. (The comment may name it; what must
-    be absent is the quoted secret name as a fenced_secrets map entry.)"""
-    assert '"percona-ci-platform/authentik/saml/certificate"' not in _tf(POLICY)
+    and would only risk breaking ESO sync. It must not be a map entry (a comment
+    mention is fine)."""
+    m = _fenced_map(_tf(POLICY))
+    assert not re.search(r'=\s*"percona-ci-platform/authentik/saml/certificate"', m)
 
 
 def test_fence_is_deny_get_secret_value() -> None:
-    tf = _tf(POLICY)
-    assert "aws_secretsmanager_secret_policy" in tf
-    assert '"DenyGetSecretValueExceptAllowlist"' in tf
-    assert '"Deny"' in tf
-    assert '"secretsmanager:GetSecretValue"' in tf
+    block = _policy_block(_tf(POLICY))
+    assert '"DenyGetSecretValueExceptAllowlist"' in block
+    assert re.search(r'Effect\s*=\s*"Deny"', block)
+    assert re.search(r'Action\s*=\s*"secretsmanager:GetSecretValue"', block)
+    assert re.search(r'Principal\s*=\s*"\*"', block)
 
 
 def test_fence_allowlists_only_eso_role_plus_breakglass() -> None:
     """Deny everyone except the ESO pod-identity role and the (empty by default)
     break-glass var. A wider allowlist would defeat the fence."""
-    tf = _tf(POLICY)
-    assert "StringNotLike" in tf  # HCL identifier key, unquoted
-    assert '"aws:PrincipalArn"' in tf
-    assert "module.pod_identity_external_secrets.iam_role_arn" in tf
-    assert "var.fenced_secret_breakglass_arns" in tf
+    block = _policy_block(_tf(POLICY))
+    assert re.search(r'StringNotLike\s*=\s*\{', block)
+    assert '"aws:PrincipalArn"' in block
+    assert "module.pod_identity_external_secrets.iam_role_arn" in block
+    assert "var.fenced_secret_breakglass_arns" in block
 
 
 def test_fence_attaches_via_data_source_lookup() -> None:
@@ -62,7 +82,7 @@ def test_fence_attaches_via_data_source_lookup() -> None:
     through a data source rather than a managed aws_secretsmanager_secret."""
     tf = _tf(POLICY)
     assert 'data "aws_secretsmanager_secret" "fenced"' in tf
-    assert "secret_arn = data.aws_secretsmanager_secret.fenced" in tf
+    assert "secret_arn = data.aws_secretsmanager_secret.fenced" in _policy_block(tf)
 
 
 def test_authentik_config_fence_still_present() -> None:
