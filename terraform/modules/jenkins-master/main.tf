@@ -891,6 +891,14 @@ resource "aws_instance" "master" {
   root_block_device {
     encrypted   = true
     volume_size = var.root_volume_size
+
+    # Provider default_tags reach the root volume, but the instance-level
+    # identity tags (Name/iit-billing-tag/team) do not, so assert them here.
+    tags = {
+      Name              = var.short_name
+      "iit-billing-tag" = var.short_name
+      team              = var.team
+    }
   }
 
   tags = {
