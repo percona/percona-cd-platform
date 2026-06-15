@@ -122,12 +122,6 @@ output "argocd_hostname" {
   value       = var.argocd_hostname
 }
 
-# Origins (origins.tf)
-output "jenkins_origin_records" {
-  description = "FQDNs of all created origin-<host>.cd.percona.com records (Mode B proxy upstreams)."
-  value       = [for h, _ in local.jenkins_origin_records : "origin-${h}.${var.route53_zone_name}"]
-}
-
 # Backup (backup.tf)
 output "backup_vault_arn" {
   description = "AWS Backup vault ARN holding daily snapshots of stateful PVCs."

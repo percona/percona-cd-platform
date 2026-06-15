@@ -29,10 +29,10 @@ Out of scope:
   runbook's examples say `ps3`, they refer to the EC2 master as it existed
   during the original cutover, not the in-cluster controller that serves
   `ps3.cd` today.
-- The upstream `origin-<host>` Route53 record and the `jenkins_hosts`
-  TF entry are prerequisites handled outside this runbook (operator
-  populates them ahead of the first cutover; see comments in
-  `terraform/variables.tf` and `terraform/origins.tf`).
+- Master upstream discovery is a prerequisite handled outside this
+  runbook: the `jenkins-endpoint-reconciler` addon must list the host (it
+  then keeps the `jenkins-<host>` Service EndpointSlice synced to the live
+  master IP).
 
 ## Prerequisites
 
@@ -41,8 +41,8 @@ Out of scope:
 - Operator has `percona-dev-admin` AWS credentials.
 - Operator can `kubectl` against `percona-ci-platform`.
 - Operator can reach the master via EC2 Instance Connect Endpoint (`paws ec2 ssh <host>`); the per-master SSH /32 is being retired.
-- `<host>` is registered in `var.jenkins_hosts` and has its upstream
-  Route53 record populated (see "Out of scope" above).
+- `<host>` is listed in the `jenkins-endpoint-reconciler` addon and has its
+  `jenkins-<host>` Service EndpointSlice populated (see "Out of scope" above).
 - The master's VPC CIDR does not conflict with EKS VPC (`10.220.0.0/16`)
   nor with any already-peered master VPC. Renumber first if it does
   (the ps3 cutover renumbered `10.177.0.0/22` -> `10.181.0.0/22`).

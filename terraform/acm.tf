@@ -1,10 +1,8 @@
 # Owner: platform
 # Wildcard ACM cert for *.cd.percona.com.
 # Single cert covers every host the platform serves through the shared ALB:
-# argocd, grafana, the 9 jenkins-proxy friendly names, ps3-k8s, and any
-# future *.cd.percona.com endpoint. Origin records (origin-<host>.cd.percona.com
-# — see origins.tf) sit on the same wildcard, but the in-cluster proxy is a
-# TLS *client* there, not a server, so the cert only ever terminates at the
+# argocd, grafana, the jenkins-proxy friendly names, ps3-k8s, and any
+# future *.cd.percona.com endpoint. The cert only ever terminates at the
 # ALB.
 #
 # DNS-validated via the existing public hosted zone. Validation records are

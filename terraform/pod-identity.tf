@@ -261,9 +261,7 @@ module "pod_identity_tempo" {
 # ---------------------------------------------------------------------------
 # jenkins-endpoint-reconciler — CronJob in the cluster that reconciles
 # EC2 Jenkins master IPs into K8s EndpointSlices (resources/addons/
-# jenkins-endpoint-reconciler/). Replaces the Terraform-driven origin-<host>
-# Route53 records: discovery happens continuously in the cluster, not on
-# `tofu apply`. See ADR 0019 amendment.
+# jenkins-endpoint-reconciler/). See ADR 0035.
 # ---------------------------------------------------------------------------
 
 module "pod_identity_jenkins_endpoint_reconciler" {

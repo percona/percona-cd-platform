@@ -97,8 +97,6 @@ Convergence is bounded at roughly one minute with no human in the loop.
 - Changes are canaryable with zero production blast radius: a one-off Job
   with a `HOSTS_JSON` subset and `TARGET_NAMESPACE` pointed at a sandbox
   namespace reproduces production behavior end to end.
-- `terraform/origins.tf` retirement is follow-up cleanup once the override
-  path is confirmed unneeded.
 
 ## References
 

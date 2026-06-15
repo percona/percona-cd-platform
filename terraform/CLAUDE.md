@@ -80,6 +80,10 @@ Everything else (wiring, eks-*, cleanup, iam-jenkins-*, substrate) is
 - **Third person**, no colleague names, no first-person we/our/us.
 - **Dates only when load-bearing** ("since 2026-05", an incident that explains
   a sizing choice); move narratives to ADRs/runbooks.
+- **No tombstones.** When a resource is removed, delete every reference to it.
+  Never leave "former/retired/legacy X" or "used to be Y" notes. Comments
+  state current behavior in the present tense. Git history carries what was
+  removed.
 - Keep the house strength: a header block stating WHAT the file owns and WHY
   the non-obvious choices were made, with ADR/docs anchors.
 
