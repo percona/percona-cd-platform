@@ -28,7 +28,9 @@ image:
   tag: 1.27-alpine
   pullPolicy: IfNotPresent
 
-replicaCount: 2
+# HA web plane de-pin: 3 replicas, hard-spread across >=2 AZs via the dedicated
+# `ingress` Karpenter NodePool. A single-AZ event can no longer take every master UI dark.
+replicaCount: 3
 
 resources:
   requests:

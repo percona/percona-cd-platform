@@ -1,0 +1,68 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: ingress
+spec:
+  template:
+    metadata:
+      labels:
+        # Tier taxonomy: the jenkins-ingress nginx proxy opts in via the matching
+        # nodeSelector + toleration. The taint below makes the pool exclusive so the
+        # single-AZ default-pool tenants (e.g. the Tempo read path) never follow the
+        # proxy onto these multi-AZ nodes.
+        workload.percona.com/tier: ingress
+        workload.percona.com/managed-by: karpenter
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: kubernetes.io/os
+          operator: In
+          values: [linux]
+        # Spot-first, on-demand fallback. The proxy is stateless and HA across AZs, so a
+        # spot reclaim in one AZ never takes the web plane down; on-demand backstops a
+        # spot capacity crunch.
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [spot, on-demand]
+        # Burstable t3a/t3.medium is the active, cheapest fit for a light proxy (ADR 0019
+        # keeps large artifact downloads off this path); the gen-7 large families are
+        # non-burstable fallbacks when burstable capacity is constrained. t3a.small is
+        # deliberately excluded: ~1.25Gi kube/system reserves + a 500Mi eviction threshold
+        # leave a 2Gi node too tight once DaemonSets land.
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: [t3a.medium, t3.medium, c7a.large, c7i.large, m7a.large, m7i.large]
+        # The whole point: span all three AZs so the pod zone-spread can place replicas in
+        # >=2 of them. The default and lgtm-stateful pools are deliberately pinned to 1a.
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [us-east-1a, us-east-1b, us-east-1c]
+      taints:
+        - key: workload.percona.com/tier
+          value: ingress
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      # Roll nodes every 30 days for AMI freshness; the disruption budget below serialises it.
+      expireAfter: 720h
+
+  # Tiny footprint (a handful of proxy pods). Cap well below anything that could run away.
+  limits:
+    cpu: "8"
+    memory: 32Gi
+
+  disruption:
+    # WhenEmpty only: never bin-pack a serving proxy pod onto a smaller node to save cents.
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+    # At most one ingress node disrupted at a time; with the pod PDB (minAvailable: 2)
+    # this keeps the web plane serving through a node roll or the 720h expire wave.
+    budgets:
+      - nodes: "1"
+
+  # Above the default pool (weight 10) so the tolerating nginx pods land here, not on default.
+  weight: 60
