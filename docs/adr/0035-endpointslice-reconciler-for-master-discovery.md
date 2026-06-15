@@ -12,12 +12,13 @@ changes on every SpotFleet replacement and AZ failover, and the masters are
 EIP-less, so nothing about an instance's addressing is stable across a
 rotation.
 
-The original mechanism was DNS shaped: `terraform/origins.tf` resolves each
+The original mechanism was DNS shaped: `terraform/origins.tf` resolved each
 master's private IP at `tofu apply` time (tag-filtered `data.aws_instances`)
-into an `origin-<host>.cd.percona.com` Route 53 record, and NGINX re-resolves
-the name every 5 s. It converges only when an operator runs an apply, errors
-mid-rotation when no instance is `running`, and publishes private IPs in a
-public zone.
+into an `origin-<host>.cd.percona.com` Route 53 record, and NGINX re-resolved
+the name every 5 s. It converged only when an operator ran an apply, errored
+mid-rotation when no instance was `running`, and published private IPs in a
+public zone. That machinery has since been deleted (#228); this reconciler is
+the sole upstream-discovery path.
 
 The `jenkins-endpoint-reconciler` CronJob replaced that path with the ps3
 cutover (PS-10945, PR #79, 2026-05-18) and now serves all eight proxied EC2
@@ -54,10 +55,10 @@ Convergence is bounded at roughly one minute with no human in the loop.
 ## Alternatives considered and rejected
 
 - **`origin-<host>` DNS records + apply-time discovery (the predecessor).**
-  Re-converges only on `tofu apply`, so every spot replacement needs an
-  operator action; the apply errors during the rotation window; private IPs
-  live in a public zone. The records remain solely as an operator override
-  and debugging path; no proxied upstream resolves them in the live values.
+  Re-converged only on `tofu apply`, so every spot replacement needed an
+  operator action, the apply errored during the rotation window, and private
+  IPs lived in a public zone. This mechanism was retired and deleted (#228), so
+  no records or operator override remain.
 - **Consul service discovery.** Wrong size for the problem, which is eight
   name-to-one-IP records refreshed at 1/min. Consul means a server quorum,
   agents on masters in five regions (or WAN federation), and ACL/TLS
