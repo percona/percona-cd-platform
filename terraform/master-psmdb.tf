@@ -64,6 +64,10 @@ module "psmdb" {
   purchasing_option       = "on-demand"
   on_demand_instance_type = "c7i-flex.2xlarge"
 
+  # 8 GB heap with G1GC tuning for the 16 GiB instance. Masters on 8 GiB
+  # boxes use the module default.
+  jvm_memory_opts = "-Xms6g -Xmx8g -Xss2m -XX:+UseG1GC -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200"
+
   # Distinct LT name so the module's launch template can coexist with the
   # CFN-created master template during the cutover (no name collision,
   # order-independent of delete-stack). The instance references the LT by ID.

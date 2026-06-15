@@ -240,6 +240,21 @@ variable "on_demand_instance_type" {
   default     = "c7i-flex.large"
 }
 
+variable "jvm_memory_opts" {
+  description = "Memory, stack, and GC arguments for the Jenkins JVM, spliced into JAVA_OPTS in the eks_observability systemd override. The base flags and the load-bearing durabletask/hetzner.rehydrate flags are fixed in the template around it and are not overridable here. The default matches the fleet baseline. Raise it only on instances with the RAM, e.g. psmdb's 16 GiB box runs -Xms6g -Xmx8g where an 8 GiB box cannot."
+  type        = string
+  default     = "-Xms3072m -Xmx4096m -Xss4m"
+
+  validation {
+    condition     = can(regex("-Xmx", var.jvm_memory_opts))
+    error_message = "jvm_memory_opts must set a -Xmx heap ceiling."
+  }
+  validation {
+    condition     = !can(regex("hetzner\\.rehydrate|durabletask", var.jvm_memory_opts))
+    error_message = "jvm_memory_opts is the memory/GC knob only. The durabletask and hetzner.rehydrate flags are fleet-invariant and fixed in the template. Do not set them here."
+  }
+}
+
 variable "launch_template_name" {
   description = "Override the master launch template name. null derives `<SHORT>MasterTemplate` (preserves ps3). Set a distinct value where a same-named CFN launch template must coexist during a CFN->TF cutover (ps80's CFN JMasterTemplate is literally `PS80MasterTemplate`)."
   type        = string

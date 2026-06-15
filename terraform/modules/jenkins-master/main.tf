@@ -717,6 +717,7 @@ locals {
     init_groovy_hooks       = var.init_groovy_hooks
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""
     init_groovy_files       = keys(local.init_groovy_all)
+    jvm_memory_opts         = var.jvm_memory_opts
   })
 }
 
