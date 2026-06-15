@@ -58,20 +58,21 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/instance: {{ .Release.Name }}
-        # Hard per-node spread: no two replicas share a node, so a single node loss (incl.
-        # the two same-AZ replicas) can never drop more than one pod. Forces a distinct
-        # ingress node per replica (3 nodes). matchLabelKeys scopes it per-revision so a roll
-        # (maxSurge 1 / maxUnavailable 0) does not deadlock on old pods holding the nodes.
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: DoNotSchedule
-          nodeAffinityPolicy: Honor
-          nodeTaintsPolicy: Honor
-          matchLabelKeys:
-            - pod-template-hash
-          labelSelector:
-            matchLabels:
-              app.kubernetes.io/instance: {{ .Release.Name }}
+      affinity:
+        podAntiAffinity:
+          # Hard one-pod-per-node: no two replicas share a node, so a single node loss
+          # (including the two same-AZ replicas) can never drop more than one pod. Karpenter
+          # provisions a distinct ingress node per replica. A topology spread with maxSkew 1
+          # is NOT enough here: with few nodes it still permits a 2+1 split. matchLabelKeys
+          # scopes this to the current revision so the maxSurge 1 / maxUnavailable 0 roll
+          # does not deadlock on old-revision pods holding the nodes.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              matchLabelKeys:
+                - pod-template-hash
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: {{ .Release.Name }}
       containers:
         - name: nginx
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
