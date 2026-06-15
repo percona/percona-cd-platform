@@ -1,7 +1,7 @@
 # Test deps for the scheduled cleanup Lambdas (terraform/lambdas/*/index.py).
 # Run from the repo root:
 #   uv run --with-requirements terraform/lambdas/tests/requirements.txt pytest terraform/lambdas/tests
-boto3>=1.43.25
+boto3>=1.43.29
 # cloudformation extra + openapi-spec-validator so moto's CFN model (which
 # transitively imports the apigateway model) actually works -- the EKS stack
 # tests exercise describe/create/delete stack. Upper-pinned to guard against a
@@ -9,4 +9,4 @@ boto3>=1.43.25
 moto[cloudformation]>=5.2.2,<6
 openapi-spec-validator>=0.9.0
 freezegun>=1.5.5
-pytest>=9.0.3
+pytest>=9.1.0
