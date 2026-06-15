@@ -254,6 +254,17 @@ runbook *ARGS:
 check-master-alloy *ARGS:
     uv run --no-project python3 scripts/check-master-alloy-mimir.py {{ARGS}}
 
+# Live audit: who can read the cluster's Secrets Manager secrets directly from AWS
+# (deny-by-default fence per secrets-policies.tf). Needs AWS creds; read-only, prints
+# no secret values. Static CI gate: terraform/lambdas/tests/test_secret_resource_policies.py.
+audit-secret-access: _require-aws-profile
+    uv run --no-project tests/integration/test_eso_secret_access_audit.py
+
+# Live audit: ArgoCD RBAC for the percona group (proves it cannot read secret
+# values). Needs the argocd CLI + a kube context; read-only.
+audit-argocd-rbac:
+    uv run --no-project tests/integration/test_argocd_percona_rbac.py
+
 # Drift gate (ADR 0029): assert each master's committed JCasC clouds configScript
 # is in sync with the shared catalog (resources/jenkins/clouds-catalog). Credential-free.
 clouds-render-check:

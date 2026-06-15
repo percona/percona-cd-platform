@@ -283,6 +283,19 @@ variable "authentik_secret_breakglass_arns" {
   default     = []
 }
 
+variable "fenced_secret_breakglass_arns" {
+  description = <<-EOT
+    Extra IAM principal ARN patterns allowed to GetSecretValue on the
+    out-of-band, ESO-synced fenced secrets (see secrets-policies.tf) besides
+    the ESO pod-identity role (aws:PrincipalArn StringNotLike patterns, `*`
+    wildcards allowed). Keep empty in normal operation. The deny covers
+    GetSecretValue only, so an administrator can always lift a lockout by
+    editing the resource policy itself.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "lgtm_push_hostnames" {
   description = <<-EOT
     Public ALB hostnames for external pushers (Jenkins masters with
