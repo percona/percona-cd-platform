@@ -8,6 +8,13 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  # Surge a new pod and wait for it Ready before removing an old one (maxUnavailable: 0),
+  # so the sole master web proxy never drops below its current serving count during a roll.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: jenkins-ingress
@@ -23,13 +30,49 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
     spec:
       priorityClassName: platform-default
+      # HA web plane de-pin: run on the dedicated multi-AZ `ingress` Karpenter
+      # NodePool (tainted) so the proxy spreads across AZs without scattering the single-AZ
+      # default-pool tenants (e.g. the Tempo read path). See nodepool-ingress.yaml.
+      nodeSelector:
+        workload.percona.com/tier: ingress
+        workload.percona.com/managed-by: karpenter
+      tolerations:
+        - key: workload.percona.com/tier
+          operator: Equal
+          value: ingress
+          effect: NoSchedule
       topologySpreadConstraints:
+        # Hard spread across >=2 AZs. minDomains: 2 forces a real second zone (an omitted
+        # minDomains defaults to 1, which DoNotSchedule would satisfy inside a single AZ).
+        # nodeAffinityPolicy/nodeTaintsPolicy Honor so the pool's zone requirement and the
+        # ingress taint are counted correctly; matchLabelKeys scopes skew math to this
+        # revision so a rollout's old+new pods do not fight the constraint.
         - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          minDomains: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          matchLabelKeys:
+            - pod-template-hash
           labelSelector:
             matchLabels:
               app.kubernetes.io/instance: {{ .Release.Name }}
+      affinity:
+        podAntiAffinity:
+          # Hard one-pod-per-node: no two replicas share a node, so a single node loss
+          # (including the two same-AZ replicas) can never drop more than one pod. Karpenter
+          # provisions a distinct ingress node per replica. A topology spread with maxSkew 1
+          # is NOT enough here: with few nodes it still permits a 2+1 split. matchLabelKeys
+          # scopes this to the current revision so the maxSurge 1 / maxUnavailable 0 roll
+          # does not deadlock on old-revision pods holding the nodes.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              matchLabelKeys:
+                - pod-template-hash
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: {{ .Release.Name }}
       containers:
         - name: nginx
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -91,7 +134,11 @@ metadata:
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
 spec:
-  minAvailable: 1
+  # 3 replicas, keep at least 2 up (allows one out at a time). minAvailable (not
+  # maxUnavailable) is a clean in-place update of the existing PDB field, and AlwaysAllow
+  # lets an already-unhealthy pod be evicted so a node drain cannot wedge on it.
+  minAvailable: 2
+  unhealthyPodEvictionPolicy: AlwaysAllow
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name }}
