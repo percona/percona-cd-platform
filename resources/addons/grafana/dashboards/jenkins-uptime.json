@@ -316,8 +316,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "transparent",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           }
