@@ -58,10 +58,13 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/instance: {{ .Release.Name }}
-        # Soft per-node spread so two replicas in the same AZ still prefer distinct nodes.
+        # Hard per-node spread: no two replicas share a node, so a single node loss (incl.
+        # the two same-AZ replicas) can never drop more than one pod. Forces a distinct
+        # ingress node per replica (3 nodes). matchLabelKeys scopes it per-revision so a roll
+        # (maxSurge 1 / maxUnavailable 0) does not deadlock on old pods holding the nodes.
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           nodeAffinityPolicy: Honor
           nodeTaintsPolicy: Honor
           matchLabelKeys:
