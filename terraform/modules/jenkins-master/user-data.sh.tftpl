@@ -194,7 +194,7 @@ start_jenkins() {
 		# enable Hetzner worker re-adoption on JVM restart so stranded
 		# Hetzner VMs from a crash are picked back up instead of reaped
 		# by OrphanedNodesCleaner during the 5-minute defer window.
-		Environment="JAVA_OPTS=-Djava.awt.headless=true -Xms3072m -Xmx4096m -Xss4m -server -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600 -Dhetzner.rehydrate.enabled=true -Dhetzner.rehydrate.grace-period-minutes=5"
+		Environment="JAVA_OPTS=-Djava.awt.headless=true ${jvm_memory_opts} -server -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=600 -Dhetzner.rehydrate.enabled=true -Dhetzner.rehydrate.grace-period-minutes=5"
 	EOF
 %{ endif ~}
 
