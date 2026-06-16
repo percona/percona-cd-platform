@@ -44,6 +44,10 @@ spec:
               ebsCsiRoleArn: '{{ metadata.annotations.ebs_csi_role_arn }}'
               externalSecretsRoleArn: '{{ metadata.annotations.external_secrets_role_arn }}'
               karpenterQueue: '{{ metadata.annotations.karpenter_sqs_name }}'
+              # EFS filesystem ID for the storageclass-efs StorageClass
+              # (parameters.fileSystemId). Sourced from terraform/efs.tf via the
+              # cluster-secret annotation. Addons that don't read it ignore it.
+              efsFileSystemId: '{{ metadata.annotations.efs_file_system_id }}'
 
             # LGTM bucket-name overrides. Each chart's umbrella values.yaml
             # uses placeholders that this block fills from the cluster-secret
