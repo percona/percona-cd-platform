@@ -711,6 +711,7 @@ locals {
     eip_allocation_id       = var.create_eip ? aws_eip.master[0].id : ""
     data_volume_id          = aws_ebs_volume.data.id
     jenkins_package_version = var.jenkins_package_version
+    packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook

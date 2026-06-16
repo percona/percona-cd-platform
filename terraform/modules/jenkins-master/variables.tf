@@ -158,6 +158,25 @@ variable "jenkins_package_version" {
   default     = "2.541.3"
 }
 
+variable "base_packages" {
+  description = "Baseline packages yum-installed on every master. Defaults restore diagnostic/operator tools standard AL2023 bundles but the minimal AMI omits (dig, vim, etc.). Set [] to install none."
+  type        = list(string)
+  default = [
+    "bind-utils",
+    "vim-enhanced",
+    "htop",
+    "tcpdump",
+    "traceroute",
+    "lsof",
+    "unzip",
+    "bzip2",
+  ]
+  validation {
+    condition     = alltrue([for p in var.base_packages : can(regex("^[a-zA-Z0-9._+-]+$", p))])
+    error_message = "Each base_packages entry must be a bare rpm name (yum token) with no spaces, empty strings, or shell metacharacters, since they interpolate into the boot script."
+  }
+}
+
 variable "create_termination_queue" {
   description = "Create SQS + EventBridge spot-interruption queue. All masters keep the default; spot-era defence-in-depth retained while the fleet runs on-demand."
   type        = bool
