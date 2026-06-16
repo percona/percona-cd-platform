@@ -98,6 +98,36 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   tags = local.tags
 }
 
+resource "aws_eks_addon" "efs_csi_driver" {
+  cluster_name                = module.eks.cluster_name
+  addon_name                  = "aws-efs-csi-driver"
+  addon_version               = lookup(var.addon_versions, "aws-efs-csi-driver", null)
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  # Controller pins to the system NG (multi-AZ on-demand, no spot interrupts),
+  # matching the EBS-CSI and CoreDNS placement. The node DaemonSet stays
+  # unrestricted — it must run on every node to perform the NFS mount. Dynamic
+  # provisioning creates an EFS access point per PVC (not an EBS volume), so the
+  # extraVolumeTags backstop the EBS driver carries does not apply here; the
+  # filesystem itself is tagged in efs.tf.
+  configuration_values = jsonencode({
+    controller = {
+      nodeSelector = { "workload.percona.com/tier" = "bootstrap" }
+      replicaCount = 2
+    }
+  })
+
+  # Pod Identity association is created in pod-identity.tf; depends_on keeps
+  # the addon from racing the agent.
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    module.pod_identity_efs_csi,
+  ]
+
+  tags = local.tags
+}
+
 resource "aws_eks_addon" "snapshot_controller" {
   cluster_name                = module.eks.cluster_name
   addon_name                  = "snapshot-controller"

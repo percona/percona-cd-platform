@@ -94,6 +94,24 @@ module "pod_identity_ebs_csi" {
   tags = local.tags
 }
 
+module "pod_identity_efs_csi" {
+  source  = local.modules.pod_identity.source
+  version = local.modules.pod_identity.version
+
+  name                      = "${local.cluster_name}-efs-csi"
+  attach_aws_efs_csi_policy = true
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "kube-system"
+      service_account = "efs-csi-controller-sa"
+    }
+  }
+
+  tags = local.tags
+}
+
 module "pod_identity_external_secrets" {
   source  = local.modules.pod_identity.source
   version = local.modules.pod_identity.version
