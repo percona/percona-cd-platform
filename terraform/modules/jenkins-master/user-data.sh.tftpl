@@ -73,6 +73,15 @@ install_software() {
     done
 
     retry yum -y install yum-utils wget cronie rsync bc jq
+
+    # Diagnostic/operator tools the minimal AMI omits (dig, vim, etc.).
+    # Best-effort: under set -o errexit, a missing or mistyped package logs a
+    # warning and is skipped instead of aborting the boot. The java/jenkins/ssm
+    # installs below have no such guard, so a failure there aborts the boot.
+%{ if packages != "" ~}
+    retry yum -y install ${packages} || echo "WARN: packages not fully installed: ${packages}" >&2
+%{ endif ~}
+
     wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
     sed -i 's/^repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/jenkins.repo
     grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
