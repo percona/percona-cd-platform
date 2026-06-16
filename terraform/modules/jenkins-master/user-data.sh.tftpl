@@ -75,11 +75,11 @@ install_software() {
     retry yum -y install yum-utils wget cronie rsync bc jq
 
     # Diagnostic/operator tools the minimal AMI omits (dig, vim, etc.).
-    # Best-effort: under set -o errexit, a missing or mistyped package logs a
-    # warning and is skipped instead of aborting the boot. The java/jenkins/ssm
-    # installs below have no such guard, so a failure there aborts the boot.
+    # strict=0 installs what it can and skips (but logs) any package it can't, so
+    # a single bad entry never drops the batch; the || echo guard keeps boot
+    # going under set -o errexit if the whole install fails.
 %{ if packages != "" ~}
-    retry yum -y install ${packages} || echo "WARN: packages not fully installed: ${packages}" >&2
+    retry yum -y install --setopt=strict=0 ${packages} || echo "WARN: base package install failed" >&2
 %{ endif ~}
 
     wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
