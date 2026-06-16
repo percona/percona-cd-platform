@@ -8,6 +8,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 |---|---|
 | Architecture: layered views, failure domains, decisions, open questions | [`architecture.md`](architecture.md) |
 | PoC history & lessons | [`poc-history.md`](poc-history.md), [`lessons-from-poc.md`](lessons-from-poc.md) |
+| CI antipatterns: what not to do on the platform, and why | [`ci-antipatterns.md`](ci-antipatterns.md) |
 
 ## Subsystems
 
