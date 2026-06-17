@@ -38,7 +38,7 @@ The chain, and the ownership boundary it creates:
 flowchart TB
     subgraph tf["Terraform owns (runs at apply time)"]
         helm["1: helm_release argocd<br/>chart pinned in versions.tf"]
-        secret["2: cluster Secret<br/>28 annotations carry the AWS facts"]
+        secret["2: cluster Secret<br/>29 annotations carry the AWS facts"]
         root["3: root Application<br/>argocd-bootstrap/root-app.yaml"]
         helm --> secret --> root
     end
@@ -99,7 +99,7 @@ The Secret (`argocd.argoproj.io/secret-type: cluster`, label
 `enabled: "true"`) is how Terraform facts reach Helm values. ApplicationSet
 [cluster generators](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Cluster/)
 select it by label and expose every annotation as a template parameter.
-The annotation contract today is 28 keys, grouped:
+The annotation contract today is 29 keys, grouped:
 
 - Identity: cluster name, account ID, region, VPC ID.
 - Ingress and DNS: Route53 zone, ACM wildcard ARN, the ArgoCD, Grafana,
@@ -109,6 +109,7 @@ The annotation contract today is 28 keys, grouped:
   interruption queue).
 - LGTM: three bucket names, three role ARNs, the KMS key, three push
   endpoints.
+- Storage: the EFS filesystem ID consumed by the efs-sc StorageClass.
 - Authentik SAML: enabled flag and the IdP metadata, base64-encoded so
   multi-line XML survives the annotation-to-values pipeline.
 

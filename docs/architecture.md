@@ -410,8 +410,8 @@ tainted. Two MNGs + three Karpenter NodePools.
 
 The `default` and `lgtm-stateful` Karpenter pools and the `prometheus_system`
 MNG are pinned to us-east-1a for the same reason: their workloads carry EBS
-volumes that must follow the pod, and multi-AZ there would require EFS (not
-provisioned). The `bootstrap` MNG and the `ingress` NodePool are multi-AZ (the
+volumes that must follow the pod, and multi-AZ there would require EFS, now available as `efs-sc` but kept
+off these latency-sensitive EBS workloads. The `bootstrap` MNG and the `ingress` NodePool are multi-AZ (the
 ingress proxy carries no EBS, so it spreads one replica per node across AZs).
 Everything stateful is on-demand, and spot appears in the `general` and
 `ingress` pools.
@@ -423,6 +423,7 @@ Everything stateful is on-demand, and spot appears in the `general` and
 | `gp3` | yes | Delete | Stateless scratch volumes |
 | `gp3-monitoring-1a-retain` | no | Retain | Grafana data, Authentik Postgres |
 | `gp3-jenkins-1a-retain` | no | Retain | In-cluster `JENKINS_HOME` |
+| `efs-sc` | no | Retain | ReadWriteMany volumes, multi-AZ |
 
 LGTM long-term data lives in S3 (Mimir blocks, Loki chunks, Tempo traces).
 
@@ -433,8 +434,8 @@ App-of-Apps (`argocd-bootstrap/root`) fans out to ApplicationSets reconciling
 `resources/jenkins/master/instances/` (one per in-cluster master).
 
 - **Bootstrap:** external-secrets, aws-load-balancer-controller,
-  external-dns, karpenter, storageclass-gp3, priorityclasses,
-  prometheus-operator-crds, snapscheduler
+  external-dns, karpenter, storageclass-gp3, storageclass-efs,
+  priorityclasses, prometheus-operator-crds, snapscheduler
 - **Identity:** authentik, headlamp
 - **Observability:** mimir, loki, tempo, grafana, alloy, alloy-gateway,
   prometheus-node-exporter, kube-state-metrics, mtr

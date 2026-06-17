@@ -1,0 +1,30 @@
+# EFS dynamic-provisioning StorageClass. Each PVC carves its own EFS access
+# point under the filesystem (terraform/efs.tf), enforcing a private POSIX
+# identity and root directory. Unlike the gp3 (EBS) classes this is
+# ReadWriteMany and multi-AZ. NOT the cluster default — gp3 stays default; opt
+# in with storageClassName: efs-sc.
+#
+# reclaimPolicy: Retain protects shared data — a PVC delete must not destroy the
+# access point and its directory. volumeBindingMode: Immediate because EFS is
+# regional with a mount target per AZ, so there is no node-topology constraint
+# to defer binding for (the gp3 classes use WaitForFirstConsumer for EBS AZ
+# affinity, which EFS does not have).
+#
+# No tagSpecification_* parameters: EFS provisions access points, not EBS
+# volumes, so the volume-cleanup reaper (which targets available EBS volumes)
+# does not apply. The filesystem itself carries the mandatory tags in efs.tf.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: {{ .Values.aws.efsFileSystemId }}
+  directoryPerms: "700"
+  gidRangeStart: "1000"
+  gidRangeEnd: "2000"
+  basePath: "/dynamic_provisioning"
+  ensureUniqueDirectory: "true"

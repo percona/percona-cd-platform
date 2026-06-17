@@ -248,6 +248,12 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       ebs_csi_role_arn          = module.pod_identity_ebs_csi.iam_role_arn
       external_secrets_role_arn = module.pod_identity_external_secrets.iam_role_arn
 
+      # EFS filesystem ID (efs.tf) — consumed by the storageclass-efs addon's
+      # StorageClass parameters.fileSystemId. The ID is not committable in YAML,
+      # so it flows through this annotation into the addons ApplicationSet
+      # valuesObject.
+      efs_file_system_id = aws_efs_file_system.platform.id
+
       # Karpenter — controller role + interruption queue + node role
       karpenter_iam_role_arn      = module.karpenter.iam_role_arn
       karpenter_sqs_name          = module.karpenter.queue_name

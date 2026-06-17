@@ -1,0 +1,6 @@
+# fileSystemId is injected at runtime from terraform/efs.tf via the addons
+# ApplicationSet valuesObject (aws.efsFileSystemId, see argocd-bootstrap/
+# applicationsets/addons.yaml). The placeholder keeps `helm template` and lint
+# working standalone.
+aws:
+  efsFileSystemId: fs-placeholder
