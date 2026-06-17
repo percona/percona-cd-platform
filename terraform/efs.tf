@@ -23,6 +23,23 @@ resource "aws_efs_file_system" "platform" {
   tags = merge(local.tags, {
     Name = "${local.cluster_name}-efs"
   })
+
+  # Shared data volume: never let an apply destroy or replace it. Removing the
+  # filesystem must be a deliberate, separate change (drop this block first).
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# EFS-managed automatic daily backups (AWS Backup). The tag-selected AWS Backup
+# plan in backup.tf only covers EBS volumes, so the EFS data the efs-sc
+# StorageClass will hold needs its own policy.
+resource "aws_efs_backup_policy" "platform" {
+  file_system_id = aws_efs_file_system.platform.id
+
+  backup_policy {
+    status = "ENABLED"
+  }
 }
 
 # NFS ingress from the cluster CIDR. Pods receive VPC-routable IPs via the

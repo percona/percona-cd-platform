@@ -17,9 +17,17 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: efs-sc
+  annotations:
+    # StorageClass mountOptions/parameters are immutable, so ArgoCD must
+    # delete and recreate the class to change them. Safe here: efs-sc has no
+    # bound PVCs and a StorageClass is only consulted at provision time, so any
+    # bound PVs are untouched. Same idiom as gp3-jenkins-1a-retain.
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 provisioner: efs.csi.aws.com
 reclaimPolicy: Retain
 volumeBindingMode: Immediate
+mountOptions:
+  - tls
 parameters:
   provisioningMode: efs-ap
   fileSystemId: {{ .Values.aws.efsFileSystemId }}
