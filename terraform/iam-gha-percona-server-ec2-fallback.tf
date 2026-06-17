@@ -266,15 +266,17 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
     }
   }
 
-  # Canonical's public Ubuntu 24.04 arm64 AMI ID SSM parameter. Scoped to
-  # the exact path; Canonical owns the parameter, the workflow only reads
-  # it.
+  # Canonical's public Ubuntu arm64 AMI ID SSM parameter. The version
+  # segment is wildcarded so a runner OS bump (24.04 -> 26.04 and beyond)
+  # needs no IAM change, and branches on different versions (8.0 on 24.04,
+  # 8.4/9.7 on 26.04) both resolve. Still bound to the canonical arm64
+  # gp3 path; Canonical owns the parameter, the workflow only reads it.
   statement {
     sid     = "ReadCanonicalUbuntuArm64Ami"
     effect  = "Allow"
     actions = ["ssm:GetParameter"]
     resources = [
-      "arn:aws:ssm:eu-central-1::parameter/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
+      "arn:aws:ssm:eu-central-1::parameter/aws/service/canonical/ubuntu/server/*/stable/current/arm64/hvm/ebs-gp3/ami-id",
     ]
   }
 
