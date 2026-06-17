@@ -115,7 +115,7 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/github_workflow"
-      values   = ["build"]
+      values   = ["builds"]
     }
 
     # Exact allowlist of tag keys the workflow sends. Note underscores --
