@@ -140,7 +140,11 @@ AWS_PROFILE=percona-dev-admin aws ec2 describe-instances --region eu-west-1 \
   schedule. It is a disable candidate: the volume is already preserved by the
   one-off snapshot + the S3 archive, so the daily DLM snapshots add cost for no
   benefit now the master is gone. Disable (do not delete the existing snapshots)
-  once the retained-home story is signed off.
+  once the retained-home story is signed off. For general orphan-snapshot
+  hygiene on other retired masters, see
+  [`orphaned-snapshot-cleanup.md`](orphaned-snapshot-cleanup.md); the
+  `eu-west-1` ps3 snapshots are out of scope there until this DLM policy is
+  retired.
 - **Stale chart-default orphan PVC.** A 1.3 GB `jenkins-ps3-k8s` PVC backed by
   `vol-00591943` (the Jenkins chart's default dynamic claim from an early boot,
   never the real home) is orphaned and can be deleted with its PV. This is the

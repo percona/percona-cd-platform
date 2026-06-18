@@ -346,8 +346,13 @@ today's production.
 
 - `pg` remains on CloudFormation and a SpotFleet, with on-box TLS. Its
   migration must follow the live-IAM-parity preflight.
-- Eight identity volumes are irreplaceable state. Snapshots exist, but the
-  restore drill is validated only for the in-cluster master.
+- Eight identity volumes are irreplaceable state. They are now covered by
+  Terraform-managed daily snapshots (one DLM policy per master region, 14
+  retained, copied to us-east-1 for cross-region durability), so a single
+  region loss is survivable at an explicit 24h RPO
+  ([ADR 0037](adr/0037-master-ebs-snapshot-rpo.md), restore procedure in
+  [`runbooks/disaster-recovery.md`](runbooks/disaster-recovery.md)). The
+  end-to-end restore drill is rehearsed only for the in-cluster master.
 - Controller-side configuration applied through the UI is invisible to git
   until codified. Treat any UI change as temporary.
 - The shared-services cell is single-region. A regional event degrades all

@@ -148,8 +148,19 @@ Metric counters expose this: `hetzner_rehydrate_failures_total{reason="ambiguous
 ### 6. Fresh-EBS rebuild
 
 The data EBS volume survives instance replacement (this is the common
-case). But on actual volume loss or snapshot restore, the new master
-gets a fresh `$JENKINS_HOME`:
+case). The volume is also covered by Terraform-managed daily snapshots
+(one DLM policy per master region, 14 retained, copied to us-east-1 for
+cross-region durability, 24h RPO per
+[ADR 0037](adr/0037-master-ebs-snapshot-rpo.md)), so an actual volume loss
+is recovered by restoring the latest snapshot into a new volume and
+re-attaching it (procedure in
+[`runbooks/disaster-recovery.md`](runbooks/disaster-recovery.md), the
+EC2 master DATA volume section). A snapshot restore brings back the
+`$JENKINS_HOME` content as of the snapshot, within the 24h RPO floor.
+
+The cases below describe a master that comes up on a genuinely fresh
+`$JENKINS_HOME` instead, either a volume loss with no snapshot to restore
+from or a deliberate clean start:
 
 - `credentials.xml` is gone → rehydrate creates the agent record, but
   the SSH launcher has no key, so each agent comes online and then
@@ -160,8 +171,12 @@ gets a fresh `$JENKINS_HOME`:
 - DC circuit-breaker state is gone → the first restart can stampede a
   still-sick datacenter (until the breakers re-trip on live failures).
 
-Mitigation: idempotent `init.groovy.d` for the `api-admin` user
-(deferred); baking persisted state into snapshots is the proper fix.
+Mitigation: a snapshot restore recovers this persisted state directly,
+since the managed daily snapshots capture `credentials.xml`, the
+`api-admin` user, and DC circuit-breaker state as of the snapshot
+([ADR 0037](adr/0037-master-ebs-snapshot-rpo.md)). The genuinely
+fresh-home path (no snapshot to restore from) still needs idempotent
+`init.groovy.d` for the `api-admin` user (deferred).
 
 ### 7. Hetzner API failure during the rehydrate pass
 

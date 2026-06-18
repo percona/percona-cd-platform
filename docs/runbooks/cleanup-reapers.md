@@ -9,6 +9,11 @@ Both reapers ship `DRY_RUN="true"`: they log every WOULD-delete decision but
 delete nothing until deliberately armed. Arming is a reviewed code change, never
 a one-off CLI flag.
 
+These reapers act on EBS volumes and EC2 instances only, never on snapshots.
+Orphaned EBS snapshots left by CloudFormation `DeletionPolicy: Snapshot` are
+cleaned up by hand; see
+[`orphaned-snapshot-cleanup.md`](orphaned-snapshot-cleanup.md).
+
 ## What runs
 
 | Reaper | Function | Schedule | Sweeps | Targets |
