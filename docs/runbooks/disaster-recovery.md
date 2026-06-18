@@ -40,3 +40,32 @@ restore the EBS snapshot into a new volume in the target AZ, bind a `Retain`
 PVC to it, then let the manual-sync Application schedule the controller. Note
 the current default PVC reclaim policy is `Delete`; the pilot must switch it to
 `Retain` and AZ-pin it before it holds real data.
+
+## Restore an EC2 master DATA volume from a DLM snapshot
+
+The EC2 masters (every master except the in-cluster ps3-k8s) are snapshotted by
+the per-region DLM policies in `terraform/ebs-snapshots.tf`: daily, 14 retained,
+24h RPO per [ADR 0037](../adr/0037-master-ebs-snapshot-rpo.md).
+
+1. Find the latest snapshot of the master's data volume (for a region loss, use
+   the cross-region copy with `--region us-east-1` instead):
+
+   ```sh
+   AWS_PROFILE=percona-dev-admin aws ec2 describe-snapshots --region <region> \
+     --owner-ids self \
+     --filters Name=tag:snapshot-policy,Values=jenkins-master \
+       "Name=tag:Name,Values=jenkins-<inst> DATA, do not remove" \
+     --query 'reverse(sort_by(Snapshots,&StartTime))[0].{id:SnapshotId,t:StartTime}'
+   ```
+
+2. Create a volume from the snapshot in the master's AZ (EBS is AZ-bound; the
+   jenkins-master module pins `az_index`):
+
+   ```sh
+   aws ec2 create-volume --region <region> --availability-zone <az> \
+     --snapshot-id <snap> --volume-type gp3
+   ```
+
+3. Stop the master, detach the live data volume, attach the restored one at the
+   same device, start the master. Data written since the last snapshot (up to
+   the 24h RPO floor) is lost.
