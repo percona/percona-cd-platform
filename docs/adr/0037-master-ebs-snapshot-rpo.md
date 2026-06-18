@@ -4,6 +4,8 @@
 **Status:** Accepted (2026-06-18)
 **Related:** [ADR 0026](0026-canary-dr-operating-model.md) (closes its flagged "24h EBS-RPO floor as an unmade decision"), [ADR 0028](0028-jenkins-dynamic-config-data-lifecycle.md) (the `workload=jenkins` vault-leak constraint, and the in-cluster snapscheduler vehicle this reconciles with), [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (ownership boundary: out-of-band resources have no owner), [docs/eks-hardening.md](../eks-hardening.md) item #14.
 
+> **Implementation status: APPLIED (2026-06-18).** The Terraform DLM module and `ebs-snapshots.tf` are applied to AWS: one ENABLED policy per master region on the new role, and all nine master data volumes carry `snapshot-policy=jenkins-master` (pg tagged in place via `aws_ec2_tag`). Coverage is verified live. STILL PENDING one daily cycle: the first daily snapshot firing per master volume, the cross-region copy landing in us-east-1, and the retirement of the 12 legacy console DLM policies (which includes the fb and ps3 orphans).
+
 ## Context
 
 The durability of every EC2 Jenkins master was set by 12 hand-made AWS console DLM policies, created in 2023 on the console default role, present in no IaC. They have three problems:
@@ -46,7 +48,7 @@ Only the `JENKINS_HOME` data volumes are covered. Root/OS volumes are rebuildabl
 
 ## Acceptance criteria
 
-- Every master data volume (including pg) is matched by exactly one Terraform-managed DLM policy.
-- A daily snapshot is observed per master data volume, and a cross-region copy lands in us-east-1 within one cycle.
-- Zero policies remain on the console default DLM role, and the fb and ps3 orphans are gone.
+- (met) Every master data volume (including pg) is matched by exactly one Terraform-managed DLM policy.
+- (pending) A daily snapshot is observed per master data volume, and a cross-region copy lands in us-east-1 within one cycle.
+- (pending) Zero policies remain on the console default DLM role, and the fb and ps3 orphans are gone.
 - The existing snapshot history is preserved through the cutover.
