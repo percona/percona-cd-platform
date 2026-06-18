@@ -3,6 +3,7 @@
 **Status:** Accepted (2026-05-04)
 **Related:** [ADR 0010](0010-distributed-lgtm.md), [eks-hardening.md](../eks-hardening.md)
 **Superseded in part by:** [ADR 0015](0015-lgtm-bucket-object-lock-removed.md) — decision **H5** (S3 Object Lock COMPLIANCE retention on the LGTM buckets) was reversed: Object Lock broke Loki's PutObject path, so retention moved to lifecycle expiration. The bucket-level Object Lock flag remains structurally enabled but dormant (it cannot be disabled post-creation).
+**Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) — decision **H4** (Multi-AZ NAT-GW, `one_nat_gateway_per_az = true`) was reversed on cost grounds. The single-AZ collapse pins all stateful workloads to us-east-1a, so a single NAT-GW there (`single_nat_gateway = true`) is the live posture, with the AZ egress SPOF accepted.
 
 ## Context
 
@@ -87,6 +88,11 @@ private subnet's route table points at its own AZ's NAT — AZ outage
 isolates that AZ's pods, doesn't black-hole the cluster. Cost delta:
 ~$32/mo idle × 2 extra NAT-GWs; data-transfer cost is dominated by S3
 gateway endpoint egress (free), not NAT-GW egress.
+
+> **Reversed by [ADR 0020](0020-lgtm-single-az-collapse.md) (2026-05-13).** The
+> single-AZ collapse pins every stateful workload to us-east-1a, so the multi-AZ
+> NAT spend buys no resilience the workloads can use. Live posture is a single
+> NAT in us-east-1a (`single_nat_gateway = true`), AZ egress SPOF accepted.
 
 ### H5 — S3 Object Lock (Compliance, 7 d) on LGTM buckets
 
