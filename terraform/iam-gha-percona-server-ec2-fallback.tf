@@ -299,10 +299,14 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
   }
 }
 
-# Trust + role wiring delegated to the in-repo module. The four-entry
-# subject_claims list intentionally pre-includes `refs/heads/trunk` and
-# `refs/heads/8.4` so the planned trunk + 8.4 follow-ups do not require an
-# IAM edit when they land.
+# Trust + role wiring delegated to the in-repo module. subject_claims is the
+# explicit StringEquals allowlist of percona-server OIDC subjects permitted to
+# assume the fallback role: the maintained arm64 build branches (8.0, 8.4,
+# 9.7), the development trunk, and same-repo pull requests. Each build branch
+# needs its own entry (the module forbids wildcard subs); a fork PR runs via
+# pull_request_target and presents its base-branch ref, so a new build branch
+# must be added here as well. See the module main.tf header for the
+# StringEquals (not StringLike) rationale.
 module "gha_percona_server_ec2_fallback" {
   source = "./modules/github-oidc-role"
 
@@ -312,8 +316,9 @@ module "gha_percona_server_ec2_fallback" {
 
   subject_claims = [
     "repo:percona/percona-server:ref:refs/heads/8.0",
-    "repo:percona/percona-server:ref:refs/heads/trunk",
     "repo:percona/percona-server:ref:refs/heads/8.4",
+    "repo:percona/percona-server:ref:refs/heads/9.7",
+    "repo:percona/percona-server:ref:refs/heads/trunk",
     "repo:percona/percona-server:pull_request",
   ]
 
