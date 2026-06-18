@@ -637,6 +637,9 @@ resource "aws_ebs_volume" "data" {
 
   tags = merge(local.base_tags, {
     Name = "${var.short_name} DATA, do not remove"
+    # Selects the volume into the per-region DLM snapshot policy
+    # (terraform/ebs-snapshots.tf, docs/adr/0037-master-ebs-snapshot-rpo.md).
+    "snapshot-policy" = "jenkins-master"
   })
 
   lifecycle {
@@ -786,6 +789,7 @@ resource "aws_launch_template" "master" {
       "iit-billing-tag" = var.short_name
       "PerconaKeep"     = "True"
       team              = var.team
+      "snapshot-policy" = "jenkins-master"
     }
   }
 
