@@ -79,10 +79,12 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
       values   = ["eu-central-1"]
     }
 
+    # Two 16 vCPU / 32 GB fallback shapes: c7g (arm64 Graviton) and c7i
+    # (x86_64). The workflow launches the type matching the build arch.
     condition {
       test     = "StringEquals"
       variable = "ec2:InstanceType"
-      values   = ["c7g.4xlarge"]
+      values   = ["c7g.4xlarge", "c7i.4xlarge"]
     }
 
     # Mandatory cleanup tags. Without these, the percona-dev-admin cleanup
@@ -266,17 +268,17 @@ data "aws_iam_policy_document" "gha_percona_server_ec2_fallback_perms" {
     }
   }
 
-  # Canonical's public Ubuntu arm64 AMI ID SSM parameter. The version
-  # segment is wildcarded so a runner OS bump (24.04 -> 26.04 and beyond)
-  # needs no IAM change, and branches on different versions (8.0 on 24.04,
-  # 8.4/9.7 on 26.04) both resolve. Still bound to the canonical arm64
-  # gp3 path; Canonical owns the parameter, the workflow only reads it.
+  # Canonical's public Ubuntu AMI ID SSM parameters for both build arches
+  # (arm64 and amd64). The version segment is wildcarded so a runner OS bump
+  # (24.04 -> 26.04 and beyond) needs no IAM change. Bound to the canonical
+  # gp3 path; Canonical owns the parameters, the workflow only reads them.
   statement {
-    sid     = "ReadCanonicalUbuntuArm64Ami"
+    sid     = "ReadCanonicalUbuntuAmi"
     effect  = "Allow"
     actions = ["ssm:GetParameter"]
     resources = [
       "arn:aws:ssm:eu-central-1::parameter/aws/service/canonical/ubuntu/server/*/stable/current/arm64/hvm/ebs-gp3/ami-id",
+      "arn:aws:ssm:eu-central-1::parameter/aws/service/canonical/ubuntu/server/*/stable/current/amd64/hvm/ebs-gp3/ami-id",
     ]
   }
 
