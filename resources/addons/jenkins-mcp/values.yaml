@@ -22,6 +22,7 @@ oidc:
   publicBaseUrl: https://jenkins-mcp.cd.percona.com
 
 host: jenkins-mcp.cd.percona.com
+ingressEnabled: true   # set false for a ClusterIP-only deploy (e.g. a port-forward smoke)
 
 # ESO: the fleet config (masters + read-only JNKPercona tokens) is one JSON blob in
 # AWS Secrets Manager, synced to a file the pod mounts. Provisioned out-of-band.
