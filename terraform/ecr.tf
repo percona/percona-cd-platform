@@ -25,7 +25,19 @@ resource "aws_ecr_repository" "jenkins_endpoint_reconciler" {
   }
 }
 
-# Keep storage bounded; both images are small and rebuilt rarely.
+# jenkins-mcp image (images/jenkins-mcp): a forked mcp-jenkins server exposing
+# read-only Jenkins fleet tools over MCP and authenticating callers via
+# Authentik OIDC; run by the jenkins-mcp addon behind the jenkins-cd ALB.
+resource "aws_ecr_repository" "jenkins_mcp" {
+  name                 = "percona-cd/jenkins-mcp"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+# Keep storage bounded; these images are small and rebuilt rarely.
 resource "aws_ecr_lifecycle_policy" "mtr_ingest" {
   repository = aws_ecr_repository.mtr_ingest.name
   policy     = local.ecr_keep_last_10
@@ -33,6 +45,11 @@ resource "aws_ecr_lifecycle_policy" "mtr_ingest" {
 
 resource "aws_ecr_lifecycle_policy" "jenkins_endpoint_reconciler" {
   repository = aws_ecr_repository.jenkins_endpoint_reconciler.name
+  policy     = local.ecr_keep_last_10
+}
+
+resource "aws_ecr_lifecycle_policy" "jenkins_mcp" {
+  repository = aws_ecr_repository.jenkins_mcp.name
   policy     = local.ecr_keep_last_10
 }
 
