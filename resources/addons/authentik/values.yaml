@@ -152,6 +152,7 @@ authentik:
       - authentik-blueprint-grafana
       - authentik-blueprint-argocd
       - authentik-blueprint-headlamp
+      - authentik-blueprint-jenkins-mcp
 
   # Bundled Bitnami Postgres — adequate for v1 (single Authentik replica,
   # session DB only). Migrate to RDS when scaling Authentik horizontally.

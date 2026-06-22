@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins-mcp
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jenkins-mcp
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      priorityClassName: platform-default
+      serviceAccountName: {{ .Release.Name }}
+      containers:
+        - name: jenkins-mcp
+          image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --transport
+            - streamable-http
+            - --host
+            - 0.0.0.0
+            - --port
+            - "9887"
+            {{- if .Values.readOnly }}
+            - --read-only
+            {{- end }}
+          env:
+            - name: HOME
+              value: /home/app
+            - name: MCP_JENKINS_FLEET_FILE
+              value: /etc/jenkins-mcp/fleet.json
+            {{- if .Values.oidc.issuer }}
+            - name: MCP_OIDC_ISSUER
+              value: {{ .Values.oidc.issuer | quote }}
+            - name: MCP_OIDC_JWKS_URI
+              value: {{ .Values.oidc.jwksUri | quote }}
+            - name: MCP_OIDC_AUDIENCE
+              value: {{ .Values.oidc.audience | quote }}
+            - name: MCP_PUBLIC_BASE_URL
+              value: {{ .Values.oidc.publicBaseUrl | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 9887
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: fleet
+              mountPath: /etc/jenkins-mcp
+              readOnly: true
+            - name: home
+              mountPath: /home/app
+      volumes:
+        - name: fleet
+          secret:
+            secretName: jenkins-mcp-fleet
+        - name: home
+          emptyDir: {}
