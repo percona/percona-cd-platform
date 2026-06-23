@@ -677,7 +677,7 @@ class Jenkins:
             A list of ItemType objects representing the items.
         """
         query = reduce(
-            lambda q, _: f'jobs[url,color,name,lastBuild[number,url],{q}]',
+            lambda q, _: f'jobs[url,color,name,lastBuild[number,url],assignedLabel[name],{q}]',
             range(folder_depth_per_request),
             'jobs',
         )
@@ -780,6 +780,7 @@ class Jenkins:
         class_pattern: str | None = None,
         fullname_pattern: str | None = None,
         color_pattern: str | None = None,
+        label_pattern: str | None = None,
     ) -> list['ItemType']:
         """Query items by specific field patterns.
 
@@ -789,12 +790,16 @@ class Jenkins:
             class_pattern: The pattern of the _class.
             fullname_pattern: The pattern of the fullname.
             color_pattern: The pattern of the color.
+            label_pattern: The pattern of the assigned agent label. Matches freestyle/matrix jobs
+                (which expose assignedLabel); pipeline jobs keep their label in the Jenkinsfile and
+                so never match.
 
         Returns:
             A list of ItemType objects matching the specified patterns.
         """
-        class_re, fullname_re, color_re = (
-            re.compile(pattern) if pattern else None for pattern in (class_pattern, fullname_pattern, color_pattern)
+        class_re, fullname_re, color_re, label_re = (
+            re.compile(pattern) if pattern else None
+            for pattern in (class_pattern, fullname_pattern, color_pattern, label_pattern)
         )
 
         items = self.get_items(folder_depth=folder_depth, folder_depth_per_request=folder_depth_per_request)
@@ -810,6 +815,10 @@ class Jenkins:
             if color_re:
                 # Only Job has color attribute
                 if not isinstance(item, Job | FreeStyleProject) or not color_re.search(item.color):
+                    continue
+            if label_re:
+                label = item.assigned_label_name()
+                if label is None or not label_re.search(label):
                     continue
             result.append(item)
 

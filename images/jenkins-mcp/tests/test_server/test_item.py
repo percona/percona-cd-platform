@@ -93,6 +93,28 @@ async def test_query_items(mock_jenkins, mocker):
 
 
 @pytest.mark.asyncio
+async def test_query_items_surfaces_label_and_passes_filter(mock_jenkins, mocker):
+    from mcp_jenkins.jenkins.model.item import AssignedLabel
+
+    mock_jenkins.query_items.return_value = [
+        Job(
+            fullname='fs',
+            color='blue',
+            name='fs',
+            url='1',
+            class_='FreeStyleProject',
+            assignedLabel=AssignedLabel(name='docker-aarch64'),
+        ),
+    ]
+
+    result = await item.query_items(mocker.Mock(), label_pattern='.*aarch64.*')
+
+    assert result['items'][0]['label'] == 'docker-aarch64'
+    assert 'assignedLabel' not in result['items'][0]  # surfaced as `label`, raw field not leaked
+    assert mock_jenkins.query_items.call_args.kwargs['label_pattern'] == '.*aarch64.*'
+
+
+@pytest.mark.asyncio
 async def test_build_item(mock_jenkins, mocker):
     mock_jenkins.build_item.return_value = None
 

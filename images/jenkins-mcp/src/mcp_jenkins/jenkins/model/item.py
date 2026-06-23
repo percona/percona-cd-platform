@@ -7,6 +7,10 @@ from mcp_jenkins.jenkins.model.build import Build
 ItemType = Union['Folder', 'MultiBranchProject', 'FreeStyleProject', 'Job', 'UnknownItem']
 
 
+class AssignedLabel(BaseModel):
+    name: str | None = None
+
+
 class _ItemBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -15,15 +19,25 @@ class _ItemBase(BaseModel):
     url: str
     fullname: str = Field(default=None, alias='fullName')
 
+    def assigned_label_name(self) -> str | None:
+        """The job's assigned agent label name, or None. Freestyle/matrix expose it; pipeline
+        (WorkflowJob) keeps its agent label in the Jenkinsfile, so this is None for them."""
+        label = getattr(self, 'assignedLabel', None)
+        if label is None:
+            return None
+        return label.get('name') if isinstance(label, dict) else getattr(label, 'name', None)
+
 
 class Job(_ItemBase):
     color: str
     lastBuild: Optional['Build'] = None
+    assignedLabel: Optional['AssignedLabel'] = None
 
 
 class FreeStyleProject(_ItemBase):
     color: str
     lastBuild: Optional['Build'] = None
+    assignedLabel: Optional['AssignedLabel'] = None
 
 
 class Folder(_ItemBase):

@@ -74,6 +74,7 @@ async def query_items(
     class_pattern: str = None,
     fullname_pattern: str = None,
     color_pattern: str = None,
+    label_pattern: str = None,
     folder_depth: int | None = None,
     limit: int = 200,
     master: MasterArg = None,
@@ -84,22 +85,31 @@ async def query_items(
         class_pattern: The pattern of the _class
         fullname_pattern: The pattern of the fullname
         color_pattern: The pattern of the color
+        label_pattern: Regex on the job's assigned agent label (where arch lives, e.g.
+            "docker-aarch64"). Matches FREESTYLE/MATRIX jobs that expose assignedLabel; PIPELINE
+            (WorkflowJob) jobs keep their agent label inside the Jenkinsfile, so they never match,
+            for those filter by fullname_pattern or read get_item_parameters.
         folder_depth: The maximum depth of folders to traverse. If None, traverses all levels.
         limit: Maximum items to return (capped at 2000).
 
     Returns:
-        A dict: items (compact: fullname, class, color), total (items found), returned, truncated.
+        A dict: items (compact: fullname, class, color, and label when the job exposes one), total
+        (items found), returned, truncated.
     """
     limit = max(1, min(limit, 2000))
-    items = [
-        i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild'})
-        for i in jenkins(ctx, master).query_items(
-            class_pattern=class_pattern,
-            fullname_pattern=fullname_pattern,
-            color_pattern=color_pattern,
-            folder_depth=folder_depth,
-        )
-    ]
+    items = []
+    for i in jenkins(ctx, master).query_items(
+        class_pattern=class_pattern,
+        fullname_pattern=fullname_pattern,
+        color_pattern=color_pattern,
+        label_pattern=label_pattern,
+        folder_depth=folder_depth,
+    ):
+        entry = i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild', 'assignedLabel'})
+        label = i.assigned_label_name()
+        if label:
+            entry['label'] = label
+        items.append(entry)
     return {
         'items': items[:limit],
         'total': len(items),

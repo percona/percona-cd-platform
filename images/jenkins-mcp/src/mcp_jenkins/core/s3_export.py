@@ -119,6 +119,23 @@ def upload_stream(response: Response, *, key: str, content_type: str, filename: 
     return stored
 
 
+def upload_bytes(data: bytes, *, key: str, content_type: str, filename: str) -> int:
+    """Upload an in-memory payload to S3 (for an already-read, size-bounded artifact member).
+
+    Used by the archive-extract path, where the member has been read into memory under a hard size
+    cap (so this never buffers an unbounded object). Returns the stored size in bytes.
+    """
+    client = _s3_client()
+    client.put_object(
+        Bucket=_bucket(),
+        Key=key,
+        Body=data,
+        ContentType=content_type,
+        ContentDisposition=f'attachment; filename="{filename}"',
+    )
+    return len(data)
+
+
 def presign_response(*, key: str, size: int, content_type: str, filename: str) -> dict:
     """Presign a time-limited GET and return the download metadata. The url is a bearer capability."""
     bucket = _bucket()

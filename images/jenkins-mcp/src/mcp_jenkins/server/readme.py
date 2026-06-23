@@ -25,11 +25,15 @@ _CATALOG = [
             ),
             (
                 'query_items',
-                'query_items(fullname_pattern?, color_pattern?, class_pattern?, folder_depth?, limit?, master?)',
+                'query_items(fullname_pattern?, class_pattern?, color_pattern?, label_pattern?, ..., master?)',
             ),
             (
                 'query_items',
-                '      filter jobs by name/class/color; flat compact list. Both return {items, total, truncated}.',
+                '      filter jobs by name/class/color/label; label_pattern = the agent label (arch, e.g. aarch64),',
+            ),
+            (
+                'query_items',
+                '      freestyle/matrix only (pipeline jobs keep their label in the Jenkinsfile, so they never match).',
             ),
             ('get_item', 'get_item(fullname, master?)             one job/folder'),
             ('get_item_config', 'get_item_config(fullname, master?)      job config XML'),
@@ -99,6 +103,22 @@ _CATALOG = [
                 'search_build_logs',
                 'search_build_logs(pattern, job_pattern, master?, ...)  grep build consoles across jobs (cost-bounded)',
             ),
+            (
+                'grep_build_artifact',
+                'grep_build_artifact(fullname, relative_path, pattern, archive_member?, number?, master?, ...)',
+            ),
+            (
+                'grep_build_artifact',
+                '      grep inside ONE artifact (or a member of a .tar.gz via archive_member); streamed + capped',
+            ),
+            (
+                'list_archive_artifact',
+                'list_archive_artifact(fullname, relative_path, glob?, number?, master?)  list members of a .tar.gz',
+            ),
+            (
+                'extract_archive_artifact',
+                'extract_archive_artifact(fullname, relative_path, member, number?, master?)  one member -> inline/S3',
+            ),
         ],
     ),
     (
@@ -133,6 +153,9 @@ _SAMPLES_READ = [
     '  "which masters are up?"                       -> list_masters()',
     '  "what jobs are on pxc?"                        -> get_all_items(master="pxc")',
     '  "pxc jobs (incl. folders) matching 8.0"        -> query_items(fullname_pattern=".*8.0.*", master="pxc")',
+    '  "arm64 (freestyle/matrix) jobs on ps80"        -> query_items(label_pattern=".*(aarch64|arm).*", master="ps80")',
+    '  "list logs in an MTR tarball"  -> list_archive_artifact(relative_path="...mtr_logs-5.tar.gz", glob="*.log")',
+    '  "grep a log inside a tarball"  -> grep_build_artifact(..., archive_member="<m>", pattern="ERROR")',
     '  "did the last build of <job> pass?"            -> get_build(fullname="<job>")',
     '  "console for <job> build 123"                  -> get_build_console_output(fullname="<job>", number=123)',
     '  "just the errors in a log"   -> get_build_console_output(fullname="<job>", pattern="(?i)error|fail")',
