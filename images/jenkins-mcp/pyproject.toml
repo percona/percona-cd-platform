@@ -1,6 +1,6 @@
 [project]
 name = "mcp-jenkins"
-version = "0.6.0"
+version = "0.7.0"
 description = "Token-free Jenkins fleet MCP gateway for Percona developers. Authenticates callers via Authentik (Duo) OIDC and holds a single read-only Jenkins credential; serves read-only fleet tools plus a writers-gated operate tier."
 readme = "README.md"
 license = "AGPL-3.0-only"

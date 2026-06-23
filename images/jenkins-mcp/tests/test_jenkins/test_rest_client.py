@@ -1275,6 +1275,36 @@ class TestItem:
             )
         ]
 
+    def test_query_items_label_pattern_and_tree(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'jobs': [
+                    {
+                        'name': 'fs-arm',
+                        'url': 'https://example.com/job/fs-arm/',
+                        '_class': 'hudson.model.FreeStyleProject',
+                        'color': 'blue',
+                        'fullName': 'fs-arm',
+                        'assignedLabel': {'name': 'docker-aarch64'},
+                    },
+                    {
+                        'name': 'pipe',
+                        'url': 'https://example.com/job/pipe/',
+                        '_class': 'hudson.model.WorkflowJob',
+                        'color': 'blue',
+                        'fullName': 'pipe',
+                    },
+                ]
+            }
+        )
+
+        matched = jenkins.query_items(label_pattern='.*aarch64.*')
+        # only the freestyle job exposes assignedLabel; the pipeline job has none -> excluded
+        assert [m.fullname for m in matched] == ['fs-arm']
+        assert matched[0].assigned_label_name() == 'docker-aarch64'
+        # the get_items tree must actually request the label
+        assert 'assignedLabel[name]' in mock_session.request.call_args.kwargs['url']
+
     def test_build_item(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(
             status_code=201, headers={'Location': 'https://example.com/queue/item/123/'}
