@@ -59,11 +59,17 @@ class _LimitedReader:
         self._read = 0
 
     def read(self, size: int = -1) -> bytes:
-        chunk = self._raw.read(size)
-        self._read += len(chunk)
-        if self._read > self._limit:
+        # Clamp the request to the remaining budget BEFORE reading. tarfile reads
+        # _block(tarinfo.size) in one call for PAX/GNU extended headers and member content, where
+        # tarinfo.size is attacker-controlled; without this clamp a single huge read would
+        # decompress past the cap into memory before any post-hoc check could fire (OOM via bomb).
+        remaining = self._limit - self._read
+        if remaining <= 0:
             msg = f'archive exceeds the {self._limit}-byte decompression limit'
             raise _ArchiveLimitError(msg)
+        want = remaining if size < 0 or size > remaining else size
+        chunk = self._raw.read(want)
+        self._read += len(chunk)
         return chunk
 
 
@@ -108,8 +114,8 @@ def _safe_member_name(member: str) -> str:
     if member.startswith('/') or '\\' in member or '..' in member.split('/'):
         msg = f'unsafe member path (absolute or traversal): {member!r}'
         raise ValueError(msg)
-    if any(ord(c) < 0x20 for c in member):
-        msg = f'member must not contain control characters: {member!r}'
+    if '"' in member or any(ord(c) < 0x20 for c in member):
+        msg = f'member must not contain control characters or quotes: {member!r}'
         raise ValueError(msg)
     return member
 
@@ -293,22 +299,22 @@ def _grep_member(
 ) -> tuple[list[dict], bool]:
     """Find a member (capped), validate it, and grep its lines through the bounded reader."""
     try:
-        tf = _open_tar(response)
-        for info in _iter_members(tf):
-            if info.name != member:
-                continue
-            if not _is_real_file(info):
-                msg = f'member is not a regular file: {member!r}'
-                raise ValueError(msg)
-            if info.size > _MAX_MEMBER_BYTES:
-                msg = f'member too large to read: {info.size} > {_MAX_MEMBER_BYTES} bytes'
-                raise ValueError(msg)
-            fobj = tf.extractfile(info)
-            if fobj is None:
-                msg = f'cannot read member: {member!r}'
-                raise ValueError(msg)
-            lines = _bounded_line_reader(fobj.read, holder)
-            return _grep_stream(lines, matcher=matcher, context_lines=context_lines, max_matches=max_matches)
+        with _open_tar(response) as tf:
+            for info in _iter_members(tf):
+                if info.name != member:
+                    continue
+                if not _is_real_file(info):
+                    msg = f'member is not a regular file: {member!r}'
+                    raise ValueError(msg)
+                if info.size > _MAX_MEMBER_BYTES:
+                    msg = f'member too large to read: {info.size} > {_MAX_MEMBER_BYTES} bytes'
+                    raise ValueError(msg)
+                fobj = tf.extractfile(info)
+                if fobj is None:
+                    msg = f'cannot read member: {member!r}'
+                    raise ValueError(msg)
+                lines = _bounded_line_reader(fobj.read, holder)
+                return _grep_stream(lines, matcher=matcher, context_lines=context_lines, max_matches=max_matches)
     except _ArchiveLimitError as e:
         raise ValueError(str(e)) from None
     except (tarfile.TarError, EOFError, OSError, zlib.error) as e:
@@ -346,24 +352,26 @@ async def list_archive_artifact(
     safe_path = _validate_relative_path(relative_path)
     _require_targz(safe_path)
     max_entries = max(1, min(max_entries, _MAX_ENTRIES))
-    match = (lambda _name: True) if glob in ('**', '*', '') else (lambda name: fnmatch.fnmatch(name, glob))
+    # fnmatchcase, not fnmatch: deterministic case-sensitivity regardless of host OS.
+    match = (lambda _name: True) if glob in ('**', '*', '') else (lambda name: fnmatch.fnmatchcase(name, glob))
 
     client = jenkins(ctx, master)
     number = _resolve_number(client, fullname, number)
     entries: list[dict] = []
     truncated = False
+    scan_limited = False
     with client.stream_build_artifact(fullname=fullname, number=number, relative_path=safe_path) as response:
         try:
-            tf = _open_tar(response)
-            for info in _iter_members(tf):
-                if not _is_real_file(info) or not _is_safe_name(info.name) or not match(info.name):
-                    continue
-                if len(entries) >= max_entries:
-                    truncated = True
-                    break
-                entries.append({'name': info.name, 'size': info.size})
+            with _open_tar(response) as tf:
+                for info in _iter_members(tf):
+                    if not _is_real_file(info) or not _is_safe_name(info.name) or not match(info.name):
+                        continue
+                    if len(entries) >= max_entries:
+                        truncated = True
+                        break
+                    entries.append({'name': info.name, 'size': info.size})
         except _ArchiveLimitError:
-            truncated = True  # stopped at a member-count / decompression cap; report partial
+            scan_limited = True  # hit the member-count / decompression cap (bomb guard), NOT normal truncation
         except (tarfile.TarError, EOFError, OSError, zlib.error) as e:
             msg = 'invalid or unsupported tar.gz archive'
             raise ValueError(msg) from e
@@ -374,6 +382,7 @@ async def list_archive_artifact(
         'entries': entries,
         'total_listed': len(entries),
         'truncated': truncated,
+        'scan_limited': scan_limited,
     }
 
 
@@ -414,22 +423,24 @@ async def extract_archive_artifact(
     data: bytes | None = None
     with client.stream_build_artifact(fullname=fullname, number=number, relative_path=safe_path) as response:
         try:
-            tf = _open_tar(response)
-            for info in _iter_members(tf):
-                if info.name != safe_member:
-                    continue
-                if not _is_real_file(info):
-                    msg = f'member is not a regular file: {safe_member!r}'
-                    raise ValueError(msg)
-                if info.size > _MAX_MEMBER_BYTES:
-                    msg = f'member too large to extract: {info.size} > {_MAX_MEMBER_BYTES} bytes (use the Jenkins UI)'
-                    raise ValueError(msg)
-                fobj = tf.extractfile(info)
-                if fobj is None:
-                    msg = f'cannot read member: {safe_member!r}'
-                    raise ValueError(msg)
-                data = fobj.read(info.size)
-                break
+            with _open_tar(response) as tf:
+                for info in _iter_members(tf):
+                    if info.name != safe_member:
+                        continue
+                    if not _is_real_file(info):
+                        msg = f'member is not a regular file: {safe_member!r}'
+                        raise ValueError(msg)
+                    if info.size > _MAX_MEMBER_BYTES:
+                        msg = (
+                            f'member too large to extract: {info.size} > {_MAX_MEMBER_BYTES} bytes (use the Jenkins UI)'
+                        )
+                        raise ValueError(msg)
+                    fobj = tf.extractfile(info)
+                    if fobj is None:
+                        msg = f'cannot read member: {safe_member!r}'
+                        raise ValueError(msg)
+                    data = fobj.read(info.size)
+                    break
         except _ArchiveLimitError as e:
             raise ValueError(str(e)) from None
         except (tarfile.TarError, EOFError, OSError, zlib.error) as e:

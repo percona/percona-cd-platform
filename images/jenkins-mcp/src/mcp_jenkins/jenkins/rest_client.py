@@ -23,6 +23,27 @@ from mcp_jenkins.jenkins.model.item import (
 from mcp_jenkins.jenkins.model.node import Node
 from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
+_MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS surface on an authenticated call)
+
+
+def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
+    """Compile a query_items filter pattern with a length cap and a sanitized error.
+
+    The matched strings are short (names/labels), but an uncapped or invalid user regex is a CPU /
+    error-leak surface, so bound the input and turn re.error into a clean ValueError (mirrors the
+    grep_build_artifact pattern guard).
+    """
+    if not pattern:
+        return None
+    if len(pattern) > _MAX_QUERY_PATTERN_LEN:
+        msg = f'pattern too long ({len(pattern)} > {_MAX_QUERY_PATTERN_LEN} chars)'
+        raise ValueError(msg)
+    try:
+        return re.compile(pattern)
+    except re.error as e:
+        msg = f'invalid regex pattern: {e}'
+        raise ValueError(msg) from e
+
 
 class Jenkins:
     DEFAULT_HEADERS = {'Content-Type': 'text/xml; charset=utf-8'}
@@ -798,7 +819,7 @@ class Jenkins:
             A list of ItemType objects matching the specified patterns.
         """
         class_re, fullname_re, color_re, label_re = (
-            re.compile(pattern) if pattern else None
+            _compile_query_pattern(pattern)
             for pattern in (class_pattern, fullname_pattern, color_pattern, label_pattern)
         )
 

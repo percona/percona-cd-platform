@@ -142,3 +142,14 @@ async def test_get_item_parameters(mock_jenkins, mocker):
         {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},
     ]
     mock_jenkins.get_item_parameters.assert_called_once_with(fullname='job1')
+
+
+def test_assigned_label_name_coerces_non_string():
+    from mcp_jenkins.jenkins.model.item import UnknownItem
+
+    # A matrix/maven job routes through UnknownItem with assignedLabel as a raw dict; a non-string
+    # name must coerce to None so it can never reach re.search() in query_items.
+    bad = UnknownItem(_class='hudson.matrix.MatrixProject', name='m', url='u', assignedLabel={'name': 123})
+    assert bad.assigned_label_name() is None
+    ok = UnknownItem(_class='hudson.matrix.MatrixProject', name='m', url='u', assignedLabel={'name': 'docker-aarch64'})
+    assert ok.assigned_label_name() == 'docker-aarch64'
