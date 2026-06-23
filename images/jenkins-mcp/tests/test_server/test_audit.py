@@ -186,11 +186,12 @@ async def test_middleware_increments_metrics(capture_audit, mocker):
 
 
 @pytest.mark.asyncio
-async def test_middleware_metric_carries_master_label(capture_audit, mocker):
+async def test_middleware_metric_master_label_known_passes_through(capture_audit, mocker):
     from prometheus_client import REGISTRY
 
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    mocker.patch('mcp_jenkins.server.audit.get_fleet', return_value=mocker.Mock(names=lambda: ['pxc', 'ps80']))
 
     ctx = mocker.Mock()
     ctx.message.name = 'get_build'
@@ -205,3 +206,27 @@ async def test_middleware_metric_carries_master_label(capture_audit, mocker):
     await audit.AuditMiddleware().on_call_tool(ctx, call_next)
     after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
     assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_middleware_metric_master_label_unknown_clamped_to_invalid(capture_audit, mocker):
+    from prometheus_client import REGISTRY
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    mocker.patch('mcp_jenkins.server.audit.get_fleet', return_value=mocker.Mock(names=lambda: ['pxc']))
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build'
+    ctx.message.arguments = {'master': 'bogus-not-in-fleet'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return 'ok'
+
+    labels = {'tool': 'get_build', 'status': 'ok', 'is_write': 'false', 'master': 'invalid'}
+    before = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
+    assert after == before + 1  # bogus master collapses to the 'invalid' label (cardinality bound)
+    assert json.loads(capture_audit[-1])['master'] == 'bogus-not-in-fleet'  # raw value kept in the log

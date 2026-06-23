@@ -785,8 +785,39 @@ class TestBuild:
                 url='https://example.com/job/example-job/3/',
                 number=3,
                 timestamp=1767975558000,
+                building=True,
             )
         ]
+
+    def test_get_running_builds_dedupes_across_executors(self, jenkins, mock_session, mocker):
+        # The same parallel build occupies several executors; it must be returned once.
+        executable = {
+            'number': 3,
+            'url': 'https://example.com/job/example-job/3/',
+            'timestamp': 1767975558000,
+            'fullDisplayName': 'Example Job #3',
+        }
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'computer': [
+                    {
+                        'displayName': 'node-1',
+                        'offline': False,
+                        'executors': [{'currentExecutable': executable}, {'currentExecutable': executable}],
+                    },
+                    {
+                        'displayName': 'node-2',
+                        'offline': False,
+                        'executors': [{'currentExecutable': executable}],
+                    },
+                ]
+            }
+        )
+
+        builds = jenkins.get_running_builds()
+        assert len(builds) == 1
+        assert builds[0].url == 'https://example.com/job/example-job/3/'
+        assert builds[0].building is True
 
     def test_get_build_artifacts(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(
@@ -1059,6 +1090,30 @@ class TestItem:
                 color='blue',
             ),
         ]
+
+    def test_get_items_requests_and_populates_last_build(self, jenkins, mock_session, mocker):
+        # Regression: search_build_logs relied on job.lastBuild, but the get_items tree never
+        # requested it, so lastBuild was always None and the cross-job search matched nothing.
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'jobs': [
+                    {
+                        'name': 'asan-mtr',
+                        'url': 'https://example.com/job/asan-mtr/',
+                        '_class': 'hudson.model.WorkflowJob',
+                        'color': 'yellow',
+                        'fullName': 'asan-mtr',
+                        'lastBuild': {'number': 10, 'url': 'https://example.com/job/asan-mtr/10/'},
+                    }
+                ]
+            }
+        )
+
+        items = jenkins.get_items()
+
+        assert items[0].lastBuild is not None
+        assert items[0].lastBuild.number == 10
+        assert 'lastBuild[number,url]' in mock_session.request.call_args.kwargs['url']
 
     def test_get_item(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(

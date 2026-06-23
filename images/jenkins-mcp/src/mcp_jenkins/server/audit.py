@@ -21,6 +21,8 @@ from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 from loguru import logger
 from prometheus_client import Counter, Histogram
 
+from mcp_jenkins.core.fleet import get_fleet
+
 # Config/script-mutating tools (job UPDATE, node config, script console): NEVER served in operate
 # mode; they stay tagged 'write' in the server modules so read-only/operate both exclude them.
 _CONFIG_TOOLS = frozenset({'set_item_config', 'set_node_config', 'run_groovy_script'})
@@ -79,6 +81,18 @@ _DENIED = Counter('mcp_authz_denied', 'Authorization denials on tool calls.', ['
 
 def _hash(value: str | None) -> str | None:
     return hashlib.sha256(value.encode()).hexdigest()[:16] if value else None
+
+
+def _master_label(name: str | None) -> str:
+    """Clamp the master to the fleet allowlist for the metric label (bounded cardinality).
+
+    The raw master arg/header is caller-controlled, so an unclamped label would let a typo or
+    abuse blow up Prometheus cardinality. Known fleet names pass through; unselected -> 'none';
+    anything else -> 'invalid'. Only the metric label is clamped; the audit log keeps the raw value.
+    """
+    if not name:
+        return 'none'
+    return name if name in get_fleet().names() else 'invalid'
 
 
 def _summarize_args(arguments: dict | None) -> dict:
@@ -162,7 +176,7 @@ class AuditMiddleware(Middleware):
             duration_s = time.perf_counter() - start
             record['duration_ms'] = round(duration_s * 1000, 1)
             is_write_label = 'true' if record['is_write'] else 'false'
-            master_label = record['master'] or 'none'
+            master_label = _master_label(record['master'])
             _CALLS.labels(tool=tool, status=record['status'], is_write=is_write_label, master=master_label).inc()
             _DURATION.labels(tool=tool, is_write=is_write_label, master=master_label).observe(duration_s)
             logger.bind(audit=True).info(json.dumps(record, default=str))
