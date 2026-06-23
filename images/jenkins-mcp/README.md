@@ -29,9 +29,10 @@ Facts that apply to every client:
   field name differs per client: Claude Code uses `--client-id` / `oauth.clientId`, Cursor uses
   `auth.CLIENT_ID`. Omit it and the client falls back to DCR and fails with "does not support
   dynamic client registration".
-- **Access.** Reads are open to any authenticated Percona user. The operate tier (build, replay,
-  stop, cancel) is served only to members of the `jenkins-mcp-writers` Authentik group, enforced
-  per call. Config and script mutation are never exposed. 31 tools total (27 read, 4 operate).
+- **Access.** Reads are open to any authenticated Percona user (including downloading a large log or
+  artifact to a short-lived signed S3 URL). The operate tier (build, replay, stop, cancel) is served
+  only to members of the `jenkins-mcp-writers` Authentik group, enforced per call. Config and script
+  mutation are never exposed. 33 tools total (29 read, 4 operate).
 - **Master selection.** Pick a master per call with the `master` argument (for example
   `master: "ps80"`), or pin a session default by sending the `x-jenkins-master` header. Allowlisted
   names only. Call `list_masters` to see them.
@@ -145,6 +146,19 @@ OIDC auth turns on when `MCP_OIDC_ISSUER` / `MCP_OIDC_JWKS_URI` / `MCP_OIDC_AUDI
 `MCP_PUBLIC_BASE_URL` are set; the fleet (masters + read-only tokens) is one JSON blob at
 `MCP_JENKINS_FLEET_FILE`. In production this runs as the `jenkins-mcp` addon on the
 percona-ci-platform EKS cluster, behind the `jenkins-cd` ALB.
+
+To run it locally, point it at a one-master fleet file and leave the OIDC vars unset, so it runs
+WITHOUT auth (local dev only):
+
+```sh
+echo '{"masters":[{"name":"ps80","url":"https://ps80.cd.percona.com/","username":"JNKPercona","token":"<api token>"}]}' > fleet.json
+MCP_JENKINS_FLEET_FILE=fleet.json uv run mcp-jenkins \
+  --transport streamable-http --host 127.0.0.1 --port 9887 --read-only
+curl -s http://127.0.0.1:9887/healthz   # -> OK
+```
+
+Operators: to add or remove a master, or grant the build (operate) tier, see
+[`../../docs/runbooks/jenkins-mcp-operate.md`](../../docs/runbooks/jenkins-mcp-operate.md).
 
 ## Develop
 
