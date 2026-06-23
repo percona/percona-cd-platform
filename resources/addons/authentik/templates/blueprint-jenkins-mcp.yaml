@@ -1,0 +1,85 @@
+{{/*
+Authentik blueprint — jenkins-mcp OIDC client (PUBLIC / PKCE).
+
+Companion to blueprint-grafana.yaml. Defines the OAuth2 provider the Jenkins
+MCP server validates bearer tokens against, plus the Application that surfaces
+it. The SAML source, group property mapping, and identification stage live in
+blueprint-grafana.yaml.
+
+Differs from the confidential web clients (grafana/argocd/headlamp): this is a
+PUBLIC client (client_type: public) for a CLI (Claude Code) that cannot hold a
+secret. PKCE is the result of client_type: public — Authentik requires a
+code_challenge and accepts no client secret on token exchange, so there is no
+client_secret here and therefore no Authentik env var / Secrets Manager key.
+
+The redirect is a loopback regex covering the CLI's ephemeral callback port
+(RFC 8252), modelled on the argocd provider. The MCP server is the OAuth2
+resource server: it validates the access-token aud against its configured
+audience, which is the client_id `jenkins-mcp` (Authentik stamps aud with the
+provider client_id, the same contract the headlamp client relies on).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprint-jenkins-mcp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- /* Required label for the chart's blueprint mount path. */}}
+    app.kubernetes.io/component: blueprint
+data:
+  jenkins-mcp-bridge.yaml: |
+    version: 1
+    metadata:
+      name: jenkins-mcp-bridge
+      labels:
+        blueprints.goauthentik.io/system: "true"
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        identifiers:
+          name: jenkins-mcp-provider
+        attrs:
+          client_id: jenkins-mcp
+          client_type: public
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          include_claims_in_id_token: true
+          access_token_validity:  minutes=30
+          refresh_token_validity: days=30
+          # Loopback regex covers Claude Code's ephemeral callback port (RFC 8252).
+          # The two strict cursor entries cover the Cursor MCP OAuth callback (web
+          # and the desktop deep link); Cursor pre-registers this same client_id.
+          redirect_uris:
+            - matching_mode: regex
+              url: ^http://(127\.0\.0\.1|localhost):[0-9]+/callback$
+            - matching_mode: strict
+              url: https://www.cursor.com/agents/mcp/oauth/callback
+            - matching_mode: strict
+              url: cursor://anysphere.cursor-mcp/oauth/callback
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          # openid + profile match the working grafana/argocd providers (profile
+          # carries `groups`); offline_access is bound so a refresh_token is
+          # issued for the CLI's cached session.
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
+
+      - model: authentik_core.application
+        identifiers:
+          slug: jenkins-mcp
+        attrs:
+          name: Jenkins MCP
+          provider: !Find [authentik_providers_oauth2.oauth2provider, [name, jenkins-mcp-provider]]
+          meta_launch_url: https://jenkins-mcp.cd.percona.com/
+          open_in_new_tab: false
+          policy_engine_mode: any
+          group: ""
+
+      # Access model: reads are open to any authenticated Percona user. There is no application
+      # policy binding, so the app does not restrict who may authorize. Users are JIT-provisioned
+      # via the Duo SSO SAML source on first login. The operate (build-lifecycle) tier is gated
+      # per-call by the server to the jenkins-mcp-writers group below.
+      - model: authentik_core.group
+        id: jenkins-mcp-writers
+        identifiers:
+          name: jenkins-mcp-writers

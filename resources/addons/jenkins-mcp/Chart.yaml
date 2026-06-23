@@ -1,0 +1,5 @@
+apiVersion: v2
+name: jenkins-mcp
+version: 0.1.0
+description: Forked mcp-jenkins server (read-only Jenkins fleet tools over MCP, Authentik OIDC) behind the jenkins-cd ALB.
+type: application

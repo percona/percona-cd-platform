@@ -1,0 +1,41 @@
+# AWS facts broadcast by the addons ApplicationSet (keeps the account id out of git).
+aws:
+  accountId: ""
+  region: us-east-1
+
+# First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
+image:
+  repository: percona-cd/jenkins-mcp
+  tag: "0.2.7"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+readOnly: true
+# Set enableOperate true (with readOnly false) to serve build-lifecycle tools (trigger/replay/
+# stop/cancel) after a fail-closed permission preflight, gated to the jenkins-mcp-writers group.
+enableOperate: false
+
+# OAuth2 resource-server auth against Authentik (Duo-backed). The server validates
+# bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the
+# Authentik client_id (Authentik stamps aud = client_id, as the headlamp client does).
+oidc:
+  issuer: https://auth.cd.percona.com/application/o/jenkins-mcp/
+  jwksUri: https://auth.cd.percona.com/application/o/jenkins-mcp/jwks/
+  audience: jenkins-mcp
+  publicBaseUrl: https://jenkins-mcp.cd.percona.com
+
+host: jenkins-mcp.cd.percona.com
+ingressEnabled: true   # set false for a ClusterIP-only deploy (e.g. a port-forward smoke)
+
+# ESO: the fleet config (masters + read-only JNKPercona tokens) is one JSON blob in
+# AWS Secrets Manager, synced to a file the pod mounts. Provisioned out-of-band.
+externalSecret:
+  remoteKey: percona-ci-platform/jenkins-mcp/fleet
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
