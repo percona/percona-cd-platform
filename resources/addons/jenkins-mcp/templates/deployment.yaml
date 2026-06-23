@@ -1,3 +1,6 @@
+{{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
+{{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. Refusing to render with no access mode, the server would otherwise serve every tool (including config/script mutation)." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +23,7 @@ spec:
     spec:
       priorityClassName: platform-default
       serviceAccountName: {{ .Release.Name }}
+      automountServiceAccountToken: false
       containers:
         - name: jenkins-mcp
           image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -41,16 +45,14 @@ spec:
               value: /home/app
             - name: MCP_JENKINS_FLEET_FILE
               value: /etc/jenkins-mcp/fleet.json
-            {{- if .Values.oidc.issuer }}
             - name: MCP_OIDC_ISSUER
-              value: {{ .Values.oidc.issuer | quote }}
+              value: {{ required "jenkins-mcp: oidc.issuer is required (refusing to render without OIDC auth)" .Values.oidc.issuer | quote }}
             - name: MCP_OIDC_JWKS_URI
-              value: {{ .Values.oidc.jwksUri | quote }}
+              value: {{ required "jenkins-mcp: oidc.jwksUri is required" .Values.oidc.jwksUri | quote }}
             - name: MCP_OIDC_AUDIENCE
-              value: {{ .Values.oidc.audience | quote }}
+              value: {{ required "jenkins-mcp: oidc.audience is required" .Values.oidc.audience | quote }}
             - name: MCP_PUBLIC_BASE_URL
-              value: {{ .Values.oidc.publicBaseUrl | quote }}
-            {{- end }}
+              value: {{ required "jenkins-mcp: oidc.publicBaseUrl is required" .Values.oidc.publicBaseUrl | quote }}
           ports:
             - name: http
               containerPort: 9887
