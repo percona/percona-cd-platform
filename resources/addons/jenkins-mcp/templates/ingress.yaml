@@ -18,7 +18,7 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: {{ .Values.host }}
+    - host: {{ required "jenkins-mcp: ingressHost is required" .Values.ingressHost }}
       http:
         paths:
           - path: /
