@@ -39,5 +39,6 @@ tag is bumped in `resources/addons/jenkins-mcp/values.yaml`.
 
 ## License
 
-MIT. This project began as a derivative of [mcp-jenkins](https://github.com/lanbaoshen/mcp-jenkins)
-and has been substantially rewritten by Percona. See `LICENSE` (the original copyright is retained).
+AGPL-3.0 (see `LICENSE`), matching the percona-cd-platform repository. This project began as a
+derivative of [mcp-jenkins](https://github.com/lanbaoshen/mcp-jenkins) (MIT) and has been
+substantially rewritten by Percona. The upstream MIT copyright is retained in `NOTICE`.

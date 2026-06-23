@@ -19,8 +19,9 @@ ENV HOME=/home/app
 RUN mkdir -p /home/app && chown 65532:65532 /home/app
 
 # Install deps first (this layer caches across source-only changes), then the
-# project. LICENSE is copied so the distributed image carries the MIT notice.
-COPY pyproject.toml uv.lock README.md LICENSE ./
+# project. LICENSE (AGPL-3.0) + NOTICE (retained upstream MIT attribution) are
+# copied so the distributed image carries both.
+COPY pyproject.toml uv.lock README.md LICENSE NOTICE ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
