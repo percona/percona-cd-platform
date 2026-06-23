@@ -6,9 +6,14 @@ from pathlib import Path
 import click
 from loguru import logger
 
+# Replace loguru's default handler. Audit records have their own pure-JSON stdout sink
+# (server.audit), so the human-formatted sinks below EXCLUDE them; otherwise the default handler
+# would re-emit every audit line in loguru format and double-log each tool call into Loki.
+logger.remove()
+logger.add(sys.stderr, level='INFO', filter=lambda r: not r['extra'].get('audit', False))
 try:
     LOG_DIR = Path.home() / '.mcp_jenkins'
-    logger.add(LOG_DIR / 'log.log', rotation='10 MB')
+    logger.add(LOG_DIR / 'log.log', rotation='10 MB', filter=lambda r: not r['extra'].get('audit', False))
 except Exception as e:  # noqa: BLE001
     logger.error(f'Failed to set up logger directory: {e}')
 
