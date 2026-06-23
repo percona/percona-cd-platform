@@ -93,6 +93,8 @@ jobs:
     needs: [lint, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     permissions:
       contents: read
       id-token: write          # ONLY this job mints the OIDC JWT
@@ -156,5 +158,71 @@ jobs:
           {
             echo "Pushed \`${REGISTRY}/${IMAGE_REPO}:${TAG}\`"
             echo "Digest \`${DIGEST}\`"
-            echo "To deploy: bump \`resources/addons/jenkins-mcp/values.yaml\` image.tag to \`${TAG}\`."
+            echo "A deploy bump PR for \`${TAG}\` is opened automatically by the bump job."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---- open a deploy bump PR for the just-pushed tag (verified commit, no GitHub App) ----
+  # createCommitOnBranch signs the commit with GitHub's key, so the bump PR meets main's
+  # required-signed-commits rule with no GPG key or GitHub App (mirrors refresh-fork-locks.yml).
+  # A human squash-merges the one-line PR to deploy; ArgoCD then syncs HEAD. The image is
+  # already built, smoke-booted, and pushed by publish, so the bump is pre-validated.
+  bump:
+    name: open deploy bump PR
+    if: github.event_name == 'push'
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write           # createCommitOnBranch on the bump branch
+      pull-requests: write      # gh pr create
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - name: open bump PR
+        env:
+          # An optional fine-grained PAT makes the PR re-trigger ci-gate; without it the PR
+          # still opens and the commit is still GitHub-verified, but ci-gate does not run on
+          # a GITHUB_TOKEN-opened PR (the image is already validated by publish).
+          GH_TOKEN: ${{ secrets.JENKINS_MCP_BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ needs.publish.outputs.tag }}
+          BASE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          VALUES: resources/addons/jenkins-mcp/values.yaml
+        run: |
+          set -euo pipefail
+          [ -n "$NEW_TAG" ] || { echo "no tag from publish job"; exit 1; }
+          cur="$(grep -E '^  tag: ' "$VALUES" | head -1 | sed -E 's|^  tag: "?([^"]*)"?.*|\1|')"
+          if [ "$cur" = "$NEW_TAG" ]; then
+            echo "values.yaml already on ${NEW_TAG}; nothing to bump."
+            exit 0
+          fi
+          BRANCH="chore/deploy-jenkins-mcp-${RUN_ID}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" -f sha="${BASE_SHA}"
+          sed -E "s|^  tag: .*|  tag: \"${NEW_TAG}\"|" "$VALUES" > /tmp/values.yaml
+          CONTENT_B64="$(base64 -w0 /tmp/values.yaml)"
+          # shellcheck disable=SC2016  # $vars are GraphQL variables substituted by gh -f, not the shell.
+          gh api graphql -f query='
+            mutation($nwo:String!,$branch:String!,$path:String!,$contents:Base64String!,$head:GitObjectID!,$msg:String!){
+              createCommitOnBranch(input:{
+                branch:{repositoryNameWithOwner:$nwo, branchName:$branch},
+                message:{headline:$msg},
+                expectedHeadOid:$head,
+                fileChanges:{additions:[{path:$path, contents:$contents}]}
+              }){ commit { oid } }
+            }' \
+            -f nwo="$GITHUB_REPOSITORY" -f branch="$BRANCH" \
+            -f path="$VALUES" -f contents="$CONTENT_B64" -f head="$BASE_SHA" \
+            -f msg="chore(jenkins-mcp): deploy image ${NEW_TAG}"
+          BODY="$(mktemp)"
+          {
+            printf '%s\n' '## Deploy'
+            printf '%s\n' ''
+            printf '%s\n' "- Bump ${VALUES} image.tag to ${NEW_TAG} (built, smoke-booted, and pushed to ECR by this run)."
+            printf '%s\n' '- The commit is GitHub-verified (createCommitOnBranch), so it satisfies the signed-commits rule on main.'
+            printf '%s\n' '- Squash-merge to deploy. ArgoCD syncs HEAD and the pod rolls. No auto-merge.'
+          } > "$BODY"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(jenkins-mcp): deploy image ${NEW_TAG}" \
+            --body-file "$BODY"

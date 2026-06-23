@@ -72,6 +72,7 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 | Shell access to the masters (`just ssh`, SSM) | [`docs/runbooks/master-shell-access.md`](docs/runbooks/master-shell-access.md) |
 | Account cleanup reapers | [`docs/runbooks/cleanup-reapers.md`](docs/runbooks/cleanup-reapers.md) |
 | Bootstrap, recovery, upgrades | [`docs/runbooks/`](docs/runbooks/) |
+| Token-free Jenkins MCP gateway (connect an MCP client) | [`images/jenkins-mcp/README.md`](images/jenkins-mcp/README.md) |
 | Every past design decision | [`docs/adr/`](docs/adr/) |
 
 ## Contributing
