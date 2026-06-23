@@ -7,12 +7,12 @@
 #
 # Build (EKS nodes are amd64):
 #   docker buildx build --platform linux/amd64 \
-#     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-mcp:0.2.6 \
+#     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-mcp:0.2.7 \
 #     --push images/jenkins-mcp
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 RUN uv pip install --system --no-cache \
-    'mcp-jenkins @ git+https://github.com/nogueiraanderson/mcp-jenkins@5edcbc7'
+    'mcp-jenkins @ git+https://github.com/nogueiraanderson/mcp-jenkins@10b43eb'
 
 USER 65532:65532
 EXPOSE 9887
