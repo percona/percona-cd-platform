@@ -1067,6 +1067,53 @@ class TestItem:
 
         assert jenkins.get_item_config(fullname='example-job') == '<project>config</project>'
 
+    def test_get_item_parameters(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            **{
+                'json.return_value': {
+                    'property': [
+                        {
+                            '_class': 'hudson.model.ParametersDefinitionProperty',
+                            'parameterDefinitions': [
+                                {
+                                    'name': 'BRANCH',
+                                    'type': 'StringParameterDefinition',
+                                    'description': 'Branch to build',
+                                    'defaultParameterValue': {'value': 'main'},
+                                },
+                                {
+                                    'name': 'ENV',
+                                    'type': 'ChoiceParameterDefinition',
+                                    'description': '',
+                                    'defaultParameterValue': {'value': 'dev'},
+                                    'choices': ['dev', 'prod'],
+                                },
+                                {'name': 'TOKEN', 'type': 'StringParameterDefinition'},
+                            ],
+                        },
+                        {'_class': 'some.other.Property'},
+                    ],
+                },
+            }
+        )
+
+        assert jenkins.get_item_parameters(fullname='example-job') == [
+            {
+                'name': 'BRANCH',
+                'type': 'StringParameterDefinition',
+                'defaultValue': 'main',
+                'description': 'Branch to build',
+            },
+            {
+                'name': 'ENV',
+                'type': 'ChoiceParameterDefinition',
+                'defaultValue': 'dev',
+                'description': '',
+                'choices': ['dev', 'prod'],
+            },
+            {'name': 'TOKEN', 'type': 'StringParameterDefinition', 'defaultValue': '', 'description': ''},
+        ]
+
     def test_set_item_config(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(status_code=200)
 

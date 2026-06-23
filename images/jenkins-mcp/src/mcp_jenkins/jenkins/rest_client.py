@@ -627,6 +627,36 @@ class Jenkins:
         response = self.request('GET', rest_endpoint.ITEM_CONFIG(folder=folder, name=name))
         return response.text
 
+    def get_item_parameters(self, *, fullname: str) -> list[dict]:
+        """Return a job's parameter definitions via the job API (Job/Read).
+
+        Reads parameterDefinitions from the standard job api/json, not config.xml, which needs
+        Job/ExtendedRead that the read-only service identity does not hold.
+
+        Args:
+            fullname: The full name of the item (e.g., "folder1/folder2/item").
+
+        Returns:
+            One dict per parameter: name, type, defaultValue, description, and choices (only for
+            choice parameters).
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self.request('GET', rest_endpoint.ITEM_PARAMETERS(folder=folder, name=name))
+        params: list[dict] = []
+        for prop in response.json().get('property', []):
+            for definition in prop.get('parameterDefinitions') or []:
+                default = definition.get('defaultParameterValue') or {}
+                entry = {
+                    'name': definition.get('name', ''),
+                    'type': definition.get('type', ''),
+                    'defaultValue': default.get('value', ''),
+                    'description': definition.get('description', ''),
+                }
+                if definition.get('choices'):
+                    entry['choices'] = definition['choices']
+                params.append(entry)
+        return params
+
     def set_item_config(self, *, fullname: str, config_xml: str) -> None:
         """Set item configuration by its fullname.
 
