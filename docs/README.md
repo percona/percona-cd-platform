@@ -53,6 +53,7 @@ Step-by-step procedures for operational tasks.
 - [`grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md): Grafana OAuth cutover
 - [`jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md): per-master SSL cutover to the shared ALB
 - [`jenkins-mcp-exports.md`](runbooks/jenkins-mcp-exports.md): jenkins-mcp log/artifact S3 export tools (presigned downloads)
+- [`jenkins-mcp-operate.md`](runbooks/jenkins-mcp-operate.md): operate the jenkins-mcp gateway fleet (add/remove a master, onboard a writer)
 - [`lgtm-az-migration.md`](runbooks/lgtm-az-migration.md): relocate bound LGTM PVCs across AZs
 - [`lgtm-orphan-pvc-sweep.md`](runbooks/lgtm-orphan-pvc-sweep.md): clean up orphaned LGTM PVCs
 - [`master-shell-access.md`](runbooks/master-shell-access.md): shell on a master (`just ssh`, SSM, EIP allow-list, ps3 kubectl)
