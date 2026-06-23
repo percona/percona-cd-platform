@@ -1,5 +1,5 @@
 # Owner: platform
-# Ten Pod Identity associations for the in-cluster addons that need AWS IAM:
+# Eleven Pod Identity associations for the in-cluster addons that need AWS IAM:
 #
 #   alb-controller        aws-load-balancer-controller / aws-load-balancer-controller
 #   external-dns          external-dns / external-dns
@@ -13,6 +13,8 @@
 #                         (policy in iam-jenkins-controller.tf)
 #   cloudwatch-exporter   read-only CloudWatch metrics + tag discovery for
 #                         YACE (policy in iam-cloudwatch-exporter.tf)
+#   jenkins-mcp           scoped S3 export access for the MCP gateway (policy
+#                         in iam-jenkins-mcp.tf, bucket jenkins-mcp-exports.tf)
 #   karpenter             handled by karpenter-prereqs.tf (the eks//modules/karpenter
 #                         submodule creates its own association inline)
 #
@@ -371,6 +373,35 @@ module "pod_identity_cloudwatch_exporter" {
       # addon dir resources/addons/cloudwatch-exporter/.
       namespace       = "cloudwatch-exporter"
       service_account = "cloudwatch-exporter"
+    }
+  }
+
+  tags = local.tags
+}
+
+# ---------------------------------------------------------------------------
+# jenkins-mcp — token-free Jenkins MCP gateway (resources/addons/jenkins-mcp/).
+# Scoped S3 access for its log/artifact export tools. Policy in
+# iam-jenkins-mcp.tf, bucket in jenkins-mcp-exports.tf. See docs/adr/0039.
+# ---------------------------------------------------------------------------
+
+module "pod_identity_jenkins_mcp" {
+  source  = local.modules.pod_identity.source
+  version = local.modules.pod_identity.version
+
+  # 31 chars, under the 38-char `name_prefix` cap on aws_iam_role.
+  name = "${local.cluster_name}-jenkins-mcp"
+  additional_policy_arns = {
+    s3_exports = aws_iam_policy.jenkins_mcp.arn
+  }
+
+  associations = {
+    main = {
+      cluster_name = module.eks.cluster_name
+      # Namespace + SA match the ApplicationSet path basename, i.e. the addon
+      # dir resources/addons/jenkins-mcp/.
+      namespace       = "jenkins-mcp"
+      service_account = "jenkins-mcp"
     }
   }
 

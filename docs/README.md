@@ -52,6 +52,7 @@ Step-by-step procedures for operational tasks.
 - [`eks-upgrade.md`](runbooks/eks-upgrade.md): control plane + node group upgrades
 - [`grafana-saml-cutover.md`](runbooks/grafana-saml-cutover.md): Grafana OAuth cutover
 - [`jenkins-ssl-cutover.md`](runbooks/jenkins-ssl-cutover.md): per-master SSL cutover to the shared ALB
+- [`jenkins-mcp-exports.md`](runbooks/jenkins-mcp-exports.md): jenkins-mcp log/artifact S3 export tools (presigned downloads)
 - [`lgtm-az-migration.md`](runbooks/lgtm-az-migration.md): relocate bound LGTM PVCs across AZs
 - [`lgtm-orphan-pvc-sweep.md`](runbooks/lgtm-orphan-pvc-sweep.md): clean up orphaned LGTM PVCs
 - [`master-shell-access.md`](runbooks/master-shell-access.md): shell on a master (`just ssh`, SSM, EIP allow-list, ps3 kubectl)

@@ -38,6 +38,7 @@ and [how it works](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-how-i
 | tempo / tempo | tempo | Same shape, own bucket |
 | jenkins-endpoint-reconciler / jenkins-endpoint-reconciler | jenkins-discovery | Read-only `ec2:DescribeInstances` on `*` (the action supports no resource scoping, and masters span five regions) |
 | jenkins-ps3-k8s / jenkins | jenkins-ctlr | The EC2-plugin provision surface, ASG control scoped to `jenkins-*-arm-*`, and `iam:PassRole` to worker roles |
+| jenkins-mcp / jenkins-mcp | jenkins-mcp | Scoped S3 `Put`/`Get`/`Abort`/`Delete` on the one exports bucket (`jenkins-mcp-exports.tf`) |
 | karpenter / karpenter | (inline via the karpenter submodule) | Karpenter v1 controller policy |
 
 Role ARNs are exported from `terraform/outputs.tf` and reach charts through

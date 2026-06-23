@@ -23,6 +23,8 @@ _READ_SET = {
     'get_build_history',
     'get_build_stages',
     'get_build_changeset',
+    'export_build_log',
+    'export_build_artifact',
     'search_build_logs',
     'get_all_nodes',
     'get_node',

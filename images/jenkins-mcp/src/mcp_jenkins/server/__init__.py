@@ -88,4 +88,15 @@ mcp.add_middleware(AuditMiddleware())
 
 # Import tool modules to register them with the MCP server
 # This must happen after mcp is created so the @mcp.tool() decorators can reference it
-from mcp_jenkins.server import build, fleet, item, node, queue, readme, script, search, view  # noqa: F401, E402
+from mcp_jenkins.server import (  # noqa: F401, E402
+    build,
+    build_export,
+    fleet,
+    item,
+    node,
+    queue,
+    readme,
+    script,
+    search,
+    view,
+)
