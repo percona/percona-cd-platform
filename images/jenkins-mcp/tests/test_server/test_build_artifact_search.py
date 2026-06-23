@@ -200,7 +200,7 @@ async def test_extract_unknown_member_raises(mock_jenkins, mocker):
 
 # ---- security gates ----
 @pytest.mark.asyncio
-@pytest.mark.parametrize('bad', ['../escape', '/etc/passwd', 'a\\b', 'ok/../../x'])
+@pytest.mark.parametrize('bad', ['../escape', '/etc/passwd', 'a\\b', 'ok/../../x', 'evil"; x="y'])
 async def test_extract_rejects_unsafe_member(mock_jenkins, mocker, bad):
     with pytest.raises(ValueError, match='unsafe member|control char'):
         await bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member=bad, number=1)
@@ -233,7 +233,27 @@ async def test_list_bomb_guard_decompressed_total(mock_jenkins, mocker, monkeypa
     monkeypatch.setattr(bas, '_MAX_DECOMPRESSED_TOTAL', 4)
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({f'f{i}.log': b'XXXX' for i in range(5)})))
     out = await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
-    assert out['truncated'] is True  # _LimitedReader tripped the decompressed-bytes cap
+    assert out['scan_limited'] is True  # _LimitedReader tripped the cap (distinct from normal truncation)
+    assert out['truncated'] is False
+
+
+def test_limited_reader_clamps_before_read():
+    # HIGH from the 3-model review: a single huge read (PAX/GNU header size) must not over-allocate.
+    import io
+
+    src = io.BytesIO(b'z' * 10_000)
+    reader = bas._LimitedReader(src, limit=100)
+    chunk = reader.read(10_000)  # asks for 10k, must get at most the 100-byte budget
+    assert len(chunk) == 100
+    with pytest.raises(bas._ArchiveLimitError):
+        reader.read(10_000)  # budget exhausted -> raise (no further allocation)
+
+
+def test_limited_reader_clamps_read_all():
+    import io
+
+    reader = bas._LimitedReader(io.BytesIO(b'z' * 10_000), limit=50)
+    assert len(reader.read(-1)) == 50  # read(-1) is clamped to the budget, not the whole stream
 
 
 @pytest.mark.asyncio

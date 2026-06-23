@@ -25,7 +25,10 @@ class _ItemBase(BaseModel):
         label = getattr(self, 'assignedLabel', None)
         if label is None:
             return None
-        return label.get('name') if isinstance(label, dict) else getattr(label, 'name', None)
+        # A matrix/maven job routes through UnknownItem (extra='allow'), where assignedLabel stays a
+        # raw dict; coerce to str-or-None so a non-string can never reach re.search() in query_items.
+        name = label.get('name') if isinstance(label, dict) else getattr(label, 'name', None)
+        return name if isinstance(name, str) else None
 
 
 class Job(_ItemBase):

@@ -1305,6 +1305,13 @@ class TestItem:
         # the get_items tree must actually request the label
         assert 'assignedLabel[name]' in mock_session.request.call_args.kwargs['url']
 
+    def test_query_items_rejects_bad_pattern(self, jenkins):
+        # The pattern guard fires before any API call (raised during the compile of the 4 patterns).
+        with pytest.raises(ValueError, match='invalid regex pattern'):
+            jenkins.query_items(label_pattern='(unclosed')
+        with pytest.raises(ValueError, match='pattern too long'):
+            jenkins.query_items(fullname_pattern='x' * 3000)
+
     def test_build_item(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(
             status_code=201, headers={'Location': 'https://example.com/queue/item/123/'}
