@@ -65,7 +65,6 @@ data:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
 
       - model: authentik_core.application
-        id: jenkins-mcp-app
         identifiers:
           slug: jenkins-mcp
         attrs:
@@ -76,25 +75,11 @@ data:
           policy_engine_mode: any
           group: ""
 
-      # Access tiers. Membership gates what the MCP server serves: jenkins-mcp-users
-      # is required to authorize at all (the application binding below); jenkins-mcp-writers
-      # additionally unlocks the operate (build-lifecycle) tools, enforced per-call by the
-      # server. Users are JIT-provisioned via the Duo SSO SAML source, then added to a group.
-      - model: authentik_core.group
-        id: jenkins-mcp-users
-        identifiers:
-          name: jenkins-mcp-users
+      # Access model: reads are open to any authenticated Percona user. There is no application
+      # policy binding, so the app does not restrict who may authorize. Users are JIT-provisioned
+      # via the Duo SSO SAML source on first login. The operate (build-lifecycle) tier is gated
+      # per-call by the server to the jenkins-mcp-writers group below.
       - model: authentik_core.group
         id: jenkins-mcp-writers
         identifiers:
           name: jenkins-mcp-writers
-
-      # Bind jenkins-mcp-users to the application so only members can authorize and
-      # receive a token (non-members are denied at consent). Writers must also be users.
-      - model: authentik_policies.policybinding
-        identifiers:
-          target: !KeyOf jenkins-mcp-app
-          group: !KeyOf jenkins-mcp-users
-          order: 0
-        attrs:
-          enabled: true
