@@ -6,7 +6,7 @@ Wraps dashboards/hetzner-plugin.json in a ConfigMap labelled
 auto-imports it (sidecar.dashboards block in values.yaml,
 searchNamespace=ALL). The `grafana_folder` annotation puts it in
 the "Jenkins" space alongside the other Jenkins-fleet dashboards
-(see ADR 0035 for the folder taxonomy).
+(see ADR 0041 for the folder taxonomy).
 
 This was the first repo-owned dashboard shipped via the sidecar
 ConfigMap pattern; every dashboard in this addon now ships the

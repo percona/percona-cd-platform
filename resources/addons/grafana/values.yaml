@@ -146,7 +146,7 @@ grafana:
     # disables password session login, so basic auth is the ONLY
     # API path for the local admin. It serves the sidecar's
     # provisioning-reload hook, the folders API, and the future
-    # folder-permissions automation (ADR 0035). Brute force on the
+    # folder-permissions automation (ADR 0041). Brute force on the
     # internet-facing ALB is mitigated by Grafana's login lockout and
     # the 32-char random credential; browser sign-in remains
     # Duo + Authentik only.
@@ -362,7 +362,7 @@ grafana:
 # Dashboard provisioning is sidecar-only: every dashboard ships as a
 # ConfigMap (templates/configmap-*-dashboard*.yaml) carrying the
 # grafana_dashboard label and a single-segment grafana_folder
-# annotation. Folder taxonomy ("spaces"): docs/adr/0035. The legacy
+# annotation. Folder taxonomy ("spaces"): docs/adr/0041. The legacy
 # file-based dashboardProviders (platform-lgtm, platform-karpenter,
 # jenkins) and the gnetId download init container are fully retired;
 # their empty "Platform / *" folders were deleted via the UI after the
