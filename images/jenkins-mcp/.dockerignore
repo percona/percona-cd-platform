@@ -1,0 +1,13 @@
+# Keep the build context lean: the Dockerfile only COPYs pyproject.toml,
+# uv.lock, README.md, LICENSE, and src/. Everything else (tests, the smoke
+# script, a local virtualenv, caches) just bloats context transfer and can
+# bust the layer cache.
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.git/
+tests/
+smoke.sh
