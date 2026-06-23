@@ -13,8 +13,15 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
-# Install deps + the package into /app/.venv from the lockfile (reproducible, frozen).
-COPY pyproject.toml uv.lock README.md ./
+# HOME must be writable by the runtime uid so the loguru file-sink setup works
+# on a bare `docker run` (the addon also mounts a writable emptyDir here).
+ENV HOME=/home/app
+RUN mkdir -p /home/app && chown 65532:65532 /home/app
+
+# Install deps first (this layer caches across source-only changes), then the
+# project. LICENSE is copied so the distributed image carries the MIT notice.
+COPY pyproject.toml uv.lock README.md LICENSE ./
+RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 

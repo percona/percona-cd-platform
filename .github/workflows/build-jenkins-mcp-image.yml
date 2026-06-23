@@ -56,13 +56,14 @@ jobs:
       - name: ruff check + format
         working-directory: images/jenkins-mcp
         run: |
-          uv run --with ruff ruff check .
-          uv run --with ruff ruff format --check .
+          uv run --frozen ruff check .
+          uv run --frozen ruff format --check .
 
   # ---- PR validation: build + smoke, NO AWS token, NO push ----
   validate:
     name: build + smoke (no push)
     if: github.event_name == 'pull_request'
+    needs: [lint, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -89,6 +90,7 @@ jobs:
   publish:
     name: build + smoke + push (OIDC)
     if: github.event_name == 'push'
+    needs: [lint, test]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -105,7 +107,9 @@ jobs:
       - name: compute image tag (<version>-<short-sha>)
         id: meta
         run: |
+          set -euo pipefail
           ver="$(grep -m1 '^version = ' images/jenkins-mcp/pyproject.toml | cut -d'"' -f2)"
+          [ -n "$ver" ] || { echo "could not parse version from pyproject.toml"; exit 1; }
           echo "tag=${ver}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - name: build (amd64, load, NO push yet)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
@@ -138,6 +142,11 @@ jobs:
           sbom: true
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.tag }}
+      - name: SECOND smoke against the PUSHED digest
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: images/jenkins-mcp/smoke.sh "${REGISTRY}/${IMAGE_REPO}@${DIGEST}"
       - name: summary (image ref + deploy hint)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
