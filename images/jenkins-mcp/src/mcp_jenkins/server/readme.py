@@ -39,8 +39,16 @@ _CATALOG = [
     (
         'Builds',
         [
-            ('get_running_builds', 'get_running_builds(master?)             what is building now'),
+            ('get_running_builds', 'get_running_builds(master?)             unique builds running now'),
             ('get_build', 'get_build(fullname, number?, master?)   build result/info (last build if number omitted)'),
+            (
+                'get_build_failure_summary',
+                'get_build_failure_summary(fullname, number?, status_filter?, master?)',
+            ),
+            (
+                'get_build_failure_summary',
+                '      START HERE for UNSTABLE/FAILED: result + stages + ONLY the failing tests (deduped, grouped)',
+            ),
             (
                 'get_build_console_output',
                 'get_build_console_output(fullname, number?, pattern?, offset?, limit?, master?)',
@@ -50,8 +58,16 @@ _CATALOG = [
                 '      console log; pattern is a regex line filter (slice big logs with pattern/limit)',
             ),
             (
+                'get_build_console_tail',
+                'get_build_console_tail(fullname, number?, lines?, master?)  last N console lines (the failure tail)',
+            ),
+            (
                 'get_build_test_report',
                 'get_build_test_report / get_build_parameters / get_build_scripts(fullname, number?, master?)',
+            ),
+            (
+                'get_build_test_report',
+                '      get_build_test_report is the RAW full report; prefer get_build_failure_summary for failures',
             ),
             (
                 'get_all_build_artifacts',
@@ -120,6 +136,8 @@ _SAMPLES_READ = [
     '  "did the last build of <job> pass?"            -> get_build(fullname="<job>")',
     '  "console for <job> build 123"                  -> get_build_console_output(fullname="<job>", number=123)',
     '  "just the errors in a log"   -> get_build_console_output(fullname="<job>", pattern="(?i)error|fail")',
+    '  "why is <job> UNSTABLE / what failed?"  -> get_build_failure_summary(fullname="<job>")',
+    '  "the end of the <job> log"    -> get_build_console_tail(fullname="<job>", lines=200)',
     '  "what parameters does <job> take?"             -> get_item_parameters(fullname="<job>")',
     '  "what is running on ps80 right now?"           -> get_running_builds(master="ps80")',
     '  "last 10 builds of <job>"  -> get_build_history(fullname="<job>", count=10)',

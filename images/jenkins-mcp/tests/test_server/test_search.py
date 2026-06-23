@@ -100,9 +100,18 @@ async def test_search_skips_folders_and_unbuilt(mock_jenkins, mocker):
 
     out = await search.search_build_logs(mocker.Mock(), pattern='MATCH', job_pattern='b.*')
 
-    assert out['summary']['jobs_matched_pattern'] == 1
+    assert out['summary']['jobs_matched_pattern'] == 3  # all name-matches, incl. folder + unbuilt
+    assert out['summary']['jobs_with_last_build'] == 1  # only the built job is scannable
     assert out['summary']['jobs_scanned'] == 1
     assert mock_jenkins.get_build_console_output.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_invalid_regex(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = []
+    with pytest.raises(ValueError, match='invalid pattern regex'):
+        await search.search_build_logs(mocker.Mock(), pattern='(unclosed', job_pattern='pxc.*')
+    mock_jenkins.query_items.assert_not_called()
 
 
 @pytest.mark.asyncio

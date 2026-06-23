@@ -254,3 +254,113 @@ async def test_get_build_changeset(mock_jenkins, mocker):
     result = await build.get_build_changeset(mocker.Mock(), fullname='job1')
     assert result == [{'commitId': 'abc', 'author': 'Jane', 'msg': 'fix', 'timestamp': 1, 'affectedPaths': ['a.py']}]
     mock_jenkins.get_build_changeset.assert_called_once_with(fullname='job1', number=3)
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_filters_and_dedupes(mock_jenkins, mocker):
+    mock_jenkins.get_build.return_value = Build(number=10, url='u/10', result='UNSTABLE', building=False, timestamp=1)
+    mock_jenkins.get_build_stages.return_value = PipelineStages(
+        stages=[PipelineStage(id='1', name='mtr', status='SUCCESS')]
+    )
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 2,
+        'passCount': 100,
+        'skipCount': 1,
+        'suites': [
+            {
+                'name': 'worker_1',
+                'cases': [
+                    {'className': 'main', 'name': 'pass_test', 'status': 'PASSED', 'duration': 1.0},
+                    {
+                        'className': 'main',
+                        'name': 'dd_upgrade',
+                        'status': 'FAILED',
+                        'duration': 2.0,
+                        'errorDetails': 'boom',
+                    },
+                    {
+                        'className': 'main',
+                        'name': 'dd_upgrade',
+                        'status': 'FAILED',
+                        'duration': 2.0,
+                        'errorDetails': 'boom',
+                    },
+                ],
+            },
+            {
+                'name': 'worker_2',
+                'cases': [
+                    {'className': 'rpl', 'name': 'rpl_x', 'status': 'REGRESSION', 'duration': 3.0},
+                    {'className': 'main', 'name': 'skipped_t', 'status': 'SKIPPED'},
+                ],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='asan-mtr', number=10)
+
+    assert out['build']['result'] == 'UNSTABLE'
+    assert out['test_counts']['failCount'] == 2
+    assert out['test_counts']['passCount'] == 100
+    assert out['test_counts']['status_counts']['FAILED'] == 2  # raw tally counts the duplicate row
+    assert sorted(c['name'] for c in out['cases']) == ['dd_upgrade', 'rpl_x']  # FAILED+REGRESSION, deduped
+    assert out['included_count'] == 2
+    assert out['stages'][0]['name'] == 'mtr'
+    assert {g['suite'] for g in out['groups']} == {'worker_1', 'worker_2'}
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_status_filter_and_cap(mock_jenkins, mocker):
+    mock_jenkins.get_build.return_value = Build(number=5, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 3,
+        'passCount': 0,
+        'skipCount': 0,
+        'suites': [{'name': 's', 'cases': [{'className': 'c', 'name': f't{i}', 'status': 'FAILED'} for i in range(3)]}],
+    }
+
+    out = await build.get_build_failure_summary(
+        mocker.Mock(), fullname='j', number=5, status_filter='FAILED', max_cases=2
+    )
+    assert out['included_count'] == 2
+    assert out['truncated'] is True
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_no_report(mock_jenkins, mocker):
+    from requests.exceptions import HTTPError
+
+    mock_jenkins.get_build.return_value = Build(number=1, url='u', result='SUCCESS')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.side_effect = HTTPError(response=mocker.Mock(status_code=404))
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
+    assert out['cases'] == []
+    assert out['test_counts']['failCount'] == 0
+    assert any('no test report' in n for n in out['notes'])
+
+
+@pytest.mark.asyncio
+async def test_get_build_console_tail_passes_and_caps_lines(mock_jenkins, mocker):
+    mock_jenkins.get_build_console_tail.return_value = 'line99\nFinished: UNSTABLE'
+
+    out = await build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=2)
+    assert out == 'line99\nFinished: UNSTABLE'
+    assert mock_jenkins.get_build_console_tail.call_args.kwargs['lines'] == 2
+
+    await build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=999999)
+    assert mock_jenkins.get_build_console_tail.call_args.kwargs['lines'] == 5000
+
+
+@pytest.mark.asyncio
+async def test_get_build_console_output_rejects_long_pattern(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='pattern too long'):
+        await build.get_build_console_output(mocker.Mock(), fullname='j', number=1, pattern='x' * 2001)
+
+
+@pytest.mark.asyncio
+async def test_get_build_history_caps_count(mock_jenkins, mocker):
+    mock_jenkins.get_build_history.return_value = []
+    await build.get_build_history(mocker.Mock(), fullname='j', count=99999)
+    assert mock_jenkins.get_build_history.call_args.kwargs['count'] == 100

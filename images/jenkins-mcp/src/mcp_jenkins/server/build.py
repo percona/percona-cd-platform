@@ -1,9 +1,41 @@
 import base64
+from typing import Literal
 
 from fastmcp import Context
+from requests.exceptions import HTTPError
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
+
+# Caps that bound a single read so a tool call can never pull an unbounded payload or hand a
+# pathological regex to the line filter.
+_MAX_PATTERN_LEN = 2000
+_MAX_HISTORY_COUNT = 100
+_MAX_TAIL_LINES = 5000
+_MAX_FAILURE_CASES = 1000
+
+# JUnit case-status sets per failure-summary filter. UNSTABLE = the statuses Jenkins marks a build
+# unstable for (FAILED + REGRESSION). None = no status filter (every case).
+_FAILURE_STATUS_FILTERS: dict[str, set[str] | None] = {
+    'UNSTABLE': {'FAILED', 'REGRESSION'},
+    'FAILED': {'FAILED'},
+    'REGRESSION': {'REGRESSION'},
+    'NON_PASSED': {'FAILED', 'REGRESSION', 'SKIPPED'},
+    'ALL': None,
+}
+# Narrow testReport projection: per-case identity + status + short errorDetails, NOT the heavy
+# stdout/stderr/errorStackTrace, so a 15k-case parallel report does not come back whole.
+_FAILURE_REPORT_TREE = 'failCount,passCount,skipCount,suites[name,cases[className,name,status,duration,errorDetails]]'
+
+
+def _resolve_number(ctx: Context, fullname: str, number: int | None, master: MasterArg) -> int:
+    """Resolve an explicit build number, or the job's last build number, or raise."""
+    if number is None:
+        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    if number is None:
+        msg = f'No build found for job: {fullname}'
+        raise ValueError(msg)
+    return number
 
 
 @mcp.tool(tags=['read'])
@@ -77,10 +109,10 @@ async def get_build_console_output(
     Returns:
         The console output of the build
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
+    if pattern and len(pattern) > _MAX_PATTERN_LEN:
+        msg = f'pattern too long ({len(pattern)} > {_MAX_PATTERN_LEN} chars)'
+        raise ValueError(msg)
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_console_output(
         fullname=fullname, number=number, pattern=pattern, offset=offset, limit=limit
@@ -104,6 +136,132 @@ async def get_build_test_report(
         number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
 
     return jenkins(ctx, master).get_build_test_report(fullname=fullname, number=number)
+
+
+@mcp.tool(tags=['read'])
+async def get_build_failure_summary(
+    ctx: Context,
+    fullname: str,
+    number: int | None = None,
+    status_filter: Literal['UNSTABLE', 'FAILED', 'REGRESSION', 'NON_PASSED', 'ALL'] = 'UNSTABLE',
+    max_cases: int = 200,
+    include_error_details: bool = True,  # noqa: FBT001, FBT002
+    max_error_chars: int = 1200,
+    master: MasterArg = None,
+) -> dict:
+    """Summarize a build's failures in ONE call: result + stages + the failing tests, deduped.
+
+    The right first tool for an UNSTABLE/FAILED build. It fuses build metadata, the pipeline stage
+    breakdown, and ONLY the non-passing JUnit cases, so a 15k-pass report never comes back whole.
+    For the full raw report use get_build_test_report.
+
+    Args:
+        fullname: The fullname of the job
+        number: The number of the build, if None, get the last build
+        status_filter: Which case statuses to include. UNSTABLE = FAILED + REGRESSION (default);
+            FAILED / REGRESSION isolate one; NON_PASSED adds SKIPPED; ALL returns every case.
+        max_cases: Cap on returned cases (capped at 1000); truncated is flagged.
+        include_error_details: Include each case's short errorDetails message.
+        max_error_chars: Truncate each errorDetails to this many characters.
+
+    Returns:
+        A dict with build, stages, test_counts, status_filter, cases (deduped), groups (by suite),
+        included_count, truncated, and notes.
+    """
+    max_cases = max(1, min(max_cases, _MAX_FAILURE_CASES))
+    wanted = _FAILURE_STATUS_FILTERS[status_filter]
+    client = jenkins(ctx, master)
+    number = _resolve_number(ctx, fullname, number, master)
+
+    build = client.get_build(fullname=fullname, number=number)
+    stages = client.get_build_stages(fullname=fullname, number=number)
+
+    notes: list[str] = []
+    counts = {'total': 0, 'passCount': 0, 'failCount': 0, 'skipCount': 0}
+    status_counts: dict[str, int] = {}
+    selected: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    try:
+        report = client.get_build_test_report(fullname=fullname, number=number, tree=_FAILURE_REPORT_TREE)
+    except HTTPError as e:
+        http_status = e.response.status_code if e.response is not None else None
+        report = None
+        notes.append(f'no test report (HTTP {http_status}); counts and cases are empty')
+
+    if report:
+        counts['failCount'] = report.get('failCount') or 0
+        counts['skipCount'] = report.get('skipCount') or 0
+        counts['passCount'] = report.get('passCount') or 0
+        counts['total'] = counts['failCount'] + counts['skipCount'] + counts['passCount']
+        for suite in report.get('suites') or []:
+            suite_name = suite.get('name') or ''
+            for case in suite.get('cases') or []:
+                case_status = (case.get('status') or '').upper()
+                status_counts[case_status] = status_counts.get(case_status, 0) + 1
+                if wanted is not None and case_status not in wanted:
+                    continue
+                key = (case.get('className') or '', case.get('name') or '')
+                if key in seen:
+                    continue
+                seen.add(key)
+                entry = {
+                    'name': key[1],
+                    'className': key[0],
+                    'status': case_status,
+                    'suite': suite_name,
+                    'duration': case.get('duration'),
+                }
+                if include_error_details and case.get('errorDetails'):
+                    entry['errorDetails'] = case['errorDetails'][:max_error_chars]
+                selected.append(entry)
+
+    truncated = len(selected) > max_cases
+    cases = selected[:max_cases]
+
+    groups: dict[str, dict] = {}
+    for case_entry in cases:
+        group = groups.setdefault(case_entry['suite'], {'suite': case_entry['suite'], 'count': 0, 'cases': []})
+        group['count'] += 1
+        group['cases'].append(case_entry['name'])
+
+    return {
+        'master': master,
+        'fullname': fullname,
+        'number': number,
+        'build': build.model_dump(include={'url', 'result', 'building', 'timestamp', 'duration'}, exclude_none=True),
+        'stages': [s.model_dump(exclude_none=True) for s in stages.stages],
+        'test_counts': {**counts, 'status_counts': status_counts},
+        'status_filter': status_filter,
+        'included_count': len(cases),
+        'truncated': truncated,
+        'cases': cases,
+        'groups': sorted(groups.values(), key=lambda g: -g['count']),
+        'notes': notes,
+    }
+
+
+@mcp.tool(tags=['read'])
+async def get_build_console_tail(
+    ctx: Context, fullname: str, number: int | None = None, lines: int = 200, master: MasterArg = None
+) -> str:
+    """Get the LAST N lines of a build's console (the cheap path to the failure tail + result).
+
+    Streams the console server-side and returns only the trailing lines, so it is cheap even on a
+    multi-MB log. The failure summary and `Finished: <result>` marker live at the end. Use
+    get_build_console_output with a pattern to grep, or export_build_log for the whole log.
+
+    Args:
+        fullname: The fullname of the job
+        number: The number of the build, if None, get the last build
+        lines: Number of trailing lines to return (capped at 5000)
+
+    Returns:
+        The last `lines` lines of the console output.
+    """
+    lines = max(1, min(lines, _MAX_TAIL_LINES))
+    number = _resolve_number(ctx, fullname, number, master)
+    return jenkins(ctx, master).get_build_console_tail(fullname=fullname, number=number, lines=lines)
 
 
 @mcp.tool(tags=['read'])
@@ -216,6 +374,7 @@ async def get_build_history(ctx: Context, fullname: str, count: int = 10, master
     Returns:
         A list of builds with number, result, timestamp, duration, building, url
     """
+    count = max(1, min(count, _MAX_HISTORY_COUNT))
     builds = jenkins(ctx, master).get_build_history(fullname=fullname, count=count)
     return [b.model_dump(exclude_none=True) for b in builds]
 

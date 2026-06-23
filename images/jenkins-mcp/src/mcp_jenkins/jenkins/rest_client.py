@@ -1,4 +1,5 @@
 import re
+from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import reduce
@@ -345,6 +346,33 @@ class Jenkins:
         response.close()
         return '\n'.join(matched)
 
+    def get_build_console_tail(self, *, fullname: str, number: int, lines: int = 200) -> str:
+        """Return the last `lines` lines of a build's console without buffering the whole log.
+
+        Streams the console and keeps only a bounded ring of the most recent lines, so it is cheap
+        even on a multi-MB log. The failure summary and `Finished: <result>` marker live at the end.
+
+        Args:
+            fullname: The fullname of the job.
+            number: The build number.
+            lines: Number of trailing lines to return.
+
+        Returns:
+            The last `lines` lines joined by newlines.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self._session.get(
+            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
+            timeout=self.timeout,
+            stream=True,
+        )
+        response.raise_for_status()
+        tail: deque[str] = deque(maxlen=lines)
+        for raw_line in response.iter_lines(decode_unicode=True):
+            tail.append(raw_line)
+        response.close()
+        return '\n'.join(tail)
+
     def stop_build(self, *, fullname: str, number: int) -> None:
         """Stop a running Jenkins build.
 
@@ -397,21 +425,26 @@ class Jenkins:
                 return {p['name']: p.get('value') for p in action['parameters']}
         return {}
 
-    def get_build_test_report(self, *, fullname: str, number: int, depth: int = 0) -> dict:
+    def get_build_test_report(self, *, fullname: str, number: int, depth: int = 0, tree: str | None = None) -> dict:
         """Get the test report of a specific build.
 
         Args:
             fullname: The fullname of the job.
             number: The build number.
             depth: The depth of the information to retrieve.
+            tree: Optional Jenkins `tree` field projection. When set it narrows the payload to the
+                requested fields (e.g. drop per-case stdout/stderr/stackTrace), which keeps a large
+                parallel-test report small. Jenkins prefers tree over depth when both are present.
 
         Returns:
             A dictionary representing the test report.
         """
         folder, name = self._parse_fullname(fullname)
+        params = {'tree': tree} if tree else None
         response = self.request(
             'GET',
             rest_endpoint.BUILD_TEST_REPORT(folder=folder, name=name, number=number, depth=depth),
+            params=params,
         )
         return response.json()
 
@@ -611,21 +644,27 @@ class Jenkins:
             response.close()
 
     def get_running_builds(self) -> list[Build]:
-        """Get all running builds across all nodes.
+        """Get all running builds across all nodes, deduplicated.
 
-        The build obtained through this method only includes the number, url and timestamp.
+        A build that occupies several executors (e.g. a parallel pipeline) appears once per
+        executor in the node data; keying by build URL returns each running build once. The
+        executor's currentExecutable carries no `building` flag, so it is set True here (a
+        currently-executing build is building by definition).
 
         Returns:
-            A list of Build objects representing the running builds.
+            A list of unique running Build objects (number, url, timestamp, building=True).
         """
-        builds = []
+        builds: dict[str, Build] = {}
 
         for node in self.get_nodes(depth=2):
             for executor in node.executors:
-                if executor.currentExecutable and executor.currentExecutable.number:
-                    builds.append(Build.model_validate(executor.currentExecutable.model_dump(mode='json')))
+                executable = executor.currentExecutable
+                if executable and executable.number:
+                    build = Build.model_validate(executable.model_dump(mode='json'))
+                    build.building = True
+                    builds[build.url] = build
 
-        return builds
+        return list(builds.values())
 
     def get_items(self, *, folder_depth: int | None = None, folder_depth_per_request: int = 10) -> list[ItemType]:
         """Get items in the Jenkins instance up to a specified folder depth.
@@ -638,7 +677,7 @@ class Jenkins:
             A list of ItemType objects representing the items.
         """
         query = reduce(
-            lambda q, _: f'jobs[url,color,name,{q}]',
+            lambda q, _: f'jobs[url,color,name,lastBuild[number,url],{q}]',
             range(folder_depth_per_request),
             'jobs',
         )

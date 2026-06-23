@@ -7,6 +7,8 @@ never trigger an unbounded log crawl. Any bound that clips results is surfaced i
 summary, never applied silently.
 """
 
+import re
+
 from fastmcp import Context
 from requests.exceptions import HTTPError
 
@@ -73,6 +75,11 @@ async def search_build_logs(
     max_total_matches = _clamp(max_total_matches, _MAX_TOTAL_MATCHES_LIMIT, 'max_total_matches', notes)
 
     effective_pattern = f'(?i){pattern}' if ignore_case else pattern
+    try:
+        re.compile(effective_pattern)
+    except re.error as e:
+        msg = f'invalid pattern regex: {e}'
+        raise ValueError(msg) from e
     client = jenkins(ctx, master)
 
     matched = client.query_items(fullname_pattern=job_pattern, folder_depth=folder_depth)
@@ -115,9 +122,10 @@ async def search_build_logs(
         'master': master,
         'results': results,
         'summary': {
-            'jobs_matched_pattern': len(buildable),
+            'jobs_matched_pattern': len(matched),
+            'jobs_with_last_build': len(buildable),
             'jobs_scanned': jobs_scanned,
-            'jobs_with_matches': len(results),
+            'jobs_with_matches': len({r['job_fullname'] for r in results}),
             'builds_scanned': builds_scanned,
             'total_matches': total_matches,
             'truncated_jobs': truncated_jobs,
