@@ -110,73 +110,13 @@ async def test_build_item(mock_jenkins, mocker):
 
 @pytest.mark.asyncio
 async def test_get_item_parameters(mock_jenkins, mocker):
-    mock_jenkins.get_item_config.return_value = """
-        <project>
-          <properties>
-            <hudson.model.ParametersDefinitionProperty>
-              <parameterDefinitions>
-                <hudson.model.StringParameterDefinition>
-                  <name>BRANCH</name>
-                  <defaultValue>main</defaultValue>
-                  <description>Branch to build</description>
-                </hudson.model.StringParameterDefinition>
-                <hudson.model.BooleanParameterDefinition>
-                  <name>DEPLOY</name>
-                  <defaultValue>false</defaultValue>
-                  <description>Deploy after build</description>
-                </hudson.model.BooleanParameterDefinition>
-              </parameterDefinitions>
-            </hudson.model.ParametersDefinitionProperty>
-          </properties>
-        </project>
-    """
-
-    assert await item.get_item_parameters(mocker.Mock(), fullname='job1') == [
-        {
-            'name': 'BRANCH',
-            'type': 'hudson.model.StringParameterDefinition',
-            'defaultValue': 'main',
-            'description': 'Branch to build',
-        },
-        {
-            'name': 'DEPLOY',
-            'type': 'hudson.model.BooleanParameterDefinition',
-            'defaultValue': 'false',
-            'description': 'Deploy after build',
-        },
+    mock_jenkins.get_item_parameters.return_value = [
+        {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},
     ]
 
-    mock_jenkins.get_item_config.assert_called_once_with(fullname='job1')
+    result = await item.get_item_parameters(mocker.Mock(), fullname='job1')
 
-
-@pytest.mark.asyncio
-async def test_get_item_parameters_no_params(mock_jenkins, mocker):
-    mock_jenkins.get_item_config.return_value = '<project><properties/></project>'
-
-    assert await item.get_item_parameters(mocker.Mock(), fullname='job1') == []
-
-
-@pytest.mark.asyncio
-async def test_get_item_parameters_missing_fields(mock_jenkins, mocker):
-    mock_jenkins.get_item_config.return_value = """
-        <project>
-          <properties>
-            <hudson.model.ParametersDefinitionProperty>
-              <parameterDefinitions>
-                <hudson.model.StringParameterDefinition>
-                  <name>TOKEN</name>
-                </hudson.model.StringParameterDefinition>
-              </parameterDefinitions>
-            </hudson.model.ParametersDefinitionProperty>
-          </properties>
-        </project>
-    """
-
-    assert await item.get_item_parameters(mocker.Mock(), fullname='job1') == [
-        {
-            'name': 'TOKEN',
-            'type': 'hudson.model.StringParameterDefinition',
-            'defaultValue': '',
-            'description': '',
-        },
+    assert result == [
+        {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},
     ]
+    mock_jenkins.get_item_parameters.assert_called_once_with(fullname='job1')

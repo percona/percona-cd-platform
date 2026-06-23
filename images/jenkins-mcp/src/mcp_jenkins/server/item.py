@@ -1,4 +1,3 @@
-import xml.etree.ElementTree as ET
 from typing import Literal
 
 from fastmcp import Context
@@ -132,26 +131,16 @@ async def build_item(
 
 @mcp.tool(tags=['read'])
 async def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = None) -> list[dict]:
-    """Get the parameter definitions of a Jenkins job
+    """Get the parameter definitions of a Jenkins job.
+
+    Reads the job's parameterDefinitions via the standard job API (Job/Read). It does not read
+    config.xml, which needs Job/ExtendedRead that the read-only service identity does not hold.
 
     Args:
         fullname: The fullname of the item
 
     Returns:
-        A list of parameter definitions, each containing name, type, defaultValue, and description
+        A list of parameter definitions, each with name, type, defaultValue, description, and
+        choices (for choice parameters).
     """
-    config_xml = jenkins(ctx, master).get_item_config(fullname=fullname)
-    root = ET.fromstring(config_xml)
-
-    params = []
-    for param in root.iter('parameterDefinitions'):
-        for definition in param:
-            entry = {
-                'name': definition.findtext('name', ''),
-                'type': definition.tag,
-                'defaultValue': definition.findtext('defaultValue', ''),
-                'description': definition.findtext('description', ''),
-            }
-            params.append(entry)
-
-    return params
+    return jenkins(ctx, master).get_item_parameters(fullname=fullname)
