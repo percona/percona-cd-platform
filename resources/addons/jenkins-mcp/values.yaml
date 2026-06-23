@@ -10,10 +10,11 @@ image:
   pullPolicy: IfNotPresent
 
 replicaCount: 1
-readOnly: true
-# Set enableOperate true (with readOnly false) to serve build-lifecycle tools (trigger/replay/
-# stop/cancel) after a fail-closed permission preflight, gated to the jenkins-mcp-writers group.
-enableOperate: false
+# Operate mode: serve the build-lifecycle tools (build/replay/stop/cancel) after the fail-closed
+# permission preflight, gated per-call to the jenkins-mcp-writers group. Reads stay open to any
+# authenticated user; config/script mutation is never served. Set readOnly: true to revert.
+readOnly: false
+enableOperate: true
 
 # OAuth2 resource-server auth against Authentik (Duo-backed). The server validates
 # bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the
