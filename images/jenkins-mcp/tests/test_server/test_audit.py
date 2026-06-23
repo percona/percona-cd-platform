@@ -178,7 +178,29 @@ async def test_middleware_increments_metrics(capture_audit, mocker):
     async def call_next(_):
         return 'ok'
 
-    labels = {'tool': 'get_all_items', 'status': 'ok', 'is_write': 'false'}
+    labels = {'tool': 'get_all_items', 'status': 'ok', 'is_write': 'false', 'master': 'none'}
+    before = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
+    assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_middleware_metric_carries_master_label(capture_audit, mocker):
+    from prometheus_client import REGISTRY
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build'
+    ctx.message.arguments = {'master': 'pxc'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return 'ok'
+
+    labels = {'tool': 'get_build', 'status': 'ok', 'is_write': 'false', 'master': 'pxc'}
     before = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
     await audit.AuditMiddleware().on_call_tool(ctx, call_next)
     after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0

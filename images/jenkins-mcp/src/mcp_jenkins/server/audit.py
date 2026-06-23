@@ -63,9 +63,17 @@ _SAFE_ARG_KEYS = frozenset(
 # Dedicated stdout sink: emit ONLY audit records, as one raw JSON line (parsed by Loki `| json`).
 logger.add(sys.stdout, level='INFO', format='{message}', filter=lambda r: r['extra'].get('audit', False))
 
-# Aggregate usage metrics (NO user label -> no cardinality blowup); exposed at /metrics.
-_CALLS = Counter('mcp_tool_calls', 'Total MCP tool calls.', ['tool', 'status', 'is_write'])
-_DURATION = Histogram('mcp_tool_duration_seconds', 'MCP tool call duration in seconds.', ['tool', 'is_write'])
+# Aggregate usage metrics (NO user label -> no cardinality blowup); exposed at /metrics. The
+# `master` label is bounded by the fleet allowlist (~4-10 values) plus 'none', so it stays
+# low-cardinality. Buckets extend past the prometheus default 10s ceiling because cross-region
+# Jenkins REST calls and log/artifact exports routinely run longer.
+_CALLS = Counter('mcp_tool_calls', 'Total MCP tool calls.', ['tool', 'status', 'is_write', 'master'])
+_DURATION = Histogram(
+    'mcp_tool_duration_seconds',
+    'MCP tool call duration in seconds.',
+    ['tool', 'is_write', 'master'],
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+)
 _DENIED = Counter('mcp_authz_denied', 'Authorization denials on tool calls.', ['tool', 'reason'])
 
 
@@ -154,6 +162,7 @@ class AuditMiddleware(Middleware):
             duration_s = time.perf_counter() - start
             record['duration_ms'] = round(duration_s * 1000, 1)
             is_write_label = 'true' if record['is_write'] else 'false'
-            _CALLS.labels(tool=tool, status=record['status'], is_write=is_write_label).inc()
-            _DURATION.labels(tool=tool, is_write=is_write_label).observe(duration_s)
+            master_label = record['master'] or 'none'
+            _CALLS.labels(tool=tool, status=record['status'], is_write=is_write_label, master=master_label).inc()
+            _DURATION.labels(tool=tool, is_write=is_write_label, master=master_label).observe(duration_s)
             logger.bind(audit=True).info(json.dumps(record, default=str))
