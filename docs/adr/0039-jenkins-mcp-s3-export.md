@@ -2,7 +2,7 @@
 # 0039: Jenkins MCP server-side S3 export for large logs and artifacts
 
 **Status:** Accepted (2026-06-23)
-**Related:** [ADR 0038](0038-jenkins-mcp-image-autodeploy.md) (the same gateway's deploy path; this is the first ADR to record a jenkins-mcp runtime capability), [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (the "large artifacts to S3" ownership principle), [ADR 0033](0033-s3-gateway-endpoint-policy-iam-governed.md) (allow S3 at the VPC gateway endpoint, govern at IAM, which this object-scoped policy does), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) and [ADR 0012](0012-authentik-saml-oidc-bridge.md) (the gateway's single-credential and Authentik/Duo OIDC posture this builds on).
+**Related:** [ADR 0040](0040-jenkins-mcp-in-artifact-search-extract.md) (in-artifact search/extract, which reuses this S3 path via `s3_export.upload_bytes` to return a large extracted tarball member), [ADR 0038](0038-jenkins-mcp-image-autodeploy.md) (the same gateway's deploy path; this is the first ADR to record a jenkins-mcp runtime capability), [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (the "large artifacts to S3" ownership principle), [ADR 0033](0033-s3-gateway-endpoint-policy-iam-governed.md) (allow S3 at the VPC gateway endpoint, govern at IAM, which this object-scoped policy does), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) and [ADR 0012](0012-authentik-saml-oidc-bridge.md) (the gateway's single-credential and Authentik/Duo OIDC posture this builds on).
 
 ## Context
 

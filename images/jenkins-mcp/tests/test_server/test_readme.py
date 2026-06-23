@@ -59,7 +59,7 @@ async def test_get_readme_lists_fleet_and_key_sections(mocker):
     text = await readme.get_readme()
 
     assert 'Masters configured: ps80, pxc' in text
-    assert 'master="pxc"' in text  # documents per-call selection
+    assert 'master="<name>"' in text  # documents per-call selection (generic placeholder)
     assert 'list_masters()' in text
     assert 'query_items' in text
     assert 'Read (everyone)' in text  # access tiers documented
