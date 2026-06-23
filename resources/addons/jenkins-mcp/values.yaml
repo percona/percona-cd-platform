@@ -49,3 +49,9 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+# Prometheus scrape of /metrics. The cluster Alloy DaemonSet discovers every ServiceMonitor
+# cluster-wide and remote-writes to Mimir; no selector label is needed. Set enabled: false to stop.
+serviceMonitor:
+  enabled: true
+  interval: 30s

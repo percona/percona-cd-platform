@@ -1,0 +1,26 @@
+{{- if .Values.serviceMonitor.enabled }}
+# The cluster Alloy DaemonSet runs prometheus.operator.servicemonitors "all", discovering every
+# ServiceMonitor cluster-wide (no selector label required) and remote-writing /metrics to Mimir.
+# Series carry cluster="percona-ci-platform" + namespace/service/pod from the scrape.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins-mcp
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http          # Service port NAME (80 -> targetPort http -> container 9887)
+      path: /metrics      # distinct from the /healthz probe path
+      interval: {{ .Values.serviceMonitor.interval | default "30s" }}
+      scheme: http
+{{- end }}
