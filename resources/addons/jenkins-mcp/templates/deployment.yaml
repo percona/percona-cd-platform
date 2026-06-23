@@ -33,6 +33,8 @@ spec:
             - "9887"
             {{- if .Values.readOnly }}
             - --read-only
+            {{- else if .Values.enableOperate }}
+            - --enable-operate
             {{- end }}
           env:
             - name: HOME
