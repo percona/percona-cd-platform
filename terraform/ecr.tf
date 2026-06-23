@@ -48,9 +48,13 @@ resource "aws_ecr_lifecycle_policy" "jenkins_endpoint_reconciler" {
   policy     = local.ecr_keep_last_10
 }
 
+# jenkins-mcp is CI-published on every push to main, and deploy pins a tagged
+# digest in resources/addons/jenkins-mcp/values.yaml. A keep-last-N "any"-tag
+# policy could expire a still-deployed tag, so use the untagged-only shape (like
+# jenkins_percona) which never touches a tagged digest.
 resource "aws_ecr_lifecycle_policy" "jenkins_mcp" {
   repository = aws_ecr_repository.jenkins_mcp.name
-  policy     = local.ecr_keep_last_10
+  policy     = local.ecr_expire_untagged_after_14d
 }
 
 locals {

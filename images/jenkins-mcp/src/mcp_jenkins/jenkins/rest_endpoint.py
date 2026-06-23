@@ -1,0 +1,56 @@
+from string import Formatter
+
+
+class RestEndpoint(str):
+    def __new__(cls, value: str) -> str:
+        obj = str.__new__(cls, value)
+        obj._fields = {name for _, name, _, _ in Formatter().parse(value) if name}
+        return obj
+
+    def __call__(self, **kwargs: str | int) -> str:
+        if missing := self._fields.difference(kwargs):
+            raise KeyError(f'Missing: {missing}')
+
+        return self.format(**kwargs)
+
+
+CRUMB = RestEndpoint('crumbIssuer/api/json')
+
+ITEM = RestEndpoint('{folder}job/{name}/api/json?depth={depth}')
+ITEMS = RestEndpoint('{folder}/api/json?tree={query}')
+ITEM_CONFIG = RestEndpoint('{folder}job/{name}/config.xml')
+ITEM_BUILD = RestEndpoint('{folder}job/{name}/{build_type}')
+
+QUEUE = RestEndpoint('queue/api/json?depth={depth}')
+QUEUE_ITEM = RestEndpoint('queue/item/{id}/api/json?depth={depth}')
+QUEUE_CANCEL_ITEM = RestEndpoint('queue/cancelItem?id={id}')
+
+NODE = RestEndpoint('computer/{name}/api/json?depth={depth}')
+NODES = RestEndpoint('computer/api/json?depth={depth}')
+NODE_CONFIG = RestEndpoint('computer/{name}/config.xml')
+
+VIEW = RestEndpoint('{view_path}/api/json?depth={depth}')
+VIEWS = RestEndpoint('api/json?tree=views[name,url]')
+
+BUILD = RestEndpoint('{folder}job/{name}/{number}/api/json?depth={depth}')
+BUILD_CONSOLE_OUTPUT = RestEndpoint('{folder}job/{name}/{number}/consoleText')
+BUILD_STOP = RestEndpoint('{folder}job/{name}/{number}/stop')
+BUILD_REPLAY = RestEndpoint('{folder}job/{name}/{number}/replay')
+BUILD_PARAMETERS = RestEndpoint('{folder}job/{name}/{number}/api/json?tree=actions[parameters[name,value]]')
+BUILD_TEST_REPORT = RestEndpoint('{folder}job/{name}/{number}/testReport/api/json?depth={depth}')
+BUILD_ARTIFACT = RestEndpoint('{folder}job/{name}/{number}/artifact/{relative_path}')
+BUILD_ARTIFACTS = RestEndpoint('{folder}job/{name}/{number}/api/json?tree=artifacts[fileName,relativePath,displayPath]')
+JOB_BUILDS = RestEndpoint(
+    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url]{{0,{count}}}'
+)
+BUILD_WORKFLOW_DESCRIBE = RestEndpoint('{folder}job/{name}/{number}/wfapi/describe')
+BUILD_CHANGESETS = RestEndpoint(
+    '{folder}job/{name}/{number}/api/json'
+    '?tree=changeSet[items[commitId,author[fullName],msg,timestamp,affectedPaths]],'
+    'changeSets[items[commitId,author[fullName],msg,timestamp,affectedPaths]]'
+)
+
+PLUGIN_LIST = RestEndpoint('pluginManager/api/json?depth={depth}')
+PLUGIN_LIST_TREE = RestEndpoint('pluginManager/api/json?tree=plugins[{tree}]')
+
+SCRIPT_TEXT = RestEndpoint('scriptText')
