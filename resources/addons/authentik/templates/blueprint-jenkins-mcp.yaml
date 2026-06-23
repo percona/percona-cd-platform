@@ -45,9 +45,16 @@ data:
           include_claims_in_id_token: true
           access_token_validity:  minutes=30
           refresh_token_validity: days=30
+          # Loopback regex covers Claude Code's ephemeral callback port (RFC 8252).
+          # The two strict cursor entries cover the Cursor MCP OAuth callback (web
+          # and the desktop deep link); Cursor pre-registers this same client_id.
           redirect_uris:
             - matching_mode: regex
               url: ^http://(127\.0\.0\.1|localhost):[0-9]+/callback$
+            - matching_mode: strict
+              url: https://www.cursor.com/agents/mcp/oauth/callback
+            - matching_mode: strict
+              url: cursor://anysphere.cursor-mcp/oauth/callback
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
           # openid + profile match the working grafana/argocd providers (profile
           # carries `groups`); offline_access is bound so a refresh_token is
@@ -58,6 +65,7 @@ data:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
 
       - model: authentik_core.application
+        id: jenkins-mcp-app
         identifiers:
           slug: jenkins-mcp
         attrs:
@@ -67,3 +75,26 @@ data:
           open_in_new_tab: false
           policy_engine_mode: any
           group: ""
+
+      # Access tiers. Membership gates what the MCP server serves: jenkins-mcp-users
+      # is required to authorize at all (the application binding below); jenkins-mcp-writers
+      # additionally unlocks the operate (build-lifecycle) tools, enforced per-call by the
+      # server. Users are JIT-provisioned via the Duo SSO SAML source, then added to a group.
+      - model: authentik_core.group
+        id: jenkins-mcp-users
+        identifiers:
+          name: jenkins-mcp-users
+      - model: authentik_core.group
+        id: jenkins-mcp-writers
+        identifiers:
+          name: jenkins-mcp-writers
+
+      # Bind jenkins-mcp-users to the application so only members can authorize and
+      # receive a token (non-members are denied at consent). Writers must also be users.
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf jenkins-mcp-app
+          group: !KeyOf jenkins-mcp-users
+          order: 0
+        attrs:
+          enabled: true
