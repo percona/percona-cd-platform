@@ -1,4 +1,6 @@
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import reduce
 from typing import Literal
 
@@ -548,6 +550,65 @@ class Jenkins:
         return self.endpoint_url(
             rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path),
         )
+
+    @contextmanager
+    def stream_build_console_output(self, *, fullname: str, number: int) -> Iterator[Response]:
+        """Open a streaming GET of the whole raw console log.
+
+        Yields an open response with stream=True so the caller can pipe response.raw straight to a
+        sink without buffering the whole log in memory. Unlike get_build_console_output this applies
+        no line filtering. decode_content lets the caller read decompressed bytes from response.raw.
+
+        Args:
+            fullname: The fullname of the job.
+            number: The build number.
+
+        Yields:
+            The open requests.Response; closed when the context exits.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self._session.get(
+            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
+            timeout=self.timeout,
+            stream=True,
+        )
+        response.raise_for_status()
+        response.raw.decode_content = True
+        try:
+            yield response
+        finally:
+            response.close()
+
+    @contextmanager
+    def stream_build_artifact(self, *, fullname: str, number: int, relative_path: str) -> Iterator[Response]:
+        """Open a streaming GET of a build artifact's raw bytes.
+
+        Yields an open response with stream=True so the caller can pipe response.raw straight to a
+        sink without buffering the whole artifact in memory (unlike get_build_artifact, which returns
+        response.content). The caller must validate relative_path; it is interpolated into the URL.
+
+        Args:
+            fullname: The fullname of the job.
+            number: The build number.
+            relative_path: The relative path of the artifact.
+
+        Yields:
+            The open requests.Response; closed when the context exits.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self._session.get(
+            self.endpoint_url(
+                rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
+            ),
+            timeout=self.timeout,
+            stream=True,
+        )
+        response.raise_for_status()
+        response.raw.decode_content = True
+        try:
+            yield response
+        finally:
+            response.close()
 
     def get_running_builds(self) -> list[Build]:
         """Get all running builds across all nodes.

@@ -1,12 +1,13 @@
 [project]
 name = "mcp-jenkins"
-version = "0.3.1"
+version = "0.4.0"
 description = "Token-free Jenkins fleet MCP gateway for Percona developers. Authenticates callers via Authentik (Duo) OIDC and holds a single read-only Jenkins credential; serves read-only fleet tools plus a writers-gated operate tier."
 readme = "README.md"
 license = "AGPL-3.0-only"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.3",
+    "boto3~=1.35",
     "fastmcp>=3.0.2,<4",
     "loguru>=0.7.3",
     "prometheus-client>=0.21.0",

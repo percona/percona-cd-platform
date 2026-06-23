@@ -3,6 +3,12 @@ aws:
   accountId: ""
   region: us-east-1
 
+# S3 export bucket (terraform jenkins-mcp-exports.tf). export_build_log / export_build_artifact
+# stream a log/artifact here and return a short-lived presigned GET URL (default 6h, capped at 6h).
+s3:
+  exportsBucket: percona-ci-platform-jenkins-mcp-exports
+  presignTtl: 21600
+
 # First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
 image:
   repository: percona-cd/jenkins-mcp

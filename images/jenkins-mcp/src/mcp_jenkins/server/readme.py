@@ -66,6 +66,14 @@ _CATALOG = [
                 'get_build_stages(fullname, number?, master?)     pipeline stage breakdown (empty for freestyle)',
             ),
             ('get_build_changeset', 'get_build_changeset(fullname, number?, master?)  SCM commits included in a build'),
+            (
+                'export_build_log',
+                'export_build_log(fullname, number?, master?)     stream the WHOLE log to S3, returns a signed URL',
+            ),
+            (
+                'export_build_artifact',
+                'export_build_artifact(fullname, relative_path, number?, master?)  artifact -> S3 signed URL',
+            ),
         ],
     ),
     (
@@ -118,6 +126,8 @@ _SAMPLES_READ = [
     '  "which stage failed in <job>?"  -> get_build_stages(fullname="<job>")',
     '  "what changed in <job> build 50?"  -> get_build_changeset(fullname="<job>", number=50)',
     '  "find OOMKilled in pxc jobs"  -> search_build_logs(pattern="OOMKilled", job_pattern="pxc.*", master="pxc")',
+    '  "download the full log of <job>"  -> export_build_log(fullname="<job>")',
+    '  "signed link to an artifact"      -> export_build_artifact(fullname="<job>", relative_path="dist/app.tar.gz")',
 ]
 
 _SAMPLES_OPERATE = [
@@ -216,5 +226,6 @@ async def get_readme() -> str:
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
         '  - Reads are open to any authenticated Percona user (Duo SSO login).',
         '  - Operate tools additionally need the jenkins-mcp-writers group (refused otherwise).',
+        '  - export_build_log / export_build_artifact stream big logs/artifacts to a short-lived signed S3 URL.',
     ]
     return '\n'.join(lines)

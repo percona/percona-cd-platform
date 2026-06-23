@@ -621,6 +621,39 @@ class TestBuild:
         jenkins.get_build_console_output(fullname='example-job', number=1, limit=2)
         mock_response.close.assert_called_once()
 
+    def test_stream_build_console_output(self, jenkins, mock_session, mocker):
+        raw = mocker.Mock()
+        mock_response = mocker.Mock(raw=raw)
+        mock_session.get.return_value = mock_response
+
+        with jenkins.stream_build_console_output(fullname='example-job', number=1) as resp:
+            assert resp is mock_response
+
+        mock_session.get.assert_called_once_with(
+            'https://example.com/job/example-job/1/consoleText',
+            timeout=jenkins.timeout,
+            stream=True,
+        )
+        assert raw.decode_content is True
+        mock_response.raise_for_status.assert_called_once()
+        mock_response.close.assert_called_once()
+
+    def test_stream_build_artifact(self, jenkins, mock_session, mocker):
+        raw = mocker.Mock()
+        mock_response = mocker.Mock(raw=raw)
+        mock_session.get.return_value = mock_response
+
+        with jenkins.stream_build_artifact(fullname='example-job', number=1, relative_path='dist/app.tar.gz') as resp:
+            assert resp is mock_response
+
+        mock_session.get.assert_called_once_with(
+            'https://example.com/job/example-job/1/artifact/dist/app.tar.gz',
+            timeout=jenkins.timeout,
+            stream=True,
+        )
+        assert raw.decode_content is True
+        mock_response.close.assert_called_once()
+
     def test_stop_build(self, jenkins, mock_session):
         assert jenkins.stop_build(fullname='example-job', number=42) is None
 
