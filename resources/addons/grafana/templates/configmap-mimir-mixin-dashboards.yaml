@@ -11,7 +11,7 @@ biggest single dashboard, mimir-reads.json, is 261KiB). The
 `grafana_dashboard: "1"` label is what the chart's sidecar.dashboards
 block (values.yaml) discovers via searchNamespace=ALL; the
 `grafana_folder: "Observability"` annotation files them in the
-Observability space next to the Loki dashboard (ADR 0035).
+Observability space next to the Loki dashboard (ADR 0041).
 
 These dashboards are the destination of the inline cross-dashboard links
 in `Mimir / Overview` (panels with markdown like

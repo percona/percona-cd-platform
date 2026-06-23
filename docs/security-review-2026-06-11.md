@@ -121,7 +121,7 @@ Basic auth was disabled per this finding, which surfaced the second half of
 the problem: with `disable_login_form`, Grafana 12 also disables password
 session login, so the local admin had NO API surface at all. The
 provisioning-reload hook 401ed for weeks and admin automation (folder
-cleanup, the ADR 0035 permissions phase) was impossible. PR #220 re-enabled
+cleanup, the ADR 0041 permissions phase) was impossible. PR #220 re-enabled
 basic auth with compensating controls that change the risk profile this
 finding described: the credential is no longer the chart-random Secret but a
 32-char value pinned in Secrets Manager

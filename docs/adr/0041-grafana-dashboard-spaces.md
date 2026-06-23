@@ -1,5 +1,5 @@
 <!-- Copyright (C) 2026 Percona LLC -->
-# 0035 — Grafana dashboard spaces: audience-aligned folder taxonomy
+# 0041 — Grafana dashboard spaces: audience-aligned folder taxonomy
 
 **Status:** Accepted (2026-06-12)
 **Related:** [ADR 0016](0016-lgtm-only-metrics-stack.md) (datasource UID pinning), [ADR 0012](0012-authentik-saml-oidc-bridge.md) (group → role mapping), [ADR 0031](0031-in-cluster-synthetic-probing-for-jenkins-masters.md) (jenkins-uptime dashboard), [ADR 0034](0034-cloudwatch-exporter-for-aws-lb-metrics.md) (AWS LB dashboard)
