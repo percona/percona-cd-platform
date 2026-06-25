@@ -11,6 +11,7 @@ from mcp_jenkins.core.fleet import get_fleet
 from mcp_jenkins.server import mcp
 
 _OPERATE_TOOLS = ('build_item', 'replay_build', 'stop_build', 'cancel_queue_item')
+_MANAGE_TOOLS = ('create_item', 'set_item_config', 'delete_item')
 
 # Curated catalog: (group heading, [(tool_name, description_line)...]). Lines are filtered to
 # the served set at call time; a group with no served line is dropped. Multi-tool read lines are
@@ -147,6 +148,23 @@ _CATALOG = [
             ),
         ],
     ),
+    (
+        'Manage (job definitions -- jenkins-mcp-writers only)',
+        [
+            (
+                'create_item',
+                'create_item(fullname, config_xml, master?)      create a new job/folder from config.xml',
+            ),
+            (
+                'set_item_config',
+                'set_item_config(fullname, config_xml, master?)  overwrite an existing job/folder config.xml',
+            ),
+            (
+                'delete_item',
+                'delete_item(fullname, master?)                  delete a job/folder and its build history',
+            ),
+        ],
+    ),
 ]
 
 _SAMPLES_READ = [
@@ -179,6 +197,13 @@ _SAMPLES_OPERATE = [
     '  "cancel queue item 45"     -> cancel_queue_item(id=45)',
 ]
 
+_SAMPLES_MANAGE = [
+    '  "download a job config"  -> get_item_config(fullname="<job>")',
+    '  "create a job from XML"  -> create_item(fullname="<folder/job>", config_xml="<config.xml>")',
+    '  "update a job config"    -> set_item_config(fullname="<job>", config_xml="<config.xml>")',
+    '  "delete a job"           -> delete_item(fullname="<job>")',
+]
+
 
 async def _served_tool_names() -> set[str] | None:
     """The names this instance actually serves (after the CLI tag filter), or None if unknown.
@@ -200,20 +225,24 @@ async def get_readme() -> str:
 
     Returns a concise guide covering what this server is, the configured masters, how to select a
     master per call (the optional `master` argument), the access tiers (read for everyone,
-    build-lifecycle operate for the jenkins-mcp-writers group, and no config/script mutation at
-    all), the tool catalog filtered to what this instance serves, sample queries, and tips. Call
-    this first whenever you are unsure which tool to use or how to query the Jenkins fleet.
+    build-lifecycle operate and job-definition manage for the jenkins-mcp-writers group, and no
+    node-config or script-console mutation), the tool catalog filtered to what this instance serves,
+    sample queries, and tips. Call this first whenever you are unsure which tool to use.
     """
     fleet = ', '.join(get_fleet().names()) or '(none configured)'
     served = await _served_tool_names()
     operate_served = served is None or any(t in served for t in _OPERATE_TOOLS)
+    manage_served = served is None or any(t in served for t in _MANAGE_TOOLS)
 
-    if served is None:
-        operate_status = 'served only on operate-mode deployments (run list_masters/list-tools to confirm here).'
-    elif operate_served:
-        operate_status = 'ENABLED on this instance (you still need the jenkins-mcp-writers group to call it).'
-    else:
-        operate_status = 'not enabled on this instance (read-only deployment).'
+    def _tier_status(is_served: bool) -> str:  # noqa: FBT001
+        if served is None:
+            return 'served only on operate-mode deployments (run list_masters/list-tools to confirm here).'
+        if is_served:
+            return 'ENABLED on this instance (you still need the jenkins-mcp-writers group to call it).'
+        return 'not enabled on this instance (read-only deployment).'
+
+    operate_status = _tier_status(operate_served)
+    manage_status = _tier_status(manage_served)
 
     def is_served(name: str) -> bool:
         return served is None or name in served
@@ -232,8 +261,9 @@ async def get_readme() -> str:
         '## Access tiers',
         '  - Read (everyone): inspect jobs, builds, logs, nodes, queue, views across the whole fleet.',
         f'  - Operate (build lifecycle): build / replay / stop / cancel. {operate_status}',
-        '  - Config + script mutation (edit/delete a job, node config, Groovy) is NEVER exposed here, in',
-        '    any mode. There is no tool for it. Use the Jenkins UI for that.',
+        f'  - Manage (job definitions): create / update / delete a job config.xml. {manage_status}',
+        '  - Node config and Groovy script-console mutation are NEVER exposed here, in any mode. There is',
+        '    no tool for them. Use the Jenkins UI for that.',
         '',
         '## Pick a master (per call)',
         'Every per-master tool takes an optional `master` argument:',
@@ -257,6 +287,8 @@ async def get_readme() -> str:
     lines += ['', '## Sample queries', *_SAMPLES_READ]
     if operate_served:
         lines += ['operate (jenkins-mcp-writers, when enabled):', *_SAMPLES_OPERATE]
+    if manage_served:
+        lines += ['manage (jenkins-mcp-writers, when enabled):', *_SAMPLES_MANAGE]
 
     lines += [
         '',
@@ -266,7 +298,8 @@ async def get_readme() -> str:
         '  - On a big master, narrow with query_items(fullname_pattern=...) rather than raising limit.',
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
         '  - Reads are open to any authenticated Percona user (Duo SSO login).',
-        '  - Operate tools additionally need the jenkins-mcp-writers group (refused otherwise).',
+        '  - Operate and manage tools additionally need the jenkins-mcp-writers group (refused otherwise).',
+        '  - A manage writer can define a job that runs code on a master, so the group is code-execution-capable.',
         '  - export_build_log / export_build_artifact stream big logs/artifacts to a short-lived signed S3 URL.',
         '  - For a failing build use get_build_failure_summary (just the failures), not the raw test report.',
         '  - In-artifact (streamed + capped): grep_build_artifact greps a log or a .tar.gz member (literal default,',
