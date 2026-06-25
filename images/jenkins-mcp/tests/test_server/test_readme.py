@@ -35,6 +35,7 @@ _READ_SET = {
     'get_view',
 }
 _OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'}
+_MANAGE_SET = _OPERATE_SET | {'create_item', 'set_item_config', 'delete_item'}
 
 
 def _patch_fleet(mocker, masters):
@@ -95,7 +96,22 @@ async def test_get_readme_hides_operate_when_read_only(mocker):
 
     assert 'not enabled on this instance' in text
     assert 'build_item(' not in text  # operate catalog/sample dropped
-    assert '-- jenkins-mcp-writers only' not in text  # operate catalog group heading dropped
+    assert 'create_item(' not in text  # manage catalog/sample dropped
+    assert '-- jenkins-mcp-writers only' not in text  # operate + manage catalog group headings dropped
+
+
+@pytest.mark.asyncio
+async def test_get_readme_shows_manage_when_served(mocker):
+    _patch_fleet(mocker, [Master(name='ps80', url='u', username='u', token='x')])  # noqa: S106
+    _patch_served(mocker, _MANAGE_SET)
+
+    text = await readme.get_readme()
+
+    assert 'Manage (job definitions' in text  # manage catalog group heading
+    assert 'create_item(fullname' in text  # manage tool in the catalog
+    assert 'delete_item(' in text
+    assert 'manage (jenkins-mcp-writers, when enabled)' in text  # manage sample block present
+    assert 'NEVER exposed' in text  # node/script mutation still guaranteed off
 
 
 @pytest.mark.asyncio
