@@ -23,13 +23,18 @@ from prometheus_client import Counter, Histogram
 
 from mcp_jenkins.core.fleet import get_fleet
 
-# Config/script-mutating tools (job UPDATE, node config, script console): NEVER served in operate
-# mode; they stay tagged 'write' in the server modules so read-only/operate both exclude them.
-_CONFIG_TOOLS = frozenset({'set_item_config', 'set_node_config', 'run_groovy_script'})
-# Build-lifecycle tools: served only in write-enable (operate) mode AND only to the writers group.
+# Raw config/script mutators (node config, script console): NEVER served. They stay tagged 'write'
+# in the server modules, so read-only/operate/manage all exclude them. run_groovy_script is RCE.
+_CONFIG_TOOLS = frozenset({'set_node_config', 'run_groovy_script'})
+# Job-definition CRUD: served in operate mode under the 'manage' tag AND gated to the writers group.
+# They create/update/delete a job's config.xml, distinct from build lifecycle.
+_MANAGE_TOOLS = frozenset({'create_item', 'set_item_config', 'delete_item'})
+# Build-lifecycle tools: served in operate mode AND gated to the writers group.
 # They trigger/replay/stop/cancel builds; they never update or delete job config.
 _OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'})
-_WRITE_TOOLS = _OPERATE_TOOLS | _CONFIG_TOOLS  # all mutating tools, for the is_write audit flag
+# Every tool whose call requires the writers group (build lifecycle + job-config CRUD).
+_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS
+_WRITE_TOOLS = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS  # all mutating tools, for the is_write flag
 _WRITERS_GROUP = 'jenkins-mcp-writers'
 
 # Argument keys safe to log verbatim (job names, build numbers, search patterns, flags). Everything
@@ -157,7 +162,11 @@ class AuditMiddleware(Middleware):
             **_identity(),
         }
         start = time.perf_counter()
-        denied = tool in _OPERATE_TOOLS and _WRITERS_GROUP not in (record.get('groups') or [])
+        # A non-list `groups` claim would turn `not in` into a substring test and could fail open
+        # (e.g. a bare 'x-jenkins-mcp-writers-y' string). Force list-membership semantics.
+        claim_groups = record.get('groups')
+        is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups
+        denied = tool in _GROUP_GATED and not is_writer
         try:
             if denied:
                 record['status'] = 'denied'
