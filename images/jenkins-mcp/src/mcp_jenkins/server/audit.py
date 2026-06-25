@@ -162,7 +162,11 @@ class AuditMiddleware(Middleware):
             **_identity(),
         }
         start = time.perf_counter()
-        denied = tool in _GROUP_GATED and _WRITERS_GROUP not in (record.get('groups') or [])
+        # A non-list `groups` claim would turn `not in` into a substring test and could fail open
+        # (e.g. a bare 'x-jenkins-mcp-writers-y' string). Force list-membership semantics.
+        claim_groups = record.get('groups')
+        is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups
+        denied = tool in _GROUP_GATED and not is_writer
         try:
             if denied:
                 record['status'] = 'denied'

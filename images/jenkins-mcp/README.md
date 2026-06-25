@@ -11,7 +11,9 @@ and injects it per call, so no user ever handles a Jenkins token.
 - The operate tier (build, replay, stop, cancel) and the manage tier (create, update, delete job
   definitions) are served only when the server runs with `--enable-operate`, and are gated per call
   to the `jenkins-mcp-writers` Authentik group.
-- Node-config and script-console mutation are never exposed, in any mode.
+- Node-config and script-console mutation are never exposed, in any mode. The manage tier still lets a
+  writer define a job that runs code on a master, so `jenkins-mcp-writers` is a code-execution-capable
+  group and should be curated accordingly.
 
 ## Connect your MCP client
 

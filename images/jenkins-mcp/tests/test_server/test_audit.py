@@ -215,6 +215,33 @@ async def test_manage_tool_allowed_with_writers_group(capture_audit, mocker):
 
 
 @pytest.mark.asyncio
+async def test_gated_tool_denied_when_groups_claim_is_a_string(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    # A non-list groups claim must not fail open via substring matching.
+    token = mocker.Mock(claims={'sub': 'u1', 'groups': 'prefix-jenkins-mcp-writers-suffix'}, client_id='c')
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'create_item'
+    ctx.message.arguments = {'fullname': 'j', 'config_xml': '<project/>'}
+    ctx.timestamp = datetime.now(UTC)
+
+    called = {'ran': False}
+
+    async def call_next(_):
+        called['ran'] = True
+        return 'ran'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    assert called['ran'] is False  # string claim does not satisfy list membership
+    assert json.loads(capture_audit[-1])['status'] == 'denied'
+
+
+@pytest.mark.asyncio
 async def test_middleware_increments_metrics(capture_audit, mocker):
     from prometheus_client import REGISTRY
 
