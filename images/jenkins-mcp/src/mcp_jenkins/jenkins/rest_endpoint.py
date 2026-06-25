@@ -24,6 +24,8 @@ ITEM_PARAMETERS = RestEndpoint(
     '?tree=property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
 )
 ITEM_BUILD = RestEndpoint('{folder}job/{name}/{build_type}')
+ITEM_CREATE = RestEndpoint('{folder}createItem')
+ITEM_DELETE = RestEndpoint('{folder}job/{name}/doDelete')
 
 QUEUE = RestEndpoint('queue/api/json?depth={depth}')
 QUEUE_ITEM = RestEndpoint('queue/item/{id}/api/json?depth={depth}')

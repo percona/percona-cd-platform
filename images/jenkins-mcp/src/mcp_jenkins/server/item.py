@@ -57,15 +57,46 @@ async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None)
     return jenkins(ctx, master).get_item_config(fullname=fullname)
 
 
-@mcp.tool(tags=['write'])
+@mcp.tool(tags=['manage'])
 async def set_item_config(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
-    """Set specific item config in Jenkins
+    """Update an existing item's config.xml in Jenkins (writers only).
+
+    Gated to the jenkins-mcp-writers group and served only in operate mode. Posts the full
+    config.xml to an existing job; use create_item for an item that does not exist yet.
 
     Args:
         fullname: The fullname of the item
-        config_xml: The config XML of the item
+        config_xml: The full config XML to write
     """
     jenkins(ctx, master).set_item_config(fullname=fullname, config_xml=config_xml)
+
+
+@mcp.tool(tags=['manage'])
+async def create_item(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
+    """Create a new Jenkins item (job/folder) from a config.xml (writers only).
+
+    Gated to the jenkins-mcp-writers group and served only in operate mode. The parent folder
+    must already exist; fails if an item with this fullname already exists (use set_item_config
+    to update an existing one).
+
+    Args:
+        fullname: The fullname of the item to create
+        config_xml: The full config XML for the new item
+    """
+    jenkins(ctx, master).create_item(fullname=fullname, config_xml=config_xml)
+
+
+@mcp.tool(tags=['manage'])
+async def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> None:
+    """Delete a Jenkins item (job/folder) by fullname (writers only).
+
+    Gated to the jenkins-mcp-writers group and served only in operate mode. Irreversible: removes
+    the item and its build history.
+
+    Args:
+        fullname: The fullname of the item to delete
+    """
+    jenkins(ctx, master).delete_item(fullname=fullname)
 
 
 @mcp.tool(tags=['read'])

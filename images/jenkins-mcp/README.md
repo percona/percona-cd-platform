@@ -8,9 +8,10 @@ and injects it per call, so no user ever handles a Jenkins token.
 ## Access model
 
 - Reads are open to any authenticated Percona user (Authentik / Duo SSO).
-- The operate tier (build, replay, stop, cancel) is served only when the server runs with
-  `--enable-operate`, and is gated per call to the `jenkins-mcp-writers` Authentik group.
-- Config and script mutation are never exposed, in any mode.
+- The operate tier (build, replay, stop, cancel) and the manage tier (create, update, delete job
+  definitions) are served only when the server runs with `--enable-operate`, and are gated per call
+  to the `jenkins-mcp-writers` Authentik group.
+- Node-config and script-console mutation are never exposed, in any mode.
 
 ## Connect your MCP client
 
@@ -30,9 +31,10 @@ Facts that apply to every client:
   `auth.CLIENT_ID`. Omit it and the client falls back to DCR and fails with "does not support
   dynamic client registration".
 - **Access.** Reads are open to any authenticated Percona user (including downloading a large log or
-  artifact to a short-lived signed S3 URL). The operate tier (build, replay, stop, cancel) is served
-  only to members of the `jenkins-mcp-writers` Authentik group, enforced per call. Config and script
-  mutation are never exposed. 33 tools total (29 read, 4 operate).
+  artifact to a short-lived signed S3 URL). The operate tier (build, replay, stop, cancel) and the
+  manage tier (create, update, delete job definitions) are served only to members of the
+  `jenkins-mcp-writers` Authentik group, enforced per call. Node-config and script mutation are never
+  exposed. 36 tools total (29 read, 4 operate, 3 manage).
 - **Master selection.** Pick a master per call with the `master` argument (for example
   `master: "ps80"`), or pin a session default by sending the `x-jenkins-master` header. Allowlisted
   names only. Call `list_masters` to see them.

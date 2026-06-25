@@ -793,6 +793,34 @@ class Jenkins:
             data=config_xml,
         )
 
+    def create_item(self, *, fullname: str, config_xml: str) -> None:
+        """Create a new item (job/folder) from a config.xml under its parent folder.
+
+        The parent folder must already exist; Jenkins returns an error if an item with this
+        fullname is already present. The leaf name is sent as the createItem `name` query param.
+
+        Args:
+            fullname: The full name of the item to create (e.g., "folder1/new-job").
+            config_xml: The item configuration as an XML string.
+        """
+        folder, name = self._parse_fullname(fullname)
+        self.request(
+            'POST',
+            rest_endpoint.ITEM_CREATE(folder=folder),
+            headers=self.DEFAULT_HEADERS,
+            data=config_xml,
+            params={'name': name},
+        )
+
+    def delete_item(self, *, fullname: str) -> None:
+        """Delete an item (job/folder) by its fullname, including its build history.
+
+        Args:
+            fullname: The full name of the item (e.g., "folder1/folder2/item").
+        """
+        folder, name = self._parse_fullname(fullname)
+        self.request('POST', rest_endpoint.ITEM_DELETE(folder=folder, name=name))
+
     def query_items(
         self,
         *,

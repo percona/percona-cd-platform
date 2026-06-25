@@ -95,8 +95,11 @@ def main(
                 logger.error(f'write preflight violation: {v}')
             logger.error('Refusing operate (write) mode: the Jenkins service identity is over-privileged.')
             sys.exit(1)
-        mcp.enable(tags={'read', 'operate'}, only=True)
-        logger.info('Operate (write) mode enabled: read + operate tools, gated to the jenkins-mcp-writers group.')
+        mcp.enable(tags={'read', 'operate', 'manage'}, only=True)
+        logger.info(
+            'Operate (write) mode enabled: read + operate (build) + manage (job-config CRUD) tools; '
+            'operate and manage are gated per call to the jenkins-mcp-writers group.'
+        )
 
     if transport == 'stdio':
         asyncio.run(mcp.run_async(transport=transport))

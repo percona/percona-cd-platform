@@ -74,6 +74,24 @@ async def test_set_item_config(mock_jenkins, mocker):
 
 
 @pytest.mark.asyncio
+async def test_create_item(mock_jenkins, mocker):
+    mock_jenkins.create_item.return_value = None
+
+    await item.create_item(mocker.Mock(), fullname='folder1/job1', config_xml='<project/>')
+
+    mock_jenkins.create_item.assert_called_once_with(fullname='folder1/job1', config_xml='<project/>')
+
+
+@pytest.mark.asyncio
+async def test_delete_item(mock_jenkins, mocker):
+    mock_jenkins.delete_item.return_value = None
+
+    await item.delete_item(mocker.Mock(), fullname='folder1/job1')
+
+    mock_jenkins.delete_item.assert_called_once_with(fullname='folder1/job1')
+
+
+@pytest.mark.asyncio
 async def test_query_items(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = [
         Job(fullname='job1', color='blue', name='job1', url='1', class_='Job'),
