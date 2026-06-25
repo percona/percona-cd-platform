@@ -11,6 +11,9 @@ and injects it per call, so no user ever handles a Jenkins token.
 - The operate tier (build, replay, stop, cancel) and the manage tier (create, update, delete job
   definitions) are served only when the server runs with `--enable-operate`, and are gated per call
   to the `jenkins-mcp-writers` Authentik group.
+- Job management is API-only for now. The manage tools are served but the gateway identity lacks
+  backend Create/Configure/Delete, so they return 403. Manage job definitions through the Jenkins
+  API/CLI directly until this is activated (PS-11341).
 - Node-config and script-console mutation are never exposed, in any mode. The manage tier still lets a
   writer define a job that runs code on a master, so `jenkins-mcp-writers` is a code-execution-capable
   group and should be curated accordingly.
