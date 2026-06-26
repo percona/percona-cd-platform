@@ -18,7 +18,8 @@ image:
 replicaCount: 1
 # Operate mode: serve the build-lifecycle tools (build/replay/stop/cancel) after the fail-closed
 # permission preflight, gated per-call to the jenkins-mcp-writers group. Reads stay open to any
-# authenticated user; config/script mutation is never served. Set readOnly: true to revert.
+# authenticated user, except get_item_config (config.xml) which is writers-gated; node-config and
+# script-console mutation are never served. Set readOnly: true to revert.
 readOnly: false
 enableOperate: true
 

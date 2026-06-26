@@ -12,10 +12,14 @@ the access model are in `images/jenkins-mcp/README.md`; the S3 export path in
 
 - **Reads** (jobs, builds, logs, nodes, queue, views, and the S3 log/artifact export) are open to
   **any authenticated Percona user** (Authentik / Duo SSO). There is no read group, and first login
-  JIT-provisions the Authentik user.
-- **Operate** (build, replay, stop, cancel) is served only to members of the **`jenkins-mcp-writers`**
-  Authentik group, enforced per call.
-- **Config and script mutation are never served**, in any mode.
+  JIT-provisions the Authentik user. **Exception:** `get_item_config` (a job's raw config.xml) is
+  gated to **`jenkins-mcp-writers`**, because config.xml can carry plaintext secrets (e.g. the
+  `<authToken>` remote-build-trigger token).
+- **Operate** (build, replay, stop, cancel) and **manage** (create / update / delete job definitions)
+  are served only with `--enable-operate`, gated per call to **`jenkins-mcp-writers`**. The manage
+  tier is served but currently inert: the service identity lacks backend Create/Configure/Delete, so
+  those calls return 403 (job management stays API/CLI-only for now, PS-11341).
+- **Node-config and Groovy script-console mutation are never served**, in any mode.
 
 ## The fleet (which masters are reachable)
 
@@ -34,11 +38,14 @@ code. External Secrets Operator syncs it to the k8s secret `jenkins-mcp-fleet`, 
 ## Add a master
 
 1. **Grant the service account read on that master.** The gateway authenticates as the
-   `JNKPercona` service user. On the target master ensure `JNKPercona` has `Overall/Read` plus
-   folder-scoped `Job/Read` (add `Job/Build` and `Job/Cancel` only if that master should support the
-   operate tier). It must NOT hold `Overall/RunScripts`, `Job/Configure`, `Job/Create`, or
-   credentials permissions: the operate preflight probes `/script` and `/view/all/newJob` on every
-   master and refuses to start the gateway in operate mode if any returns 200 (fail-closed).
+   `JNKPercona` service user. On the target master ensure `JNKPercona` has `Overall/Read`,
+   folder-scoped `Job/Read`, and `Job/ExtendedRead` (the last is required for `get_item_config` to
+   read config.xml; add `Job/Build` and `Job/Cancel` only if that master should support the operate
+   tier). For the Terraform-managed masters this grant lives in
+   `resources/jenkins-masters/<inst>/init.groovy.d/matrix.groovy`. It must NOT hold
+   `Overall/RunScripts`, `Job/Configure`, `Job/Create`, or credentials permissions: the operate
+   preflight probes `/script` and `/view/all/newJob` on every master and refuses to start the gateway
+   in operate mode if any returns 200 (fail-closed).
 2. **Mint an API token for `JNKPercona` on that master** (Jenkins UI, the `JNKPercona` user,
    Security, Add new API token). Copy it once.
 3. **Add the entry to the fleet secret.** Edit the JSON in the AWS console (Secrets Manager,
