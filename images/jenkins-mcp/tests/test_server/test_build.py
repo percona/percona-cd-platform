@@ -339,6 +339,65 @@ async def test_get_build_failure_summary_no_report(mock_jenkins, mocker):
     assert out['cases'] == []
     assert out['test_counts']['failCount'] == 0
     assert any('no test report' in n for n in out['notes'])
+    assert out['partial'] is False
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_flags_unit_tests_wrapper(mock_jenkins, mocker):
+    # MTR --unit-tests-report folds a whole ctest run into ONE JUnit case (suite/className end
+    # ".report", name "unit_tests"), so failCount=1 hides the real per-test failures. The summary must
+    # flag this as partial and steer to the console, not silently undercount (ps80 #1270).
+    mock_jenkins.get_build.return_value = Build(number=1270, url='u', result='UNSTABLE', timestamp=1)
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 533,
+        'skipCount': 10,
+        'suites': [
+            {
+                'name': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+                'cases': [
+                    {
+                        'className': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+                        'name': 'unit_tests',
+                        'status': 'FAILED',
+                        'errorDetails': 'Test failed',
+                    },
+                ],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='ps-8.4-mtr', number=1270)
+
+    assert out['partial'] is True
+    assert out['wrapper_cases'] == [
+        {
+            'name': 'unit_tests',
+            'className': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+            'suite': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+        }
+    ]
+    assert out['see_also'] == ['get_build_console_tail', 'grep_build_artifact']
+    assert any('understates reality' in n for n in out['notes'])
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_not_partial_for_normal_failures(mock_jenkins, mocker):
+    # A normal per-test failure must NOT be flagged partial and must carry no wrapper_cases/see_also.
+    mock_jenkins.get_build.return_value = Build(number=5, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 1,
+        'skipCount': 0,
+        'suites': [{'name': 'worker_1', 'cases': [{'className': 'main', 'name': 'dd_upgrade', 'status': 'FAILED'}]}],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=5)
+    assert out['partial'] is False
+    assert 'wrapper_cases' not in out
+    assert 'see_also' not in out
 
 
 @pytest.mark.asyncio
