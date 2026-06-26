@@ -41,7 +41,7 @@ Facts that apply to every client:
   artifact to a short-lived signed S3 URL), except `get_item_config` (raw config.xml), which is gated
   to `jenkins-mcp-writers`. The operate tier (build, replay, stop, cancel) and the manage tier (create,
   update, delete job definitions) are served only to members of the `jenkins-mcp-writers` Authentik
-  group, enforced per call. Node-config and script mutation are never exposed. 36 tools total (29 read,
+  group, enforced per call. Node-config and script mutation are never exposed. 41 tools total (34 read,
   4 operate, 3 manage).
 - **Master selection.** Pick a master per call with the `master` argument (for example
   `master: "ps80"`), or pin a session default by sending the `x-jenkins-master` header. Allowlisted

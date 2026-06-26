@@ -52,7 +52,11 @@ _CATALOG = [
             ),
             (
                 'get_build_failure_summary',
-                '      START HERE for UNSTABLE/FAILED: result + stages + ONLY the failing tests (deduped, grouped)',
+                '      START HERE for UNSTABLE/FAILED: result + stages + ONLY the failing tests (deduped, grouped);',
+            ),
+            (
+                'get_build_failure_summary',
+                '      sets partial=true when a rolled-up wrapper case (e.g. MTR unit-tests) hides real failures',
             ),
             (
                 'get_build_console_output',
@@ -77,6 +81,10 @@ _CATALOG = [
             (
                 'get_all_build_artifacts',
                 'get_all_build_artifacts / get_build_artifact / get_build_artifact_url(fullname, ..., master?)',
+            ),
+            (
+                'get_all_build_artifacts',
+                '      each artifact carries a content hint; a .tar.gz -> list_archive_artifact / grep_build_artifact',
             ),
             (
                 'get_build_history',

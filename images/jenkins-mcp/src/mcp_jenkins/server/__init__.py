@@ -63,7 +63,19 @@ class JenkinsMCP(FastMCP[LifespanContext]):
         return super().http_app(path=path, middleware=final_middleware_list, transport=transport, **kwargs)
 
 
-mcp = JenkinsMCP('mcp-jenkins', lifespan=lifespan, auth=_build_auth())
+# Server-level orientation returned at MCP initialize(): the "instructions" field many clients
+# surface automatically (the GitHub MCP convention). Keep it short and point at get_readme() for the
+# full tool guide, so it complements rather than duplicates the get_readme tool.
+_INSTRUCTIONS = (
+    'Token-free gateway to the Percona Jenkins fleet. Call get_readme() first for the full tool guide. '
+    'Reads are open to any authenticated user; the operate (build/replay/stop/cancel) and manage '
+    '(create/update/delete job) tiers need the jenkins-mcp-writers group. Every per-master tool takes an '
+    'optional master argument (omit for the default); call list_masters() for the configured masters. For '
+    'a failing build start with get_build_failure_summary; if it reports partial=true (a rolled-up wrapper '
+    'case), get the real failing tests from get_build_console_tail or grep_build_artifact.'
+)
+
+mcp = JenkinsMCP('mcp-jenkins', instructions=_INSTRUCTIONS, lifespan=lifespan, auth=_build_auth())
 
 
 @mcp.custom_route('/healthz', methods=['GET'])
