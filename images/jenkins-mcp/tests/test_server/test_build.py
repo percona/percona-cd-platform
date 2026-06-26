@@ -135,7 +135,12 @@ async def test_get_all_build_artifacts(mock_jenkins, mocker):
             'relativePath': 'playwright-report/index.html',
             'displayPath': 'playwright-report/index.html',
         },
-        {'fileName': 'trace.zip', 'relativePath': 'trace.zip', 'displayPath': 'trace.zip'},
+        {
+            'fileName': 'trace.zip',
+            'relativePath': 'trace.zip',
+            'displayPath': 'trace.zip',
+            'hint': 'archive (use list_archive_artifact to see members)',
+        },
     ]
 
 
@@ -146,6 +151,27 @@ async def test_get_all_build_artifacts_with_number(mock_jenkins, mocker):
     assert await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=5) == []
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_artifacts.assert_called_once_with(fullname='job1', number=5)
+
+
+@pytest.mark.asyncio
+async def test_get_all_build_artifacts_hints_classify_mtr_paths(mock_jenkins, mocker):
+    # Real ps80 #1270 listing: hints must steer the caller to the right artifact without trial+error,
+    # and leave an opaque stub (public_url) unlabeled rather than guess.
+    mock_jenkins.get_build_artifacts.return_value = [
+        Artifact(fileName='build.log.gz', relativePath='build.log.gz'),
+        Artifact(fileName='make_build.log', relativePath='work/make_build.log'),
+        Artifact(fileName='mtr-test_1.log', relativePath='work/mtr-test_1.log'),
+        Artifact(fileName='ps80-test-mtr_logs-1.tar.gz', relativePath='work/results/ps80-test-mtr_logs-1.tar.gz'),
+        Artifact(fileName='public_url', relativePath='public_url'),
+    ]
+
+    out = await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1270)
+    hints = {a['relativePath']: a.get('hint') for a in out}
+    assert hints['build.log.gz'] == 'full build console log'
+    assert hints['work/make_build.log'] == 'build log'
+    assert hints['work/mtr-test_1.log'].startswith('test-runner log')
+    assert hints['work/results/ps80-test-mtr_logs-1.tar.gz'].startswith('per-test logs archive')
+    assert hints['public_url'] is None
 
 
 @pytest.mark.asyncio
