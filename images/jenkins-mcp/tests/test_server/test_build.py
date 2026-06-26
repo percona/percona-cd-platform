@@ -175,6 +175,18 @@ async def test_get_all_build_artifacts_hints_classify_mtr_paths(mock_jenkins, mo
 
 
 @pytest.mark.asyncio
+async def test_get_all_build_artifacts_non_log_gz_unlabeled(mock_jenkins, mocker):
+    # A bare .gz that is not a .log.gz must not be mislabeled as a log.
+    mock_jenkins.get_build_artifacts.return_value = [
+        Artifact(fileName='core.gz', relativePath='work/core.gz'),
+        Artifact(fileName='dump.sql.gz', relativePath='work/dump.sql.gz'),
+    ]
+
+    out = await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1)
+    assert all('hint' not in a for a in out)
+
+
+@pytest.mark.asyncio
 async def test_get_build_artifact_text(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_artifact.return_value = b'<html>report</html>'
@@ -424,6 +436,78 @@ async def test_get_build_failure_summary_not_partial_for_normal_failures(mock_je
     assert out['partial'] is False
     assert 'wrapper_cases' not in out
     assert 'see_also' not in out
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_wrapper_detected_despite_status_filter(mock_jenkins, mocker):
+    # The wrapper is FAILED; status_filter=REGRESSION drops it from the displayed `cases`, but partial
+    # must still be flagged because the build DOES hide failures (raw-report detection, not filtered).
+    mock_jenkins.get_build.return_value = Build(number=1, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 0,
+        'skipCount': 0,
+        'suites': [
+            {
+                'name': 'w1.UNIT_TESTS.report',
+                'cases': [
+                    {'className': 'w1.UNIT_TESTS.report', 'name': 'unit_tests', 'status': 'FAILED'},
+                    {'className': 'rpl', 'name': 'rpl_x', 'status': 'REGRESSION'},
+                ],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='REGRESSION')
+    assert out['partial'] is True
+    assert [w['name'] for w in out['wrapper_cases']] == ['unit_tests']
+    assert [c['name'] for c in out['cases']] == ['rpl_x']  # FAILED wrapper excluded from display by the filter
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_passing_wrapper_not_partial(mock_jenkins, mocker):
+    # A PASSING rolled-up report hides nothing; status_filter=ALL includes it in cases, but it must
+    # NOT set partial (only FAILED/REGRESSION wrappers are load-bearing).
+    mock_jenkins.get_build.return_value = Build(number=1, url='u', result='SUCCESS')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 0,
+        'passCount': 1,
+        'skipCount': 0,
+        'suites': [
+            {
+                'name': 'w1.UNIT_TESTS.report',
+                'cases': [{'className': 'w1.UNIT_TESTS.report', 'name': 'unit_tests', 'status': 'PASSED'}],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='ALL')
+    assert out['partial'] is False
+    assert 'wrapper_cases' not in out
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_unit_tests_substring_not_wrapper(mock_jenkins, mocker):
+    # A real failing test under a `unit_tests` package must NOT be misread as a rollup wrapper.
+    mock_jenkins.get_build.return_value = Build(number=1, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 0,
+        'skipCount': 0,
+        'suites': [
+            {
+                'name': 'storage.unit_tests.btree',
+                'cases': [{'className': 'storage.unit_tests.btree', 'name': 'insert_split', 'status': 'FAILED'}],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
+    assert out['partial'] is False
+    assert 'wrapper_cases' not in out
 
 
 @pytest.mark.asyncio

@@ -26,6 +26,8 @@ _FAILURE_STATUS_FILTERS: dict[str, set[str] | None] = {
 # Narrow testReport projection: per-case identity + status + short errorDetails, NOT the heavy
 # stdout/stderr/errorStackTrace, so a 15k-case parallel report does not come back whole.
 _FAILURE_REPORT_TREE = 'failCount,passCount,skipCount,suites[name,cases[className,name,status,duration,errorDetails]]'
+# A wrapper case only hides failures when it is itself failing; a passing rolled-up report hides nothing.
+_WRAPPER_FAIL_STATUSES = {'FAILED', 'REGRESSION'}
 
 
 def _resolve_number(ctx: Context, fullname: str, number: int | None, master: MasterArg) -> int:
@@ -47,13 +49,10 @@ def _is_wrapper_case(entry: dict) -> bool:
     cls = (entry.get('className') or '').lower()
     suite = (entry.get('suite') or '').lower()
     name = (entry.get('name') or '').lower()
-    return (
-        cls.endswith('.report')
-        or suite.endswith('.report')
-        or 'unit_tests' in cls
-        or 'unit_tests' in suite
-        or name == 'unit_tests'
-    )
+    # Require the compound MTR signature: the exact rollup case name `unit_tests` AND a `.report`
+    # suite/className. Matching `.report` alone would false-flag a normal test in a `*.report` package,
+    # and a loose `'unit_tests' in suite` substring would false-flag a real `storage.unit_tests.*` test.
+    return name == 'unit_tests' and (cls.endswith('.report') or suite.endswith('.report'))
 
 
 def _artifact_hint(relative_path: str) -> str | None:
@@ -75,10 +74,11 @@ def _artifact_hint(relative_path: str) -> str | None:
         return 'build log'
     if 'mtr' in base and base.endswith('.log'):
         return 'test-runner log (ctest/MTR console; per-test logs are in the *-mtr_logs-*.tar.gz)'
-    if base.endswith(('.log.gz', '.gz')):
+    if base.endswith('.log.gz'):
         return 'gzipped log'
     if base.endswith('.log'):
         return 'log'
+    # A bare .gz (core.gz, dump.sql.gz, metrics.json.gz) is not necessarily a log; do not over-claim.
     return None
 
 
@@ -227,6 +227,8 @@ async def get_build_failure_summary(
     status_counts: dict[str, int] = {}
     selected: list[dict] = []
     seen: set[tuple[str, str]] = set()
+    wrapper_failures: list[dict] = []
+    wrapper_seen: set[tuple[str, str]] = set()
 
     try:
         report = client.get_build_test_report(fullname=fullname, number=number, tree=_FAILURE_REPORT_TREE)
@@ -245,15 +247,27 @@ async def get_build_failure_summary(
             for case in suite.get('cases') or []:
                 case_status = (case.get('status') or '').upper()
                 status_counts[case_status] = status_counts.get(case_status, 0) + 1
+                class_name = case.get('className') or ''
+                case_name = case.get('name') or ''
+                # Collect wrapper FAILURES from the raw report, before the display filter and the
+                # max_cases cut, so partial / wrapper_cases stay correct when status_filter excludes the
+                # wrapper or it sorts past the cap (and never flag a passing rolled-up report).
+                if case_status in _WRAPPER_FAIL_STATUSES:
+                    wrapper_key = (class_name, case_name)
+                    if wrapper_key not in wrapper_seen and _is_wrapper_case(
+                        {'className': class_name, 'suite': suite_name, 'name': case_name}
+                    ):
+                        wrapper_seen.add(wrapper_key)
+                        wrapper_failures.append({'name': case_name, 'className': class_name, 'suite': suite_name})
                 if wanted is not None and case_status not in wanted:
                     continue
-                key = (case.get('className') or '', case.get('name') or '')
+                key = (class_name, case_name)
                 if key in seen:
                     continue
                 seen.add(key)
                 entry = {
-                    'name': key[1],
-                    'className': key[0],
+                    'name': case_name,
+                    'className': class_name,
                     'status': case_status,
                     'suite': suite_name,
                     'duration': case.get('duration'),
@@ -272,11 +286,9 @@ async def get_build_failure_summary(
         group['cases'].append(case_entry['name'])
 
     # A wrapper case counts as one failure but hides a whole sub-runner's real failures (see
-    # _is_wrapper_case), so failCount understates reality. Flag it and point at the console, the only
-    # place the real failing tests appear -- the JUnit report does not carry them.
-    wrapper_cases = [
-        {'name': c['name'], 'className': c['className'], 'suite': c['suite']} for c in cases if _is_wrapper_case(c)
-    ]
+    # _is_wrapper_case), so failCount understates reality. wrapper_failures is gathered from the raw
+    # report (any FAILED/REGRESSION wrapper), independent of the display filter and max_cases.
+    wrapper_cases = wrapper_failures[:max_cases]
     if wrapper_cases:
         labels = ', '.join(w['className'] or w['name'] for w in wrapper_cases)
         notes.append(
