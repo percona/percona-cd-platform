@@ -38,6 +38,50 @@ def _resolve_number(ctx: Context, fullname: str, number: int | None, master: Mas
     return number
 
 
+def _is_wrapper_case(entry: dict) -> bool:
+    """True if a single JUnit case rolls up an entire sub-runner so its FAILED status hides N real
+    failures. The motivating case: MTR's `--unit-tests-report` folds a whole ctest run into one case
+    (suite/className `...UNIT_TESTS.report`, name `unit_tests`), so failCount counts it as one. The
+    real per-test failures are not in the JUnit report at all; they only appear in the console log.
+    """
+    cls = (entry.get('className') or '').lower()
+    suite = (entry.get('suite') or '').lower()
+    name = (entry.get('name') or '').lower()
+    return (
+        cls.endswith('.report')
+        or suite.endswith('.report')
+        or 'unit_tests' in cls
+        or 'unit_tests' in suite
+        or name == 'unit_tests'
+    )
+
+
+def _artifact_hint(relative_path: str) -> str | None:
+    """Short content hint derived from an artifact's path, so the caller knows which artifact holds
+    what without trial-and-error. Generic by design (build / test-runner / archive), with one
+    specific pointer for an MTR-style per-test tarball (the documented in-archive-search case).
+    Returns None when the path is not confidently recognizable, rather than mislabeling it.
+    """
+    base = (relative_path or '').rsplit('/', 1)[-1].lower()
+    if ('mtr_logs' in base or 'test-mtr' in base) and base.endswith(('.tar.gz', '.tgz')):
+        return 'per-test logs archive (use list_archive_artifact / grep_build_artifact archive_member=...)'
+    if base.endswith(('.tar.gz', '.tgz', '.tar', '.zip')):
+        return 'archive (use list_archive_artifact to see members)'
+    if base.startswith(('junit', 'test-')) and base.endswith('.xml'):
+        return 'JUnit report (use get_build_failure_summary for failures)'
+    if base in ('build.log', 'build.log.gz'):
+        return 'full build console log'
+    if base == 'cmake.log' or base.startswith('make_') or (base.startswith('build') and base.endswith('.log')):
+        return 'build log'
+    if 'mtr' in base and base.endswith('.log'):
+        return 'test-runner log (ctest/MTR console; per-test logs are in the *-mtr_logs-*.tar.gz)'
+    if base.endswith(('.log.gz', '.gz')):
+        return 'gzipped log'
+    if base.endswith('.log'):
+        return 'log'
+    return None
+
+
 @mcp.tool(tags=['read'])
 async def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all running builds from Jenkins
@@ -166,7 +210,9 @@ async def get_build_failure_summary(
 
     Returns:
         A dict with build, stages, test_counts, status_filter, cases (deduped), groups (by suite),
-        included_count, truncated, and notes.
+        included_count, truncated, notes, and partial. partial is True when a rolled-up "report"
+        wrapper case (e.g. MTR --unit-tests-report -> ctest) hides the real per-test failures; then
+        wrapper_cases lists them and a note + see_also point at the console where the real tests are.
     """
     max_cases = max(1, min(max_cases, _MAX_FAILURE_CASES))
     wanted = _FAILURE_STATUS_FILTERS[status_filter]
@@ -225,7 +271,22 @@ async def get_build_failure_summary(
         group['count'] += 1
         group['cases'].append(case_entry['name'])
 
-    return {
+    # A wrapper case counts as one failure but hides a whole sub-runner's real failures (see
+    # _is_wrapper_case), so failCount understates reality. Flag it and point at the console, the only
+    # place the real failing tests appear -- the JUnit report does not carry them.
+    wrapper_cases = [
+        {'name': c['name'], 'className': c['className'], 'suite': c['suite']} for c in cases if _is_wrapper_case(c)
+    ]
+    if wrapper_cases:
+        labels = ', '.join(w['className'] or w['name'] for w in wrapper_cases)
+        notes.append(
+            f'{len(wrapper_cases)} rolled-up report case(s) ({labels}) each count as ONE failure but hide the '
+            'real per-test results (e.g. MTR --unit-tests-report folds a whole ctest run into one case), so '
+            'failCount understates reality. Get the real failing tests from the console via '
+            'get_build_console_tail, or grep_build_artifact (pattern "The following tests FAILED" or "*** Failed").'
+        )
+
+    result = {
         'master': master,
         'fullname': fullname,
         'number': number,
@@ -235,10 +296,15 @@ async def get_build_failure_summary(
         'status_filter': status_filter,
         'included_count': len(cases),
         'truncated': truncated,
+        'partial': bool(wrapper_cases),
         'cases': cases,
         'groups': sorted(groups.values(), key=lambda g: -g['count']),
         'notes': notes,
     }
+    if wrapper_cases:
+        result['wrapper_cases'] = wrapper_cases
+        result['see_also'] = ['get_build_console_tail', 'grep_build_artifact']
+    return result
 
 
 @mcp.tool(tags=['read'])
@@ -305,15 +371,21 @@ async def get_all_build_artifacts(
         number: The number of the build, if None, get the last build
 
     Returns:
-        A list of artifact metadata dicts with fileName, relativePath, and displayPath
+        A list of artifact metadata dicts with fileName, relativePath, displayPath, and (when the
+        path is recognizable) a short `hint` of what the artifact holds. For a `.tar.gz`, use
+        list_archive_artifact to see members and grep_build_artifact(archive_member=...) to read one.
     """
     if number is None:
         number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
 
-    return [
-        artifact.model_dump(exclude_none=True)
-        for artifact in jenkins(ctx, master).get_build_artifacts(fullname=fullname, number=number)
-    ]
+    artifacts = []
+    for artifact in jenkins(ctx, master).get_build_artifacts(fullname=fullname, number=number):
+        entry = artifact.model_dump(exclude_none=True)
+        hint = _artifact_hint(entry.get('relativePath', ''))
+        if hint:
+            entry['hint'] = hint
+        artifacts.append(entry)
+    return artifacts
 
 
 @mcp.tool(tags=['read'])

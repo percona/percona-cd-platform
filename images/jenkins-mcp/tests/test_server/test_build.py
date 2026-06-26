@@ -135,7 +135,12 @@ async def test_get_all_build_artifacts(mock_jenkins, mocker):
             'relativePath': 'playwright-report/index.html',
             'displayPath': 'playwright-report/index.html',
         },
-        {'fileName': 'trace.zip', 'relativePath': 'trace.zip', 'displayPath': 'trace.zip'},
+        {
+            'fileName': 'trace.zip',
+            'relativePath': 'trace.zip',
+            'displayPath': 'trace.zip',
+            'hint': 'archive (use list_archive_artifact to see members)',
+        },
     ]
 
 
@@ -146,6 +151,27 @@ async def test_get_all_build_artifacts_with_number(mock_jenkins, mocker):
     assert await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=5) == []
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_artifacts.assert_called_once_with(fullname='job1', number=5)
+
+
+@pytest.mark.asyncio
+async def test_get_all_build_artifacts_hints_classify_mtr_paths(mock_jenkins, mocker):
+    # Real ps80 #1270 listing: hints must steer the caller to the right artifact without trial+error,
+    # and leave an opaque stub (public_url) unlabeled rather than guess.
+    mock_jenkins.get_build_artifacts.return_value = [
+        Artifact(fileName='build.log.gz', relativePath='build.log.gz'),
+        Artifact(fileName='make_build.log', relativePath='work/make_build.log'),
+        Artifact(fileName='mtr-test_1.log', relativePath='work/mtr-test_1.log'),
+        Artifact(fileName='ps80-test-mtr_logs-1.tar.gz', relativePath='work/results/ps80-test-mtr_logs-1.tar.gz'),
+        Artifact(fileName='public_url', relativePath='public_url'),
+    ]
+
+    out = await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1270)
+    hints = {a['relativePath']: a.get('hint') for a in out}
+    assert hints['build.log.gz'] == 'full build console log'
+    assert hints['work/make_build.log'] == 'build log'
+    assert hints['work/mtr-test_1.log'].startswith('test-runner log')
+    assert hints['work/results/ps80-test-mtr_logs-1.tar.gz'].startswith('per-test logs archive')
+    assert hints['public_url'] is None
 
 
 @pytest.mark.asyncio
@@ -339,6 +365,65 @@ async def test_get_build_failure_summary_no_report(mock_jenkins, mocker):
     assert out['cases'] == []
     assert out['test_counts']['failCount'] == 0
     assert any('no test report' in n for n in out['notes'])
+    assert out['partial'] is False
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_flags_unit_tests_wrapper(mock_jenkins, mocker):
+    # MTR --unit-tests-report folds a whole ctest run into ONE JUnit case (suite/className end
+    # ".report", name "unit_tests"), so failCount=1 hides the real per-test failures. The summary must
+    # flag this as partial and steer to the console, not silently undercount (ps80 #1270).
+    mock_jenkins.get_build.return_value = Build(number=1270, url='u', result='UNSTABLE', timestamp=1)
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 533,
+        'skipCount': 10,
+        'suites': [
+            {
+                'name': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+                'cases': [
+                    {
+                        'className': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+                        'name': 'unit_tests',
+                        'status': 'FAILED',
+                        'errorDetails': 'Test failed',
+                    },
+                ],
+            },
+        ],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='ps-8.4-mtr', number=1270)
+
+    assert out['partial'] is True
+    assert out['wrapper_cases'] == [
+        {
+            'name': 'unit_tests',
+            'className': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+            'suite': 'ubuntu-noble.Debug.WORKER_1.UNIT_TESTS.report',
+        }
+    ]
+    assert out['see_also'] == ['get_build_console_tail', 'grep_build_artifact']
+    assert any('understates reality' in n for n in out['notes'])
+
+
+@pytest.mark.asyncio
+async def test_get_build_failure_summary_not_partial_for_normal_failures(mock_jenkins, mocker):
+    # A normal per-test failure must NOT be flagged partial and must carry no wrapper_cases/see_also.
+    mock_jenkins.get_build.return_value = Build(number=5, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.return_value = {
+        'failCount': 1,
+        'passCount': 1,
+        'skipCount': 0,
+        'suites': [{'name': 'worker_1', 'cases': [{'className': 'main', 'name': 'dd_upgrade', 'status': 'FAILED'}]}],
+    }
+
+    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=5)
+    assert out['partial'] is False
+    assert 'wrapper_cases' not in out
+    assert 'see_also' not in out
 
 
 @pytest.mark.asyncio

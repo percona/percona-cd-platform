@@ -1,7 +1,11 @@
+import re
+from collections import Counter
+from pathlib import Path
+
 import pytest
 
 from mcp_jenkins.core.fleet import Fleet, Master
-from mcp_jenkins.server import readme
+from mcp_jenkins.server import mcp, readme
 
 _READ_SET = {
     'list_masters',
@@ -33,6 +37,11 @@ _READ_SET = {
     'get_queue_item',
     'get_all_views',
     'get_view',
+    'get_build_console_tail',
+    'get_build_failure_summary',
+    'grep_build_artifact',
+    'list_archive_artifact',
+    'extract_archive_artifact',
 }
 _OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'}
 _MANAGE_SET = _OPERATE_SET | {'create_item', 'set_item_config', 'delete_item'}
@@ -124,3 +133,53 @@ async def test_get_readme_degrades_when_served_unknown(mocker):
     # Unknown served set -> mode-agnostic: still shows operate, with a hedged status.
     assert 'operate-mode deployments' in text
     assert 'build_item(fullname' in text
+
+
+@pytest.mark.asyncio
+async def test_read_set_fixture_matches_live_read_tools():
+    # Gate: the hand-maintained _READ_SET fixture must equal the live read-tagged @mcp.tool set, so a
+    # newly added read tool cannot silently rot the rendering fixtures above.
+    tools = await mcp.list_tools()
+    live_read = {t.name for t in tools if 'read' in (t.tags or set())}
+    assert _READ_SET == live_read
+
+
+@pytest.mark.asyncio
+async def test_get_readme_documents_every_served_tool(mocker):
+    # Fail-closed gate: every served (non-write) tool must appear in the get_readme guide, so the
+    # curated catalog can never silently drift behind the @mcp.tool set. get_readme need not list
+    # itself; write tools (node-config / script mutation) are intentionally never exposed.
+    tools = await mcp.list_tools()
+    required = {t.name for t in tools if 'write' not in (t.tags or set())} - {'get_readme'}
+
+    _patch_fleet(mocker, [Master(name='ps80', url='u', username='u', token='x')])  # noqa: S106
+    _patch_served(mocker, required | {'get_readme'})
+    text = await readme.get_readme()
+
+    missing = sorted(name for name in required if name not in text)
+    assert not missing, f'served tools missing from the get_readme catalog: {missing}'
+
+
+@pytest.mark.asyncio
+async def test_readme_md_tool_count_matches_served():
+    # Fail-closed gate: the hardcoded tool count in README.md must track the live @mcp.tool tiers.
+    tools = await mcp.list_tools()
+
+    def tier(tags: set | None) -> str:
+        return next((x for x in ('write', 'manage', 'operate', 'read') if x in (tags or set())), 'untagged')
+
+    counts = Counter(tier(t.tags) for t in tools)
+    readme_md = Path(__file__).resolve().parents[2] / 'README.md'
+    text = readme_md.read_text()
+    match = re.search(r'(\d+)\s+tools total\s*\(\s*(\d+)\s+read,\s*(\d+)\s+operate,\s*(\d+)\s+manage\s*\)', text)
+    assert match, 'README.md tool-count line not found'
+    total, read_n, operate_n, manage_n = (int(x) for x in match.groups())
+    assert (read_n, operate_n, manage_n) == (counts['read'], counts['operate'], counts['manage'])
+    assert total == counts['read'] + counts['operate'] + counts['manage']
+
+
+def test_server_instructions_point_to_get_readme():
+    # The MCP initialize() instructions field is the cross-tool orientation many clients read
+    # automatically; it must be set and steer the model to the get_readme guide.
+    assert mcp.instructions
+    assert 'get_readme()' in mcp.instructions
