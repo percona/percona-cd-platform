@@ -156,7 +156,8 @@ async def test_get_readme_documents_every_served_tool(mocker):
     _patch_served(mocker, required | {'get_readme'})
     text = await readme.get_readme()
 
-    missing = sorted(name for name in required if name not in text)
+    # Whole-token match so a short tool name is not satisfied by a longer one (get_build in get_build_history).
+    missing = sorted(name for name in required if not re.search(rf'\b{re.escape(name)}\b', text))
     assert not missing, f'served tools missing from the get_readme catalog: {missing}'
 
 
@@ -171,9 +172,9 @@ async def test_readme_md_tool_count_matches_served():
     counts = Counter(tier(t.tags) for t in tools)
     readme_md = Path(__file__).resolve().parents[2] / 'README.md'
     text = readme_md.read_text()
-    match = re.search(r'(\d+)\s+tools total\s*\(\s*(\d+)\s+read,\s*(\d+)\s+operate,\s*(\d+)\s+manage\s*\)', text)
-    assert match, 'README.md tool-count line not found'
-    total, read_n, operate_n, manage_n = (int(x) for x in match.groups())
+    matches = re.findall(r'(\d+)\s+tools total\s*\(\s*(\d+)\s+read,\s*(\d+)\s+operate,\s*(\d+)\s+manage\s*\)', text)
+    assert len(matches) == 1, f'expected exactly one tool-count line in README.md, found {len(matches)}'
+    total, read_n, operate_n, manage_n = (int(x) for x in matches[0])
     assert (read_n, operate_n, manage_n) == (counts['read'], counts['operate'], counts['manage'])
     assert total == counts['read'] + counts['operate'] + counts['manage']
 
