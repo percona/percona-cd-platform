@@ -32,9 +32,15 @@ _MANAGE_TOOLS = frozenset({'create_item', 'set_item_config', 'delete_item'})
 # Build-lifecycle tools: served in operate mode AND gated to the writers group.
 # They trigger/replay/stop/cancel builds; they never update or delete job config.
 _OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'})
-# Every tool whose call requires the writers group (build lifecycle + job-config CRUD).
-_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS
-_WRITE_TOOLS = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS  # all mutating tools, for the is_write flag
+# Config-XML read: get_item_config returns a job's raw config.xml, which routinely carries plaintext
+# secrets (e.g. the <authToken> "trigger builds remotely" token). It is served as a 'read' tool but
+# gated to the writers group so it is NOT exposed to every authenticated SSO user. See PS-11341.
+_CONFIG_READ_TOOLS = frozenset({'get_item_config'})
+# Every tool whose call requires the writers group (build lifecycle + job-config CRUD + config read).
+_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_READ_TOOLS
+# All MUTATING tools, for the is_write audit flag. get_item_config is gated but NOT a write, so it is
+# deliberately excluded here and stays is_write=false in the audit record.
+_WRITE_TOOLS = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS
 _WRITERS_GROUP = 'jenkins-mcp-writers'
 
 # Argument keys safe to log verbatim (job names, build numbers, search patterns, flags). Everything

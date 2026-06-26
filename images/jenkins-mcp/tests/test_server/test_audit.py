@@ -215,6 +215,56 @@ async def test_manage_tool_allowed_with_writers_group(capture_audit, mocker):
 
 
 @pytest.mark.asyncio
+async def test_get_item_config_denied_without_writers_group(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_item_config'
+    ctx.message.arguments = {'fullname': 'j'}
+    ctx.timestamp = datetime.now(UTC)
+
+    called = {'ran': False}
+
+    async def call_next(_):
+        called['ran'] = True
+        return '<project/>'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    assert called['ran'] is False  # config.xml read denied before the tool executed
+    rec = json.loads(capture_audit[-1])
+    assert rec['tool'] == 'get_item_config'
+    assert rec['status'] == 'denied'
+    assert rec['is_write'] is False  # a gated READ, not a write
+
+
+@pytest.mark.asyncio
+async def test_get_item_config_allowed_with_writers_group(capture_audit, mocker):
+    token = mocker.Mock(claims={'sub': 'u1', 'groups': ['jenkins-mcp-writers']}, client_id='c')
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_item_config'
+    ctx.message.arguments = {'fullname': 'j'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return '<project/>'
+
+    result = await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    assert result == '<project/>'
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'ok'
+    assert rec['is_write'] is False
+
+
+@pytest.mark.asyncio
 async def test_gated_tool_denied_when_groups_claim_is_a_string(capture_audit, mocker):
     from fastmcp.exceptions import ToolError
 

@@ -46,13 +46,17 @@ async def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dic
 
 @mcp.tool(tags=['read'])
 async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None) -> str:
-    """Get specific item config from Jenkins
+    """Get a job/folder's raw config.xml (jenkins-mcp-writers only).
+
+    Served as a read tool but gated per call to the jenkins-mcp-writers group (see audit.py),
+    because config.xml can carry plaintext secrets such as the <authToken> "trigger builds remotely"
+    token. Reads config.xml via the service identity's Job/ExtendedRead.
 
     Args:
         fullname: The fullname of the item
 
     Returns:
-        The config of the item
+        The config XML of the item
     """
     return jenkins(ctx, master).get_item_config(fullname=fullname)
 
@@ -174,8 +178,8 @@ async def build_item(
 async def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = None) -> list[dict]:
     """Get the parameter definitions of a Jenkins job.
 
-    Reads the job's parameterDefinitions via the standard job API (Job/Read). It does not read
-    config.xml, which needs Job/ExtendedRead that the read-only service identity does not hold.
+    Reads the job's parameterDefinitions via the standard job API (Job/Read), so it is open to all
+    readers. For the full config.xml use get_item_config, which is gated to jenkins-mcp-writers.
 
     Args:
         fullname: The fullname of the item
