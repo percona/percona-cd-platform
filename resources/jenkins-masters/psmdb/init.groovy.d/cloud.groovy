@@ -158,8 +158,15 @@ initMap['docker'] = '''
     sudo usermod -aG docker $(id -u -n)
     sudo mkdir -p /etc/docker
     echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json
-    sudo systemctl status docker || sudo systemctl start docker
-    sudo service docker status || sudo service docker start
+
+    sudo systemctl stop docker containerd 2>/dev/null || true
+    sudo rm -rf /var/lib/containerd
+    sudo mkdir -p /mnt/containerd /var/lib/containerd
+    sudo mount --bind /mnt/containerd /var/lib/containerd
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now docker
+    sudo systemctl restart docker
     echo "* * * * * root /usr/sbin/route add default gw 10.188.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
 '''
 initMap['docker-32gb'] = '''
@@ -227,8 +234,15 @@ initMap['docker-32gb'] = '''
     sudo usermod -aG docker $(id -u -n)
     sudo mkdir -p /etc/docker
     echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json
-    sudo systemctl status docker || sudo systemctl start docker
-    sudo service docker status || sudo service docker start
+
+    sudo systemctl stop docker containerd 2>/dev/null || true
+    sudo rm -rf /var/lib/containerd
+    sudo mkdir -p /mnt/containerd /var/lib/containerd
+    sudo mount --bind /mnt/containerd /var/lib/containerd
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now docker
+    sudo systemctl restart docker
     echo "* * * * * root /usr/sbin/route add default gw 10.188.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
 '''
 
