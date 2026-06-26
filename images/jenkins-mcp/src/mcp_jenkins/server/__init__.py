@@ -68,8 +68,9 @@ class JenkinsMCP(FastMCP[LifespanContext]):
 # full tool guide, so it complements rather than duplicates the get_readme tool.
 _INSTRUCTIONS = (
     'Token-free gateway to the Percona Jenkins fleet. Call get_readme() first for the full tool guide. '
-    'Reads are open to any authenticated user; the operate (build/replay/stop/cancel) and manage '
-    '(create/update/delete job) tiers need the jenkins-mcp-writers group. Every per-master tool takes an '
+    'Most read tools are open to any authenticated user (get_item_config needs the jenkins-mcp-writers '
+    'group); the operate (build/replay/stop/cancel) and manage (create/update/delete job) tiers also need '
+    'jenkins-mcp-writers. Every per-master tool takes an '
     'optional master argument (omit for the default); call list_masters() for the configured masters. For '
     'a failing build start with get_build_failure_summary; if it reports partial=true (a rolled-up wrapper '
     'case), get the real failing tests from get_build_console_tail or grep_build_artifact.'
