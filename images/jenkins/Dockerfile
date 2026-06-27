@@ -1,8 +1,8 @@
 # Base: Jenkins LTS 2.541.3 (matches the live fleet). Pinned BY DIGEST so an
-# upstream re-push of the same tag cannot change our base. amd64 platform
-# digest (EKS nodes are amd64; m3 build host is arm64 -> buildx cross-build).
+# upstream re-push of the same tag cannot change our base. Multi-arch INDEX
+# digest (carries linux/amd64 + linux/arm64) so the one pin builds both platforms.
 # Obtain/refresh with:
-#   crane digest --platform linux/amd64 jenkins/jenkins:2.541.3-lts-jdk17
+#   docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 --format '{{.Manifest.Digest}}'
 # Last refreshed 2026-06-09 (#114); the pinned digest is on the FROM line below.
 FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:cce1eeb79902722f3cf7a8831c41e95c39f4a42b9a2981959630cc66539b3c2d
 

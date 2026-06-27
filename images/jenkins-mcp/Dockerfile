@@ -10,10 +10,10 @@
 #     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-mcp:<tag> \
 #     --push images/jenkins-mcp
 # Base: uv + Python 3.13 (Debian bookworm slim). Pinned BY DIGEST so an upstream
-# re-push of the same tag cannot change our base. amd64 platform digest (EKS
-# nodes are amd64; build host may be arm64 -> buildx --platform linux/amd64).
-# Refresh with: crane digest --platform linux/amd64 ghcr.io/astral-sh/uv:python3.13-bookworm-slim
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:847b5e690018bc6b9d97a0848da65f721b785f1e78d9c7067b8947c7010b2718
+# re-push of the same tag cannot change our base. Multi-arch INDEX digest (carries
+# linux/amd64 + linux/arm64) so the one pin builds both platforms.
+# Refresh with: docker buildx imagetools inspect ghcr.io/astral-sh/uv:python3.13-bookworm-slim --format '{{.Manifest.Digest}}'
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca
 
 WORKDIR /app
 
