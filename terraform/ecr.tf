@@ -37,15 +37,20 @@ resource "aws_ecr_repository" "jenkins_mcp" {
   }
 }
 
-# Keep storage bounded; these images are small and rebuilt rarely.
+# Untagged-only expiry (like jenkins_mcp / jenkins_percona), NOT keep-last-N. A
+# count-based "any"-tag rule can expire a still-deployed tagged digest, and for
+# multi-arch images the per-arch children of a deployed manifest list are
+# untagged. ECR will not expire an image referenced by a manifest list until the
+# list itself is expired (ECR docs, "How lifecycle policies work"), so
+# untagged-only reaps build orphans without ever breaking a deployed image.
 resource "aws_ecr_lifecycle_policy" "mtr_ingest" {
   repository = aws_ecr_repository.mtr_ingest.name
-  policy     = local.ecr_keep_last_10
+  policy     = local.ecr_expire_untagged_after_14d
 }
 
 resource "aws_ecr_lifecycle_policy" "jenkins_endpoint_reconciler" {
   repository = aws_ecr_repository.jenkins_endpoint_reconciler.name
-  policy     = local.ecr_keep_last_10
+  policy     = local.ecr_expire_untagged_after_14d
 }
 
 # jenkins-mcp is CI-published on every push to main, and deploy pins a tagged
@@ -55,21 +60,6 @@ resource "aws_ecr_lifecycle_policy" "jenkins_endpoint_reconciler" {
 resource "aws_ecr_lifecycle_policy" "jenkins_mcp" {
   repository = aws_ecr_repository.jenkins_mcp.name
   policy     = local.ecr_expire_untagged_after_14d
-}
-
-locals {
-  ecr_keep_last_10 = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Expire all but the 10 most recent images"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 10
-      }
-      action = { type = "expire" }
-    }]
-  })
 }
 
 # Jenkins controller image (images/jenkins): the baked Jenkins master image
