@@ -94,6 +94,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     permissions:
       contents: read
       id-token: write          # ONLY this job mints the OIDC JWT
@@ -107,6 +109,9 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      - name: compute image tag (<lts>-<sha>)
+        id: meta
+        run: echo "tag=${JENKINS_LTS}-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - name: install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: fetch + verify fork HPIs
@@ -152,20 +157,28 @@ jobs:
           provenance: true
           sbom: true
           tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ env.JENKINS_LTS }}-${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.tag }}
       - name: capture pushed digest
         env:
           # Bind trusted step outputs to env so they are not interpolated
           # directly into the run shell (zizmor template-injection guard).
           DIGEST: ${{ steps.push.outputs.digest }}
         run: echo "digest=${DIGEST}" >> "$GITHUB_STEP_SUMMARY"
-      - name: SECOND smoke against the PUSHED digest
+      - name: SECOND smoke against the PUSHED digest (amd64 full boot)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           REF="${REGISTRY}/${IMAGE_REPO}@${DIGEST}"
           images/jenkins/smoke-boot.sh "$REF"
+      # The full-boot smoke above pulls the native (amd64) child of the manifest
+      # list. Validate the pushed arm64 child structurally (full arm64 boot is the
+      # Phase 5 pre-cutover gate on a real Graviton node).
+      - name: smoke arm64 against the PUSHED digest (JVM + war, via QEMU)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: docker run --rm --platform linux/arm64 --entrypoint sh "${REGISTRY}/${IMAGE_REPO}@${DIGEST}" -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-pushed-ok"
       - name: upload effective plugin list
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
@@ -194,12 +207,13 @@ jobs:
       - name: open bump PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ needs.publish.outputs.tag }}
           BASE_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
           VALUES: resources/jenkins/master/values-base.yaml
         run: |
           set -euo pipefail
-          NEW_TAG="${JENKINS_LTS}-${GITHUB_SHA}"
+          [ -n "$NEW_TAG" ] || { echo "no tag from publish job"; exit 1; }
           cur="$(grep -E '^      tag: ' "$VALUES" | head -1 | sed -E 's|^      tag: "?([^"]*)"?.*|\1|')"
           if [ "$cur" = "$NEW_TAG" ]; then
             echo "values-base.yaml already on ${NEW_TAG}; nothing to bump."
