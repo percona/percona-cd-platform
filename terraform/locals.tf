@@ -55,7 +55,9 @@ locals {
       max_size       = 4
     }
     prometheus_system = {
-      instance_types = ["m6a.large"]
+      # Non-burstable Graviton for the obs-state singletons (Grafana,
+      # Authentik PG, mtr-pg); multi-family covers per-AZ capacity.
+      instance_types = ["m7g.large", "m8g.large"]
       min_size       = 1
       desired_size   = 1
       max_size       = 2
