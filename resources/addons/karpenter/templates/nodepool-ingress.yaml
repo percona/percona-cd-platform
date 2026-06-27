@@ -26,11 +26,11 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: [spot, on-demand]
-        # Burstable t3a/t3.medium is the active, cheapest fit for a light proxy (ADR 0019
-        # keeps large artifact downloads off this path); the gen-7 large families are
-        # non-burstable fallbacks when burstable capacity is constrained. t3a.small is
-        # deliberately excluded: ~1.25Gi kube/system reserves + a 500Mi eviction threshold
-        # leave a 2Gi node too tight once DaemonSets land.
+        # Burstable t4g.medium (Graviton2) is the active, cheapest fit for a light proxy
+        # (ADR 0019 keeps large artifact downloads off this path); the Graviton3/4 large
+        # families are non-burstable fallbacks when burstable capacity is constrained.
+        # t4g.small is deliberately excluded: ~1.25Gi kube/system reserves + a 500Mi
+        # eviction threshold leave a 2Gi node too tight once DaemonSets land.
         - key: node.kubernetes.io/instance-type
           operator: In
           values: [t4g.medium, c7g.large, m7g.large, c8g.large, m8g.large]
