@@ -189,6 +189,7 @@ module "eks" {
     jenkins_master = {
       instance_types = local.ng.jenkins_master.instance_types
       capacity_type  = "ON_DEMAND"
+      ami_type       = "AL2023_ARM_64_STANDARD"
       min_size       = local.ng.jenkins_master.min_size
       desired_size   = local.ng.jenkins_master.desired_size
       max_size       = local.ng.jenkins_master.max_size
