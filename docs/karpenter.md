@@ -39,9 +39,10 @@ and [disruption](https://karpenter.sh/docs/concepts/disruption/).
 |---|---|---|---|
 | Tier label | `general` (untainted fallthrough) | `lgtm-stateful` (exclusive NoSchedule taint) | `ingress` (exclusive NoSchedule taint) |
 | Capacity | spot first, on-demand fallback | on-demand only | spot first, on-demand fallback |
-| Families | c7i, c7a, m7i, m7a, r7i, r7a | r7a, r7i, m7a, m7i | t3a/t3 medium, c7a/c7i/m7a/m7i large (instance-type list) |
+| Arch | amd64 | arm64 (Graviton) | amd64 |
+| Families | c7i, c7a, m7i, m7a, r7i, r7a | r7g, m7g, r8g, m8g | t3a/t3 medium, c7a/c7i/m7a/m7i large (instance-type list) |
 | Sizes | large to 4xlarge | large to 2xlarge | medium, large |
-| AZ | us-east-1a | us-east-1a | us-east-1a/b/c (multi-AZ) |
+| AZ | us-east-1a | us-east-1a/b/c (matches drifted volumes, ADR 0023) | us-east-1a/b/c (multi-AZ) |
 | Expiry | 720h (30-day roll for AMI freshness) | Never, 10 min termination grace | 720h |
 | Disruption | `WhenEmptyOrUnderutilized`, consolidate after 1 m, budget 1 node | `WhenEmpty` only, drift and underutilized budgets blocked at 0 | `WhenEmpty`, consolidate after 5 m, budget 1 node |
 | Limits | 200 CPU, 800 Gi | 64 CPU, 256 Gi | 8 CPU, 32 Gi |
@@ -54,10 +55,14 @@ co-eviction. Ingesters do not tolerate either, so `lgtm-stateful` is
 on-demand, never bin-packed while running, and never expired, a direct
 consequence of the 2026-05-11 CPU-credit outage that created the taxonomy.
 
-The `default` and `lgtm-stateful` pools pin us-east-1a: EBS is zonal, the
-stateful data already lives in 1a, and keeping the elastic tier there lets
-consolidation fully vacate the other AZs (the single-NAT collapse rides the
-same decision). The `ingress` pool is the deliberate exception: it spans all
+The `default` pool pins us-east-1a: EBS is zonal, the elastic tier carries no
+durable state, and keeping it in 1a lets consolidation fully vacate the other
+AZs (the single-NAT collapse rides the same decision). The `lgtm-stateful` pool
+spanned 1a only by intent (ADR 0020), but its stateful volumes drifted into
+1b/1c (ADR 0023, still open) and the pods follow their per-AZ EBS, so the pool
+now lists all three AZs to match reality (a 1a-only pin would strand the drifted
+pods on any node roll). It re-narrows to 1a once the volumes migrate back. The
+`ingress` pool is multi-AZ by design: it spans all
 three AZs so the jenkins-ingress NGINX web plane can place one replica per node
 across distinct AZs (the proxy carries no EBS, so the zonal-data argument does
 not apply). It is tainted so the single-AZ tenants above cannot drift onto it

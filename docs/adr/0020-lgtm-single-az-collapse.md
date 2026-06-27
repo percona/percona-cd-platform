@@ -3,6 +3,7 @@
 **Status:** Accepted (2026-05-13; PVC-retention values codified 2026-05-27)
 **Supersedes:** Multi-AZ ingester topology described in [ADR 0010](0010-distributed-lgtm.md), the multi-AZ portion of [ADR 0017](0017-cluster-tier-taxonomy-and-lgtm-pinning.md), and the Multi-AZ NAT-GW decision (**H4**) in [ADR 0011](0011-robustness-pass.md).
 **Amended by:** [ADR 0023](0023-lgtm-stateful-az-drift.md) — live PVs drifted into 1b/1c despite the single-AZ intent; the verification in this ADR could not detect it. Remediation (default-`gp3` `allowedTopologies` lock) is tracked there.
+**Partially reversed by:** [ADR 0042](0042-lgtm-stateful-arm64.md): the single-AZ NodePool pin is widened to us-east-1a/b/c to match the drifted volumes during the arm64 migration. The single-replica collapse (the other half of this ADR) is unchanged, and the pin re-narrows to 1a once ADR 0023 migrates the volumes back.
 **Related:** [ADR 0014](0014-memberlist-cluster-label-isolation.md), [ADR 0015](0015-lgtm-bucket-object-lock-removed.md).
 
 ## Context
