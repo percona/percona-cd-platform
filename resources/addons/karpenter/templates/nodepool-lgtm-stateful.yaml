@@ -15,7 +15,7 @@ spec:
       requirements:
         - key: kubernetes.io/arch
           operator: In
-          values: [amd64]
+          values: [arm64]
         - key: kubernetes.io/os
           operator: In
           values: [linux]
@@ -27,21 +27,24 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: [on-demand]
-        # Memory-leaning families. r-class is ~2x mem/$ vs m-class for
-        # Mimir/Loki ingester resident heap workloads. m7a/m7i kept as
-        # fallback when r-class capacity is constrained in a particular AZ.
+        # Memory-leaning Graviton families. r-class is ~2x mem/$ vs m-class
+        # for Mimir/Loki ingester resident heap workloads. Graviton3 (r7g/m7g)
+        # primary, Graviton4 (r8g/m8g) as a capacity backstop. Karpenter picks
+        # the cheapest satisfiable, m7g.large at the current ingester footprint.
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: [r7a, r7i, m7a, m7i]
+          values: [r7g, m7g, r8g, m8g]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: [large, xlarge, 2xlarge]
-        # Single-AZ topology (us-east-1a). LGTM stack collapsed from
-        # 3-AZ HA in 2026-05; ingester WAL data lives in EBS which is
-        # per-AZ, and S3 is the durable source of truth for blocks.
+        # Multi-AZ (us-east-1a/b/c). ADR 0020 intended single-AZ 1a, but the
+        # stateful EBS volumes drifted to 1b/1c (ADR 0023, open) and the pods
+        # follow their per-AZ volume. Pinning 1a would strand them on any roll;
+        # S3 is the durable block store, the EBS WAL re-attaches in its own AZ.
+        # Re-narrow to 1a once ADR 0023 migrates the volumes back.
         - key: topology.kubernetes.io/zone
           operator: In
-          values: [us-east-1a]
+          values: [us-east-1a, us-east-1b, us-east-1c]
       taints:
         - key: workload.percona.com/tier
           value: lgtm-stateful
