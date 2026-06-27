@@ -23,18 +23,18 @@ forks (Hetzner cloud, EC2 cloud). Built and pushed to ECR by
 FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:<DIGEST>
 ```
 
-2.541.3 matches the live EC2 fleet. The image is consumed on `linux/amd64` only
-(EKS nodes are amd64; the m3 build host is arm64 -> buildx cross-builds). We pin
-the **per-platform amd64 digest**, not the multi-arch index digest, so an
-upstream re-push of the same tag cannot silently change our base.
+2.541.3 matches the live EC2 fleet. The image is built **multi-arch**
+(`linux/amd64` + `linux/arm64`) so it can run on Graviton EKS nodes; CI builds
+both arches (arm64 via QEMU on the amd64 runner) and pushes one manifest list. We
+pin the **multi-arch index digest**, so an upstream re-push of the same tag cannot
+silently change our base.
 
-Refresh the digest on every LTS bump:
+Refresh the digest on every LTS bump (use the multi-arch index digest, not a
+per-platform child):
 
 ```bash
-crane digest --platform linux/amd64 jenkins/jenkins:2.541.3-lts-jdk17
-# or, without crane:
 docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 \
-  --format '{{ range .Manifest.Manifests }}{{ if eq .Platform.Architecture "amd64" }}{{ println .Digest }}{{ end }}{{ end }}'
+  --format '{{ .Manifest.Digest }}'
 ```
 
 Substitute the printed `sha256:...` into the `FROM` line and update the

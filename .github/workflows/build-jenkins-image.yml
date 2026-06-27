@@ -51,13 +51,14 @@ jobs:
       # docker/* is not in the repo zizmor ref-pin allowlist (.github/zizmor.yml),
       # so its actions are SHA-pinned everywhere. Refresh with:
       #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: fetch + verify fork HPIs
         working-directory: images/jenkins
         run: ./fetch-hpis.sh
-      - name: build (amd64, load to local daemon, no push)
+      - name: build amd64 (load to local daemon, no push)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
@@ -65,8 +66,21 @@ jobs:
           load: true
           push: false
           tags: jenkins-percona:pr-${{ github.sha }}
-      - name: smoke-boot (empty-home AND restored-home)
+      - name: smoke-boot amd64 (empty-home AND restored-home)
         run: images/jenkins/smoke-boot.sh jenkins-percona:pr-${{ github.sha }}
+      - name: build arm64 (load, no push)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: jenkins-percona:pr-arm64-${{ github.sha }}
+      # A full Jenkins JVM boot under QEMU is too slow for CI; confirm the arm64
+      # image's JVM runs and the war is present. The full arm64 boot (JCasC reload +
+      # agent spawn) is validated in the Phase 5 pre-cutover on a real Graviton node.
+      - name: smoke arm64 (JVM + war present, via QEMU)
+        run: docker run --rm --platform linux/arm64 --entrypoint sh jenkins-percona:pr-arm64-${{ github.sha }} -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-image-ok"
       - name: upload effective plugin list
         uses: actions/upload-artifact@v7
         with:
@@ -91,13 +105,14 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
           persist-credentials: false
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: install jq
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: fetch + verify fork HPIs
         working-directory: images/jenkins
         run: ./fetch-hpis.sh
-      - name: build (amd64, load, NO push yet)
+      - name: build amd64 (load, NO push yet)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
@@ -105,8 +120,18 @@ jobs:
           load: true
           push: false
           tags: jenkins-percona:${{ github.sha }}
-      - name: smoke-boot BEFORE push (empty-home AND restored-home)
+      - name: smoke-boot amd64 BEFORE push (empty-home AND restored-home)
         run: images/jenkins/smoke-boot.sh jenkins-percona:${{ github.sha }}
+      - name: build arm64 (load, NO push yet)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: jenkins-percona:arm64-${{ github.sha }}
+      - name: smoke arm64 BEFORE push (JVM + war present, via QEMU)
+        run: docker run --rm --platform linux/arm64 --entrypoint sh jenkins-percona:arm64-${{ github.sha }} -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-image-ok"
 
       # --- AWS creds appear here; everything after is privileged ---
       - name: configure AWS credentials (OIDC)
@@ -117,12 +142,12 @@ jobs:
       - name: ECR login
         id: ecr
         uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
-      - name: push (amd64) with SBOM + provenance
+      - name: push (multi-arch manifest list) with SBOM + provenance
         id: push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
         with:
           context: images/jenkins
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           provenance: true
           sbom: true
@@ -147,3 +172,65 @@ jobs:
           name: plugins-effective-${{ github.sha }}
           path: images/jenkins/plugins.effective.txt
           if-no-files-found: warn
+
+  # ---- open a deploy bump PR for the just-pushed tag (verified commit) ----
+  # createCommitOnBranch signs the commit with GitHub's key, so the bump PR meets
+  # main's required-signed-commits rule. A human squash-merges the one-line PR to
+  # deploy. This RESTARTS the in-cluster ps3-k8s production controller, so merge it
+  # deliberately, not on a clock.
+  bump:
+    name: open deploy bump PR
+    if: github.event_name == 'push'
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write           # createCommitOnBranch on the bump branch
+      pull-requests: write      # gh pr create
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - name: open bump PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          VALUES: resources/jenkins/master/values-base.yaml
+        run: |
+          set -euo pipefail
+          NEW_TAG="${JENKINS_LTS}-${GITHUB_SHA}"
+          cur="$(grep -E '^      tag: ' "$VALUES" | head -1 | sed -E 's|^      tag: "?([^"]*)"?.*|\1|')"
+          if [ "$cur" = "$NEW_TAG" ]; then
+            echo "values-base.yaml already on ${NEW_TAG}; nothing to bump."
+            exit 0
+          fi
+          BRANCH="chore/deploy-jenkins-percona-${RUN_ID}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" -f sha="${BASE_SHA}"
+          sed -E "s|^      tag: .*|      tag: \"${NEW_TAG}\"|" "$VALUES" > /tmp/values.yaml
+          CONTENT_B64="$(base64 -w0 /tmp/values.yaml)"
+          # shellcheck disable=SC2016  # $vars are GraphQL variables substituted by gh -f, not the shell.
+          gh api graphql -f query='
+            mutation($nwo:String!,$branch:String!,$path:String!,$contents:Base64String!,$head:GitObjectID!,$msg:String!){
+              createCommitOnBranch(input:{
+                branch:{repositoryNameWithOwner:$nwo, branchName:$branch},
+                message:{headline:$msg},
+                expectedHeadOid:$head,
+                fileChanges:{additions:[{path:$path, contents:$contents}]}
+              }){ commit { oid } }
+            }' \
+            -f nwo="$GITHUB_REPOSITORY" -f branch="$BRANCH" \
+            -f path="$VALUES" -f contents="$CONTENT_B64" -f head="$BASE_SHA" \
+            -f msg="chore(jenkins-percona): deploy image ${NEW_TAG}"
+          BODY="$(mktemp)"
+          {
+            printf '%s\n' '## Deploy'
+            printf '%s\n' ''
+            printf '%s\n' "- Bump ${VALUES} image.tag to ${NEW_TAG} (multi-arch image built, smoke-tested, and pushed to ECR by this run)."
+            printf '%s\n' '- The commit is GitHub-verified (createCommitOnBranch), so it satisfies the signed-commits rule on main.'
+            printf '%s\n' '- Squash-merge to deploy. This RESTARTS the in-cluster ps3-k8s controller; merge deliberately.'
+          } > "$BODY"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(jenkins-percona): deploy image ${NEW_TAG}" \
+            --body-file "$BODY"
