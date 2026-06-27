@@ -1,0 +1,227 @@
+name: build-jenkins-endpoint-reconciler-image
+
+on:
+  pull_request:
+    paths:
+      - 'images/jenkins-endpoint-reconciler/**'
+      - '.github/workflows/build-jenkins-endpoint-reconciler-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'images/jenkins-endpoint-reconciler/**'
+      - '.github/workflows/build-jenkins-endpoint-reconciler-image.yml'
+
+# Default: read-only. The privileged push job re-declares its own permissions.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_REPO: percona-cd/jenkins-endpoint-reconciler
+  AWS_REGION: us-east-1
+  VALUES: resources/addons/jenkins-endpoint-reconciler/values.yaml
+
+jobs:
+  # ---- actionlint/zizmor gate (shared composite, mirrors ci.yml) ----
+  lint:
+    name: actions lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/actions-lint
+
+  # ---- PR validation: build + smoke each arch, NO AWS token, NO push ----
+  # (unit tests run in ci.yml; the smoke confirms the image's deps import per arch)
+  validate:
+    name: build + smoke (no push)
+    if: github.event_name == 'pull_request'
+    needs: [lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read            # explicitly NO id-token
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # docker/* is SHA-pinned (not in the repo zizmor ref-pin allowlist). Refresh with:
+      #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      # A multi-arch manifest cannot be loaded into the daemon, so build + smoke
+      # each arch single-platform with --load. arm64 runs under QEMU binfmt.
+      - name: build amd64 (load, no push)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins-endpoint-reconciler
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: reconciler:pr-amd64-${{ github.sha }}
+      - name: smoke amd64 (deps import)
+        run: docker run --rm --entrypoint python reconciler:pr-amd64-${{ github.sha }} -c "import boto3, kubernetes; print('reconciler ok', __import__('platform').machine())"
+      - name: build arm64 (load, no push)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins-endpoint-reconciler
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: reconciler:pr-arm64-${{ github.sha }}
+      - name: smoke arm64 (deps import, via QEMU)
+        run: docker run --rm --entrypoint python reconciler:pr-arm64-${{ github.sha }} -c "import boto3, kubernetes; print('reconciler ok', __import__('platform').machine())"
+
+  # ---- main: build + smoke + push multi-arch to ECR via OIDC ----
+  publish:
+    name: build + smoke + push (OIDC)
+    if: github.event_name == 'push'
+    needs: [lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    permissions:
+      contents: read
+      id-token: write          # ONLY this job mints the OIDC JWT
+    steps:
+      # Third-party actions pinned by commit SHA below this line (the job holds
+      # AWS creds after configure-aws-credentials). Resolve/refresh SHAs with:
+      #   gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      - name: compute image tag (<version>-<short-sha>)
+        id: meta
+        run: |
+          set -euo pipefail
+          # No pyproject; derive the version from the currently-deployed tag in
+          # values.yaml (the leading semver, dropping any existing -<sha> suffix).
+          ver="$(grep -E '^  tag: ' "$VALUES" | head -1 | sed -E 's|^  tag: "?([0-9]+\.[0-9]+\.[0-9]+).*|\1|')"
+          [ -n "$ver" ] || { echo "could not parse version from $VALUES"; exit 1; }
+          echo "tag=${ver}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: build amd64 (load, NO push yet)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins-endpoint-reconciler
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: reconciler:amd64-${{ github.sha }}
+      - name: smoke amd64 BEFORE push (deps import)
+        run: docker run --rm --entrypoint python reconciler:amd64-${{ github.sha }} -c "import boto3, kubernetes; print('reconciler ok', __import__('platform').machine())"
+      - name: build arm64 (load, NO push yet)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins-endpoint-reconciler
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: reconciler:arm64-${{ github.sha }}
+      - name: smoke arm64 BEFORE push (deps import, via QEMU)
+        run: docker run --rm --entrypoint python reconciler:arm64-${{ github.sha }} -c "import boto3, kubernetes; print('reconciler ok', __import__('platform').machine())"
+
+      # --- AWS creds appear here; everything after is privileged ---
+      - name: configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
+        with:
+          role-to-assume: ${{ secrets.JENKINS_ENDPOINT_RECONCILER_IMAGE_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: ECR login
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
+      - name: push (multi-arch manifest list) with SBOM + provenance
+        id: push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: images/jenkins-endpoint-reconciler
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.tag }}
+      - name: SECOND smoke against the PUSHED digest
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: docker run --rm --entrypoint python "${REGISTRY}/${IMAGE_REPO}@${DIGEST}" -c "import boto3, kubernetes; print('reconciler pushed ok')"
+      - name: summary (image ref + deploy hint)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "Pushed \`${REGISTRY}/${IMAGE_REPO}:${TAG}\`"
+            echo "Digest \`${DIGEST}\`"
+            echo "A deploy bump PR for \`${TAG}\` is opened automatically by the bump job."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---- open a deploy bump PR for the just-pushed tag (verified commit) ----
+  # createCommitOnBranch signs the commit with GitHub's key, so the bump PR meets
+  # main's required-signed-commits rule with no GPG key or GitHub App. A human
+  # squash-merges the one-line PR to deploy; ArgoCD then syncs HEAD.
+  bump:
+    name: open deploy bump PR
+    if: github.event_name == 'push'
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write           # createCommitOnBranch on the bump branch
+      pull-requests: write      # gh pr create
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - name: open bump PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ needs.publish.outputs.tag }}
+          BASE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [ -n "$NEW_TAG" ] || { echo "no tag from publish job"; exit 1; }
+          cur="$(grep -E '^  tag: ' "$VALUES" | head -1 | sed -E 's|^  tag: "?([^"]*)"?.*|\1|')"
+          if [ "$cur" = "$NEW_TAG" ]; then
+            echo "values.yaml already on ${NEW_TAG}; nothing to bump."
+            exit 0
+          fi
+          BRANCH="chore/deploy-reconciler-${RUN_ID}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/${BRANCH}" -f sha="${BASE_SHA}"
+          sed -E "s|^  tag: .*|  tag: \"${NEW_TAG}\"|" "$VALUES" > /tmp/values.yaml
+          CONTENT_B64="$(base64 -w0 /tmp/values.yaml)"
+          # shellcheck disable=SC2016  # $vars are GraphQL variables substituted by gh -f, not the shell.
+          gh api graphql -f query='
+            mutation($nwo:String!,$branch:String!,$path:String!,$contents:Base64String!,$head:GitObjectID!,$msg:String!){
+              createCommitOnBranch(input:{
+                branch:{repositoryNameWithOwner:$nwo, branchName:$branch},
+                message:{headline:$msg},
+                expectedHeadOid:$head,
+                fileChanges:{additions:[{path:$path, contents:$contents}]}
+              }){ commit { oid } }
+            }' \
+            -f nwo="$GITHUB_REPOSITORY" -f branch="$BRANCH" \
+            -f path="$VALUES" -f contents="$CONTENT_B64" -f head="$BASE_SHA" \
+            -f msg="chore(jenkins-endpoint-reconciler): deploy image ${NEW_TAG}"
+          BODY="$(mktemp)"
+          {
+            printf '%s\n' '## Deploy'
+            printf '%s\n' ''
+            printf '%s\n' "- Bump ${VALUES} image.tag to ${NEW_TAG} (built, smoke-tested, and pushed to ECR by this run)."
+            printf '%s\n' '- The commit is GitHub-verified (createCommitOnBranch), so it satisfies the signed-commits rule on main.'
+            printf '%s\n' '- Squash-merge to deploy. ArgoCD syncs HEAD. No auto-merge.'
+          } > "$BODY"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(jenkins-endpoint-reconciler): deploy image ${NEW_TAG}" \
+            --body-file "$BODY"
