@@ -1,11 +1,19 @@
 # backube snapscheduler operator. Values scoped under the dependency name
-# (see Chart.yaml). Defaults suit a single-operator install: 1 replica,
-# amd64/linux nodeSelector, CRD management on (ships the SnapshotSchedule CRD).
-# Lightweight controller; runs on the default (general) Karpenter NodePool,
-# same as cloudnative-pg.
+# (see Chart.yaml). 1 replica, CRD management on (ships the SnapshotSchedule
+# CRD). Lightweight controller; runs on the default (general) Karpenter
+# NodePool, same as cloudnative-pg.
+#
+# Image: upstream ships amd64-only, so we run a multi-arch build (images/
+# snapscheduler) pushed to ECR. The repository (with the account id) is set by
+# the addons ApplicationSet; tagOverride pins the build here. nodeSelector pins
+# arm64 to match the all-Graviton fleet.
 snapscheduler:
   replicaCount: 1
   manageCRDs: true
+  image:
+    tagOverride: "3.5.0-r1"
+  nodeSelector:
+    kubernetes.io/arch: arm64
   resources:
     requests:
       cpu: 10m

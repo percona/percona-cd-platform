@@ -89,6 +89,24 @@ resource "aws_ecr_lifecycle_policy" "jenkins_percona" {
   policy     = local.ecr_expire_untagged_after_14d
 }
 
+# snapscheduler operator image (images/snapscheduler): a multi-arch build of the
+# upstream backube/snapscheduler operator, which upstream ships amd64-only. The
+# operator runs the scheduled controller-PVC VolumeSnapshots, so it must run on
+# the all-arm64 fleet. Consumed by the snapscheduler addon.
+resource "aws_ecr_repository" "snapscheduler" {
+  name                 = "percona-cd/snapscheduler"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "snapscheduler" {
+  repository = aws_ecr_repository.snapscheduler.name
+  policy     = local.ecr_expire_untagged_after_14d
+}
+
 locals {
   ecr_expire_untagged_after_14d = jsonencode({
     rules = [{
