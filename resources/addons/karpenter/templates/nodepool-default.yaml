@@ -14,7 +14,7 @@ spec:
       requirements:
         - key: kubernetes.io/arch
           operator: In
-          values: [amd64]
+          values: [arm64]
         - key: kubernetes.io/os
           operator: In
           values: [linux]
@@ -29,7 +29,7 @@ spec:
         # a dedicated NodePool with stricter requirements.
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: [c7i, c7a, m7i, m7a, r7i, r7a]
+          values: [c7g, m7g, r7g, c8g, m8g, r8g]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: [large, xlarge, 2xlarge, 4xlarge]
