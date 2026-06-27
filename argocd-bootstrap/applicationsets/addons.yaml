@@ -150,6 +150,14 @@ spec:
                 ingress:
                   hosts:
                     - '{{ metadata.annotations.authentik_hostname }}'
+
+            # snapscheduler — the upstream operator is amd64-only, so we run a
+            # multi-arch build (images/snapscheduler) in ECR. The repository
+            # (account id from the cluster annotation) is set here; the tag and
+            # arm64 nodeSelector live in resources/addons/snapscheduler/values.yaml.
+            snapscheduler:
+              image:
+                repository: '{{ metadata.annotations.aws_account_id }}.dkr.ecr.{{ metadata.annotations.aws_region }}.amazonaws.com/percona-cd/snapscheduler'
       destination:
         server: '{{ server }}'
         namespace: '{{ path.basename }}'
