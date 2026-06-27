@@ -140,6 +140,7 @@ module "eks" {
     prometheus_system = {
       instance_types = local.ng.prometheus_system.instance_types
       capacity_type  = "ON_DEMAND"
+      ami_type       = "AL2023_ARM_64_STANDARD"
       min_size       = local.ng.prometheus_system.min_size
       desired_size   = local.ng.prometheus_system.desired_size
       max_size       = local.ng.prometheus_system.max_size
