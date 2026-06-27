@@ -174,11 +174,14 @@ jobs:
       # The full-boot smoke above pulls the native (amd64) child of the manifest
       # list. Validate the pushed arm64 child structurally (full arm64 boot is the
       # Phase 5 pre-cutover gate on a real Graviton node).
-      - name: smoke arm64 against the PUSHED digest (JVM + war, via QEMU)
+      # Reference the pushed TAG (not the list @digest): docker rejects
+      # `@<manifest-list-digest>` together with --platform ("cannot overwrite
+      # digest"), so use the tag and let --platform select the arm64 child.
+      - name: smoke arm64 against the PUSHED image (JVM + war, via QEMU)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          DIGEST: ${{ steps.push.outputs.digest }}
-        run: docker run --rm --platform linux/arm64 --entrypoint sh "${REGISTRY}/${IMAGE_REPO}@${DIGEST}" -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-pushed-ok"
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: docker run --rm --platform linux/arm64 --entrypoint sh "${REGISTRY}/${IMAGE_REPO}:${TAG}" -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-pushed-ok"
       - name: upload effective plugin list
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
