@@ -101,6 +101,7 @@ module "eks" {
     system = {
       instance_types = local.ng.system.instance_types
       capacity_type  = "ON_DEMAND"
+      ami_type       = "AL2023_ARM_64_STANDARD"
       min_size       = local.ng.system.min_size
       desired_size   = local.ng.system.desired_size
       max_size       = local.ng.system.max_size
