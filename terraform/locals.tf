@@ -61,15 +61,12 @@ locals {
       max_size       = 2
     }
     jenkins_master = {
-      # Dedicated single-AZ on-demand node for the in-cluster Jenkins controller
-      # pilot (ps3-k8s). m6a.xlarge (4 vCPU / 16 GiB) matches the deleted
-      # jenkins_system NG and clears the controller's 6Gi mem / 4000m cpu limit
-      # plus the node DaemonSets. Single node (min=desired=max=1): the controller
-      # is a single-replica SPOF, so no scaling/surge -- an AMI bump recreates the
-      # one node in a window and the Retain PVC re-attaches in the same AZ. Costs
-      # one idle node until the pilot deploys (the accepted dark-replica tradeoff,
-      # same as the old jenkins_system at ~$126/mo).
-      instance_types = ["m6a.xlarge"]
+      # Single dedicated 1a node for the in-cluster Jenkins controller (ps3-k8s).
+      # m7g/m8g.xlarge (4 vCPU / 16 GiB) clears the controller's 6Gi/4000m limit
+      # plus DaemonSets. Single node (min=desired=max=1): the controller is a
+      # single-replica SPOF, so an arch/AMI change recreates the one node in a
+      # window and the Retain PVC re-attaches in the same AZ.
+      instance_types = ["m7g.xlarge", "m8g.xlarge"]
       min_size       = 1
       desired_size   = 1
       max_size       = 1
