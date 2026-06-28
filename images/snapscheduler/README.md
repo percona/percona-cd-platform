@@ -24,14 +24,7 @@ moved, rebuild, then bump the chart image tag.
 
 ## Licensing
 
-This image redistributes the upstream operator, so it carries the upstream terms,
-not just ours:
-
-- **Operator (`/manager` binary)** — AGPL-3.0-or-later (upstream backube; verified
-  in the v3.5.0 source headers). Shipped as `LICENSE` (GNU AGPL v3 text).
-- **`api/` CRD types** — additionally Apache-2.0. Shipped as `LICENSE.apache-2.0.txt`.
-- **Our Dockerfile wrapper** — AGPL-3.0, consistent with this repo.
-- **Linked Go modules + stdlib** — their own licenses; see `NOTICE`.
-
-See `NOTICE` for attributions. The legal files are COPYed into the image (the
-distroless stage has no package manager, so they live at `/licenses`).
+This image redistributes the upstream backube operator, so it carries the upstream
+terms: the operator (`/manager`) is AGPL-3.0-or-later and the `api/` types are
+additionally Apache-2.0; our Dockerfile wrapper is AGPL-3.0. See `LICENSE`,
+`LICENSE.apache-2.0.txt`, and `NOTICE` (COPYed into the image at `/licenses`).
