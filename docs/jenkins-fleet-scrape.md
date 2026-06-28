@@ -86,11 +86,22 @@ gateway nginx sidecar.
 
 ## Master-side Alloy config (sketch)
 
-`/etc/alloy/config.alloy` on each master has four components:
+`/etc/alloy/config.alloy` on each master has the following components:
 
 ```
 prometheus.scrape "hetzner_local" {
   targets    = [{ "__address__" = "localhost:8080", "__metrics_path__" = "/hetzner-prometheus/" }]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+  scrape_interval = "60s"
+}
+
+prometheus.exporter.unix "node" {
+  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat"]
+  // netdev/filesystem excludes drop Docker veth + pseudo-fs noise; see ADR 0044.
+}
+
+prometheus.scrape "node" {
+  targets    = prometheus.exporter.unix.node.targets
   forward_to = [prometheus.remote_write.mimir.receiver]
   scrape_interval = "60s"
 }
