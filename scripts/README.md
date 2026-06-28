@@ -96,6 +96,29 @@ fetches the alloy-gateway bearer token from AWS Secrets Manager. Idempotent.
 Not invoked locally; lives here so platform changes to the gateway and the
 master-side installer land in one diff.
 
+## CI gates
+
+[`check_conventions.py`](check_conventions.py)
+Terraform conventions gate (`just tf-conventions`, part of `just ci`): file-naming
+grammar, per-team `# Owner:` banners, and the comment rules (no copyright headers,
+no `CLAUDE.md` refs, no Jira ticket IDs). Stdlib-only, fail-closed.
+
+[`render-clouds.py`](render-clouds.py)
+Renders each master's JCasC clouds `configScript` from the shared clouds catalog.
+`check <inst>` is the CI drift + no-YAML-alias gate (ADR 0029); `apply <inst>`
+rewrites the committed values. Never hand-edit the rendered values.
+
+[`jenkins-chart-render-check.sh`](jenkins-chart-render-check.sh)
+Renders the per-instance Jenkins controller chart and asserts the values reach the
+`jenkins` subchart (image / Retain PVC / ALB group / ClusterIP agent Service /
+node-pool pin). Guards the `jenkins:`-scoping regression. Run via `just helm-render`.
+
+[`refresh-fork-locks.sh`](refresh-fork-locks.sh)
+Recorded-pin auto-bump for the `ec2` / `hetzner-cloud` fork plugins: rewrites
+`images/jenkins/percona-plugins.lock.json` to the latest `.percona.` release
+(sha256- and MANIFEST-verified). `--check` reports only and exits 3 if a bump
+exists. Run via `just refresh-fork-locks` / `just check-fork-locks`.
+
 ## Conventions
 
 - **Exit codes:** `0` all green, `1` at least one FAIL, `2` precondition missing.

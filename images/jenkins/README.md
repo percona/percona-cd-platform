@@ -120,8 +120,11 @@ the byte-identical-to-EC2 restore property).
 > **Operator note:** the two forks win on EVERY pod boot, so to change a fork
 > version rebuild the image (bump `percona-plugins.lock.json`). A hand-edit on
 > the PVC is reset on the next restart. Community plugins are the opposite: a UI
-> upgrade persists, so pin a community plugin in `plugins.txt` and rebuild when
-> you want it enforced rather than merely floored.
+> upgrade persists, and a `plugins.txt` bump only raises the **floor** (the
+> seeder still skips it when the home carries an equal-or-newer build). To FORCE
+> a community plugin on every boot the way the forks are forced, add its id to
+> `PINNED_PLUGINS` in the `Dockerfile` (it is renamed to `<id>.jpi.override` and
+> force-installed unconditionally); `ec2-fleet` is pinned that way today.
 
 ## Image reference: TAG, not digest (today)
 
@@ -138,7 +141,7 @@ digest in the PR body for traceability.
 `.github/workflows/build-jenkins-image.yml`:
 
 - **`validate`** (pull requests): build + smoke-boot, NO AWS token, NO push.
-  Runs end-to-end on the Hetzner-only image today.
+  Runs end-to-end on the full image (both `ec2` and `hetzner-cloud` forks baked).
 - **`publish`** (push to `main`): the only job with `id-token: write`. Builds and
   smoke-boots BEFORE push, assumes the scoped OIDC role, pushes to ECR with SBOM
   + provenance, captures the pushed digest, then re-smokes the pushed `@sha256:`
