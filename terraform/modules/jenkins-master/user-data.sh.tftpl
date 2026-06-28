@@ -363,7 +363,7 @@ main() {
     # fetch the same content from a thin pass-through at
     # Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh
     # until they migrate to TF.
-    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/5366fbd1d8f21ada50bfc96a68ebb6e0ed5edc07/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
 %{ endif ~}
 }
 
