@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/actions-lint
@@ -51,12 +51,12 @@ jobs:
     permissions:
       contents: read            # explicitly NO id-token
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       # docker/* is SHA-pinned (not in the repo zizmor ref-pin allowlist). Refresh with:
       #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: build amd64 (load, no push)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
@@ -104,10 +104,10 @@ jobs:
       # Third-party actions pinned by commit SHA below this line (the job holds
       # AWS creds after configure-aws-credentials). Resolve/refresh SHAs with:
       #   gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
       - name: compute image tag (<version>-<short-sha>)
         id: meta
@@ -146,13 +146,13 @@ jobs:
 
       # --- AWS creds appear here; everything after is privileged ---
       - name: configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b  # v6.2.1
         with:
           role-to-assume: ${{ secrets.SNAPSCHEDULER_IMAGE_PUSH_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: ECR login
         id: ecr
-        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64  # v2
       # The repo is tag-IMMUTABLE: a workflow_dispatch re-run at the same commit
       # would compute the same <version>-<sha> tag and the push would fail
       # opaquely. Fail early with a clear message instead.
@@ -220,7 +220,7 @@ jobs:
       contents: write           # createCommitOnBranch on the bump branch
       pull-requests: write      # gh pr create
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
       - name: open bump PR
