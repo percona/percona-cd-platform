@@ -20,34 +20,11 @@ kubernetes API errors. An empty discovery (no running master) is a valid steady 
 SpotFleet replacement: the slice is written empty and the proxy serves its 503 page until the
 next run picks up the new IP.
 
-## What it is built from
-
-- **Base image:** `ghcr.io/astral-sh/uv:python3.13-bookworm-slim`, pinned by multi-arch index
-  digest so an upstream re-push of the same tag cannot change the base. This base bundles the
-  `uv` installer (astral-sh/uv, Apache-2.0 OR MIT), CPython 3.13 (PSF License Agreement), and a
-  Debian 12 "bookworm" slim userland (Debian base packages under their respective licenses).
-- **Python dependencies**, installed at build time with `uv pip install --system`:
-  - `boto3` 1.36.x (Apache-2.0) and its stack: `botocore`, `s3transfer` (Apache-2.0),
-    `jmespath` (MIT), `python-dateutil` (Apache-2.0 AND BSD-3-Clause), `urllib3` (MIT),
-    `six` (MIT).
-  - `kubernetes` 31.x (Apache-2.0) and its stack: `requests`, `google-auth`,
-    `websocket-client`, `rsa` (Apache-2.0), `urllib3`, `pyyaml`, `cachetools`,
-    `durationpy`, `charset-normalizer` (MIT), `requests-oauthlib` (ISC), `oauthlib`,
-    `idna`, `pyasn1`, `pyasn1-modules` (BSD), `certifi` (MPL-2.0), `six`, `python-dateutil`.
-- **Application code:** `reconcile.py`, original to Percona, under AGPL-3.0 (see LICENSE).
-
-Every bundled dependency is permissive (Apache-2.0 / MIT / BSD / ISC / PSF) or weak-copyleft
-file-level (MPL-2.0, certifi), all compatible with the repository's AGPL-3.0 license. Their
-required attributions are reproduced in NOTICE, and each installed package retains its own
-license metadata inside the image.
-
 ## License
 
-This image is licensed under the GNU Affero General Public License v3.0 (see LICENSE),
-consistent with the percona-cd-platform repository it lives in. The only first-party code is
-`reconcile.py`; everything else is an unmodified upstream dependency redistributed under its
-own license (permissive, or weak file-level copyleft for certifi's MPL-2.0), as attributed in
-NOTICE.
+`reconcile.py` is Percona's code, AGPL-3.0 (see LICENSE). The `uv`/CPython base image and the
+boto3/kubernetes dependency stacks keep their own (permissive, plus certifi's MPL-2.0)
+licenses. See NOTICE for the full attribution.
 
 ## Build (multi-arch)
 

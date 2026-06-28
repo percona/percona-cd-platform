@@ -91,5 +91,4 @@ Community Jenkins plugins (resolved from plugins.txt)
   The image installs community plugins from the Jenkins Update Center per
   plugins.txt. Each is distributed under its own OSI-approved license
   (predominantly MIT and Apache-2.0), declared in that plugin's HPI MANIFEST.MF
-  inside the image. A machine-generated, per-plugin license inventory is the
-  authoritative list (see README.md).
+  inside the image.
