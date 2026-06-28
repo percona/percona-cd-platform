@@ -47,34 +47,49 @@ done
 # workload: the images, and any kubernetes.io/arch values it pins.
 workloads_json="$(kubectl get deploy,statefulset,daemonset,cronjob,job -A -o json)"
 
-mapfile -t images < <(
-  echo "${workloads_json}" | jq -r '
+# Capture each pipeline into a variable with an EXPLICIT exit check, THEN mapfile.
+# `mapfile < <(... | jq)` runs the pipeline in a subshell, so a jq/kubectl
+# failure does NOT trip `set -e` and would leave an empty array -> a false-green.
+images_raw="$(echo "${workloads_json}" | jq -r '
     .items[]
     | (.spec.template.spec // .spec.jobTemplate.spec.template.spec) as $ps
     | ($ps.containers // []) + ($ps.initContainers // [])
     | .[].image
-  ' | sort -u
-)
+  ' | sort -u)" || { err "failed to extract images (jq/kubectl error)"; exit 1; }
+mapfile -t images < <(printf '%s\n' "${images_raw}" | grep -v '^$' || true)
+if ((${#images[@]} == 0)); then
+  err "no workload images found (wrong kube-context, or empty cluster?)"
+  exit 1
+fi
 
-# Wrong-arch pins: flag a workload only when it EXCLUDES the target arch, i.e. a
-# nodeSelector arch that differs, or a required node-affinity whose arch
-# matchExpressions never permit the target (an affinity `In [amd64, arm64]`
-# permits arm64 and is fine; terms are ORed).
-mapfile -t bad_pins < <(
-  echo "${workloads_json}" | jq -r --arg target "${target_arch}" '
+# Wrong-arch pins, with correct selector semantics. A workload EXCLUDES the
+# target arch when: its nodeSelector arch differs; OR its required node-affinity
+# excludes it, i.e. EVERY ORed nodeSelectorTerm has an arch matchExpression that
+# excludes the target. `operator` is honoured (In/NotIn/Exists/DoesNotExist):
+# `In [amd64, arm64]` permits arm64, `NotIn [arm64]` excludes it.
+bad_pins_raw="$(echo "${workloads_json}" | jq -r --arg target "${target_arch}" '
+    def expr_excludes($e; $t):
+      ($e.operator // "In") as $op | ($e.values // []) as $vals
+      | if   $op == "In"           then ($vals | index($t) | not)
+        elif $op == "NotIn"        then ($vals | index($t) | . != null)
+        elif $op == "DoesNotExist" then true
+        elif $op == "Exists"       then false
+        else false end;
+    def term_excludes($t):
+      (.matchExpressions // []) | any(.[]; .key == "kubernetes.io/arch" and expr_excludes(.; $t));
     .items[]
     | { ns: .metadata.namespace, kind: .kind, name: .metadata.name,
         ps: (.spec.template.spec // .spec.jobTemplate.spec.template.spec) } as $w
     | ($w.ps.nodeSelector["kubernetes.io/arch"]) as $sel
-    | [ ( $w.ps.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms // [] )[]
-        | .matchExpressions[]? | select(.key=="kubernetes.io/arch") | .values ] as $afflists
+    | ($w.ps.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms) as $terms
     | select(
         ($sel != null and $sel != $target)
-        or ( ($afflists | length) > 0 and ( [ $afflists[] | index($target) ] | map(select(. != null)) | length ) == 0 )
+        or ( ($terms | type) == "array" and ($terms | length) > 0
+             and ($terms | all(.[]; term_excludes($target))) )
       )
     | "\($w.ns)/\($w.kind)/\($w.name) excludes kubernetes.io/arch=\($target)"
-  '
-)
+  ')" || { err "failed to evaluate arch pins (jq error)"; exit 1; }
+mapfile -t bad_pins < <(printf '%s\n' "${bad_pins_raw}" | grep -v '^$' || true)
 
 # ---- log into every registry the images reference ----
 # Each distinct ECR host (ours AND AWS-owned accounts like the EKS-addon
