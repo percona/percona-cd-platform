@@ -11,7 +11,7 @@ snapscheduler:
   replicaCount: 1
   manageCRDs: true
   image:
-    tagOverride: "3.5.0-r1"
+    tagOverride: "3.5.0-5798b42b40d4"
   nodeSelector:
     kubernetes.io/arch: arm64
   resources:
