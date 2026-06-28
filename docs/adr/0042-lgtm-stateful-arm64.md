@@ -1,6 +1,6 @@
 # 0042 — LGTM stateful tier on arm64 (Graviton), multi-AZ to match drifted volumes
 
-**Status:** Accepted (2026-06-27). Extended cluster-wide by ADR 0043 (the lgtm-stateful pool was the first phase of the platform-wide arm64 migration).
+**Status:** Accepted (2026-06-27). Extended cluster-wide by [ADR 0043](0043-platform-wide-arm64-migration.md).
 **Amends:** [ADR 0017](0017-cluster-tier-taxonomy-and-lgtm-pinning.md): the `lgtm-stateful` Karpenter NodePool moves from amd64 to arm64. ADR 0017 stands; this ADR records the arch change.
 **Partially reverses:** [ADR 0020](0020-lgtm-single-az-collapse.md): the single-AZ (us-east-1a) pin on the stateful pool is widened back to us-east-1a/b/c. This is a pragmatic match to live state, not a return to multi-AZ HA. See the AZ-drift note below.
 **Related:** [ADR 0023](0023-lgtm-stateful-az-drift.md) (the unremediated AZ drift this ADR works around), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (the Alloy push queues that buffer the cutover pause).
