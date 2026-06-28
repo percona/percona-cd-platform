@@ -1,51 +1,24 @@
 # Documentation conventions (docs/)
 
-Scoped instructions for `docs/` (ADRs and runbooks). The repo-root `CLAUDE.md`
-carries the platform-wide rules; the global no-em-dash / semicolons-sparingly
-style applies here too. These are guidance, not a gated check.
+Scoped to `docs/` (ADRs, runbooks). The repo-root `CLAUDE.md` has the platform
+rules; the global no-em-dash, sparse-semicolon style applies here too. Guidance,
+not a gate.
 
 ## ADRs (`docs/adr/`)
 
-- **One file per decision**, `NNNN-kebab-title.md`, `NNNN` zero-padded and
-  monotonically increasing. Title line `# NNNN - Title` (a hyphen, not an em
-  dash).
-- **Header = terse cross-reference lines**, one per relationship, in this order
-  when present: `**Status:**`, `**Amends:**`, `**Related:**`,
-  `**Superseded by:**` / `**Partially reverses:**`, `**Amended by:**`. A
-  cross-ref is a pointer with a one-clause why, not an explanation:
-  `**Amended by:** [ADR 00NN](00NN-slug.md) (the MNGs moved to Graviton)`. The
-  detail lives in the linked ADR.
-- **Never stack two lines for the same relationship.** If an ADR is amended a
-  second time, EDIT the existing `**Amended by:**` line to list both refs; do
-  not add a second `**Amended by:**` line. Two `Amended by` lines that both name
-  the same ADR is the noise to avoid.
-- **Amend, do not rewrite.** When a later ADR changes a past decision, add an
-  `**Amended by:**` pointer to the OLD ADR and record the change in the NEW one.
-  The old ADR's body stays as the historical record (its superseded values are
-  the "pre-migration record"); do not gut it or restate the new decision inside
-  it.
-- **Body sections:** `## Context`, `## Decision`, `## Consequences`; add
-  `## Rollout` / `## Verification` only when they carry real content.
-- **No dense paragraphs.** Break any multi-item content (a per-node-group
-  rollout, a list of changes, several findings) into bullets. One idea per
-  paragraph, a blank line between. A wall of text with no newlines and five
-  facts crammed in is the anti-pattern.
-- **State the decision and its rationale, not the play-by-play.** Cut the "too
-  much info": ephemeral ops detail, a restatement of the diff, and timeline
-  narrative belong in the PR or a runbook, not the ADR.
+- One decision per file, `NNNN-kebab-title.md`. Title `# NNNN - Title` (hyphen, not an em dash).
+- Header cross-refs, in order, one line each: `Status`, `Amends`, `Related`, `Superseded by` / `Partially reverses`, `Amended by`. Each is a pointer plus a one-clause why; the detail lives in the linked ADR.
+- One line per relationship. Amended again? Edit the existing `Amended by` line to add the ref; never stack a second one.
+- Amend, do not rewrite. A later ADR adds an `Amended by` pointer; the old body stays as the record (its superseded values are the "before" state).
+- Body: `Context`, `Decision`, `Consequences` (add `Rollout` / `Verification` only when they carry real content). State the decision and its rationale, not the play-by-play.
+- No dense paragraphs. Bullets for any multi-item content; one idea per paragraph.
 
 ## Runbooks (`docs/runbooks/`)
 
-- Present tense, imperative steps, copy-pasteable commands, terse. A gate or
-  check belongs as a command the reader runs, not a paragraph describing it.
-- Same no-tombstones and dates-only-when-load-bearing rules as below.
+- Present tense, imperative steps, copy-pasteable commands, terse. A check is a command the reader runs, not a paragraph describing it.
 
-## Shared
+## Everywhere
 
-- **No em dashes** (use commas, colons, or parentheses). Semicolons sparingly.
-- **Dates only when load-bearing** (an incident that explains a sizing choice).
-  Keep them out of cross-references.
-- **No tombstones.** State current behavior in the present tense; git history
-  carries what was removed. An ADR is the exception that PROVES the rule: it
-  records a point-in-time decision, so its body stays as written and later
-  change is captured by an `**Amended by:**` pointer, never by editing the body.
+- No em dashes (commas, colons, parens). Semicolons sparingly.
+- Dates only when load-bearing; keep them out of cross-refs.
+- No tombstones: present tense, git history holds what was removed. The ADR body is the one exception, a point-in-time record changed only by an `Amended by` pointer.
