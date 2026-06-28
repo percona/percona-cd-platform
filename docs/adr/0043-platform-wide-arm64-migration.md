@@ -19,19 +19,22 @@ The gating fact: three node groups host an internal ECR image, and a pool cannot
 
 ### Two findings that shape the mechanics
 
-- **An MNG `ami_type` arch flip is a node-group REPLACEMENT, not an in-place version update.** `ami_type` is ForceNew, so `tofu plan` shows `-/+` (1 add, 1 destroy) for every MNG phase. This is SAFE because the terraform-aws-eks module sets `create_before_destroy = true` + `node_group_name_prefix` on the node group: the new arm64 group is created and healthy before the old amd64 group drains. The plan's draft NO-GO gate ("stop on replacement") was therefore wrong as written; the real distinction is create-before-destroy (safe) vs destroy-then-create (unsafe), keyed on the plan's `change.actions` order. See `docs/runbooks/mng-label-taint-changes.md`.
+- **An MNG `ami_type` arch flip is a node-group REPLACEMENT, not an in-place update.** `ami_type` is ForceNew, so `tofu plan` shows `-/+`. It is SAFE because the terraform-aws-eks module sets `create_before_destroy` + `node_group_name_prefix`: the new arm64 group is healthy before the old drains. So the NO-GO gate keys on the replacement ORDER (create-before-destroy safe, destroy-then-create not), not on "any replacement". See `docs/runbooks/mng-label-taint-changes.md`.
 - **Cross-compile, never emulate, for the multi-arch builds.** Building an amd64 Go toolchain under QEMU on an arm64 build host segfaults the compiler. The Dockerfiles pin the builder to `$BUILDPLATFORM` and Go cross-compiles to `$TARGETARCH`; only the runtime smoke runs the other arch under QEMU.
 
 ## Rollout
 
-Phased, lowest-risk first, each verified before the next. NodePool flips (ingress, default) auto-roll. MNG flips (system, prometheus_system, jenkins_master) replace create-before-destroy; the two stateful MNGs were done in a window with pre-roll EBS snapshots of every PVC. The `system` MNG hosts karpenter itself and rolled cleanly (the new arm64 group came up first). `prometheus_system` evicted Grafana + Authentik PG gracefully (PDB `disruptionsAllowed=1`) and recovered mtr-pg from its re-attached 1a PVC. `jenkins_master` rescheduled the singleton ps3-k8s controller onto the new arm64 node, re-attaching the 100Gi Retain PVC in-AZ (a transient Multi-Attach during the volume hand-off self-resolved). PRs #300–#319.
+Phased, lowest-risk first, each verified before the next (PRs #300-#319). NodePool flips auto-roll; MNG flips are create-before-destroy, and the two stateful MNGs ran in a window with a pre-roll EBS snapshot of every PVC:
+
+- `system` (hosts karpenter): rolled cleanly, the new arm64 group came up first.
+- `prometheus_system`: Grafana + Authentik PG evicted gracefully (PDB allows 1); mtr-pg recovered from its re-attached 1a PVC.
+- `jenkins_master`: the singleton ps3-k8s controller rescheduled onto arm64, 100Gi Retain PVC re-attached in-AZ (a transient Multi-Attach self-resolved).
 
 ## Consequences
 
 - **Cost:** about 19% off the compute for every pool and MNG (on top of ADR 0042's lgtm saving). Storage unchanged.
 - **One new owned image.** snapscheduler is now a platform-built image (`images/snapscheduler`), tracking upstream releases via the `SNAPSCHEDULER_VERSION` Dockerfile ARG. A small maintenance cost for a tool with no upstream arm64.
 - **A preflight gap was exposed.** snapscheduler escaped the per-pool workload inventory (it floats on a cluster-wide nodeSelector and runs as a CronJob with no steady-state pod), surfacing as a Pending pod only after the last amd64 node was gone. The follow-up is a mechanical arch-readiness gate (enumerate every image on a pool, fail if any lacks the target arch; scan for wrong-arch nodeSelector pins).
-- **Build host note corrected.** `just build-image` and the in-repo `CLAUDE.md` previously said "EKS nodes are amd64" and built `--platform linux/amd64`; both are fixed to multi-arch.
 
 ## Verification
 

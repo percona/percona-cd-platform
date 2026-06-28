@@ -1,7 +1,7 @@
 # 0027 — Baked Jenkins controller image (ECR + GHA-OIDC push), HYBRID plugin reconciliation
 
 **Status:** Accepted (2026-05-31); in-cluster consumption is the Stage 0 pilot (see [ADR 0025](0025-singleton-controller-rollout-gating.md)).
-**Amended by:** [ADR 0043](0043-platform-wide-arm64-migration.md) (2026-06-27) — the jenkins-percona image is now multi-arch (`linux/amd64,linux/arm64`), pinned by the multi-arch INDEX digest. Decision item 2's "amd64-only" base pin is superseded; the controller runs on a Graviton MNG.
+**Amended by:** [ADR 0043](0043-platform-wide-arm64-migration.md): jenkins-percona is now multi-arch, pinned by the multi-arch index digest (Decision item 2's amd64-only base pin is superseded).
 **Related:** [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (this realizes its "plugins shift to a baked image" governing principle — shrinking the irreplaceable EBS residue), [ADR 0025](0025-singleton-controller-rollout-gating.md) (the gated in-cluster pilot consumes this image), [ADR 0021](0021-mtr-test-history-relational-store.md) (sibling "pinned ECR image + EKS workload, built via scoped GHA-OIDC" pattern).
 
 ## Context

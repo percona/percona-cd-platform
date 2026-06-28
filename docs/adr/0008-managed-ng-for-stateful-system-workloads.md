@@ -1,8 +1,7 @@
 # 0008 — Managed NodeGroups for stateful system workloads
 
 **Status:** Accepted (2026-04-30)
-**Amended by:** [ADR 0017](0017-cluster-tier-taxonomy-and-lgtm-pinning.md) (per-workload taints became the `workload.percona.com/tier` taxonomy). The Decision table below is updated to the current live topology; see the history-and-drift note under it.
-**Amended by:** [ADR 0043](0043-platform-wide-arm64-migration.md) (2026-06-27) — the `system`, `prometheus_system`, and `jenkins_master` MNGs moved from `m6a` to Graviton (`m7g`/`m8g`, `ami_type = AL2023_ARM_64_STANDARD`). The `m6a` instance types in the table below record the pre-migration state.
+**Amended by:** [ADR 0017](0017-cluster-tier-taxonomy-and-lgtm-pinning.md) (taints became the `workload.percona.com/tier` taxonomy) and [ADR 0043](0043-platform-wide-arm64-migration.md) (the MNGs moved to arm64 Graviton). The table reflects current topology; the `m6a` types are the pre-migration record.
 
 ## Context
 
