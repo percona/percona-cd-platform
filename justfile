@@ -36,7 +36,42 @@ ci: lint validate
 
 lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor
 
-validate: tf-validate manifest-validate helm-render clouds-render-check lambda-test
+validate: tf-validate manifest-validate helm-render clouds-render-check arch-pins-check lambda-test
+
+# Fail-closed arch-pin gate: no committed cluster manifest pins
+# kubernetes.io/arch to a non-arm64 arch (would strand Pending on the
+# all-Graviton fleet). Credential-free; the chart-default blind spot is covered
+# by the `check-arch-readiness` preflight (see scripts/check_arch_pins.py).
+arch-pins-check:
+    uv run --with pyyaml python3 scripts/check_arch_pins.py
+
+# Arch-migration PREFLIGHT (creds): before flipping a NodePool/MNG to a new
+# arch, assert every workload image publishes the target arch AND no PodSpec
+# pins the wrong arch. Run it, not `just ci`, before the cutover.
+#   just check-arch-readiness          # target arm64 (default)
+#   just check-arch-readiness amd64
+check-arch-readiness *ARGS: _require-aws-profile
+    scripts/check-arch-readiness.sh {{ARGS}}
+
+# NO-GO gate for an MNG arch flip: read the saved tfplan and assert any replaced
+# node group is create-before-destroy (safe), not destroy-then-create. Run after
+# `just tf-plan`. See docs/runbooks/mng-label-taint-changes.md.
+tf-ng-replacement-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # tofu -chdir=terraform resolves the plan path relative to terraform/.
+    [[ -f "terraform/tfplan" ]] || { echo "no saved plan at terraform/tfplan; run just tf-plan first" >&2; exit 1; }
+    bad="$(tofu -chdir=terraform show -json tfplan \
+      | jq -r '.resource_changes[]
+          | select(.type=="aws_eks_node_group")
+          | select(.change.actions==["delete","create"])
+          | .address')"
+    if [[ -n "$bad" ]]; then
+      echo "NO-GO: node group(s) replaced destroy-then-create (drops the group before its replacement):" >&2
+      echo "$bad" | sed 's/^/  - /' >&2
+      exit 1
+    fi
+    echo "tf-ng-replacement-check OK: any node-group replacement is create-before-destroy."
 
 # ---------- cleanup lambdas ----------
 # Mirrors the `cleanup-lambda tests` CI job (moto, credential-free). Runtime
