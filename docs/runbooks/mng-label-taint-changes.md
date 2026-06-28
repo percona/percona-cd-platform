@@ -116,6 +116,40 @@ For those, plan for the eviction failure ahead of time:
    node first, lets the workload reschedule, then drains the old. Scale
    back down after.
 
+## Arch flip (`ami_type`): a node-group REPLACEMENT, not a version update
+
+Changing `ami_type` (e.g. `AL2023_x86_64_STANDARD` -> `AL2023_ARM_64_STANDARD`
+for a Graviton migration) is different from the AMI-release bump above.
+`ami_type` is ForceNew, so `tofu plan` shows the node group **must be replaced**
+(`-/+`, "1 to add, 1 to destroy"), not an in-place `UpdateNodegroupVersion`.
+
+This is SAFE: the terraform-aws-eks module sets `create_before_destroy = true`
+plus `node_group_name_prefix` on `aws_eks_node_group.this`, so tofu creates the
+**new** arm64 node group (a fresh generated name) and waits for it ACTIVE before
+it destroys the old one. The bootstrap/stateless workloads reschedule onto the
+new nodes during the old group's drain.
+
+So the NO-GO test is NOT "stop on any replacement" (an arch flip always shows
+replacement). The real distinction is the replacement ORDER. Read it from the
+saved plan, do not eyeball `+/-` vs `-/+`:
+
+```bash
+# export AWS_PROFILE=percona-dev-admin
+tofu -chdir=terraform plan -target='module.eks.module.eks_managed_node_group["<name>"]' -out=tfplan
+tofu -chdir=terraform show -json tfplan \
+  | jq -r '.resource_changes[] | select(.address|endswith("aws_eks_node_group.this[0]")) | .change.actions | @json'
+# ["create","delete"]  -> create-before-destroy: SAFE, proceed
+# ["delete","create"]  -> destroy-then-create:   STOP (would drop the node group before its replacement)
+```
+
+Caveat for the singleton stateful MNG (`jenkins_master`, `max_size=1`, RWO PVC):
+create-before-destroy gives the controller a landing node, but the 100Gi PVC is
+single-attach, so the controller cannot start on the new node until the old pod
+releases the volume. Expect a brief controller restart (a transient
+`Multi-Attach` during the hand-off is normal and self-resolves). Take a pre-roll
+EBS snapshot of the PVC, and run it in a window. See
+[ADR 0043](../adr/0043-platform-wide-arm64-migration.md).
+
 ## Past incidents this prevents
 
 - 2026-05-11 16:43 UTC: legacy-label cleanup PR (PR #72). Tofu apply

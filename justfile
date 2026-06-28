@@ -406,10 +406,15 @@ build-image name tag="0.1.0": _require-aws-profile
     registry="${account}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com"
     aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" \
       | docker login --username AWS --password-stdin "$registry"
-    docker buildx build --platform linux/amd64 \
+    # Multi-arch (amd64+arm64): the EKS fleet is Graviton, so an amd64-only push
+    # cannot schedule. A multi-arch push needs a docker-container builder (the
+    # default docker driver cannot build multiple platforms in one manifest).
+    docker buildx inspect cd-multiarch >/dev/null 2>&1 \
+      || docker buildx create --name cd-multiarch --driver docker-container >/dev/null
+    docker buildx build --builder cd-multiarch --platform linux/amd64,linux/arm64 \
       -t "${registry}/percona-cd/{{name}}:{{tag}}" \
       --push "images/{{name}}"
-    echo "pushed ${registry}/percona-cd/{{name}}:{{tag}}"
+    echo "pushed multi-arch ${registry}/percona-cd/{{name}}:{{tag}}"
 
 # ---------- jenkins fork plugin locks ----------
 # Recorded-pin auto-bump: rewrite images/jenkins/percona-plugins.lock.json to the

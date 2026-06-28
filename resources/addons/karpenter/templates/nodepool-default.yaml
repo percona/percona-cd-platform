@@ -24,7 +24,7 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: [spot, on-demand]
-        # Gen-7 Intel + AMD, general-purpose + compute + memory. Excludes
+        # Gen-7/8 Graviton, general-purpose + compute + memory. Excludes
         # storage/GPU/burstable on purpose — workloads that need those open
         # a dedicated NodePool with stricter requirements.
         - key: karpenter.k8s.aws/instance-family
@@ -83,6 +83,7 @@ spec:
     budgets:
       - nodes: "1"
 
-  # Single NodePool today, so weight is moot — kept for forward-compat
-  # when an arm64 / GPU NodePool gets added.
+  # The three NodePools are taint-exclusive (no pod matches two), so weight
+  # is moot today; kept for forward-compat if an overlapping pool (e.g. GPU)
+  # is added.
   weight: 10

@@ -5,8 +5,8 @@
 # behind the jenkins-cd ALB. Built from the vendored source in this directory
 # (no runtime install, no external fork pull); deps locked via uv.lock.
 #
-# Build (EKS nodes are amd64; CI does this on push to main):
-#   docker buildx build --platform linux/amd64 \
+# Build (EKS nodes are arm64 Graviton; CI builds this multi-arch on push to main):
+#   docker buildx build --platform linux/amd64,linux/arm64 \
 #     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-mcp:<tag> \
 #     --push images/jenkins-mcp
 # Base: uv + Python 3.13 (Debian bookworm slim). Pinned BY DIGEST so an upstream

@@ -23,7 +23,7 @@ is **fenced, not destroyed** (single-writer), kept as a one-command rollback.
 
 ## Substrate prerequisites (already in place for us-east-1a)
 
-- `jenkins_master` EKS **managed** node group (m6a.xlarge, us-east-1a, taint
+- `jenkins_master` EKS **managed** node group (m7g.xlarge/m8g.xlarge, us-east-1a, taint
   `workload.percona.com/tier=jenkins-master`). This is a STATIC MNG, deliberately
   outside Karpenter: no NodePool templates the `jenkins-master` tier value, so the
   controller can only land here. If the node dies the MNG ASG replaces it (brief
