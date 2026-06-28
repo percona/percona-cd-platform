@@ -13,7 +13,7 @@ ARG SNAPSCHEDULER_VERSION=3.5.0
 # Pinned commit of tag v3.5.0; verified at build time so a moved tag fails closed.
 ARG SNAPSCHEDULER_COMMIT=46883ceb23a2e3dbf59fcc4e0ef59c96a6195ba6
 
-FROM --platform=$BUILDPLATFORM golang:1.24@sha256:39d9e7d9c5d9c9e4baf0d8fff579f06d5032c0f4425cdec9e86732e8e4e374dc AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG SNAPSCHEDULER_VERSION
@@ -40,5 +40,8 @@ LABEL org.opencontainers.image.title="snapscheduler" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
 WORKDIR /
 COPY --from=builder /manager /manager
+# Legal: license + attribution files. The distroless base has no package
+# manager, so the image carries them at /licenses.
+COPY LICENSE LICENSE.apache-2.0.txt NOTICE README.md /licenses/
 USER 65532:65532
 ENTRYPOINT ["/manager"]

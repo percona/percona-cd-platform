@@ -17,6 +17,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # deterministic (use exactly the pinned versions; do not silently upgrade
 # transitive deps to "latest"). --verbose for build-log auditability.
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+
+# Legal: license + attribution files, carried into the distributed image.
+COPY LICENSE LICENSE.apache-2.0.txt NOTICE README.md /licenses/
+
 RUN jenkins-plugin-cli \
       --plugin-file /usr/share/jenkins/ref/plugins.txt \
       --latest=false \

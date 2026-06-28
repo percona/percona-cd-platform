@@ -1,0 +1,95 @@
+Jenkins controller image (Percona)
+Copyright (c) Percona, LLC
+
+The first-party files in images/jenkins/ (Dockerfile, plugins.txt,
+percona-plugins.lock.json, fetch-hpis.sh, smoke-boot.sh, and the groovy/ boot
+hooks) are licensed under the GNU Affero General Public License v3.0 (see
+LICENSE), consistent with the percona-cd-platform repository.
+
+This is a combined work, not a mere aggregation: the baked plugins and the
+Groovy boot hooks run inside the same Jenkins JVM as the upstream core. Each
+component nonetheless retains its own license, listed below. Because operators
+interact with the controller over a network, AGPL-3.0 section 13 applies to the
+Percona first-party parts; their complete corresponding source is the public
+percona-cd-platform repository. The non-AGPL components keep their own terms and
+are NOT relicensed.
+
+The full license text of each bundled component travels inside the image: the
+base-image layers carry the Jenkins core, OpenJDK, and Debian package licenses
+(/usr/share/doc/<pkg>/copyright), and every plugin HPI declares its license in
+its MANIFEST.MF. The summaries below are attribution, not a substitute for those
+texts.
+
+======================================================================
+Jenkins core (base image jenkins/jenkins LTS) - MIT License
+======================================================================
+
+  Copyright (c) 2004-, Kohsuke Kawaguchi, Sun Microsystems, Inc., and a number
+  of other of contributors
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+======================================================================
+EC2 plugin - Percona fork - MIT License
+======================================================================
+
+  Baked from Percona-Lab/jenkins-ec2-plugin (fork of jenkinsci/ec2-plugin),
+  release v5.24.percona.4, SHA-256-verified per percona-plugins.lock.json. It is
+  licensed under the MIT License (same terms reproduced above). The upstream MIT
+  copyright/permission notice and Percona's change notice are retained in that
+  repository's LICENSE.txt, NOTICE, and per-file source headers.
+
+======================================================================
+Hetzner Cloud plugin - Percona fork - Apache License 2.0
+======================================================================
+
+  Baked from Percona-Lab/jenkins-hetzner-cloud-plugin (fork of
+  jenkinsci/hetzner-cloud-plugin, originally Copyright 2021 dNation), release
+  v103.percona.28, SHA-256-verified per percona-plugins.lock.json. It is
+  licensed under the Apache License, Version 2.0; the full text is shipped as
+  LICENSE.apache-2.0.txt. Percona has made significant changes; those are stated
+  in that repository's NOTICE and per-file "Modified by Percona" headers
+  (Apache-2.0 section 4(b)).
+
+======================================================================
+OpenJDK 17 runtime (base image) - GPL-2.0 with Classpath Exception
+======================================================================
+
+  The base image bundles an OpenJDK 17 runtime (Eclipse Temurin), licensed under
+  the GNU General Public License, version 2, with the Classpath Exception. It is
+  present by aggregation in the base layers; the Classpath Exception permits
+  running independently licensed applications on it.
+
+======================================================================
+Debian GNU/Linux userland (base image)
+======================================================================
+
+  The base system comprises Debian packages under their individual licenses
+  (MIT, BSD, Apache-2.0, GPL, LGPL, and others). Each package's license is in
+  the image at /usr/share/doc/<package>/copyright.
+
+======================================================================
+Community Jenkins plugins (resolved from plugins.txt)
+======================================================================
+
+  The image installs community plugins from the Jenkins Update Center per
+  plugins.txt. Each is distributed under its own OSI-approved license
+  (predominantly MIT and Apache-2.0), declared in that plugin's HPI MANIFEST.MF
+  inside the image. A machine-generated, per-plugin license inventory is the
+  authoritative list (see README.md).

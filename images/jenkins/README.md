@@ -11,7 +11,7 @@ forks (Hetzner cloud, EC2 cloud). Built and pushed to ECR by
 |------|---------|
 | `Dockerfile` | Image definition. Base pinned BY DIGEST (see below). |
 | `plugins.txt` | Community plugin manifest (pinned versions). |
-| `plugins.effective.txt` | Build-generated, committed archive of the fully-resolved plugin set (audit + determinism gate). Regenerate against the 2.541.3 base in CI. |
+| `plugins.effective.txt` | Generated **inside the image** at `/usr/share/jenkins/ref/plugins.effective.txt` (the fully-resolved plugin set, for audit). Not committed to the repo. |
 | `percona-plugins.lock.json` | Fork HPI manifest: `id` / `version` / `filename` / `url` / `sha256`. |
 | `fetch-hpis.sh` | Downloads + SHA-verifies the fork HPIs into `percona-plugins/` before the build. |
 | `percona-plugins/` | Staging dir for fetched fork plugins (staged as `<id>.jpi`). Holds only `.gitkeep` in git; `*.jpi`/`*.hpi` are gitignored (fetched at build time, never committed). |

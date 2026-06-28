@@ -46,6 +46,16 @@ Raw `tofu` / `cd terraform` is disallowed except where a runbook explicitly flag
 Source of truth: `terraform/versions.tf` (`local.modules` and `local.charts`).
 Verify with `scripts/check_versions.py` before any pin bump.
 
+## Image licensing (images/)
+
+Repo is AGPL-3.0. Every `images/<x>/` ships **LICENSE + NOTICE + README.md**, and the Dockerfile must **`COPY` them into the image** (`/licenses/`) — repo files alone do not satisfy redistribution; the shipped image must carry them. Model: `images/jenkins-mcp/`.
+
+- **Our code -> AGPL-3.0** (verbatim repo-root `LICENSE`); never relicense.
+- **Redistributed upstream binary -> its own license** (e.g. `snapscheduler` = backube AGPL-3.0-or-later). Permissive bases/deps (MIT/Apache/BSD/PSF/LGPL) combine in but keep their terms.
+- **NOTICE** carries the exact upstream notices: MIT -> verbatim copyright + permission; **Apache-2.0 -> ship `LICENSE.apache-2.0.txt` AND state significant changes (sec 4(b))**; LGPL -> name it `LGPL-3.0-only` + preserve notices. A container is a combined work at runtime (not "mere aggregation"); point to the public repo for AGPL section 13 source.
+- **Do not hand-list transitive deps** (they drift). State families + key components in NOTICE; full texts ride in the image (base `/usr/share/doc/*/copyright`, Python `*.dist-info`, plugin `MANIFEST.MF`); the authoritative inventory is machine-generated (`go-licenses`, `pip-licenses`/uv, per-plugin scan).
+- **Forked plugin repos** (`Percona-Lab/jenkins-{ec2,hetzner-cloud}-plugin`): preserve the upstream `LICENSE` unmodified (MIT / Apache-2.0), `NOTICE` lists Percona changes (sec 4(b)), `pom.xml <licenses>` matches upstream.
+
 ## Hot-button gotchas
 
 1. **EKS extended support.** Standard support: 1.33 / 1.34 / **1.35 (default)**. Picking 1.32 or below incurs paid extended-support fees.
