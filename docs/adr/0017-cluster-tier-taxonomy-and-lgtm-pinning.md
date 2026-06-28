@@ -4,6 +4,7 @@
 **Amends:** [ADR 0008](0008-managed-ng-for-stateful-system-workloads.md) — the per-workload-taint pattern extends to LGTM stateful and the bootstrap tier.
 **Related:** [ADR 0011](0011-robustness-pass.md), [ADR 0014](0014-memberlist-cluster-label-isolation.md), [ADR 0015](0015-lgtm-bucket-object-lock-removed.md), [ADR 0016](0016-lgtm-only-metrics-stack.md).
 **Superseded in part by:** [ADR 0020](0020-lgtm-single-az-collapse.md) (the us-east-1{a,b,c} multi-AZ stateful pinning gave way to single-AZ).
+**Amended by:** [ADR 0042](0042-lgtm-stateful-arm64.md) (the `lgtm-stateful` pool to arm64) and [ADR 0043](0043-platform-wide-arm64-migration.md) (the `system`/`prometheus_system`/`jenkins_master` MNGs to Graviton). The `m6a` instance types in the tables below record the pre-migration state.
 **Amended by:** [ADR 0042](0042-lgtm-stateful-arm64.md): the `lgtm-stateful` pool moved from amd64 (`r7a/r7i/m7a/m7i`) to arm64 Graviton (`r7g/m7g/r8g/m8g`). This ADR's amd64 family list records the original decision.
 
 ## Context

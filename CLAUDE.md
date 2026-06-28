@@ -14,7 +14,7 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 - **Persistent groovy scripts** (`images/jenkins/groovy/persistent/`) run every Jenkins startup after `cloud.groovy`. Alphabetical order matters; prefix with `e-` to run after `c-cloud.groovy`.
 - **One-time groovy scripts** (`images/jenkins/groovy/one-time/`) self-delete after running, write `.clone-initialized` flag.
 - **`persistence.volumes`, not `extraVolumes`** for ConfigMap mounts. Init containers can't see `extraVolumes`.
-- **Docker image:** always `docker buildx build --platform linux/amd64 --push`. Build host (m3) is arm64, EKS nodes are amd64.
+- **Docker image:** build multi-arch with `docker buildx build --platform linux/amd64,linux/arm64 --push` (needs a docker-container builder, not the default driver). Build host (m3) is arm64; EKS nodes are arm64 (Graviton), and the internal images are multi-arch (CI builds them via `--platform=$BUILDPLATFORM` cross-compile).
 - **Public repo:** no AWS account IDs / ARNs / secrets in `.tfvars` or values files. All sensitive bits flow via `var.account_id`, cluster-secret annotations, or AWS Secrets Manager → External Secrets Operator.
 - **TLS policy:** every ALB Ingress sets `alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09` (AWS's recommended default since 2025-09 — TLS 1.3+1.2 only, post-quantum hybrid key exchange, forward-secrecy-only ciphers). Defaults allow TLS 1.0/1.1.
 - **Shared ALB:** every Jenkins host Ingress carries `alb.ingress.kubernetes.io/group.name: jenkins-cd`.

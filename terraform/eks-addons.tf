@@ -15,7 +15,7 @@ resource "aws_eks_addon" "vpc_cni" {
   resolve_conflicts_on_update = "PRESERVE"
 
   # docs/eks-hardening.md:
-  #  #4  ENABLE_PREFIX_DELEGATION → 4× pod density on m6a.xlarge (58 → 234)
+  #  #4  ENABLE_PREFIX_DELEGATION → ~4× pod density (prefix mode) on the Graviton MNG nodes
   #  #16 enableNetworkPolicy = true → native VPC-CNI L3/L4 NetworkPolicy engine
   #      available; default-deny baselines can ship later as Kubernetes
   #      NetworkPolicy manifests.

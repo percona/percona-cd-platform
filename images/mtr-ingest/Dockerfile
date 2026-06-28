@@ -2,9 +2,9 @@
 # (resources/addons/mtr). Pushed to ECR under the percona-cd/ namespace:
 #   <account>.dkr.ecr.<region>.amazonaws.com/percona-cd/mtr-ingest:<tag>
 #
-# Build (EKS nodes are amd64; build host may be arm64):
+# Build (EKS nodes are arm64 Graviton; CI builds this multi-arch on push to main):
 #   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
-#   docker buildx build --platform linux/amd64 \
+#   docker buildx build --platform linux/amd64,linux/arm64 \
 #     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/mtr-ingest:0.1.0 \
 #     --push images/mtr-ingest
 # Base: uv + Python 3.13 (Debian bookworm slim). Pinned BY DIGEST so an upstream

@@ -4,8 +4,8 @@
 # (resources/addons/jenkins-endpoint-reconciler). Deps baked in (no runtime
 # uv install), per the future-option note that previously lived in values.yaml.
 #
-# Build (EKS nodes are amd64):
-#   docker buildx build --platform linux/amd64 \
+# Build (EKS nodes are arm64 Graviton; CI builds this multi-arch on push to main):
+#   docker buildx build --platform linux/amd64,linux/arm64 \
 #     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-endpoint-reconciler:0.1.0 \
 #     --push images/jenkins-endpoint-reconciler
 # Base: uv + Python 3.13 (Debian bookworm slim). Pinned BY DIGEST so an upstream

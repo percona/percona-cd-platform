@@ -39,8 +39,8 @@ and [disruption](https://karpenter.sh/docs/concepts/disruption/).
 |---|---|---|---|
 | Tier label | `general` (untainted fallthrough) | `lgtm-stateful` (exclusive NoSchedule taint) | `ingress` (exclusive NoSchedule taint) |
 | Capacity | spot first, on-demand fallback | on-demand only | spot first, on-demand fallback |
-| Arch | amd64 | arm64 (Graviton) | amd64 |
-| Families | c7i, c7a, m7i, m7a, r7i, r7a | r7g, m7g, r8g, m8g | t3a/t3 medium, c7a/c7i/m7a/m7i large (instance-type list) |
+| Arch | arm64 (Graviton) | arm64 (Graviton) | arm64 (Graviton) |
+| Families | c7g, m7g, r7g, c8g, m8g, r8g | r7g, m7g, r8g, m8g | t4g.medium, c7g/m7g/c8g/m8g large (instance-type list) |
 | Sizes | large to 4xlarge | large to 2xlarge | medium, large |
 | AZ | us-east-1a | us-east-1a/b/c (matches drifted volumes, ADR 0023) | us-east-1a/b/c (multi-AZ) |
 | Expiry | 720h (30-day roll for AMI freshness) | Never, 10 min termination grace | 720h |

@@ -6,7 +6,7 @@ metadata:
   annotations:
     karpenter-test/notes: |
       High memory-to-CPU request ratio (~8Gi per 1 CPU) drives Karpenter
-      toward memory-optimized families (r7i / r7a). Pod anti-affinity
+      toward memory-optimized families (r7g / r8g). Pod anti-affinity
       forces a fresh node for each replica.
 spec:
   replicas: 2
