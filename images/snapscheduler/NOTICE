@@ -40,9 +40,8 @@ Go standard library and linked third-party modules
   The statically linked binary includes the Go runtime and standard library
   (Copyright The Go Authors, BSD-3-Clause) and third-party Go modules pulled in
   by the build (sigs.k8s.io/controller-runtime, k8s.io/client-go, and their
-  transitive dependencies), predominantly under Apache-2.0, BSD, and MIT. A
-  complete, machine-generated per-module inventory (go-licenses against the
-  pinned tag) is the authoritative list (see README.md).
+  transitive dependencies), predominantly under Apache-2.0, BSD, and MIT. Each
+  retains its own license.
 
 ======================================================================
 Base image: gcr.io/distroless/static:nonroot

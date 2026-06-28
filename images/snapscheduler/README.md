@@ -35,7 +35,3 @@ not just ours:
 
 See `NOTICE` for attributions. The legal files are COPYed into the image (the
 distroless stage has no package manager, so they live at `/licenses`).
-
-**Follow-up:** generate the complete per-module license inventory with
-`go-licenses` against the pinned tag and ship it under `/licenses` for a fully
-machine-verified NOTICE.
