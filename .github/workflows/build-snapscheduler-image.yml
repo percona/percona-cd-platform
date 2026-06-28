@@ -153,6 +153,21 @@ jobs:
       - name: ECR login
         id: ecr
         uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
+      # The repo is tag-IMMUTABLE: a workflow_dispatch re-run at the same commit
+      # would compute the same <version>-<sha> tag and the push would fail
+      # opaquely. Fail early with a clear message instead.
+      - name: guard against immutable-tag collision
+        env:
+          REGION: ${{ env.AWS_REGION }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if aws ecr describe-images --repository-name "${IMAGE_REPO}" \
+               --image-ids imageTag="${TAG}" --region "${REGION}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists (immutable): this commit is already built." >&2
+            echo "Bump SNAPSCHEDULER_VERSION for a new release, or re-run on a new commit." >&2
+            exit 1
+          fi
       - name: push (multi-arch manifest list) with SBOM + provenance
         id: push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
@@ -164,6 +179,21 @@ jobs:
           sbom: true
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.tag }}
+      # Smoke the PUSHED artifact per arch. Use :tag + --platform (a
+      # `@<manifest-list-digest>` + --platform run fails with "cannot overwrite
+      # digest"); the tag resolves to the just-pushed list, and qemu runs arm64.
+      - name: smoke the PUSHED image (both arches)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            out="$(docker run --rm --platform "linux/${arch}" \
+              "${REGISTRY}/${IMAGE_REPO}:${TAG}" --help 2>&1 || true)"
+            echo "$out" | grep -q 'Usage of /manager' \
+              || { echo "pushed linux/${arch} image did not run"; exit 1; }
+          done
       - name: summary (image ref + deploy hint)
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
