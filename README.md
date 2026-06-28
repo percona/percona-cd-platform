@@ -77,7 +77,7 @@ bucket bootstrap: [runbook](docs/runbooks/bootstrap-state.md).
 
 ## Contributing
 
-- `just ci` must pass before PR. Pre-commit hooks approximate it ([`.pre-commit-config.yaml`](.pre-commit-config.yaml): its `terraform_validate` hook shells the `terraform` binary, not tofu, and `just tf-validate` is the real gate).
+- `just ci` must pass before PR. Pre-commit hooks approximate it ([`.pre-commit-config.yaml`](.pre-commit-config.yaml) runs `terraform_fmt` plus a local `tofu-validate` hook; the stock `terraform_validate` hook is intentionally omitted because it shells the `terraform` binary, not tofu). `just tf-validate` is the real gate.
 - Terraform changes follow [`terraform/CLAUDE.md`](terraform/CLAUDE.md), gated fail-closed by [`scripts/check_conventions.py`](scripts/check_conventions.py) (part of `just ci`).
 - Propose architecture changes in [`docs/adr/`](docs/adr/) first.
 - Version pins live in [`terraform/versions.tf`](terraform/versions.tf). Run [`scripts/check_versions.py`](scripts/check_versions.py) before bumping.

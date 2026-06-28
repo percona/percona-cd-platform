@@ -27,7 +27,7 @@ preserved byte for byte.
   moved in (`10.181.0.0/22` for ps3) so the `moved` blocks re-key state without
   recreating anything.
 - **ASG shape versus runtime.** Terraform owns `min_size`, `max_size`, and the
-  diversified `capacity-optimized` Graviton pool. The ec2-fleet plugin owns
+  diversified `price-capacity-optimized` Graviton pool. The ec2-fleet plugin owns
   `DesiredCapacity` and `protect_from_scale_in`, both `ignore_changes`d, matching
   `jenkins-arm-fleet`.
 - **Cleanup-safe.** Workers carry `iit-billing-tag = short_name` and
@@ -47,6 +47,7 @@ preserved byte for byte.
 | `data_volume_gb` | Size (GiB) of the `/mnt` build and docker data volume on workers. |
 | `ami_id` | Override the worker AMI. `null` resolves the latest Amazon Linux 2 arm64 AMI in the region. |
 | `tickets` | Tracking tickets (comma-separated), recorded in the `tickets` tag. |
+| `team` | Owning product team, recorded in the `team` tag on every resource and runtime-spawned instance/volume. Default `platform`; allowed values are the Owner set enforced by `scripts/check_conventions.py`. |
 | `tags` | Extra tags merged onto all resources. |
 
 ## Outputs

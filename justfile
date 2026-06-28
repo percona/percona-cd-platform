@@ -29,10 +29,21 @@ state_bucket := "terraform-state-storage-" + cluster
 default: help
 
 help:
-    @just --list
+    @echo "percona-cd-platform — run a task with: just <recipe>"
+    @echo ""
+    @echo "Check (no AWS creds, mirrors CI):"
+    @echo "  just ci              # lint + validate"
+    @echo ""
+    @echo "AWS recipes (export AWS_PROFILE=percona-dev-admin first):"
+    @echo "  just tf-plan         # plan -> terraform/tfplan"
+    @echo "  just tf-apply        # apply the saved tfplan"
+    @echo "  just ssh ps80        # SSM shell to a Jenkins master"
+    @echo "  just kubeconfig      # write kubeconfig for the cluster"
+    @echo ""
+    @just --list --list-heading $'Full recipe list:\n'
 
 ci: lint validate
-    @echo "✅ ci passed"
+    @echo "ci passed"
 
 lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor
 

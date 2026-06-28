@@ -14,10 +14,12 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
 - **ASG + `MixedInstancesPolicy`, not Spot Fleet.** AWS's recommended self-healing
   construct; the ec2-fleet plugin gets automatic AZ rebalancing only with an ASG.
   Spot Fleet is legacy.
-- **`capacity-optimized` allocation across >= 3 same-size Graviton types**
+- **`price-capacity-optimized` allocation across >= 3 same-size Graviton types**
   (m8g/m7g/m6g.2xlarge). A single type scores ~3 on the Spot Placement Score;
-  the diversified pool scores ~9. capacity-optimized is the only strategy AWS
-  documents as aligned with the measured SPS, and it is AWS's pick for CI.
+  the diversified pool scores ~9. The pool started on `capacity-optimized`, but
+  that concentrated the whole fleet into one pool (one pool squeeze took out three
+  workers in 25 minutes), so it now uses `price-capacity-optimized`, which spreads
+  across pools while still honouring the capacity signal.
 - **Terraform owns the pool shape; the plugin owns `DesiredCapacity` and
   `protect_from_scale_in`.** The ec2-fleet plugin sets `protect_from_scale_in=true`
   at runtime so it (not ASG scale-in) controls termination, so a full apply would
