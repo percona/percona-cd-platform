@@ -1,4 +1,4 @@
-# docs/ — documentation conventions
+# Documentation conventions (docs/)
 
 Scoped instructions for `docs/` (ADRs and runbooks). The repo-root `CLAUDE.md`
 carries the platform-wide rules; the global no-em-dash / semicolons-sparingly
