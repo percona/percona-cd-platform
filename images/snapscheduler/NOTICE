@@ -6,8 +6,8 @@ multi-arch build wrapper), licensed under the GNU Affero General Public License
 v3.0 (see LICENSE), consistent with the percona-cd-platform repository.
 
 This image redistributes the upstream backube snapscheduler operator, built
-from source at a pinned release tag. The operator is the substance of the image;
-our wrapper only cross-compiles it. The full license text of each component
+from source at a pinned release tag. The operator is the substance of the image.
+Our wrapper only cross-compiles it. The full license text of each component
 travels inside the image (this LICENSE, LICENSE.apache-2.0.txt, and the Go
 module licenses linked into the binary).
 
@@ -30,7 +30,7 @@ backube/snapscheduler api/ types - Apache License 2.0
 ======================================================================
 
   The CustomResource API types under api/ are additionally licensed under the
-  Apache License, Version 2.0; its full text is shipped as LICENSE.apache-2.0.txt
+  Apache License, Version 2.0. Its full text is shipped as LICENSE.apache-2.0.txt
   (Apache-2.0 section 4(a)).
 
 ======================================================================
@@ -48,4 +48,4 @@ Base image: gcr.io/distroless/static:nonroot
 ======================================================================
 
   A minimal distroless base (Google), carrying only CA certificates, /etc/passwd,
-  and tzdata; its components retain their own licenses in the base layers.
+  and tzdata. Its components retain their own licenses in the base layers.

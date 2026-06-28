@@ -10,8 +10,8 @@ For each host in `HOSTS_JSON` the job:
 1. Calls `ec2:DescribeInstances`, tag-filtered by `iit-billing-tag=<tag>` and
    `instance-state-name=running`, in the host's region.
 2. HTTP-probes each candidate on the Jenkins port and requires the `X-Jenkins` response
-   header, so only a real master's IP is ever written (newest serving wins a multi-match;
-   a no-server result leaves the existing slice untouched).
+   header, so only a real master's IP is ever written (newest serving wins a multi-match,
+   and a no-server result leaves the existing slice untouched).
 3. Writes the `EndpointSlice jenkins-<name>` in `TARGET_NAMESPACE`. The matching ClusterIP
    Service selects nothing, so the EndpointSlice is the sole way pods are advertised.
 
@@ -28,7 +28,7 @@ licenses. See NOTICE for the full attribution.
 
 ## Build (multi-arch)
 
-EKS nodes are arm64 Graviton; CI builds this multi-arch on push to `main`:
+EKS nodes are arm64 Graviton, so CI builds this multi-arch on push to `main`:
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 \
@@ -48,5 +48,5 @@ docker buildx imagetools inspect ghcr.io/astral-sh/uv:python3.13-bookworm-slim \
 Pushed to ECR under `percona-cd/` and run by the reconciler CronJob in the
 `resources/addons/jenkins-endpoint-reconciler` Helm chart (ArgoCD-managed). The container runs
 as non-root (UID 65532) with dependencies baked in (no runtime `uv install`). Configure it via
-`TARGET_NAMESPACE` and `HOSTS_JSON`; in-cluster credentials are read from the pod's
+`TARGET_NAMESPACE` and `HOSTS_JSON`. In-cluster credentials are read from the pod's
 ServiceAccount (IRSA for EC2, the in-cluster config for the Kubernetes API).
