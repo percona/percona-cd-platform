@@ -96,7 +96,7 @@ prometheus.scrape "hetzner_local" {
 }
 
 prometheus.exporter.unix "node" {
-  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat"]
+  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat", "stat", "pressure", "netstat", "ethtool", "filefd"]
 
   netdev {
     device_exclude = "^(veth.*|docker.*|br-.*|cni.*|lo)\$"
@@ -105,6 +105,15 @@ prometheus.exporter.unix "node" {
   filesystem {
     fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tmpfs|tracefs)\$"
     mount_points_exclude = "^/(dev|proc|sys|run|var/lib/docker/.+)(\$|/)"
+  }
+
+  netstat {
+    fields = "^(Tcp_(RetransSegs|OutSegs|ActiveOpens|CurrEstab)|TcpExt_(TCPSynRetrans|ListenDrops|ListenOverflows))\$"
+  }
+
+  ethtool {
+    device_include  = "en.*|eth.*"
+    metrics_include = "^(bw_(in|out)_allowance_exceeded|pps_allowance_exceeded|conntrack_allowance_exceeded|linklocal_allowance_exceeded)\$"
   }
 }
 
