@@ -122,6 +122,8 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             argocd-bootstrap/ resources/
+      - name: arch pins (no non-arm64 kubernetes.io/arch in committed manifests)
+        run: python3 scripts/check_arch_pins.py
 
   clouds-catalog-drift:
     name: clouds catalog drift (ADR 0029)
