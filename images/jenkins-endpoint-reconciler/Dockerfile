@@ -16,6 +16,8 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d
 
 WORKDIR /app
 COPY reconcile.py ./
+# Legal: license + attribution files, carried into the distributed image.
+COPY LICENSE NOTICE README.md /licenses/
 RUN uv pip install --system --no-cache 'boto3==1.36.*' 'kubernetes==31.*'
 
 USER 65532:65532

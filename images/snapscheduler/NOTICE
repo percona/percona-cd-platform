@@ -1,0 +1,52 @@
+snapscheduler image (Percona)
+Copyright (c) Percona, LLC
+
+The only first-party file in images/snapscheduler/ is the Dockerfile (the
+multi-arch build wrapper), licensed under the GNU Affero General Public License
+v3.0 (see LICENSE), consistent with the percona-cd-platform repository.
+
+This image redistributes the upstream backube snapscheduler operator, built
+from source at a pinned release tag. The operator is the substance of the image;
+our wrapper only cross-compiles it. The full license text of each component
+travels inside the image (this LICENSE, LICENSE.apache-2.0.txt, and the Go
+module licenses linked into the binary).
+
+======================================================================
+backube/snapscheduler operator - AGPL-3.0-or-later
+======================================================================
+
+  Copyright (C) The snapscheduler authors
+  https://github.com/backube/snapscheduler
+
+  The operator (the /manager binary, built from cmd/ and internal controllers)
+  is licensed under the GNU Affero General Public License, "either version 3 of
+  the License, or (at your option) any later version" (verified in the v3.5.0
+  source headers), i.e. AGPL-3.0-or-later. This is the same license family as
+  the percona-cd-platform repository, so it is redistributed under the AGPL v3
+  text in LICENSE.
+
+======================================================================
+backube/snapscheduler api/ types - Apache License 2.0
+======================================================================
+
+  The CustomResource API types under api/ are additionally licensed under the
+  Apache License, Version 2.0; its full text is shipped as LICENSE.apache-2.0.txt
+  (Apache-2.0 section 4(a)).
+
+======================================================================
+Go standard library and linked third-party modules
+======================================================================
+
+  The statically linked binary includes the Go runtime and standard library
+  (Copyright The Go Authors, BSD-3-Clause) and third-party Go modules pulled in
+  by the build (sigs.k8s.io/controller-runtime, k8s.io/client-go, and their
+  transitive dependencies), predominantly under Apache-2.0, BSD, and MIT. A
+  complete, machine-generated per-module inventory (go-licenses against the
+  pinned tag) is the authoritative list (see README.md).
+
+======================================================================
+Base image: gcr.io/distroless/static:nonroot
+======================================================================
+
+  A minimal distroless base (Google), carrying only CA certificates, /etc/passwd,
+  and tzdata; its components retain their own licenses in the base layers.

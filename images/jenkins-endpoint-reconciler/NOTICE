@@ -1,0 +1,69 @@
+jenkins-endpoint-reconciler (Percona)
+
+Copyright (c) Percona, LLC
+
+This image is licensed under the GNU Affero General Public License v3.0 (see LICENSE),
+consistent with the percona-cd-platform repository it lives in. The only first-party
+component is the application code (reconcile.py), which is original to Percona.
+
+This image is not derived from any upstream project. It runs on a third-party base image
+and bundles third-party Python libraries, each redistributed unmodified under its own
+license. Those licenses are permissive (Apache-2.0 / MIT / BSD / ISC / PSF) or weak,
+file-level copyleft (MPL-2.0), all compatible with AGPL-3.0. The attributions those
+licenses require are reproduced below. Each component additionally retains its own license
+text inside the image (in the base layers and in each installed package's metadata).
+
+----------------------------------------------------------------------
+
+Base image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+
+  uv (https://github.com/astral-sh/uv)
+    Copyright (c) Astral Software Inc.
+    Licensed under either of Apache License, Version 2.0 or the MIT license at your
+    option.
+
+  CPython (https://www.python.org/)
+    Copyright (c) Python Software Foundation. All rights reserved.
+    Licensed under the Python Software Foundation License Agreement (PSF-2.0).
+
+  Debian GNU/Linux 12 "bookworm" (slim) base system
+    Copyright (c) the respective Debian package authors.
+    The base userland comprises many packages under their own licenses (including
+    GPL, LGPL, MIT, and BSD). Each package's license is included in the image under
+    /usr/share/doc/<package>/copyright.
+
+----------------------------------------------------------------------
+
+Python dependencies (installed at build time via uv pip install):
+
+  boto3, botocore, s3transfer (https://github.com/boto/boto3)
+    Copyright Amazon.com, Inc. or its affiliates.
+    Licensed under the Apache License, Version 2.0.
+
+  kubernetes (https://github.com/kubernetes-client/python)
+    Copyright The Kubernetes Authors.
+    Licensed under the Apache License, Version 2.0.
+
+  requests, google-auth, websocket-client, rsa
+    Licensed under the Apache License, Version 2.0.
+
+  python-dateutil
+    Copyright (c) the dateutil contributors.
+    Licensed under the Apache License, Version 2.0 AND the BSD-3-Clause license.
+
+  jmespath, urllib3, six, pyyaml, cachetools, durationpy, charset-normalizer
+    Licensed under the MIT License.
+
+  requests-oauthlib
+    Licensed under the ISC License.
+
+  oauthlib, idna, pyasn1, pyasn1-modules
+    Licensed under the BSD License.
+
+  certifi
+    Copyright (c) Kenneth Reitz.
+    Licensed under the Mozilla Public License, Version 2.0.
+
+Each of the licenses referenced above permits redistribution provided the copyright and
+permission notices are retained. The full text of each license travels with the
+corresponding package inside the image.

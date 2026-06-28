@@ -1,0 +1,47 @@
+mtr-ingest (Percona)
+
+Copyright (c) Percona, LLC
+
+This image is licensed under the GNU Affero General Public License v3.0 (see
+LICENSE), consistent with the percona-cd-platform repository it lives in. It
+packages the original Percona "mtr-history" Python application (mtr_history/)
+together with a third-party Python runtime and dependencies that are installed
+at build time. Those upstream components remain under their own licenses, all of
+which are compatible with redistribution alongside this AGPL-3.0 work. Their
+required attributions are reproduced below.
+
+----------------------------------------------------------------------
+Base image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+----------------------------------------------------------------------
+
+uv (https://github.com/astral-sh/uv)
+  Copyright (c) Astral Software Inc.
+  Dual-licensed under Apache License 2.0 OR MIT, at your option.
+
+CPython (https://github.com/python/cpython)
+  Copyright (c) Python Software Foundation.
+  Licensed under the Python Software Foundation License (PSF-2.0).
+
+Debian "bookworm" base system (https://www.debian.org)
+  A collection of packages under their individual licenses (predominantly
+  permissive and GPL-family). See /usr/share/doc/<pkg>/copyright inside the
+  image for the per-package terms.
+
+----------------------------------------------------------------------
+Python dependencies (installed via `uv pip install '.[pg]'`)
+----------------------------------------------------------------------
+
+click (https://github.com/pallets/click)
+  Copyright (c) The Pallets team.
+  Licensed under the BSD 3-Clause License.
+
+pydantic (https://github.com/pydantic/pydantic)
+  Copyright (c) Pydantic Services Inc. and individual contributors.
+  Licensed under the MIT License.
+
+psycopg / psycopg-binary (https://github.com/psycopg/psycopg)
+  Copyright (c) The Psycopg Team.
+  Licensed under the GNU Lesser General Public License v3.0 (LGPL-3.0), which
+  is compatible with the GPL/AGPL-3.0 of this work. The psycopg-binary wheel
+  also bundles libpq (PostgreSQL License) and OpenSSL; see the wheel's
+  distributed license files for those terms.

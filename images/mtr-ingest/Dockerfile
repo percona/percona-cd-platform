@@ -16,6 +16,8 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d
 WORKDIR /app
 COPY pyproject.toml ./
 COPY mtr_history ./mtr_history
+# Legal: license + attribution files, carried into the distributed image.
+COPY LICENSE NOTICE README.md /licenses/
 
 # Install the package + the Postgres extra into the system environment; the
 # `mtr-backfill` console script lands on PATH. uv is the project standard.
