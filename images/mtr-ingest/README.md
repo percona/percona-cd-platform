@@ -8,7 +8,7 @@ so the Grafana failure matrix can render test history over time.
 
 ## License
 
-Percona's code is AGPL-3.0 (see [LICENSE](LICENSE)); the `uv`/CPython base image
+Percona's code is AGPL-3.0 (see [LICENSE](LICENSE)). The `uv`/CPython base image
 and the Python dependencies keep their own (permissive and LGPL) licenses. See
 [NOTICE](NOTICE) for the full attribution.
 

@@ -14,7 +14,7 @@ forks (Hetzner cloud, EC2 cloud). Built and pushed to ECR by
 | `plugins.effective.txt` | Generated **inside the image** at `/usr/share/jenkins/ref/plugins.effective.txt` (the fully-resolved plugin set, for audit). Not committed to the repo. |
 | `percona-plugins.lock.json` | Fork HPI manifest: `id` / `version` / `filename` / `url` / `sha256`. |
 | `fetch-hpis.sh` | Downloads + SHA-verifies the fork HPIs into `percona-plugins/` before the build. |
-| `percona-plugins/` | Staging dir for fetched fork plugins (staged as `<id>.jpi`). Holds only `.gitkeep` in git; `*.jpi`/`*.hpi` are gitignored (fetched at build time, never committed). |
+| `percona-plugins/` | Staging dir for fetched fork plugins (staged as `<id>.jpi`). Holds only `.gitkeep` in git. `*.jpi`/`*.hpi` are gitignored (fetched at build time, never committed). |
 | `groovy/` | `init.groovy.d` boot hooks (`persistent/`, `one-time/`), COPYed into the image. |
 
 ## Base image: pinned by DIGEST
@@ -24,7 +24,7 @@ FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:<DIGEST>
 ```
 
 2.541.3 matches the live EC2 fleet. The image is built **multi-arch**
-(`linux/amd64` + `linux/arm64`) so it can run on Graviton EKS nodes; CI builds
+(`linux/amd64` + `linux/arm64`) so it can run on Graviton EKS nodes. CI builds
 both arches (arm64 via QEMU on the amd64 runner) and pushes one manifest list. We
 pin the **multi-arch index digest**, so an upstream re-push of the same tag cannot
 silently change our base.
@@ -46,7 +46,7 @@ Substitute the printed `sha256:...` into the `FROM` line and update the
 asset to a temp file, verifies its `sha256` against the lock, and only then moves
 it into `percona-plugins/` as `<id>.jpi` (the plugin short-name with the `.jpi`
 extension, NOT the versioned asset name: Jenkins derives the plugin id from the
-ref-dir filename). A tampered or mismatched asset never lands; the script
+ref-dir filename). A tampered or mismatched asset never lands. The script
 hard-fails on any non-hex `sha256`. Both forks are public `Percona-Lab/*` GitHub
 Releases fetched with `curl`, so the PR validation job needs no GitHub token. The
 `sha256` pins the published-asset bytes (the release workflow rebuilds the HPI, so
@@ -77,7 +77,7 @@ against the new pin BEFORE opening a PR, so a bad bump fails in the refresh run.
 The PR is **never auto-merged**: CODEOWNERS approves, and because the PR touches
 `images/jenkins/**` the `build-jenkins-image` validation runs on it too. Set the
 optional repo secret `FORK_LOCK_BUMP_TOKEN` (a PAT/App token) so the opened PR
-re-triggers that validation; the commit itself is signed via the GitHub API
+re-triggers that validation. The commit itself is signed via the GitHub API
 (`createCommitOnBranch`), so CI needs no GPG key. The deployed image tag in
 `resources/jenkins/master/values-base.yaml` stays a separate, manual bump
 (ADR 0025): merging a lock PR does not change the running controller.
@@ -118,7 +118,7 @@ that must be redone on every new snapshot, is invisible in code review, and lose
 the byte-identical-to-EC2 restore property).
 
 > **Operator note:** the two forks win on EVERY pod boot, so to change a fork
-> version rebuild the image (bump `percona-plugins.lock.json`); a hand-edit on
+> version rebuild the image (bump `percona-plugins.lock.json`). A hand-edit on
 > the PVC is reset on the next restart. Community plugins are the opposite: a UI
 > upgrade persists, so pin a community plugin in `plugins.txt` and rebuild when
 > you want it enforced rather than merely floored.
@@ -145,10 +145,10 @@ digest in the PR body for traceability.
   digest. Third-party actions are pinned by commit SHA.
 
 `smoke-boot.sh` boots the built image and asserts each baked fork plugin loads at
-its LOCKED version. By default it runs the empty-home boot; set
+its LOCKED version. By default it runs the empty-home boot. Set
 `SMOKE_RESTORED_HOME_TAR` to a real `$JENKINS_HOME` tar to also exercise the
 `.override`-wins-over-a-populated-PVC path (the only test that proves the
-override). Wiring a restored-home fixture into CI is a follow-up.
+override).
 
 `.github/workflows/refresh-fork-locks.yml` (recorded-pin auto-bump, above) is the
 third workflow: scheduled, opens a build+smoke-validated lock-bump PR, no push.

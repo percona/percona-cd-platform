@@ -10,7 +10,7 @@ This is a combined work, not a mere aggregation: the baked plugins and the
 Groovy boot hooks run inside the same Jenkins JVM as the upstream core. Each
 component nonetheless retains its own license, listed below. Because operators
 interact with the controller over a network, AGPL-3.0 section 13 applies to the
-Percona first-party parts; their complete corresponding source is the public
+Percona first-party parts. Their complete corresponding source is the public
 percona-cd-platform repository. The non-AGPL components keep their own terms and
 are NOT relicensed.
 
@@ -62,8 +62,8 @@ Hetzner Cloud plugin - Percona fork - Apache License 2.0
   Baked from Percona-Lab/jenkins-hetzner-cloud-plugin (fork of
   jenkinsci/hetzner-cloud-plugin, originally Copyright 2021 dNation), release
   v103.percona.28, SHA-256-verified per percona-plugins.lock.json. It is
-  licensed under the Apache License, Version 2.0; the full text is shipped as
-  LICENSE.apache-2.0.txt. Percona has made significant changes; those are stated
+  licensed under the Apache License, Version 2.0. The full text is shipped as
+  LICENSE.apache-2.0.txt. Percona has made significant changes. Those are stated
   in that repository's NOTICE and per-file "Modified by Percona" headers
   (Apache-2.0 section 4(b)).
 
@@ -73,7 +73,7 @@ OpenJDK 17 runtime (base image) - GPL-2.0 with Classpath Exception
 
   The base image bundles an OpenJDK 17 runtime (Eclipse Temurin), licensed under
   the GNU General Public License, version 2, with the Classpath Exception. It is
-  present by aggregation in the base layers; the Classpath Exception permits
+  present by aggregation in the base layers. The Classpath Exception permits
   running independently licensed applications on it.
 
 ======================================================================
