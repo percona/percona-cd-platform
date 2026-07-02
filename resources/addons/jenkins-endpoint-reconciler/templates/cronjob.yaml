@@ -34,7 +34,9 @@ spec:
           serviceAccountName: {{ .Values.serviceAccount.name }}
           restartPolicy: Never
           # Reconciler does not need a privileged tier; the default (general)
-          # Karpenter NodePool is the landing zone via no tolerations.
+          # Karpenter NodePool is the landing zone via no tolerations. Assign
+          # the preemptible tier explicitly for parity with the other addons.
+          priorityClassName: platform-default
           containers:
             - name: reconciler
               # Built from images/jenkins-endpoint-reconciler (deps baked in),
