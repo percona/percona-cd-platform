@@ -119,7 +119,9 @@ DLM legacy-policy cutover, not by this manual sweep.
   RPO, cross-region copy), and the retirement of the legacy console DLM policies.
 - [`disaster-recovery.md`](disaster-recovery.md): restoring an EC2 master data
   volume from a managed DLM snapshot.
-- [`cleanup-reapers.md`](cleanup-reapers.md): the EC2 and volume reapers, which
-  act on instances and volumes, not snapshots.
+- [`cleanup-reapers.md`](cleanup-reapers.md): the EC2, volume and snapshot
+  reapers. The snapshot reaper ages out only `managed-by=ebs-csi-driver`
+  (snapscheduler) snapshots; the CloudFormation orphans this runbook covers
+  stay manual.
 - [`decommission-ps3-ec2-master.md`](decommission-ps3-ec2-master.md): the
   ps3 retirement whose `eu-west-1` snapshots are out of scope here.

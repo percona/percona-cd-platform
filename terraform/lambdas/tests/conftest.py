@@ -4,9 +4,9 @@ Each handler is a standalone ``index.py`` under ``terraform/lambdas/<name>/``.
 Both files are named ``index.py``, so a plain ``import index`` would collide;
 we load each as a uniquely-named module via importlib.
 
-The handlers read their env (DRY_RUN, MIN_AGE_HOURS, REGIONS, EKS_SKIP_PATTERN)
-at invocation, so a test sets env with ``monkeypatch.setenv`` and then calls
-``lambda_handler`` -- no reload needed.
+The handlers read their env (DRY_RUN, MIN_AGE_HOURS, RETENTION_DAYS,
+KEEP_COUNT, REGIONS, EKS_SKIP_PATTERN) at invocation, so a test sets env with
+``monkeypatch.setenv`` and then calls ``lambda_handler`` -- no reload needed.
 """
 
 from __future__ import annotations
@@ -46,6 +46,11 @@ def ec2_cleanup() -> ModuleType:
     return _load("ec2_cleanup_index", "ec2-cleanup")
 
 
+@pytest.fixture(scope="session")
+def snapshot_cleanup() -> ModuleType:
+    return _load("snapshot_cleanup_index", "snapshot-cleanup")
+
+
 @pytest.fixture(autouse=True)
 def _aws_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dummy credentials for moto, and a clean slate for the handler env knobs."""
@@ -54,5 +59,5 @@ def _aws_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AWS_SECURITY_TOKEN", "testing")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
-    for knob in ("DRY_RUN", "MIN_AGE_HOURS", "REGIONS", "EKS_SKIP_PATTERN"):
+    for knob in ("DRY_RUN", "MIN_AGE_HOURS", "RETENTION_DAYS", "KEEP_COUNT", "REGIONS", "EKS_SKIP_PATTERN"):
         monkeypatch.delenv(knob, raising=False)
