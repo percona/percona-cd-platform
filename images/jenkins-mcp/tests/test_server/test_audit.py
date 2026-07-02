@@ -291,6 +291,67 @@ async def test_gated_tool_denied_when_groups_claim_is_a_string(capture_audit, mo
     assert json.loads(capture_audit[-1])['status'] == 'denied'
 
 
+def test_config_write_tools_are_in_the_group_gated_union():
+    # Invariant: config-WRITE (RCE-class) tools must be writers-gated, not just excluded by mode tags.
+    assert audit._CONFIG_TOOLS <= audit._GROUP_GATED
+    assert {'run_groovy_script', 'set_node_config'} <= audit._GROUP_GATED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tool_name', ['run_groovy_script', 'set_node_config'])
+async def test_config_write_tool_denied_without_writers_group(capture_audit, mocker, tool_name):
+    from fastmcp.exceptions import ToolError
+
+    # Defense in depth: these tools are normally never registered, but IF one is (a mode-filter
+    # regression), it must be gated to the writers group, not open to any authenticated SSO user.
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = tool_name
+    ctx.message.arguments = {'name': 'agent1', 'script': 'println secret'}
+    ctx.timestamp = datetime.now(UTC)
+
+    called = {'ran': False}
+
+    async def call_next(_):
+        called['ran'] = True
+        return 'ran'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    assert called['ran'] is False  # gated before the RCE-class tool executed
+    rec = json.loads(capture_audit[-1])
+    assert rec['tool'] == tool_name
+    assert rec['is_write'] is True
+    assert rec['status'] == 'denied'
+    assert 'script' not in rec['args']  # sensitive arg never logged
+
+
+@pytest.mark.asyncio
+async def test_config_write_tool_allowed_with_writers_group(capture_audit, mocker):
+    token = mocker.Mock(claims={'sub': 'u1', 'groups': ['jenkins-mcp-writers']}, client_id='c')
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'run_groovy_script'
+    ctx.message.arguments = {'script': 'println secret'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return 'out'
+
+    result = await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    assert result == 'out'
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'ok'
+    assert rec['is_write'] is True
+    assert 'script' not in rec['args']  # script body never logged
+
+
 @pytest.mark.asyncio
 async def test_middleware_increments_metrics(capture_audit, mocker):
     from prometheus_client import REGISTRY

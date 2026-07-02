@@ -281,7 +281,7 @@ actionlint:
     actionlint -color
 
 zizmor:
-    zizmor --quiet .github/workflows/
+    zizmor --quiet .github/workflows/ .github/actions/
 
 # ---------- helpers ----------
 check-versions:

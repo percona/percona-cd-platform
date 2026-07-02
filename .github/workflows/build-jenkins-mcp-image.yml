@@ -132,7 +132,7 @@ jobs:
           # sed delimiter and every shell/markdown metacharacter, so a malformed
           # version fails here rather than corrupting values.yaml downstream.
           case "$ver" in
-            *[!0-9A-Za-z.+_-]*) echo "version has unexpected characters: '$ver'"; exit 1 ;;
+            [!0-9A-Za-z_]*|*[!0-9A-Za-z._-]*) echo "version is not a valid image tag: '$ver'"; exit 1 ;;
           esac
           echo "tag=${ver}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - name: build amd64 (load, NO push yet)
