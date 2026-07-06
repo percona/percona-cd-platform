@@ -59,8 +59,8 @@ output "data_volume_id" {
 }
 
 output "subnet_ids" {
-  description = "Master VPC subnet IDs (one per AZ), for attaching the jenkins-arm-fleet module."
-  value       = [for s in aws_subnet.this : s.id]
+  description = "Master VPC subnet IDs (primary subnets plus any extra_worker_subnets), for attaching the jenkins-arm-fleet module."
+  value       = concat([for s in aws_subnet.this : s.id], [for s in aws_subnet.extra : s.id])
 }
 
 output "worker_instance_profile_name" {
