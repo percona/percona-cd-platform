@@ -63,6 +63,10 @@ hosts:
     region: us-east-2
     tag: jenkins-pmm-amzn2
     port: 8080
+  - name: pg
+    region: eu-central-1
+    tag: jenkins-pg
+    port: 8080
 
 resources:
   requests:
