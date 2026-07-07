@@ -6,13 +6,13 @@ the wildcard ACM cert. The master's openresty + certbot stack is gone;
 Jenkins listens on `:8080` only; master SG allows `:8080` only from the
 EKS VPC CIDR (`10.220.0.0/16`) over a cross-region VPC peering. (PS-10945)
 
-**Status (2026-06-10): the rollout is COMPLETE for every master except
-pg** (deferred by decision; it keeps openresty + certbot + its EIP until
-separately scheduled). The procedure below is retained for pg's eventual
-window and as the reference; the later cutovers (psmdb/rel/cloud/pmm)
-used the simpler fresh-VPC variant where delete-stack precedes the module
-apply, so cross-check the per-master `terraform/master-<host>.tf` files
-for the current shape.
+**Status (2026-07-07): the rollout is COMPLETE for the entire EC2 fleet; pg
+was the last master, migrated to Terraform + the shared ALB on 2026-07-07
+(PKG-1341).** The procedure below is retained as the historical record of
+the pattern; the later cutovers (psmdb/rel/cloud/pmm) used the simpler
+fresh-VPC variant where delete-stack precedes the module apply, so
+cross-check the per-master `terraform/master-<host>.tf` files for the
+current shape.
 
 This runbook is generic: substitute `<host>` for the master being cut
 over. Concrete examples use `ps3.cd.percona.com`

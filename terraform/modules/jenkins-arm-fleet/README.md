@@ -8,9 +8,9 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
 ## Design decisions
 
 - **Standalone module, one call per master.** Not folded into `jenkins-master`,
-  so it also attaches to **still-CloudFormation masters** (cloud/pg/psmdb/rel) by
-  feeding their existing VPC/subnet/profile/role via `data` sources, without
-  migrating the whole master to Terraform first.
+  so it can also attach to a master not managed by `jenkins-master` by feeding
+  its existing VPC/subnet/profile/role via `data` sources. (Every master is now
+  Terraform-managed, so this attach-to-external path is currently unused.)
 - **ASG + `MixedInstancesPolicy`, not Spot Fleet.** AWS's recommended self-healing
   construct; the ec2-fleet plugin gets automatic AZ rebalancing only with an ASG.
   Spot Fleet is legacy.
@@ -61,21 +61,21 @@ module "ps80_arm_fleet" {
 > worker IAM substrate live in the sibling `jenkins-arm-standalone` module, which
 > owns that substrate outright (see `terraform/master-ps3.tf`).
 
-Still-CloudFormation master (feed existing resource IDs via data sources):
+Master not managed by `jenkins-master` (feed existing resource IDs via data sources):
 
 ```hcl
-data "aws_vpc" "pg"     { tags = { Name = "jenkins-pg" } }
-data "aws_subnets" "pg" { filter { name = "vpc-id"; values = [data.aws_vpc.pg.id] } }
+data "aws_vpc" "<inst>"     { tags = { Name = "jenkins-<inst>" } }
+data "aws_subnets" "<inst>" { filter { name = "vpc-id"; values = [data.aws_vpc.<inst>.id] } }
 
-module "pg_arm_fleet" {
+module "<inst>_arm_fleet" {
   source    = "./modules/jenkins-arm-fleet"
-  providers = { aws = aws.eu-central-1 }
+  providers = { aws = aws.<region> }
 
-  short_name                   = "jenkins-pg"
-  vpc_id                       = data.aws_vpc.pg.id
-  subnet_ids                   = data.aws_subnets.pg.ids
-  worker_instance_profile_name = "jenkins-pg-worker"
-  master_role_name             = "jenkins-pg-master"
+  short_name                   = "jenkins-<inst>"
+  vpc_id                       = data.aws_vpc.<inst>.id
+  subnet_ids                   = data.aws_subnets.<inst>.ids
+  worker_instance_profile_name = "jenkins-<inst>-worker"
+  master_role_name             = "jenkins-<inst>-master"
   key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size                     = 16
