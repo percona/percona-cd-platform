@@ -25,6 +25,11 @@ variable "subject_claims" {
     condition     = length(var.subject_claims) > 0
     error_message = "subject_claims must list at least one explicit sub; wildcard / empty allowlists are not supported."
   }
+
+  validation {
+    condition     = alltrue([for claim in var.subject_claims : !can(regex("[*?]", claim))])
+    error_message = "subject_claims must be exact strings: the trust policy matches with StringEquals, which treats * and ? literally, so a claim containing them can never match a real GitHub sub. Enumerate each sub explicitly."
+  }
 }
 
 variable "permissions_policy_json" {
