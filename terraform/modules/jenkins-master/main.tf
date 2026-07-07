@@ -86,6 +86,37 @@ resource "aws_route_table_association" "this" {
   route_table_id = aws_route_table.this.id
 }
 
+# Secondary CIDR + extra worker subnets (pg only today). Kept as separate
+# resources so the primary subnet_indices math and every other master's
+# plan stay untouched. The keep-VPC import adopts the live association and
+# subnets as-is; the resources also stand alone for a future fresh build.
+resource "aws_vpc_ipv4_cidr_block_association" "secondary" {
+  count      = var.secondary_vpc_cidr == null ? 0 : 1
+  vpc_id     = aws_vpc.this.id
+  cidr_block = var.secondary_vpc_cidr
+}
+
+resource "aws_subnet" "extra" {
+  for_each = var.extra_worker_subnets
+
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = each.value.cidr
+  availability_zone       = data.aws_availability_zones.available.names[each.value.az_index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.base_tags, {
+    Name = "${var.short_name}-${upper(each.key)}"
+  })
+
+  depends_on = [aws_vpc_ipv4_cidr_block_association.secondary]
+}
+
+resource "aws_route_table_association" "extra" {
+  for_each       = var.extra_worker_subnets
+  subnet_id      = aws_subnet.extra[each.key].id
+  route_table_id = aws_route_table.this.id
+}
+
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
@@ -304,6 +335,9 @@ data "aws_iam_policy_document" "worker" {
     actions = [
       "ec2:CreateTags",
       "ec2:DeleteTags",
+      # QA molecule scenarios resolve package-test AMIs by tag from the
+      # worker (boto3 describe_images). Read-only, fleet-safe.
+      "ec2:DescribeImages",
       "ec2:DescribeInstances",
       "ec2:DescribeSpotInstanceRequests",
     ]
