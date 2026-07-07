@@ -15,10 +15,10 @@
 #     subs (`repo:owner/repo:*`) are a well-known GHA OIDC footgun: a forked
 #     PR push, a tag from a malicious actor, or an environment trick can
 #     mint a token whose `sub` matches the wildcard but should NOT be
-#     allowed to assume the role. The module's `subject_claims` validator
-#     also rejects empty lists. If you genuinely want StringLike, fork this
-#     module rather than weakening it -- forcing the fork makes the
-#     decision visible in code review.
+#     allowed to assume the role. The module's `subject_claims` validators
+#     reject empty lists and any sub containing `*` or `?`. If you
+#     genuinely want StringLike, fork this module rather than weakening
+#     it -- forcing the fork makes the decision visible in code review.
 #
 #   - StringEquals on `aud`. AWS STS requires `sts.amazonaws.com`; the
 #     `audience` variable exists for non-AWS audience reuse (Cognito,
