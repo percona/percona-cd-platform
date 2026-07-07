@@ -61,9 +61,8 @@ resource "aws_iam_role_policy" "dlm_copy_kms" {
   policy = data.aws_iam_policy_document.dlm_copy_kms.json
 }
 
-# One policy per master region. The eu-central-1 instance also covers pg by tag
-# (see aws_ec2_tag below). var.aws_region (us-east-1) hosts no master and is the
-# cross-region copy sink, reusing the existing backup CMK.
+# One policy per master region. var.aws_region (us-east-1) hosts no master and
+# is the cross-region copy sink, reusing the existing backup CMK.
 module "dlm_eu_central_1" {
   source    = "./modules/dlm-snapshot"
   providers = { aws = aws.eu-central-1 }
@@ -117,31 +116,4 @@ module "dlm_eu_west_1" {
   copy_target_region  = var.aws_region
   copy_target_cmk_arn = aws_kms_key.backup.arn
   tags                = local.tags
-}
-
-# pg's data volume is CFN-managed (master-pg.tf provisions only the worker
-# fleet), so tag it in place to bring it under the eu-central-1 policy without
-# importing the volume. status=in-use selects the live volume, not the detached
-# leftover that shares the Name tag. Remove when pg migrates CFN to TF and
-# module.pg owns the volume.
-data "aws_ebs_volume" "pg_data" {
-  provider    = aws.eu-central-1
-  most_recent = true
-
-  filter {
-    name   = "tag:Name"
-    values = ["jenkins-pg DATA, do not remove"]
-  }
-
-  filter {
-    name   = "status"
-    values = ["in-use"]
-  }
-}
-
-resource "aws_ec2_tag" "pg_data_snapshot_policy" {
-  provider    = aws.eu-central-1
-  resource_id = data.aws_ebs_volume.pg_data.id
-  key         = "snapshot-policy"
-  value       = "jenkins-master"
 }
