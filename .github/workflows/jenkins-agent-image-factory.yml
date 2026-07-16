@@ -1,0 +1,112 @@
+name: jenkins-agent image factory
+
+# Bake -> smoke -> promote the Tier-A agent AMIs (strategy layer 1). PR runs
+# validate templates with no AWS access; the bake job is manual dispatch first
+# (weekly cron follows once the pxb canary proves the images). Promotion is a
+# role-tag flip, so consumers never resolve an unsmoked image.
+
+on:
+  pull_request:
+    paths:
+      - 'images/jenkins-agent/**'
+      - '.github/workflows/jenkins-agent-image-factory.yml'
+  workflow_dispatch:
+    inputs:
+      arches:
+        description: JSON list of arches to bake
+        default: '["arm64","x86_64"]'
+
+env:
+  AGENT_FACTORY_REGION: eu-central-1
+
+jobs:
+  # No-AWS gate: malformed templates or scripts fail here before any EC2 spins
+  # up. No id-token, so this job can never assume the factory role.
+  validate:
+    name: Validate templates (no AWS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
+      - name: fmt + validate (both arches)
+        working-directory: images/jenkins-agent
+        run: |
+          set -euo pipefail
+          packer fmt -check -recursive .
+          for arch in arm64 x86_64; do
+            packer init .
+            packer validate -var arch="$arch" .
+            packer init smoke
+            packer validate -var candidate_ami=ami-000000000000000ff -var arch="$arch" smoke
+          done
+      - name: shellcheck provisioners + smoke
+        run: shellcheck images/jenkins-agent/provisioners/*.sh images/jenkins-agent/smoke/*.sh
+
+  bake:
+    name: Bake + smoke + promote (${{ matrix.arch }})
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(github.event.inputs.arches || '["arm64","x86_64"]') }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
+      - uses: aws-actions/configure-aws-credentials@a159d7bb5354cf786f855f2f5d1d8d768d9a08d1 # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AGENT_FACTORY_ROLE_ARN }}
+          aws-region: ${{ env.AGENT_FACTORY_REGION }}
+
+      - name: Bake candidate
+        id: bake
+        working-directory: images/jenkins-agent
+        run: |
+          set -euo pipefail
+          packer init .
+          packer build -color=false -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" . | tee build.log
+          ami=$(grep -oE 'ami-[0-9a-f]{17}' build.log | tail -1)
+          [ -n "$ami" ] || { echo "FATAL: no AMI id in packer output"; exit 1; }
+          echo "ami=$ami" >> "$GITHUB_OUTPUT"
+          echo "- bake (${{ matrix.arch }}): $ami" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke (fresh boot + assertions)
+        working-directory: images/jenkins-agent
+        env:
+          AMI: ${{ steps.bake.outputs.ami }}
+        run: |
+          set -euo pipefail
+          packer init smoke
+          if ! packer build -color=false -var candidate_ami="$AMI" -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" smoke; then
+            echo "smoke FAILED; deregistering candidate $AMI"
+            aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$AMI" --delete-associated-snapshots
+            echo "- smoke (${{ matrix.arch }}): FAIL (candidate deregistered)" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          discard=$(aws ec2 describe-images --region "$AGENT_FACTORY_REGION" --owners self \
+            --filters Name=tag:role,Values=jenkins-agent-smoke-discard --query 'Images[].ImageId' --output text)
+          for ami in $discard; do
+            aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$ami" --delete-associated-snapshots
+          done
+          echo "- smoke (${{ matrix.arch }}): pass" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promote (role tag flip)
+        env:
+          AMI: ${{ steps.bake.outputs.ami }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            aws ec2 create-tags --region "$AGENT_FACTORY_REGION" --resources "$AMI" \
+              --tags Key=role,Value=jenkins-agent Key=smoke,Value=passed && { echo "promoted $AMI"; break; }
+            [ "$attempt" = 5 ] && { echo "- promote (${{ matrix.arch }}): FAILED ($AMI left as candidate)" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+            sleep $((attempt * 5))
+          done
+          echo "- promote (${{ matrix.arch }}): $AMI is role=jenkins-agent" >> "$GITHUB_STEP_SUMMARY"

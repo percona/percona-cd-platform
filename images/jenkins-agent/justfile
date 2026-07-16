@@ -1,0 +1,50 @@
+# Jenkins agent-image factory. Bake/smoke/promote one (os, arch) combo at a
+# time; the GHA workflow drives the same recipes. Promotion is a role-tag flip
+# (candidate -> jenkins-agent) so consumers resolving by tag never see an
+# unsmoked image. Worker clouds consume committed per-region literal AMI ids
+# (ADR 0029), bumped by PR after promotion.
+
+region  := env_var_or_default("AGENT_FACTORY_REGION", "eu-central-1")
+profile := env_var_or_default("AWS_PROFILE", "")
+
+_aws_profile_args := if profile == "" { "" } else { "--profile " + profile }
+
+default:
+    @just --list
+
+fmt-check:
+    packer fmt -check -recursive .
+
+validate arch="arm64":
+    packer init .
+    packer validate -var arch={{arch}} -var region={{region}} .
+    packer init smoke
+    packer validate -var candidate_ami=ami-000000000000000ff -var arch={{arch}} -var region={{region}} smoke
+
+# Bake one candidate AMI. Output ends with the ami id (packer manifest).
+bake arch="arm64":
+    packer init .
+    packer build -color=false -var arch={{arch}} -var region={{region}} .
+
+# Boot + assert a candidate, then discard the smoke by-product AMI.
+smoke candidate_ami arch="arm64":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    packer init smoke
+    packer build -color=false -var candidate_ami={{candidate_ami}} -var arch={{arch}} -var region={{region}} smoke
+    discard=$(aws ec2 describe-images {{_aws_profile_args}} --region {{region}} --owners self \
+      --filters Name=tag:role,Values=jenkins-agent-smoke-discard --query 'Images[].ImageId' --output text)
+    for ami in ${discard}; do
+      aws ec2 deregister-image {{_aws_profile_args}} --region {{region}} --image-id "${ami}" --delete-associated-snapshots
+    done
+
+# Promote a smoked candidate: role tag flip + smoke marker.
+promote candidate_ami:
+    aws ec2 create-tags {{_aws_profile_args}} --region {{region}} --resources {{candidate_ami}} \
+      --tags Key=role,Value=jenkins-agent Key=smoke,Value=passed
+
+# Current agent images, newest first.
+list:
+    aws ec2 describe-images {{_aws_profile_args}} --region {{region}} --owners self --include-deprecated \
+      --filters Name=tag:role,Values=jenkins-agent \
+      --query 'reverse(sort_by(Images,&CreationDate))[].[ImageId,Name,Tags[?Key==`arch`]|[0].Value]' --output table
