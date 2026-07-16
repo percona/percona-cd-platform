@@ -178,6 +178,23 @@ data "aws_iam_policy_document" "gha_agent_image_factory_perms" {
     }
   }
 
+  # Packer's amazon-parameterstore data source resolves the AL2023 base AMI
+  # (public parameter, account-less ARN), and the amazon-ebs builder validates
+  # the instance profile before launch.
+  statement {
+    sid       = "ResolveBaseAmiParameter"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${local.agent_image_factory_reg}::parameter/aws/service/ami-amazon-linux-latest/*"]
+  }
+
+  statement {
+    sid       = "ValidateBuilderInstanceProfile"
+    effect    = "Allow"
+    actions   = ["iam:GetInstanceProfile"]
+    resources = [aws_iam_instance_profile.agent_image_builder_ssm.arn]
+  }
+
   statement {
     sid    = "DescribeReadOnly"
     effect = "Allow"

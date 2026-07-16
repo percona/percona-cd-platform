@@ -26,17 +26,10 @@ bake arch="arm64":
     packer init .
     packer build -color=false -var arch={{arch}} -var region={{region}} .
 
-# Boot + assert a candidate, then discard the smoke by-product AMI.
+# Boot + assert a candidate (skip_create_ami: no by-product AMI to clean up).
 smoke candidate_ami arch="arm64":
-    #!/usr/bin/env bash
-    set -euo pipefail
     packer init smoke
     packer build -color=false -var candidate_ami={{candidate_ami}} -var arch={{arch}} -var region={{region}} smoke
-    discard=$(aws ec2 describe-images {{_aws_profile_args}} --region {{region}} --owners self \
-      --filters Name=tag:role,Values=jenkins-agent-smoke-discard --query 'Images[].ImageId' --output text)
-    for ami in ${discard}; do
-      aws ec2 deregister-image {{_aws_profile_args}} --region {{region}} --image-id "${ami}" --delete-associated-snapshots
-    done
 
 # Promote a smoked candidate: role tag flip + smoke marker.
 promote candidate_ami:

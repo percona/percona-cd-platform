@@ -5,7 +5,7 @@
 # emulation surviving a reboot cycle via systemd-binfmt.
 set -euo pipefail
 
-for tool in java git docker aws file; do
+for tool in java git docker aws file tar unzip 7za; do
   command -v "${tool}" >/dev/null || { echo "FATAL: ${tool} missing" >&2; exit 1; }
 done
 

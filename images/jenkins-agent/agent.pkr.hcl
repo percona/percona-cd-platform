@@ -2,7 +2,7 @@ packer {
   required_plugins {
     amazon = {
       source  = "github.com/hashicorp/amazon"
-      version = ">= 1.3.0"
+      version = "= 1.8.2"
     }
   }
 }
@@ -111,5 +111,10 @@ build {
       "provisioners/00-common.sh",
       "provisioners/10-qemu-binfmt.sh",
     ]
+  }
+
+  # The workflow reads the AMI id from here, never from human-readable output.
+  post-processor "manifest" {
+    output = "manifest.json"
   }
 }

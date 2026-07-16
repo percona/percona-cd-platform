@@ -18,6 +18,7 @@ on:
 
 env:
   AGENT_FACTORY_REGION: eu-central-1
+  PACKER_VERSION: 1.15.4
 
 jobs:
   # No-AWS gate: malformed templates or scripts fail here before any EC2 spins
@@ -31,6 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
+        with:
+          version: ${{ env.PACKER_VERSION }}
       - name: fmt + validate (both arches)
         working-directory: images/jenkins-agent
         run: |
@@ -50,7 +53,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Stays under the OIDC role's one-hour session: credentials do not refresh
+    # mid-job, so a run that would exceed the session must fail early instead
+    # of losing AWS access halfway through cleanup or promotion.
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +67,9 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
-      - uses: aws-actions/configure-aws-credentials@a159d7bb5354cf786f855f2f5d1d8d768d9a08d1 # v4.3.1
+        with:
+          version: ${{ env.PACKER_VERSION }}
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AGENT_FACTORY_ROLE_ARN }}
           aws-region: ${{ env.AGENT_FACTORY_REGION }}
@@ -72,33 +80,33 @@ jobs:
         run: |
           set -euo pipefail
           packer init .
-          packer build -color=false -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" . | tee build.log
-          ami=$(grep -oE 'ami-[0-9a-f]{17}' build.log | tail -1)
-          [ -n "$ami" ] || { echo "FATAL: no AMI id in packer output"; exit 1; }
+          packer build -color=false -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" .
+          ami=$(jq -r '.builds[-1].artifact_id | split(":")[1]' manifest.json)
+          if [ -z "$ami" ] || [ "$ami" = "null" ]; then
+            echo "FATAL: no AMI id in packer manifest"
+            exit 1
+          fi
+          arch_tag=$(aws ec2 describe-images --region "$AGENT_FACTORY_REGION" --image-ids "$ami" \
+            --query "Images[0].Tags[?Key=='arch']|[0].Value" --output text)
+          if [ "$arch_tag" != "${{ matrix.arch }}" ]; then
+            echo "FATAL: manifest AMI $ami carries arch=$arch_tag, expected ${{ matrix.arch }}"
+            exit 1
+          fi
           echo "ami=$ami" >> "$GITHUB_OUTPUT"
           echo "- bake (${{ matrix.arch }}): $ami" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Smoke (fresh boot + assertions)
+      - name: Smoke (fresh boot + assertions, no by-product AMI)
         working-directory: images/jenkins-agent
         env:
           AMI: ${{ steps.bake.outputs.ami }}
         run: |
           set -euo pipefail
           packer init smoke
-          if ! packer build -color=false -var candidate_ami="$AMI" -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" smoke; then
-            echo "smoke FAILED; deregistering candidate $AMI"
-            aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$AMI" --delete-associated-snapshots
-            echo "- smoke (${{ matrix.arch }}): FAIL (candidate deregistered)" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          discard=$(aws ec2 describe-images --region "$AGENT_FACTORY_REGION" --owners self \
-            --filters Name=tag:role,Values=jenkins-agent-smoke-discard --query 'Images[].ImageId' --output text)
-          for ami in $discard; do
-            aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$ami" --delete-associated-snapshots
-          done
+          packer build -color=false -var candidate_ami="$AMI" -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" smoke
           echo "- smoke (${{ matrix.arch }}): pass" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Promote (role tag flip)
+        id: promote
         env:
           AMI: ${{ steps.bake.outputs.ami }}
         run: |
@@ -110,3 +118,15 @@ jobs:
             sleep $((attempt * 5))
           done
           echo "- promote (${{ matrix.arch }}): $AMI is role=jenkins-agent" >> "$GITHUB_STEP_SUMMARY"
+
+      # A candidate that exists but never promoted (smoke failure, cancellation,
+      # parse failure) must not linger: deregister it with its snapshots.
+      - name: Cleanup unpromoted candidate
+        if: always() && steps.bake.outputs.ami != '' && steps.promote.outcome != 'success'
+        env:
+          AMI: ${{ steps.bake.outputs.ami }}
+        run: |
+          set -euo pipefail
+          echo "cleaning up unpromoted candidate $AMI"
+          aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$AMI" --delete-associated-snapshots
+          echo "- cleanup (${{ matrix.arch }}): unpromoted candidate $AMI deregistered" >> "$GITHUB_STEP_SUMMARY"

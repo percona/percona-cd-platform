@@ -2,16 +2,16 @@ packer {
   required_plugins {
     amazon = {
       source  = "github.com/hashicorp/amazon"
-      version = ">= 1.3.0"
+      version = "= 1.8.2"
     }
   }
 }
 
 # Fresh-boot smoke for an agent AMI candidate: boots the candidate, asserts the
 # baked payload, and for arm64 proves x86_64 emulation end-to-end. A candidate
-# is promoted (role tag flip) only after this build succeeds. The build
-# produces a throwaway AMI name that the workflow deregisters immediately;
-# only the boot + provisioner assertions matter.
+# is promoted (role tag flip) only after this build succeeds. skip_create_ami
+# means only the boot + assertions matter, no by-product AMI exists, and
+# concurrent matrix jobs cannot race on cleanup.
 
 variable "candidate_ami" {
   type = string
@@ -47,10 +47,11 @@ locals {
 }
 
 source "amazon-ebs" "smoke" {
-  region        = var.region
-  source_ami    = var.candidate_ami
-  instance_type = local.instance_type
-  ami_name      = "jenkins-agent-smoke-discard-${local.timestamp}"
+  region          = var.region
+  source_ami      = var.candidate_ami
+  instance_type   = local.instance_type
+  ami_name        = "jenkins-agent-smoke-discard-${local.timestamp}"
+  skip_create_ami = true
 
   communicator         = "ssh"
   ssh_username         = "ec2-user"
@@ -65,11 +66,6 @@ source "amazon-ebs" "smoke" {
 
   run_tags = {
     Name              = "jenkins-agent-smoke-${local.timestamp}"
-    "iit-billing-tag" = var.billing_tag
-  }
-
-  tags = {
-    role              = "jenkins-agent-smoke-discard"
     "iit-billing-tag" = var.billing_tag
   }
 }
