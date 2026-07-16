@@ -27,8 +27,11 @@ fi
 
 readonly AGE_SECS=$((24 * 3600))
 readonly CACHE_UNTIL=48h
-readonly PROTECTED_RE='^buildx_buildkit_(multiarch|pmmbuilder)[0-9]*$'
-readonly PROTECTED_BUILDERS='multiarch pmmbuilder'
+# Protected names sourced from a fleet audit of every live-pinned pipeline
+# source (jenkins-pipelines master + hetzner + feature branches, fork pins,
+# operator repos). Extend BOTH lines when a pipeline adds a named builder.
+readonly PROTECTED_RE='^buildx_buildkit_(multiarch|multiarch-builder|multiarch-wt|pmmbuilder)[0-9]*$'
+readonly PROTECTED_BUILDERS='multiarch multiarch-builder multiarch-wt pmmbuilder'
 now="$(date +%s)"
 removed_containers=0
 removed_volumes=0
