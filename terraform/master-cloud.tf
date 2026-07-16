@@ -109,8 +109,11 @@ module "cloud" {
   # re-syncs the bucket onto the EBS copy post-boot, so a JVM restart always
   # loads current canonical. `jenkins iac deploy` stays the no-restart
   # hot-reload path.
+  # *.sh rides along for groovy tasks that load a sibling shell payload at
+  # runtime (Jenkins evaluates only *.groovy, so shipped .sh files are inert
+  # until a groovy task reads them).
   init_groovy_files = {
-    for f in fileset("${path.module}/../resources/jenkins-masters/cloud/init.groovy.d", "*.groovy") :
+    for f in fileset("${path.module}/../resources/jenkins-masters/cloud/init.groovy.d", "*.{groovy,sh}") :
     f => file("${path.module}/../resources/jenkins-masters/cloud/init.groovy.d/${f}")
   }
   init_groovy_template_files = {
