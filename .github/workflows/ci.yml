@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/actions-lint
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
@@ -71,7 +71,7 @@ jobs:
     # The config scan is static (no tofu init needed); skip the vendored module
     # cache and the local plan snapshot.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -134,7 +134,7 @@ jobs:
     # no YAML anchors/aliases (JCasC SnakeYAML caps aliases at 50 -- the reload
     # fails above that).
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: install helm (pinned + sha-verified)
@@ -172,7 +172,7 @@ jobs:
     # Pure-Python + moto, no AWS credentials. Uses setup-python + pip to match
     # the `yaml` job (astral-sh/setup-uv is not in the zizmor ref-pin allowlist).
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v6
