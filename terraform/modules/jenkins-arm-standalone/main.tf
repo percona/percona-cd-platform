@@ -200,7 +200,9 @@ resource "aws_iam_instance_profile" "worker" {
 
 # ---------- ARM Graviton spot fleet (stays at module.ps3_arm_fleet.*) ----------
 
-# Latest Amazon Linux 2 arm64 AMI in the module's region (override via var.ami_id).
+# Latest Amazon Linux 2023 (kernel 6.1) arm64 AMI in the module's region
+# (override via var.ami_id). AL2 is past end of support and its kernel 4.14
+# lacks openat2, which current Ubuntu 26.04 containers require.
 data "aws_ami" "arm64" {
   count       = var.ami_id == null ? 1 : 0
   most_recent = true
@@ -208,7 +210,7 @@ data "aws_ami" "arm64" {
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-arm64-gp2"]
+    values = ["al2023-ami-2023.*-kernel-6.1-arm64"]
   }
   filter {
     name   = "architecture"
