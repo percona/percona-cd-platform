@@ -1512,7 +1512,7 @@ jenkins:
                 region: eu-west-1
                 sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
                 templates:
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -1550,10 +1550,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -1564,7 +1562,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -1580,7 +1578,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)
@@ -1620,7 +1618,7 @@ jenkins:
                   tenancy: Default
                   type: c5n.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -1658,10 +1656,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -1672,7 +1668,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -1688,7 +1684,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)
@@ -1728,7 +1724,7 @@ jenkins:
                   tenancy: Default
                   type: i4i.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -3390,7 +3386,7 @@ jenkins:
                   tenancy: Default
                   type: i4i.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-004aa048722f3ac3e
+                - ami: ami-0b24063151d1c59e7
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -3428,10 +3424,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -3442,7 +3436,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -3458,7 +3452,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)
@@ -4169,7 +4163,7 @@ jenkins:
                 region: eu-west-1
                 sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
                 templates:
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -4207,10 +4201,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -4221,7 +4213,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -4237,7 +4229,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)
@@ -4277,7 +4269,7 @@ jenkins:
                   tenancy: Default
                   type: c5n.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -4315,10 +4307,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -4329,7 +4319,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -4345,7 +4335,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)
@@ -4385,7 +4375,7 @@ jenkins:
                   tenancy: Default
                   type: i4i.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-07e9032b01a41341a
+                - ami: ami-091a906f2e1e40076
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -6047,7 +6037,7 @@ jenkins:
                   tenancy: Default
                   type: i4i.2xlarge
                   useEphemeralDevices: false
-                - ami: ami-004aa048722f3ac3e
+                - ami: ami-0b24063151d1c59e7
                   amiType:
                     unixData:
                       sshPort: '22'
@@ -6085,10 +6075,8 @@ jenkins:
                             echo try again
                         done
 
-                        sudo amazon-linux-extras install epel -y
-                        sudo amazon-linux-extras install java-openjdk11 -y
-                        sudo yum -y install java-17-amazon-corretto-headless
-                        sudo yum -y install git docker p7zip tzdata-java
+                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+                        sudo yum -y install git docker
                         sudo yum -y remove awscli
 
                         if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -6099,7 +6087,7 @@ jenkins:
                                 echo try again
                             done
 
-                            7za -aoa -o/tmp x /tmp/awscliv2.zip
+                            cd /tmp && unzip -q awscliv2.zip
                             cd /tmp/aws && sudo ./install
                         fi
 
@@ -6115,7 +6103,7 @@ jenkins:
                         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
                         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
                         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+                        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
                         sudo systemctl daemon-reload
                         sudo install -o root -g root -d /mnt/docker
                         sudo usermod -aG docker $(id -u -n)

@@ -23,12 +23,12 @@ netMap['${az}'] = '${sid}' // TF VPC ${vpc_id}
 %{ endfor ~}
 
 imageMap = [:]
-imageMap['eu-west-1a.docker']                = 'ami-05247819264504af0'
-imageMap['eu-west-1a.docker-32gb']           = 'ami-05247819264504af0'
-imageMap['eu-west-1a.docker2']               = 'ami-05247819264504af0'
-imageMap['eu-west-1a.micro-amazon']          = 'ami-05247819264504af0'
+imageMap['eu-west-1a.docker']                = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker-32gb']           = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker2']               = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.micro-amazon']          = 'ami-091a906f2e1e40076'
 imageMap['eu-west-1a.min-al2023-x64']        = 'ami-091a906f2e1e40076'
-imageMap['eu-west-1a.docker-32gb-aarch64']   = 'ami-0b3f5005d71118f36'
+imageMap['eu-west-1a.docker-32gb-aarch64']   = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.min-al2023-aarch64']    = 'ami-0b24063151d1c59e7'
 
 imageMap['eu-west-1b.docker']                = imageMap['eu-west-1a.docker']
@@ -85,11 +85,8 @@ initMap['docker'] = '''
         echo try again
     done
 
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+    sudo yum -y install git docker
     sudo yum -y install npm --disableplugin=priorities
     sudo yum -y remove awscli
 
@@ -101,7 +98,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -aoa -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -149,11 +146,8 @@ initMap['docker-32gb'] = '''
         echo try again
     done
 
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove awscli
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
@@ -164,7 +158,7 @@ initMap['docker-32gb'] = '''
             echo try again
         done
 
-        7za -aoa -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -221,10 +215,7 @@ initMap['micro-amazon'] = '''
         sleep 1
         echo try again
     done
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java unzip || sudo yum -y install java-17-openjdk-headless tzdata-java unzip || :
     sudo yum -y install git aws-cli || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
