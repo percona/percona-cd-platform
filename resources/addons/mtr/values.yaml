@@ -48,7 +48,7 @@ ingest:
   image:
     # Built from images/mtr-ingest, pushed to ECR under the percona-cd/ namespace.
     repository: percona-cd/mtr-ingest
-    tag: "0.1.0-6449648f0893"
+    tag: "0.1.0-82fbaa1f48f5"
     pullPolicy: IfNotPresent
   jenkins:
     url: https://ps80.cd.percona.com
