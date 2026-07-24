@@ -21,12 +21,12 @@ netMap['eu-west-1b'] = 'subnet-0ceb482387d4f3861' // TF VPC vpc-0216bcc2777ad678
 netMap['eu-west-1c'] = 'subnet-0fd9ecce73cef8c48' // TF VPC vpc-0216bcc2777ad6780
 
 imageMap = [:]
-imageMap['eu-west-1a.docker'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker-32gb'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker-64gb'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker2'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.micro-amazon'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.min-amazon-2-x64'] = 'ami-0e8b5d4aece7e1ce8'
+imageMap['eu-west-1a.docker'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker-32gb'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker-64gb'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker2'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.micro-amazon'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.min-amazon-2-x64'] = 'ami-091a906f2e1e40076'
 
 imageMap['eu-west-1a.min-centos-7-x64']  = 'ami-00d464afa64e1fc69'
 imageMap['eu-west-1a.fips-centos-7-x64'] = 'ami-00d464afa64e1fc69'
@@ -105,8 +105,8 @@ imageMap['eu-west-1c.min-hirsute-x64-zenfs'] = imageMap['eu-west-1a.min-hirsute-
 imageMap['eu-west-1c.min-focal-x64-zenfs'] = imageMap['eu-west-1a.min-focal-x64-zenfs']
 imageMap['eu-west-1c.min-bionic-x64-zenfs']  = imageMap['eu-west-1a.min-bionic-x64-zenfs']
 
-imageMap['eu-west-1a.docker-32gb-aarch64']  = 'ami-0b3f5005d71118f36'
-imageMap['eu-west-1a.docker-64gb-aarch64']  = 'ami-0b3f5005d71118f36'
+imageMap['eu-west-1a.docker-32gb-aarch64']  = 'ami-0b24063151d1c59e7'
+imageMap['eu-west-1a.docker-64gb-aarch64']  = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.min-al2023-aarch64']   = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.min-jammy-aarch64']    = 'ami-0fd301a23be2fbe30'
 imageMap['eu-west-1a.min-noble-aarch64']    = 'ami-0a636034c582e2138'
@@ -206,10 +206,12 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo amazon-linux-extras install epel -y
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove awscli
+
+    sudo systemctl enable crond
+    sudo systemctl start crond
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
@@ -219,7 +221,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 

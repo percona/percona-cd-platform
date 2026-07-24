@@ -21,17 +21,17 @@ netMap['us-west-2b'] = 'subnet-028f5265edd1581c3'
 netMap['us-west-2c'] = 'subnet-0fe430aa745b0116f'
 
 imageMap = [:]
-imageMap['us-west-2a.docker']            = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.docker-32gb']       = 'ami-024e4b8b6ef78434a'
+imageMap['us-west-2a.docker']            = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.docker-32gb']       = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.docker-32gb-hirsute']  = 'ami-0cbdf6c0f39fd3950'
 imageMap['us-west-2a.docker-32gb-jammy']    = 'ami-005f7acd8475ac91c'
 imageMap['us-west-2a.docker-32gb-noble']    = 'ami-0cf2b4e024cdb6960'
 imageMap['us-west-2a.docker-32gb-resolute']    = 'ami-0d13e2317a7e75c95'
 imageMap['us-west-2a.docker-32gb-focal']    = 'ami-0db245b76e5c21ca1'
 imageMap['us-west-2a.docker-32gb-bullseye'] = 'ami-0c1b4dff690b5d229'
-imageMap['us-west-2a.docker2']           = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.micro-amazon']      = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.min-amazon-2-x64']  = 'ami-024e4b8b6ef78434a'
+imageMap['us-west-2a.docker2']           = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.micro-amazon']      = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.min-amazon-2-x64']  = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.min-al2023-x64']    = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.min-centos-8-x64']  = 'ami-0155c31ea13d4abd2'
 imageMap['us-west-2a.min-ol-8-x64']      = 'ami-0f47366880b6cce9f'
@@ -52,7 +52,7 @@ imageMap['us-west-2a.min-bookworm-x64']  = 'ami-07b2d881c67e4c30e'
 imageMap['us-west-2a.min-trixie-x64']    = 'ami-088afd31387a0ee3a'
 imageMap['us-west-2a.min-rhel-10-x64']   = 'ami-0598edb0ace40eb9a'
 
-imageMap['us-west-2a.docker-64gb-aarch64']  = 'ami-0af666b6014514a13'
+imageMap['us-west-2a.docker-64gb-aarch64']  = 'ami-0c5777a14602ab4b9'
 imageMap['us-west-2a.min-al2023-aarch64']   = 'ami-0c5777a14602ab4b9'
 imageMap['us-west-2a.min-jammy-aarch64']    = 'ami-039aad0ef6d1c0b87'
 imageMap['us-west-2a.min-noble-aarch64']    = 'ami-0c29a2c5cf69b5a9c'
@@ -295,12 +295,12 @@ initMap['docker'] = '''
         echo try again
     done
 
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove awscli
+
+    sudo systemctl enable crond
+    sudo systemctl start crond
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
@@ -310,7 +310,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -aoa -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -328,7 +328,7 @@ initMap['docker'] = '''
     echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
     sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
     echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-    sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+    sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
     sudo systemctl daemon-reload
     sudo install -o root -g root -d /mnt/docker
     sudo usermod -aG docker $(id -u -n)
