@@ -252,6 +252,16 @@ initMap['docker-64gb'] = initMap['docker']
 initMap['docker2'] = initMap['docker']
 initMap['micro-amazon'] = '''
     set -o xtrace
+    # AL2023 mounts /tmp as tmpfs capped at half of RAM, which on small
+    # instances stays below the Jenkins free-temp-space threshold and the
+    # monitor takes every agent offline. Unmount so /tmp uses the root
+    # volume, and mask the unit so systemd cannot re-mount it. This script
+    # runs from tmpDir=/var/tmp, so nothing here holds /tmp open.
+    if mountpoint -q /tmp && grep -qs ' /tmp tmpfs ' /proc/mounts; then
+        sudo umount /tmp || { echo "ERROR: failed to unmount tmpfs /tmp" >&2; exit 1; }
+        sudo systemctl mask tmp.mount
+        sudo chmod 1777 /tmp
+    fi
     RHVER=$(rpm --eval %rhel)
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
@@ -625,7 +635,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         Node.Mode.NORMAL,                           // Node.Mode mode
         OSType,                                     // String description
         initMap[OSType],                            // String initScript
-        '',                                         // String tmpDir
+        '/var/tmp',                                 // String tmpDir
         '',                                         // String userData
         execMap[OSType],                            // String numExecutors
         userMap[OSType],                            // String remoteAdmin
