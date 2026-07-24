@@ -43,7 +43,7 @@ ec2:
   sshKeysCredentialsId: 2ab73cff-5575-4ca2-be48-17761b165103
   tagPrefix: jenkins-ps3-
   templates:
-  - ami: ami-091a906f2e1e40076
+  - ami: ami-07e9032b01a41341a
     dev: xvd-8-80-gp2
     ebsOptimized: true
     init: docker
@@ -57,7 +57,7 @@ ec2:
       b: '0.288500'
       c: '0.287500'
     type: c5n.2xlarge
-  - ami: ami-091a906f2e1e40076
+  - ami: ami-07e9032b01a41341a
     dev: xvd-8-80-gp2
     ebsOptimized: false
     init: docker
@@ -71,7 +71,7 @@ ec2:
       b: '0.514400'
       c: '0.602700'
     type: i4i.2xlarge
-  - ami: ami-091a906f2e1e40076
+  - ami: ami-07e9032b01a41341a
     dev: xvd-8-80-gp2
     ebsOptimized: true
     init: micro-amazon
@@ -309,7 +309,7 @@ ec2:
       b: '0.514400'
       c: '0.602700'
     type: i4i.2xlarge
-  - ami: ami-0b24063151d1c59e7
+  - ami: ami-004aa048722f3ac3e
     dev: xvd-8-80-gp2
     ebsOptimized: true
     init: docker

@@ -45,7 +45,7 @@ preserved byte for byte.
 | `max_size` | ASG maximum. The ec2-fleet plugin scales `DesiredCapacity` within `[0, max_size]`. |
 | `extra_ssh_cidrs` | Extra CIDRs allowed to SSH to workers, e.g. the controller's EKS VPC CIDR for the peering connection. |
 | `data_volume_gb` | Size (GiB) of the `/mnt` build and docker data volume on workers. |
-| `ami_id` | Override the worker AMI. `null` resolves the latest Amazon Linux 2023 (kernel 6.1) arm64 AMI in the region. |
+| `ami_id` | Override the worker AMI. `null` resolves the latest Amazon Linux 2 arm64 AMI in the region. |
 | `tickets` | Tracking tickets (comma-separated), recorded in the `tickets` tag. |
 | `team` | Owning product team, recorded in the `team` tag on every resource and runtime-spawned instance/volume. Default `platform`; allowed values are the Owner set enforced by `scripts/check_conventions.py`. |
 | `tags` | Extra tags merged onto all resources. |
