@@ -33,9 +33,7 @@ data "aws_vpc" "this" {
   id = var.vpc_id
 }
 
-# Latest Amazon Linux 2023 (kernel 6.1) arm64 AMI in the module's region
-# (override via var.ami_id). AL2 is past end of support and its kernel 4.14
-# lacks openat2, which current Ubuntu 26.04 containers require.
+# Latest Amazon Linux 2 arm64 AMI in the module's region (override via var.ami_id).
 # owners is pinned per the provider's supply-chain guidance for most_recent.
 data "aws_ami" "arm64" {
   count       = var.ami_id == null ? 1 : 0
@@ -44,7 +42,7 @@ data "aws_ami" "arm64" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-2023.*-kernel-6.1-arm64"]
+    values = ["amzn2-ami-hvm-*-arm64-gp2"]
   }
   filter {
     name   = "architecture"
