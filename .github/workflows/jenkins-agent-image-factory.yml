@@ -31,6 +31,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
         with:
           version: ${{ env.PACKER_VERSION }}
@@ -64,8 +66,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # matrix.arch flows through env, never inline in run blocks, so the
+    # dispatch-controlled value cannot inject into the shell (zizmor).
+    env:
+      ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       - uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232 # v3.1.0
         with:
           version: ${{ env.PACKER_VERSION }}
@@ -80,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           packer init .
-          packer build -color=false -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" .
+          packer build -color=false -var arch="$ARCH" -var region="$AGENT_FACTORY_REGION" .
           ami=$(jq -r '.builds[-1].artifact_id | split(":")[1]' manifest.json)
           if [ -z "$ami" ] || [ "$ami" = "null" ]; then
             echo "FATAL: no AMI id in packer manifest"
@@ -88,12 +96,12 @@ jobs:
           fi
           arch_tag=$(aws ec2 describe-images --region "$AGENT_FACTORY_REGION" --image-ids "$ami" \
             --query "Images[0].Tags[?Key=='arch']|[0].Value" --output text)
-          if [ "$arch_tag" != "${{ matrix.arch }}" ]; then
-            echo "FATAL: manifest AMI $ami carries arch=$arch_tag, expected ${{ matrix.arch }}"
+          if [ "$arch_tag" != "$ARCH" ]; then
+            echo "FATAL: manifest AMI $ami carries arch=$arch_tag, expected $ARCH"
             exit 1
           fi
           echo "ami=$ami" >> "$GITHUB_OUTPUT"
-          echo "- bake (${{ matrix.arch }}): $ami" >> "$GITHUB_STEP_SUMMARY"
+          echo "- bake ($ARCH): $ami" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke (fresh boot + assertions, no by-product AMI)
         working-directory: images/jenkins-agent
@@ -102,8 +110,8 @@ jobs:
         run: |
           set -euo pipefail
           packer init smoke
-          packer build -color=false -var candidate_ami="$AMI" -var arch="${{ matrix.arch }}" -var region="$AGENT_FACTORY_REGION" smoke
-          echo "- smoke (${{ matrix.arch }}): pass" >> "$GITHUB_STEP_SUMMARY"
+          packer build -color=false -var candidate_ami="$AMI" -var arch="$ARCH" -var region="$AGENT_FACTORY_REGION" smoke
+          echo "- smoke ($ARCH): pass" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Promote (role tag flip)
         id: promote
@@ -114,10 +122,10 @@ jobs:
           for attempt in 1 2 3 4 5; do
             aws ec2 create-tags --region "$AGENT_FACTORY_REGION" --resources "$AMI" \
               --tags Key=role,Value=jenkins-agent Key=smoke,Value=passed && { echo "promoted $AMI"; break; }
-            [ "$attempt" = 5 ] && { echo "- promote (${{ matrix.arch }}): FAILED ($AMI left as candidate)" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+            [ "$attempt" = 5 ] && { echo "- promote ($ARCH): FAILED ($AMI left as candidate)" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
             sleep $((attempt * 5))
           done
-          echo "- promote (${{ matrix.arch }}): $AMI is role=jenkins-agent" >> "$GITHUB_STEP_SUMMARY"
+          echo "- promote ($ARCH): $AMI is role=jenkins-agent" >> "$GITHUB_STEP_SUMMARY"
 
       # A candidate that exists but never promoted (smoke failure, cancellation,
       # parse failure) must not linger: deregister it with its snapshots.
@@ -129,4 +137,4 @@ jobs:
           set -euo pipefail
           echo "cleaning up unpromoted candidate $AMI"
           aws ec2 deregister-image --region "$AGENT_FACTORY_REGION" --image-id "$AMI" --delete-associated-snapshots
-          echo "- cleanup (${{ matrix.arch }}): unpromoted candidate $AMI deregistered" >> "$GITHUB_STEP_SUMMARY"
+          echo "- cleanup ($ARCH): unpromoted candidate $AMI deregistered" >> "$GITHUB_STEP_SUMMARY"
