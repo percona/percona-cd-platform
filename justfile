@@ -47,7 +47,7 @@ ci: lint validate
 
 lint: tf-fmt-check tf-conventions tf-trivy yaml-lint actionlint zizmor
 
-validate: tf-validate manifest-validate helm-render clouds-render-check arch-pins-check lambda-test
+validate: tf-validate manifest-validate helm-render clouds-render-check arch-pins-check bootstrap-priorityclass-check lambda-test
 
 # Fail-closed arch-pin gate: no committed cluster manifest pins
 # kubernetes.io/arch to a non-arm64 arch (would strand Pending on the
@@ -55,6 +55,13 @@ validate: tf-validate manifest-validate helm-render clouds-render-check arch-pin
 # by the `check-arch-readiness` preflight (see scripts/check_arch_pins.py).
 arch-pins-check:
     uv run --with pyyaml python3 scripts/check_arch_pins.py
+
+# Fail-closed bootstrap gate: the Terraform bootstrap copy of the
+# platform-system-critical PriorityClass (terraform/argocd.tf) must stay
+# identical to the GitOps-owned definition (resources/addons/priorityclasses/).
+# Credential-free.
+bootstrap-priorityclass-check:
+    uv run --with pyyaml python3 scripts/check_bootstrap_priorityclass.py
 
 # Arch-migration PREFLIGHT (creds): before flipping a NodePool/MNG to a new
 # arch, assert every workload image publishes the target arch AND no PodSpec
@@ -285,7 +292,7 @@ actionlint:
     actionlint -color
 
 zizmor:
-    zizmor --quiet .github/workflows/
+    zizmor --quiet .github/workflows/ .github/actions/
 
 # ---------- helpers ----------
 check-versions:
@@ -315,6 +322,45 @@ bootstrap-state:
     @echo "  S3:     s3://{{state_bucket}}"
     @echo "  Region: ${AWS_REGION:-us-east-1}"
     @echo "See docs/runbooks/bootstrap-state.md for the recreate-from-zero recipe."
+
+# Fresh-cluster (DR / greenfield) bootstrap. An empty cluster needs TWO
+# applies: the first cannot create the ArgoCD OIDC ExternalSecret (its CRD
+# arrives only after ArgoCD syncs the external-secrets addon), so phase 1 is
+# EXPECTED to exit non-zero on exactly that resource. The recipe then waits
+# for the CRD, re-plans, applies again (must succeed, fail-closed), and
+# restarts argocd-server so it picks up the late-arriving OIDC secret.
+# Steady-state clusters: use plain `just tf-plan` + `just tf-apply`; a clean
+# phase-1 apply exits here early for exactly that reason.
+bootstrap-dr: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    phase1_log=$(mktemp)
+    trap 'rm -f "${phase1_log}"' EXIT
+    just tf-plan
+    echo "== phase 1: apply (an ExternalSecret error is EXPECTED on an empty cluster) =="
+    phase1_rc=0
+    just tf-apply 2>&1 | tee "${phase1_log}" || phase1_rc=$?
+    if ((phase1_rc == 0)); then
+      echo "== single apply succeeded (cluster was not empty); bootstrap complete =="
+      exit 0
+    fi
+    if ! grep -q 'argocd_oidc_external_secret' "${phase1_log}"; then
+      echo "== phase 1 failed on something OTHER than the expected ExternalSecret; aborting ==" >&2
+      exit "${phase1_rc}"
+    fi
+    echo "== phase 1 exited ${phase1_rc} on the expected ExternalSecret; waiting for the CRD to arrive via GitOps =="
+    just kubeconfig
+    kubectl --context {{cluster}} wait --for=create \
+      crd/externalsecrets.external-secrets.io --timeout=15m
+    kubectl --context {{cluster}} wait --for=condition=Established \
+      crd/externalsecrets.external-secrets.io --timeout=2m
+    echo "== phase 2: re-plan + apply (must succeed) =="
+    just tf-plan
+    just tf-apply
+    echo "== waiting for ESO to materialize the OIDC secret, then restarting argocd-server =="
+    kubectl --context {{cluster}} -n argocd wait --for=create secret/argocd-oidc --timeout=5m
+    kubectl --context {{cluster}} -n argocd rollout restart deployment argocd-server
+    echo "== bootstrap complete =="
 
 # Update local kubeconfig to talk to the cluster.
 # Honours AWS_PROFILE if set; otherwise uses the SDK default chain.

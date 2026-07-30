@@ -41,7 +41,7 @@ variable "data_volume_gb" {
 }
 
 variable "ami_id" {
-  description = "Override the worker AMI. null resolves the latest Amazon Linux 2 arm64 AMI in the region."
+  description = "Override the worker AMI. null resolves the latest Amazon Linux 2023 (kernel 6.1) arm64 AMI in the region."
   type        = string
   default     = null
 }

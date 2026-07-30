@@ -3,8 +3,14 @@
 # recovery point survives a GitOps prune or namespace teardown. The driver
 # matches the EBS CSI add-on; the managed snapshot-controller add-on
 # (terraform/eks-addons.tf) ships the snapshot.storage.k8s.io CRDs this
-# references. Tags mirror the gp3 StorageClasses so the volume-cleanup Lambda's
-# PerconaKeep gate also covers the snapshots (applied at snapshot-create time).
+# references. The managed-by tag (applied at snapshot-create time) is the
+# selection key for the snapshot-cleanup reaper (terraform/snapshot-cleanup.tf),
+# which ages the physical snapshots out past the schedule's 14-day retention.
+# Retain plus the reaper bound the growth without letting a k8s-object deletion
+# erase recovery points. Deliberately NO PerconaKeep tag: that account contract
+# means keep-forever and would immortalize every aged-out backup. Pre-reaper
+# snapshots still carrying it need the one-off untag in
+# docs/runbooks/cleanup-reapers.md.
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
 metadata:
@@ -13,5 +19,4 @@ driver: ebs.csi.aws.com
 deletionPolicy: Retain
 parameters:
   tagSpecification_1: "iit-billing-tag=percona-ci-platform"
-  tagSpecification_2: "PerconaKeep=True"
-  tagSpecification_3: "managed-by=ebs-csi-driver"
+  tagSpecification_2: "managed-by=ebs-csi-driver"

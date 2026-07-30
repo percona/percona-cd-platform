@@ -121,6 +121,14 @@ jobs:
           set -euo pipefail
           ver="$(grep -m1 '^version = ' images/mtr-ingest/pyproject.toml | cut -d'"' -f2)"
           [ -n "$ver" ] || { echo "could not parse version from pyproject.toml"; exit 1; }
+          # Constrain the version to Docker tag grammar (first char [A-Za-z0-9_],
+          # rest [A-Za-z0-9._-]; PEP 440 '+' is NOT a legal tag char) before it
+          # flows into the image tag, the bump job's sed program, and
+          # $GITHUB_OUTPUT, so a malformed version fails here rather than
+          # producing an unpushable tag or corrupting values.yaml downstream.
+          case "$ver" in
+            [!0-9A-Za-z_]*|*[!0-9A-Za-z._-]*) echo "version is not a valid image tag: '$ver'"; exit 1 ;;
+          esac
           echo "tag=${ver}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - name: build amd64 (load, NO push yet)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0

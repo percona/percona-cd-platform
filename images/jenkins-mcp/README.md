@@ -138,6 +138,37 @@ The `redirectUri` port is free to choose (Authentik allowlists any
 `http://localhost:<port>/callback`). The first connection opens the Authentik / Duo login. Select a
 master with the per-call `master` argument.
 
+### Troubleshooting a connection
+
+**Opening the endpoint URL in a browser always returns `invalid_token`.** That is not a fault. The
+endpoint speaks MCP, not HTML, and it has no browser-facing page. The login happens inside your MCP
+client, never by visiting the URL. Ignore what the browser shows and connect from the client.
+
+**`invalid_token` from the client itself** ("clear authentication tokens in your MCP client and
+reconnect") means a stale registration or an expired refresh token. In Claude Code, clear it and
+start over:
+
+```sh
+claude mcp list                 # the name you registered it under may differ
+claude mcp logout jenkins-mcp   # drop the cached OAuth credentials
+claude mcp remove jenkins-mcp   # add -s local|user|project if it was scoped
+```
+
+Then re-add it as above and authenticate again. `claude mcp get jenkins-mcp` health-checks the result.
+In Cursor, delete the entry from `mcp.json`, fully restart Cursor (toggling the server is not enough),
+then click Connect.
+
+**"does not support dynamic client registration"** means the client id is missing. Authentik has no
+DCR, so every client must be told `jenkins-mcp` explicitly, and the field name differs per client
+(`--client-id` / `oauth.clientId` in Claude Code, `auth.CLIENT_ID` in Cursor).
+
+**A tool returns 403 or "requires the jenkins-mcp-writers Authentik group"** means the call needs the
+operate, manage, or config-read tier. Ask a platform engineer to add you to `jenkins-mcp-writers`, then
+re-authenticate so the new token carries the group claim. Reconnecting alone does not refresh it.
+
+**A transient 503 right after a gateway release** is the ALB re-registering its target, which takes
+roughly 60 to 90 seconds. Retry before reporting it.
+
 ### Auto-deploy
 
 New gateway image versions roll out on their own: when a new `percona-cd/jenkins-mcp` image is
@@ -172,11 +203,18 @@ Operators: to add or remove a master, or grant the build (operate) tier, see
 
 ## Develop
 
+CI runs these with `--frozen`, so run them that way locally too. Without it a stale `uv.lock` passes
+here and fails in CI:
+
 ```
-uv sync --all-extras --dev
-uv run pytest
-uv run ruff check . && uv run ruff format --check .
+uv sync --all-extras --dev --frozen
+uv run --frozen pytest -q
+uv run --frozen ruff check . && uv run --frozen ruff format --check .
 ```
+
+Any change that should reach the cluster must bump `version` in `pyproject.toml` **and** refresh
+`uv.lock` in the same commit. The image tag is `<pyproject.version>-<short-sha>`, so shipping without
+the version bump produces a tag that is confusing to trace back.
 
 ## Image
 

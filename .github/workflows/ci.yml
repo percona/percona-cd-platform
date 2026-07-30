@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: opentofu/setup-opentofu@v2
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: 1.11.6
       - name: tofu fmt -check
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: terraform/
@@ -99,10 +99,11 @@ jobs:
         run: pip install yamllint==1.38.0 pyyaml
       - name: yamllint
         run: yamllint -s argocd-bootstrap/ resources/ .github/
-      - name: install kubeconform
+      - name: install kubeconform (pinned + sha-verified)
         run: |
           curl -sSL -o kubeconform.tgz \
             https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          echo "c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3  kubeconform.tgz" | sha256sum -c -
           tar -xzf kubeconform.tgz kubeconform
           sudo mv kubeconform /usr/local/bin/
       - name: kubeconform
@@ -124,6 +125,8 @@ jobs:
             argocd-bootstrap/ resources/
       - name: arch pins (no non-arm64 kubernetes.io/arch in committed manifests)
         run: python3 scripts/check_arch_pins.py
+      - name: bootstrap PriorityClass equality (terraform copy == addon copy)
+        run: python3 scripts/check_bootstrap_priorityclass.py
 
   clouds-catalog-drift:
     name: clouds catalog drift (ADR 0029)

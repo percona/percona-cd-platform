@@ -6,6 +6,11 @@ cloudnative-pg:
   crds:
     create: true
 
+  # Preemptible controller tier: without a class it lands at priority 0 anyway,
+  # but assigning the tier explicitly makes it consistent with every other addon
+  # and immune to a future globalDefault change.
+  priorityClassName: platform-default
+
   # Lightweight controller; runs on the default (general) Karpenter NodePool.
   resources:
     requests:

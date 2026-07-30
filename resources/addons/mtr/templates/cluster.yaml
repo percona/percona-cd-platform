@@ -15,6 +15,10 @@ spec:
   instances: {{ .Values.postgres.instances }}
   imageName: {{ .Values.postgres.imageName }}
   primaryUpdateStrategy: unsupervised
+  # Stateful Postgres (the test-history data is the last-mile copy): protect its
+  # pods from Karpenter consolidation, same tier as the Authentik PG it shares
+  # the obs-state node with. CNPG applies this to every generated instance pod.
+  priorityClassName: platform-stateful-high
   # No superuser secret: the app role (owner) is all the ingest CronJob needs;
   # Grafana uses the managed read-only role below.
   enableSuperuserAccess: false

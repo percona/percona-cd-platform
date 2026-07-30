@@ -29,6 +29,9 @@ module "psmdb" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
+  # psmdb workers have no S3 build cache: no psmdb build cache bucket is
+  # wired through this module, so null drops the dead worker S3 IAM grant.
+  cache_bucket_name = null
 
   ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 

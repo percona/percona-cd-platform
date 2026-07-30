@@ -91,6 +91,13 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pmm.cd.percona.com
+  - name: pg
+    # EndpointSlice kept in sync with the live pg master private IP by the
+    # jenkins-endpoint-reconciler over the eu-central-1 <-> us-east-1 peering.
+    upstream: jenkins-pg.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: pg.cd.percona.com
 
 ingress:
   # Dedicated ALB group for Jenkins masters. Intentionally NOT `jenkins-cd`

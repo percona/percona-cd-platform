@@ -51,9 +51,17 @@ def test_ec2_env_contract() -> None:
     assert handler_keys - {"REGIONS"} <= tf_keys, f"handler knobs unset by TF: {handler_keys - {'REGIONS'} - tf_keys}"
 
 
+def test_snapshot_env_contract() -> None:
+    tf_keys = _env_keys(_tf("snapshot-cleanup.tf"))
+    handler_keys = _handler_env_reads("snapshot-cleanup")
+    assert tf_keys <= handler_keys, f"TF sets unread env: {tf_keys - handler_keys}"
+    assert handler_keys - {"REGIONS"} <= tf_keys, f"handler knobs unset by TF: {handler_keys - {'REGIONS'} - tf_keys}"
+
+
 @pytest.mark.parametrize("tf_name,subdir", [
     ("volume-cleanup.tf", "volume-cleanup"),
     ("ec2-cleanup.tf", "ec2-cleanup"),
+    ("snapshot-cleanup.tf", "snapshot-cleanup"),
 ])
 def test_handler_entrypoint_exists(tf_name: str, subdir: str) -> None:
     tf = _tf(tf_name)
@@ -73,8 +81,8 @@ def test_runtime_pin_matches_locals() -> None:
     locals_tf = _tf("locals.tf")
     m = re.search(r'cleanup_lambda_runtime\s*=\s*"(python3\.\d+)"', locals_tf)
     assert m, "cleanup_lambda_runtime not found in locals.tf"
-    # Both instantiations must consume the shared pin, not hardcode their own.
-    for name in ("volume-cleanup.tf", "ec2-cleanup.tf"):
+    # Every instantiation must consume the shared pin, not hardcode its own.
+    for name in ("volume-cleanup.tf", "ec2-cleanup.tf", "snapshot-cleanup.tf"):
         tf = _tf(name)
         assert "local.cleanup_lambda_runtime" in tf, f"{name} does not use the shared runtime pin"
         assert "python3." not in tf, f"{name} hardcodes a runtime"
@@ -83,10 +91,11 @@ def test_runtime_pin_matches_locals() -> None:
 def test_dry_run_locked_to_committed_state() -> None:
     """Both reapers were ARMED on 2026-06-09 after the dry-run bake-in (the
     volume dry run surfaced 12 orphans incl a 16 TB volume; EC2 ran clean
-    cycles). This lock works in both directions: flipping a reaper's dry_run,
-    either way, must update this expectation in the same PR, so the safety
-    knob can never move silently."""
-    expected = {"volume_cleanup": "false", "ec2_cleanup": "false"}
+    cycles). The snapshot reaper ships dry-run until its own bake-in review.
+    This lock works in both directions: flipping a reaper's dry_run, either
+    way, must update this expectation in the same PR, so the safety knob can
+    never move silently."""
+    expected = {"volume_cleanup": "false", "ec2_cleanup": "false", "snapshot_cleanup": "true"}
     locals_tf = _tf("locals.tf")
     for block, want in expected.items():
         m = re.search(rf'{block}\s*=\s*{{(.*?)}}', locals_tf, re.S)

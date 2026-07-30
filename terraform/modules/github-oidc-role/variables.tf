@@ -25,6 +25,11 @@ variable "subject_claims" {
     condition     = length(var.subject_claims) > 0
     error_message = "subject_claims must list at least one explicit sub; wildcard / empty allowlists are not supported."
   }
+
+  validation {
+    condition     = alltrue([for sub in var.subject_claims : !can(regex("[*?]", sub))])
+    error_message = "subject_claims must be exact sub strings; wildcard characters (* or ?) are not supported. The trust uses StringEquals, where they would be dead weight at best."
+  }
 }
 
 variable "permissions_policy_json" {

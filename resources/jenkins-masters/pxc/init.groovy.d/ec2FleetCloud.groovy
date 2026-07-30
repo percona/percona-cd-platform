@@ -2,11 +2,11 @@
 //
 // Registers the diversified Graviton EC2 Fleet (ASG-backed via the ec2-fleet
 // plugin) as a Jenkins Cloud serving the `docker-32gb-aarch64` label on pxc.
-// Uniform multi-SKU fallback path with ps3, ps80, ps57, pxb. The classic
-// `min-al2023-aarch64` SlaveTemplate in cloud.groovy still carries the
-// `docker-32gb-aarch64` label too (labelMap line: `min-al2023-aarch64
-// docker-32gb-aarch64`), so both serve the label until the classic role is
-// retired post-smoke (drop `docker-32gb-aarch64` from that labelMap entry).
+// Uniform multi-SKU fallback path with ps3, ps80, ps57, pxb. This Fleet is the
+// SOLE provider of `docker-32gb-aarch64`; the classic `min-al2023-aarch64`
+// SlaveTemplate in cloud.groovy must NOT also carry that label. Co-serving
+// routes the label to no cloud and starves fleet provisioning, so jobs hang on
+// "all nodes of label docker-32gb-aarch64 are offline".
 //
 // IAM: the `Ec2FleetPluginAutoScaling` policy is attached to the
 // jenkins-pxc-master role by the jenkins-arm-fleet module in

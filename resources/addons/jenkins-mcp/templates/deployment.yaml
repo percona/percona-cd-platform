@@ -1,5 +1,5 @@
 {{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
-{{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. Refusing to render with no access mode, the server would otherwise serve every tool (including config/script mutation)." }}
+{{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. The server itself fails closed to read-only without a mode flag, but the deployment must still declare its access mode explicitly." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment

@@ -188,6 +188,21 @@ variable "extra_subnet_a" {
   default     = false
 }
 
+variable "secondary_vpc_cidr" {
+  description = "Optional secondary VPC CIDR block association. Only pg: the CFN stack grew 10.145.0.0/21 when the original /24 worker subnets ran out of IPs (PKG-1246). null skips."
+  type        = string
+  default     = null
+}
+
+variable "extra_worker_subnets" {
+  description = "Extra worker subnets outside the primary cidrsubnet() math, keyed by a stable name (pg: b2/c2, the /22 pair inside secondary_vpc_cidr where every classic EC2 worker and QA molecule VM launches). az_index indexes the region AZ list like var.az_index. Empty for every master except pg."
+  type = map(object({
+    az_index = number
+    cidr     = string
+  }))
+  default = {}
+}
+
 variable "create_worker_user" {
   description = "Create an IAM User (CFN-era JWorkerUser). Vestigial and fail-closed unimplemented in main.tf; the pmm user was deleted keyless at cutover and job-level grants live on the worker role (worker_ami_builder / worker_ecr_read / extra_worker_managed_policies). No master sets it."
   type        = bool

@@ -1,16 +1,47 @@
 # Owner: platform
 # ArgoCD bootstrap — GitOps Bridge pattern.
 #
-# Three resources, in strict order:
-#   1. helm_release.argocd       — argo-cd chart in HA topology
-#   2. kubernetes_secret_v1      — cluster Secret with annotations carrying
+# Five resources, in strict order:
+#   1. kubectl_manifest.argocd_priorityclass — bootstrap copy of the
+#                                  PriorityClass ArgoCD's own pods reference
+#   2. helm_release.argocd       — argo-cd chart in HA topology
+#   3. kubernetes_secret_v1      — cluster Secret with annotations carrying
 #                                  TF outputs into ApplicationSet valuesObject
-#   3. kubectl_manifest.root_app — root Application of-Apps; ArgoCD then
+#   4. kubectl_manifest.root_app — root Application of-Apps; ArgoCD then
 #                                  walks argocd-bootstrap/ on its own
+#   5. kubectl_manifest.argocd_oidc_external_secret — ExternalSecret feeding
+#                                  the OIDC client secret to argocd-server
 #
 # After this point Terraform stops touching the cluster — every addon,
 # Jenkins host, dashboard, and rule is reconciled by ArgoCD from the
 # resources/ tree of this repo.
+
+# Bootstrap copy of the platform-system-critical PriorityClass. ArgoCD's own
+# pods reference it (global.priorityClassName below), but the GitOps addon
+# that owns the class steady-state (resources/addons/priorityclasses/) only
+# syncs after ArgoCD runs. On an empty cluster that is a scheduling deadlock:
+# no class, no ArgoCD pod, no addon sync. Terraform therefore server-side-
+# applies the same manifest before the Helm install; SSA lets both field
+# managers co-own the object conflict-free while the definitions are
+# identical, and `just bootstrap-priorityclass-check` fails CI when they
+# diverge. ArgoCD-only metadata (the sync-wave annotation) stays on the
+# addon copy alone.
+resource "kubectl_manifest" "argocd_priorityclass" {
+  yaml_body = <<-YAML
+    apiVersion: scheduling.k8s.io/v1
+    kind: PriorityClass
+    metadata:
+      name: platform-system-critical
+    value: 1000000000
+    description: |
+      Cluster-critical platform addons (ArgoCD, ALB controller, external-dns,
+      Karpenter controller, External Secrets Operator). Eviction-resistant.
+    globalDefault: false
+    preemptionPolicy: PreemptLowerPriority
+  YAML
+
+  server_side_apply = true
+}
 
 resource "helm_release" "argocd" {
   name             = "argocd"
@@ -31,8 +62,10 @@ resource "helm_release" "argocd" {
     global = {
       domain = var.argocd_hostname
       # Every ArgoCD component gets the system-critical priority class so
-      # Karpenter consolidation never preempts the GitOps engine. Class
-      # is created by resources/addons/priorityclasses/ at sync-wave -100.
+      # Karpenter consolidation never preempts the GitOps engine. The class
+      # is bootstrap-created by kubectl_manifest.argocd_priorityclass above
+      # and owned steady-state by resources/addons/priorityclasses/ at
+      # sync-wave -100.
       priorityClassName = "platform-system-critical"
     }
     # Drop the bundled Dex pod entirely — Authentik replaces it.
@@ -200,11 +233,13 @@ resource "helm_release" "argocd" {
   # coredns + kube-proxy must be running before any pod can resolve cluster
   # DNS or reach a Service IP. Pod Identity agent must be running before any
   # pod that would normally use it (ArgoCD itself does not, but downstream
-  # addons absolutely do, and the chain must never break).
+  # addons absolutely do, and the chain must never break). The bootstrap
+  # PriorityClass must exist before any ArgoCD pod is admitted.
   depends_on = [
     aws_eks_addon.coredns,
     aws_eks_addon.kube_proxy,
     aws_eks_addon.pod_identity_agent,
+    kubectl_manifest.argocd_priorityclass,
   ]
 }
 
@@ -330,12 +365,21 @@ resource "kubectl_manifest" "argocd_root_app" {
 # argocd-server reads $argocd-oidc:client_secret at startup. The Secret
 # must exist before the helm_release upgrade rolls server pods, otherwise
 # the new pods come up with OIDC silently broken until a manual rollout
-# restart. depends_on = [helm_release.argocd] guarantees the argocd
-# namespace exists; ESO reconciliation is fast (seconds), so by the time
-# helm rolls server pods on a cm-checksum change, the Secret is in place.
-# On a TF apply that touches helm values AND this resource together,
-# Terraform applies the kubectl_manifest first (no helm-state diff), so
-# ESO has a head-start before helm starts the rolling update.
+# restart. Steady-state the materialized Secret already exists from prior
+# applies, so helm rolls are safe regardless of apply ordering.
+#
+# depends_on pins this resource LAST in the bootstrap chain (after the
+# root app). On a fresh cluster the root app must land first so GitOps
+# installs ESO and its CRDs at all; without this edge a failing first
+# apply of this resource could stop Terraform before the root app is
+# scheduled, and the CRD would then never arrive.
+#
+# Fresh-cluster caveat: the ExternalSecret CRD itself arrives via GitOps
+# (resources/addons/external-secrets/), minutes after ArgoCD first syncs.
+# On an empty cluster this resource therefore fails its first apply, which
+# is expected; `just bootstrap-dr` encodes the two-phase sequence. The
+# provider-level apply_retry_count (providers.tf) only absorbs transient
+# API blips, not the CRD wait.
 resource "kubectl_manifest" "argocd_oidc_external_secret" {
   yaml_body = <<-YAML
     apiVersion: external-secrets.io/v1
@@ -362,5 +406,5 @@ resource "kubectl_manifest" "argocd_oidc_external_secret" {
             property: AUTHENTIK_OIDC_ARGOCD_CLIENT_SECRET
   YAML
 
-  depends_on = [helm_release.argocd]
+  depends_on = [kubectl_manifest.argocd_root_app]
 }
