@@ -26,6 +26,7 @@ module "pxc" {
   vpc_cidr                = "10.156.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   jenkins_package_version = "2.541.3"
   cache_bucket_name       = "pxc-build-cache"
 

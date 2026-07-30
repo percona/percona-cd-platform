@@ -204,14 +204,14 @@ tf-plan-masters: _require-aws-profile
     tofu -chdir=terraform plan "${targets[@]}"
 
 # ---------- operator allowlists (SSM-backed) ----------
-# Source of truth for the EKS API allowlist (and future operator allowlists).
+# Source of truth for the operator allowlists (eks-api, master-ssh).
 # Values live only in SSM Parameter Store (CloudTrail-audited), never in git.
 # A put changes nothing live until `just tf-plan && just tf-apply`.
 # Ops: docs/runbooks/eks-api-access.md. Decision: docs/adr/0036.
 allowlist-show: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
-    for p in eks-api; do
+    for p in eks-api master-ssh; do
       echo "== /{{cluster}}/allowlist/${p}"
       aws ssm get-parameter --name "/{{cluster}}/allowlist/${p}" \
         --region "${AWS_REGION:-us-east-1}" \
@@ -219,22 +219,26 @@ allowlist-show: _require-aws-profile
     done
 
 # Usage: just allowlist-set eks-api "198.51.100.5/32,203.0.113.0/24"
-# The value is the FULL comma-separated list, not a delta. The master-ssh
-# allowlist joins the case list when its parameter lands (docs/adr/0036).
+# The value is the FULL comma-separated list, not a delta. Operator input is
+# bound ONCE via quote() into shell variables before any other use; embedding
+# quote() inside a double-quoted string would let $(...) re-evaluate, so only
+# the two assignments below may interpolate the operands (docs/adr/0036).
 allowlist-set name cidrs: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
-    case "{{name}}" in eks-api) ;; *) echo "unknown allowlist '{{name}}' (expected: eks-api)" >&2; exit 2 ;; esac
-    param="/{{cluster}}/allowlist/{{name}}"
+    name={{quote(name)}}
+    cidrs={{quote(cidrs)}}
+    case "$name" in eks-api|master-ssh) ;; *) printf 'unknown allowlist %s (expected: eks-api, master-ssh)\n' "$name" >&2; exit 2 ;; esac
+    param="/{{cluster}}/allowlist/$name"
     echo "current:"
-    aws ssm get-parameter --name "${param}" --region "${AWS_REGION:-us-east-1}" \
+    aws ssm get-parameter --name "$param" --region "${AWS_REGION:-us-east-1}" \
       --query Parameter.Value --output text | tr ',' '\n'
     echo "new:"
-    tr ',' '\n' <<< "{{cidrs}}"
-    read -r -p "overwrite ${param}? [y/N] " a
-    [ "${a}" = "y" ]
-    aws ssm put-parameter --name "${param}" --type StringList \
-      --value "{{cidrs}}" --overwrite --region "${AWS_REGION:-us-east-1}"
+    tr ',' '\n' <<< "$cidrs"
+    read -r -p "overwrite $param? [y/N] " a
+    [ "$a" = "y" ]
+    aws ssm put-parameter --name "$param" --type StringList \
+      --value "$cidrs" --overwrite --region "${AWS_REGION:-us-east-1}"
     echo "saved. Apply it: just tf-plan && just tf-apply"
 
 # ---------- gitops / yaml ----------

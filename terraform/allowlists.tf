@@ -10,10 +10,10 @@
 # feed. That is accepted. Ops: docs/runbooks/eks-api-access.md.
 # Decision: docs/adr/0036-operator-allowlists-in-ssm-and-dynamic-sso-access-entry.md.
 #
-# Parameters are StringList in the cluster region. Today only the EKS API
-# allowlist lives here. The master break-glass :22 allowlist
-# (/<cluster>/allowlist/master-ssh) is the planned second tenant once its
-# CIDR owners are confirmed (docs/adr/0032 keeps that path break-glass only).
+# Parameters are StringList in the cluster region. Two tenants: the EKS API
+# allowlist and the master break-glass :22 allowlist
+# (/<cluster>/allowlist/master-ssh, consumed by every master-*.tf; docs/adr/0032
+# keeps that path break-glass only).
 #
 # The postcondition FAILS the plan (check blocks only warn in OpenTofu 1.11),
 # keeping the hardening invariant fail-closed: the parameter must exist,
@@ -34,6 +34,21 @@ data "aws_ssm_parameter" "eks_api_allowlist" {
   }
 }
 
+data "aws_ssm_parameter" "master_ssh_allowlist" {
+  name = "/${local.cluster_name}/allowlist/master-ssh"
+
+  lifecycle {
+    postcondition {
+      condition = alltrue([
+        length(compact([for c in split(",", self.value) : trimspace(c)])) > 0,
+        !contains([for c in split(",", self.value) : trimspace(c)], "0.0.0.0/0"),
+        alltrue([for c in compact([for x in split(",", self.value) : trimspace(x)]) : can(cidrhost(c, 0))]),
+      ])
+      error_message = "The master-ssh allowlist parameter must hold at least one valid CIDR and never 0.0.0.0/0 (docs/adr/0032, 0036). Fix with `just allowlist-set master-ssh <full,list>`."
+    }
+  }
+}
+
 locals {
   # aws_ssm_parameter values are sensitive-by-default; unwrapped like the
   # amis.tf consumers so the EKS endpoint plan diff stays readable.
@@ -41,4 +56,7 @@ locals {
     compact([for c in split(",", nonsensitive(data.aws_ssm_parameter.eks_api_allowlist.value)) : trimspace(c)]),
     var.api_public_access_cidrs,
   ))
+
+  # Break-glass :22 fleet allowlist, passed to every jenkins-master module.
+  master_ssh_allowed_cidrs = compact([for c in split(",", nonsensitive(data.aws_ssm_parameter.master_ssh_allowlist.value)) : trimspace(c)])
 }
