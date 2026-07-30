@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Fail-closed gate: the two bootstrap PriorityClass copies must stay identical.
+
+terraform/argocd.tf server-side-applies a bootstrap copy of the
+platform-system-critical PriorityClass so ArgoCD can schedule on an empty
+cluster; resources/addons/priorityclasses/ owns the class steady-state. SSA
+co-ownership stays conflict-free only while the two definitions agree on the
+semantic fields (value, globalDefault, preemptionPolicy, description), so any
+divergence fails CI. ArgoCD-only metadata (the sync-wave annotation) is
+excluded on purpose.
+
+Run via: just bootstrap-priorityclass-check  (uv supplies pyyaml)
+"""
+
+import re
+import sys
+import textwrap
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+TF_FILE = ROOT / "terraform/argocd.tf"
+ADDON_FILE = ROOT / "resources/addons/priorityclasses/templates/priorityclasses.yaml"
+CLASS_NAME = "platform-system-critical"
+HEREDOC = re.compile(
+    r'resource\s+"kubectl_manifest"\s+"argocd_priorityclass"\s*\{'
+    r".*?yaml_body\s*=\s*<<-?YAML\n(.*?)\n\s*YAML",
+    re.DOTALL,
+)
+
+
+def semantic_fields(doc: dict) -> dict:
+    """Returns the fields both copies must agree on, whitespace-normalized."""
+    fields = {
+        key: doc.get(key) for key in ("value", "globalDefault", "preemptionPolicy")
+    }
+    fields["description"] = " ".join(str(doc.get("description", "")).split())
+    return fields
+
+
+def load_copies() -> tuple[dict, dict]:
+    """Returns the (terraform, addon) documents, exiting non-zero if either is missing."""
+    match = HEREDOC.search(TF_FILE.read_text())
+    if not match:
+        sys.exit(
+            f"FAIL: kubectl_manifest.argocd_priorityclass heredoc not found in {TF_FILE}"
+        )
+    tf_doc = yaml.safe_load(textwrap.dedent(match.group(1)))
+    if tf_doc.get("metadata", {}).get("name") != CLASS_NAME:
+        sys.exit(f"FAIL: terraform bootstrap copy is not named {CLASS_NAME}")
+    for doc in yaml.safe_load_all(ADDON_FILE.read_text()):
+        if doc and doc.get("metadata", {}).get("name") == CLASS_NAME:
+            return tf_doc, doc
+    sys.exit(f"FAIL: {CLASS_NAME} not found in {ADDON_FILE}")
+
+
+def main() -> None:
+    tf_fields, addon_fields = (semantic_fields(doc) for doc in load_copies())
+    if tf_fields != addon_fields:
+        diff = {
+            key: (tf_fields[key], addon_fields[key])
+            for key in tf_fields
+            if tf_fields[key] != addon_fields[key]
+        }
+        sys.exit(
+            f"FAIL: bootstrap PriorityClass copies diverge (terraform vs addon): {diff}"
+        )
+    print(f"OK: {CLASS_NAME} identical in terraform and addon")
+
+
+if __name__ == "__main__":
+    main()
