@@ -182,7 +182,7 @@ imageMap['us-west-2d.min-bookworm-aarch64'] = imageMap['us-west-2a.min-bookworm-
 imageMap['us-west-2d.min-trixie-aarch64']   = imageMap['us-west-2a.min-trixie-aarch64']
 
 priceMap = [:]
-priceMap['t3a.medium'] = '0.07'   // vCPU=2, memory=4GiB
+priceMap['c6a.large'] = '0.07'   // vCPU=2, memory=4GiB
 priceMap['c6id.4xlarge'] = '0.40'  // vCPU=16, memory=32GiB, 950GB NVMe
 priceMap['r6a.4xlarge'] = '0.65' // vCPU=16, memory=128GiB
 priceMap['m6a.2xlarge'] = '0.37' // vCPU=8, memory=32GiB
@@ -751,7 +751,7 @@ capMap['m6a.2xlarge'] = '60'
 capMap['i4g.2xlarge'] = '40'
 
 typeMap = [:]
-typeMap['micro-amazon']      = 't3a.medium'
+typeMap['micro-amazon']      = 'c6a.large'
 typeMap['docker']            = 'm6a.2xlarge'
 typeMap['docker-32gb']       = 'c6id.4xlarge'
 typeMap['docker-32gb-hirsute']  = 'r6a.4xlarge'
