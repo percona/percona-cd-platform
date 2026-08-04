@@ -182,10 +182,10 @@ imageMap['us-west-2d.min-bookworm-aarch64'] = imageMap['us-west-2a.min-bookworm-
 imageMap['us-west-2d.min-trixie-aarch64']   = imageMap['us-west-2a.min-trixie-aarch64']
 
 priceMap = [:]
-priceMap['t2.medium'] = '0.07'   // type=t2.medium, vCPU=2, memory=4GiB, saving=69%, interruption='<5%', price=0.032000
-priceMap['c5d.4xlarge'] = '0.40'  // type=c5d.4xlarge, vCPU=16, memory=32GiB, saving=62%, interruption='<5%', price=0.272000
-priceMap['r5a.4xlarge'] = '0.65' // type=r5a.4xlarge, vCPU=16, memory=128GiB, saving=67%, interruption='<5%', price=0.583900
-priceMap['m5n.2xlarge'] = '0.37' // type=m5n.2xlarge, vCPU=8, memory=32GiB, saving=64%, interruption='<5%', price=0.201900
+priceMap['t3a.medium'] = '0.07'   // vCPU=2, memory=4GiB
+priceMap['c6id.4xlarge'] = '0.40'  // vCPU=16, memory=32GiB, 950GB NVMe
+priceMap['r6a.4xlarge'] = '0.65' // vCPU=16, memory=128GiB
+priceMap['m6a.2xlarge'] = '0.37' // vCPU=8, memory=32GiB
 
 priceMap['i4g.2xlarge'] = '0.34' // aarch
 
@@ -745,38 +745,38 @@ initMap['min-bookworm-aarch64'] = initMap['min-buster-x64']
 initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 
 capMap = [:]
-capMap['c5d.4xlarge'] = '80'
-capMap['r5a.4xlarge'] = '60'
-capMap['m5n.2xlarge'] = '60'
+capMap['c6id.4xlarge'] = '80'
+capMap['r6a.4xlarge'] = '60'
+capMap['m6a.2xlarge'] = '60'
 capMap['i4g.2xlarge'] = '40'
 
 typeMap = [:]
-typeMap['micro-amazon']      = 't2.medium'
-typeMap['docker']            = 'm5n.2xlarge'
-typeMap['docker-32gb']       = 'c5d.4xlarge'
-typeMap['docker-32gb-hirsute']  = 'r5a.4xlarge'
-typeMap['docker-32gb-jammy']    = 'r5a.4xlarge'
-typeMap['docker-32gb-noble']    = 'r5a.4xlarge'
-typeMap['docker-32gb-resolute']    = 'r5a.4xlarge'
-typeMap['docker-32gb-focal']    = 'r5a.4xlarge'
-typeMap['docker-32gb-bullseye'] = 'r5a.4xlarge'
-typeMap['docker2']           = 'r5a.4xlarge'
+typeMap['micro-amazon']      = 't3a.medium'
+typeMap['docker']            = 'm6a.2xlarge'
+typeMap['docker-32gb']       = 'c6id.4xlarge'
+typeMap['docker-32gb-hirsute']  = 'r6a.4xlarge'
+typeMap['docker-32gb-jammy']    = 'r6a.4xlarge'
+typeMap['docker-32gb-noble']    = 'r6a.4xlarge'
+typeMap['docker-32gb-resolute']    = 'r6a.4xlarge'
+typeMap['docker-32gb-focal']    = 'r6a.4xlarge'
+typeMap['docker-32gb-bullseye'] = 'r6a.4xlarge'
+typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker']
 typeMap['min-centos-8-x64']  = typeMap['docker']
 typeMap['min-ol-8-x64']      = typeMap['docker']
 typeMap['min-ol-9-x64']      = typeMap['docker']
 typeMap['fips-centos-7-x64'] = typeMap['docker-32gb']
-typeMap['min-jammy-x64']     = 'r5a.4xlarge'
-typeMap['min-noble-x64']     = 'r5a.4xlarge'
-typeMap['min-resolute-x64']     = 'r5a.4xlarge'
+typeMap['min-jammy-x64']     = 'r6a.4xlarge'
+typeMap['min-noble-x64']     = 'r6a.4xlarge'
+typeMap['min-resolute-x64']     = 'r6a.4xlarge'
 typeMap['min-focal-x64']     = typeMap['docker']
 typeMap['min-bionic-x64']    = typeMap['min-centos-7-x64']
 typeMap['min-buster-x64']    = typeMap['min-centos-7-x64']
-typeMap['min-centos-6-x64']  = 'm5n.2xlarge'
+typeMap['min-centos-6-x64']  = 'm6a.2xlarge'
 typeMap['min-stretch-x64']   = typeMap['docker']
 typeMap['min-xenial-x64']    = typeMap['docker']
 typeMap['min-amazon-2-x64']  = typeMap['docker']
-typeMap['min-al2023-x64']    = 'm5n.2xlarge'
+typeMap['min-al2023-x64']    = 'm6a.2xlarge'
 typeMap['min-bullseye-x64']  = typeMap['docker']
 typeMap['min-bookworm-x64']  = typeMap['docker']
 typeMap['min-trixie-x64']    = typeMap['docker']
