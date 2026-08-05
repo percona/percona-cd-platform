@@ -335,14 +335,14 @@ install_init_groovy_files() {
     # installs nothing, but never blocks boot. `jenkins iac deploy` remains
     # the no-restart hot-reload path for live edits.
     IGD_STAGE=$(mktemp -d)
+    igd_fetch() {
+        aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/$1" "$IGD_STAGE/$1" --region "$INSTANCE_REGION" \
+            && echo "$2  $IGD_STAGE/$1" | sha256sum -c - \
+            && install -o jenkins -g jenkins -m 0644 "$IGD_STAGE/$1" "/mnt/$JENKINS_HOST/init.groovy.d/$1" \
+            || echo "WARN: fetch or sha256 verify failed for init.groovy.d/$1, not installed"
+    }
 %{ for fname, fsha in init_groovy_files ~}
-    if aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/${fname}" "$IGD_STAGE/${fname}" --region "$INSTANCE_REGION" \
-        && echo "${fsha}  $IGD_STAGE/${fname}" | sha256sum -c - \
-        && install -o jenkins -g jenkins -m 0644 "$IGD_STAGE/${fname}" "/mnt/$JENKINS_HOST/init.groovy.d/${fname}"; then
-        :
-    else
-        echo "WARN: fetch or sha256 verify failed for init.groovy.d/${fname}, not installed"
-    fi
+    igd_fetch "${fname}" "${fsha}"
 %{ endfor ~}
     rm -rf "$IGD_STAGE"
 }
