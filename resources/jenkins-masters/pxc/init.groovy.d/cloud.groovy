@@ -70,7 +70,7 @@ imageMap['ramdisk-bookworm-x64'] = imageMap['min-bookworm-x64']
 imageMap['performance-centos-6-x64']   = imageMap['min-centos-7-x64']
 
 priceMap = [:]
-priceMap['m4.xlarge'] = '0.15' // type=m4.xlarge, vCPU=4, memory=16GiB, saving=62%, interruption='<5%', price=0.090300
+priceMap['m6i.xlarge'] = '0.15' // vCPU=4, memory=16GiB
 priceMap['m1.medium'] = '0.13' // centos6
 priceMap['c5.2xlarge'] = '0.28' // type=c5.2xlarge, vCPU=8, memory=16GiB, saving=53%, interruption='<5%', price=0.216700
 priceMap['r3.2xlarge'] = '0.75' // bid at on-demand (0.741) so spot is never rejected as price-too-low, 7-day spot max was 0.25 against the old bid
@@ -694,7 +694,7 @@ initMap['min-rhel-10-x64'] = '''
 '''
 
 capMap = [:]
-capMap['m4.xlarge']    = '20' // micro-amazon
+capMap['m6i.xlarge']   = '20' // micro-amazon
 capMap['m1.medium']    = '5'  // min-centos-6-x32
 capMap['c5.2xlarge'] = '40'
 capMap['c5.4xlarge'] = '80'
@@ -704,7 +704,7 @@ capMap['c5.metal']     = '2'
 capMap['c7g.metal']    = '2'
 
 typeMap = [:]
-typeMap['micro-amazon'] = 'm4.xlarge'
+typeMap['micro-amazon'] = 'm6i.xlarge'
 typeMap['docker']       = 'c5.2xlarge'
 typeMap['docker-32gb']  = 'c5.4xlarge'
 
