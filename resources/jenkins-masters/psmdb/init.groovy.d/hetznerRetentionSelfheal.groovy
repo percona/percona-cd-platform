@@ -13,10 +13,16 @@
  * when there is nothing to cure.
  *
  * Agents on an idle-period policy legitimately never run with Always, so
- * Always is the degraded state for them. Hour-wrap agents are skipped:
- * their policy is immune to the deserialization loss (singleton getter),
- * and forcing idle-based retention onto one would change its intended
- * end-of-billing-hour shutdown semantics.
+ * Always is the degraded state for them. The cure fails closed: only
+ * agents positively identified as idle-period are touched. Hour-wrap
+ * agents keep their end-of-billing-hour semantics (their policy is immune
+ * to the deserialization loss anyway), and an agent whose policy cannot
+ * be read is skipped and logged, never silently rewritten.
+ *
+ * Registering a PeriodicWork after boot is safe on this core: verified
+ * live 2026-08-07 on pg.cd, a work added via PeriodicWork.all().add()
+ * from the Script Console fired within its first period (core's
+ * PeriodicWorkExtensionListListener schedules late additions).
  *
  * Plugin classes are matched by simple class name, not imports, so this
  * script degrades to a no-op instead of failing evaluation on a master
@@ -30,35 +36,50 @@ import jenkins.model.Jenkins
 import java.util.concurrent.TimeUnit
 
 def cure = {
-    def cured = []
+    def cured = [], skipped = []
     Jenkins.get().nodes.each { node ->
-        if (!node.class.name.startsWith('cloud.dnation.jenkins.plugins.hetzner.')) {
-            return
-        }
-        if (!(node.retentionStrategy instanceof RetentionStrategy.Always)) {
-            return
-        }
-        def policy = null
+        // Per-node guard: one throwing node must not abort the pass for
+        // the rest of the fleet or block timer registration at boot.
         try {
-            policy = node.template?.shutdownPolicy
-        } catch (ignored) {
+            if (!node.class.name.startsWith('cloud.dnation.jenkins.plugins.hetzner.')) {
+                return
+            }
+            if (!(node.retentionStrategy instanceof RetentionStrategy.Always)) {
+                return
+            }
+            def policy = null
+            try {
+                policy = node.template?.shutdownPolicy
+            } catch (ignored) {
+            }
+            // Fail closed: cure only agents positively identified as
+            // idle-period. Hour-wrap agents keep their end-of-hour
+            // semantics, and an unreadable policy is skipped (and logged)
+            // rather than silently rewritten to idle retention.
+            if (policy?.class?.simpleName != 'IdlePeriodPolicy') {
+                skipped << "${node.nodeName}(${policy?.class?.simpleName ?: 'unreadable-policy'})"
+                return
+            }
+            node.setRetentionStrategy(new CloudRetentionStrategy((int) policy.idleMinutes))
+            cured << node.nodeName
+        } catch (Throwable perNode) {
+            println "hetznerRetentionSelfheal: skipping ${node.nodeName}: ${perNode}"
         }
-        if (policy?.class?.simpleName == 'BeforeHourWrapsPolicy') {
-            return
-        }
-        int idleMinutes = 10
-        if (policy?.class?.simpleName == 'IdlePeriodPolicy') {
-            idleMinutes = policy.idleMinutes
-        }
-        node.setRetentionStrategy(new CloudRetentionStrategy(idleMinutes))
-        cured << node.nodeName
     }
     if (cured) {
         println "hetznerRetentionSelfheal: cured ${cured.size()} agent(s): ${cured.join(', ')}"
     }
+    if (skipped) {
+        println "hetznerRetentionSelfheal: left ${skipped.size()} Always agent(s) uncured: ${skipped.join(', ')}"
+    }
 }
 
-cure()
+try {
+    cure()
+} catch (Throwable bootPass) {
+    // The boot pass must never prevent the periodic registration below.
+    println "hetznerRetentionSelfheal: boot cure pass failed: ${bootPass}"
+}
 
 // Also cure agents created after boot (rehydrator, provisioning from a
 // deserialized template). On live re-evaluation (iac deploy) the previous
