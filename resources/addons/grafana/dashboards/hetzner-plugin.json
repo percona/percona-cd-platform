@@ -3105,6 +3105,139 @@
               "legendFormat": "Rehydrate failures"
             }
           ]
+        },
+        {
+          "id": 609,
+          "type": "stat",
+          "title": "Reap health (now)",
+          "description": "Immortal = agents whose effective retention strategy is Always (never reaped). Overdue = online idle agents past twice their idle-shutdown period. Both must be 0; non-zero means the reaper is failing somewhere (retention loss, dead ComputerRetentionWork timer).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 12,
+            "y": 61
+          },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "sum(hetzner_agents_retention_missing{master=~\"$master\"}) or vector(0)",
+              "legendFormat": "immortal (retention=Always)",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "sum(hetzner_agents_idle_overdue{master=~\"$master\"}) or vector(0)",
+              "legendFormat": "idle overdue",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 610,
+          "type": "timeseries",
+          "title": "Reap health by master",
+          "description": "Per-master immortal and idle-overdue agent counts (v103.percona.30 gauges, 1-minute refresh; stay live through API rate-limit windows). A sustained non-zero line is the immortal-worker incident class: the agent never reaps, its disk fills over weeks.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 65
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "min": 0,
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "max",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "max by (master) (hetzner_agents_retention_missing{master=~\"$master\"})",
+              "legendFormat": "{{master}} immortal",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "max by (master) (hetzner_agents_idle_overdue{master=~\"$master\"})",
+              "legendFormat": "{{master}} overdue",
+              "refId": "B"
+            }
+          ]
         }
       ]
     },
