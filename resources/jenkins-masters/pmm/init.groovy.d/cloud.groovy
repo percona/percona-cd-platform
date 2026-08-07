@@ -371,17 +371,17 @@ jvmoptsMap['min-trixie-arm64']   = '-Xmx512m -Xms512m --add-opens=java.base/java
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/SlaveTemplate.java
 // https://javadoc.jenkins.io/plugin/ec2/index.html?hudson/plugins/ec2/UnixData.html
-SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null) {
+SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null, boolean onDemand = false) {
     String resolvedType = instanceType ?: typeMap[OSType]
     return new SlaveTemplate(
         imageMap[AZ + '.' + OSType],                // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[resolvedType], false, '0'), // SpotConfiguration spotConfig
+        onDemand ? null : new SpotConfiguration(true, priceMap[resolvedType], false, '0'), // SpotConfiguration spotConfig (null => on-demand)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(resolvedType),       // InstanceType type
         ( resolvedType.startsWith("c4") || resolvedType.startsWith("m4") || resolvedType.startsWith("c5") || resolvedType.startsWith("m5") ), // boolean ebsOptimized
-        OSType + ' ' + labelMap[OSType],            // String labelString
+        onDemand ? OSType + '-ondemand' : OSType + ' ' + labelMap[OSType],            // String labelString
         Node.Mode.NORMAL,                           // Node.Mode mode
         OSType + ' (' + resolvedType + ')',         // String description: instance-type suffix disambiguates same-label spot fallbacks
         initMap[OSType],                            // String initScript
@@ -400,7 +400,7 @@ SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null) 
         '10',                                        // String idleTerminationMinutes
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
-        capMap[resolvedType],                       // String instanceCapStr
+        onDemand ? '8' : capMap[resolvedType],      // String instanceCapStr (on-demand min-* capped at 8; spot keeps 15)
         '',                                         // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
@@ -481,6 +481,26 @@ String region = 'us-east-2'
             getTemplate('min-bullseye-arm64',  "${region}${it}"),
             getTemplate('min-bookworm-arm64',  "${region}${it}"),
             getTemplate('min-trixie-arm64',    "${region}${it}"),
+            // PMM-15197: on-demand variants for RC/release testing. null spotConfig => on-demand; '-ondemand' label suffix; cap 8.
+            // Primary instance type only (no PMM-15066 spot fallback pools — on-demand is not evicted).
+            getTemplate('min-ol-8-x64',        "${region}${it}", null, true),
+            getTemplate('min-ol-9-x64',        "${region}${it}", null, true),
+            getTemplate('min-alma-10-x64',     "${region}${it}", null, true),
+            getTemplate('min-jammy-x64',       "${region}${it}", null, true),
+            getTemplate('min-noble-x64',       "${region}${it}", null, true),
+            getTemplate('min-resolute-x64',    "${region}${it}", null, true),
+            getTemplate('min-bullseye-x64',    "${region}${it}", null, true),
+            getTemplate('min-bookworm-x64',    "${region}${it}", null, true),
+            getTemplate('min-trixie-x64',      "${region}${it}", null, true),
+            getTemplate('min-ol-8-arm64',      "${region}${it}", null, true),
+            getTemplate('min-ol-9-arm64',      "${region}${it}", null, true),
+            getTemplate('min-alma-10-arm64',   "${region}${it}", null, true),
+            getTemplate('min-jammy-arm64',     "${region}${it}", null, true),
+            getTemplate('min-noble-arm64',     "${region}${it}", null, true),
+            getTemplate('min-resolute-arm64',  "${region}${it}", null, true),
+            getTemplate('min-bullseye-arm64',  "${region}${it}", null, true),
+            getTemplate('min-bookworm-arm64',  "${region}${it}", null, true),
+            getTemplate('min-trixie-arm64',    "${region}${it}", null, true),
         ],                                       // List<? extends SlaveTemplate> templates
         '',
         ''
