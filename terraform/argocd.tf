@@ -26,6 +26,12 @@
 # identical, and `just bootstrap-priorityclass-check` fails CI when they
 # diverge. ArgoCD-only metadata (the sync-wave annotation) stays on the
 # addon copy alone.
+#
+# Neither copy declares globalDefault: a zero-value field serializes as
+# absent on the live object, so a second SSA manager applying an explicit
+# `false` reads as a change to an owned field and conflicts (observed
+# against argocd-controller). Omitting it keeps the API default (false)
+# with no ownership claim.
 resource "kubectl_manifest" "argocd_priorityclass" {
   yaml_body = <<-YAML
     apiVersion: scheduling.k8s.io/v1
@@ -36,7 +42,6 @@ resource "kubectl_manifest" "argocd_priorityclass" {
     description: |
       Cluster-critical platform addons (ArgoCD, ALB controller, external-dns,
       Karpenter controller, External Secrets Operator). Eviction-resistant.
-    globalDefault: false
     preemptionPolicy: PreemptLowerPriority
   YAML
 
