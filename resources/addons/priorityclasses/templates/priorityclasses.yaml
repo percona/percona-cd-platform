@@ -24,6 +24,7 @@ value: 1000000000
 description: |
   Cluster-critical platform addons (ArgoCD, ALB controller, external-dns,
   Karpenter controller, External Secrets Operator). Eviction-resistant.
+globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 ---
 apiVersion: scheduling.k8s.io/v1
@@ -36,6 +37,7 @@ value: 100000
 description: |
   Stateful workloads with PVCs (Prometheus, Alertmanager, Mimir/Loki/Tempo
   ingesters, Jenkins masters). Protected from Karpenter consolidation.
+globalDefault: false
 preemptionPolicy: PreemptLowerPriority
 ---
 apiVersion: scheduling.k8s.io/v1
@@ -48,4 +50,5 @@ value: 0
 description: |
   Default priority for stateless workloads on the Karpenter pool. Fully
   preemptible, fully consolidatable.
+globalDefault: false
 preemptionPolicy: PreemptLowerPriority

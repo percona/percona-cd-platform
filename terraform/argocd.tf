@@ -27,11 +27,15 @@
 # diverge. ArgoCD-only metadata (the sync-wave annotation) stays on the
 # addon copy alone.
 #
-# Neither copy declares globalDefault: a zero-value field serializes as
-# absent on the live object, so a second SSA manager applying an explicit
-# `false` reads as a change to an owned field and conflicts (observed
-# against argocd-controller). Omitting it keeps the API default (false)
-# with no ownership claim.
+# globalDefault is split, not shared: this copy omits it, the addon
+# declares it false. The live object serializes false as absent, so a
+# second SSA manager applying an explicit false reads as a change to an
+# owned field and conflicts (observed against argocd-controller).
+# Omission leaves the field absent (effective false) with no ownership
+# claim, while ArgoCD stays its sole owner and reverts any drift to
+# true. The check script fails closed on either side of the split.
+# Edits to the co-owned fields land addon-first (ArgoCD sync), then
+# tofu apply sees equal values.
 resource "kubectl_manifest" "argocd_priorityclass" {
   yaml_body = <<-YAML
     apiVersion: scheduling.k8s.io/v1

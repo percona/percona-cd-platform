@@ -32,9 +32,7 @@ HEREDOC = re.compile(
 
 def semantic_fields(doc: dict) -> dict:
     """Returns the fields both copies must agree on, whitespace-normalized."""
-    fields = {
-        key: doc.get(key) for key in ("value", "globalDefault", "preemptionPolicy")
-    }
+    fields = {key: doc.get(key) for key in ("value", "preemptionPolicy")}
     fields["description"] = " ".join(str(doc.get("description", "")).split())
     return fields
 
@@ -56,7 +54,27 @@ def load_copies() -> tuple[dict, dict]:
 
 
 def main() -> None:
-    tf_fields, addon_fields = (semantic_fields(doc) for doc in load_copies())
+    tf_doc, addon_doc = load_copies()
+
+    # globalDefault is deliberately split, not shared: the terraform copy must
+    # OMIT it (an explicit zero-value from a second SSA manager conflicts with
+    # the field's owner, because the live object serializes false as absent),
+    # while the addon copy must declare false so ArgoCD stays the sole owner
+    # and corrects any drift to true. Equality alone would pass a symmetric
+    # re-addition and silently re-arm the conflict.
+    if "globalDefault" in tf_doc:
+        sys.exit(
+            "FAIL: the terraform bootstrap copy declares globalDefault; keep "
+            "it omitted (explicit false conflicts under SSA with the field's "
+            "current manager)"
+        )
+    if addon_doc.get("globalDefault") is not False:
+        sys.exit(
+            "FAIL: the addon copy must declare globalDefault: false so ArgoCD "
+            "owns the field and reverts drift to true"
+        )
+
+    tf_fields, addon_fields = (semantic_fields(doc) for doc in (tf_doc, addon_doc))
     if tf_fields != addon_fields:
         diff = {
             key: (tf_fields[key], addon_fields[key])
