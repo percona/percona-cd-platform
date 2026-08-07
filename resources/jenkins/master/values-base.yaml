@@ -23,7 +23,7 @@ jenkins:
       # image (forks forced via .override, community soft); this tag carries the
       # refreshed forks hetzner-cloud 103.percona.28 + ec2 5.24.percona.4 (PR #89)
       # and ec2-fleet 4.2.3.539 aligning ps3 with the EC2 masters (PR #128).
-      tag: "2.541.3-e581b0fc85a2206682954b0e8c013ead418dfadf"
+      tag: "2.541.3-2a21ceb6535ab9e1b1fd764bf4b8874fea4786a6"
       pullPolicy: IfNotPresent
 
     # Plugins are BAKED into the image (community via plugins.txt; the 2 Percona
