@@ -329,14 +329,22 @@ install_init_groovy_files() {
     # bucket at boot. The repo is the source of truth (objects are uploaded
     # by Terraform), so a fresh-volume rebuild re-materializes the master's
     # full wiring set instead of relying on the carried-forward EBS data
-    # volume. Transits the S3 gateway VPC endpoint (same-region bucket). A
-    # failed fetch warns but never blocks boot. `jenkins iac deploy` remains
+    # volume. Transits the S3 gateway VPC endpoint (same-region bucket).
+    # Each file is staged and verified against the sha256 Terraform computed
+    # from the reviewed repo content; a mismatch or failed fetch warns and
+    # installs nothing, but never blocks boot. `jenkins iac deploy` remains
     # the no-restart hot-reload path for live edits.
-%{ for fname in init_groovy_files ~}
-    aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/${fname}" "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" --region "$INSTANCE_REGION" \
-        && chown jenkins:jenkins "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" \
-        || echo "WARN: failed to fetch init.groovy.d/${fname} from s3://${init_groovy_s3_bucket}"
+    IGD_STAGE=$(mktemp -d)
+    igd_fetch() {
+        aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/$1" "$IGD_STAGE/$1" --region "$INSTANCE_REGION" \
+            && echo "$2  $IGD_STAGE/$1" | sha256sum -c - \
+            && install -o jenkins -g jenkins -m 0644 "$IGD_STAGE/$1" "/mnt/$JENKINS_HOST/init.groovy.d/$1" \
+            || echo "WARN: fetch or sha256 verify failed for init.groovy.d/$1, not installed"
+    }
+%{ for fname, fsha in init_groovy_files ~}
+    igd_fetch "${fname}" "${fsha}"
 %{ endfor ~}
+    rm -rf "$IGD_STAGE"
 }
 %{ endif ~}
 
