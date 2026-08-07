@@ -382,8 +382,8 @@ SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null, 
         InstanceType.fromValue(resolvedType),       // InstanceType type
         ( resolvedType.startsWith("c4") || resolvedType.startsWith("m4") || resolvedType.startsWith("c5") || resolvedType.startsWith("m5") ), // boolean ebsOptimized
         onDemand ? OSType + '-ondemand' : OSType + ' ' + labelMap[OSType],            // String labelString
-        Node.Mode.NORMAL,                           // Node.Mode mode
-        OSType + ' (' + resolvedType + ')',         // String description: instance-type suffix disambiguates same-label spot fallbacks
+        onDemand ? Node.Mode.EXCLUSIVE : Node.Mode.NORMAL, // Node.Mode mode (on-demand: only run jobs that ask for the label)
+        onDemand ? OSType + '-ondemand' : OSType + ' (' + resolvedType + ')', // String description (distinct => separate instance-cap pool from spot; spot keeps main's instance-type suffix)
         initMap[OSType],                            // String initScript
         '',                                         // String tmpDir
         '',                                         // String userData
