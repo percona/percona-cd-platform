@@ -245,3 +245,9 @@ variable "ppg_ami_factory_subject_claims" {
   type        = list(string)
   default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
 }
+
+variable "ppg_hcloud_factory_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the PPG Hetzner-factory role. Master-only on Percona-Lab/jenkins-pipelines; this role reads the factory token, so the allowlist stays exactly this subject."
+  type        = list(string)
+  default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
+}
