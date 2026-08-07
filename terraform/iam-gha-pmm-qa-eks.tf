@@ -1,50 +1,45 @@
 # Owner: pmm
-# IAM role assumed by GitHub Actions workflows in `percona/pmm-qa` via OIDC
-# federation, used to connect kubectl/helm test runs to the PMM HA QA EKS
-# clusters (`pmm-ha*`) in us-east-2.
+# GitHub Actions OIDC role for the public `percona/pmm-qa` repo: QA
+# workflows build a kubeconfig for the PMM HA EKS clusters (`pmm-ha`,
+# `pmm-ha-test-*`, us-east-2).
 #
-# Scope: this file owns the AWS-side half only. The role's single permission
-# is `eks:DescribeCluster`, which is what `aws eks update-kubeconfig` calls
-# to render a kubeconfig (cluster endpoint + CA). Kubernetes-side
-# authorization is deliberately NOT granted here: the clusters are
-# short-lived eksctl clusters created by the pmm3-ha-eks Jenkins job
-# (Percona-Lab/jenkins-pipelines, pmm/v3/pmm3-ha-eks.groovy), and that job's
-# access-entry stage is where this role's principal gets its EKS access
-# entry + access policy at cluster create time. Splitting it that way keeps
-# cluster lifecycle and cluster authorization with one owner (the creating
-# job) and durable account-level IAM here.
+# AWS-side only. Kubernetes authorization is granted by the cluster-creating
+# pmm3-ha-eks Jenkins job (Percona-Lab/jenkins-pipelines) via EKS access
+# entries at create time; the persistent `pmm-ha` needs that grant once, out
+# of band. Trust shape (StringEquals aud + sub, no wildcards) lives in
+# ./modules/github-oidc-role.
 #
-# Public-repo safety (`percona/pmm-qa` is public):
-#   - Trust is StringEquals on an explicit subject list (module-enforced;
-#     no StringLike, no wildcards).
-#   - The `pull_request` subject only matches workflow runs in the base
-#     repository context. Fork-triggered `pull_request` runs cannot request
-#     `id-token: write`, so fork PR code cannot mint a token that assumes
-#     this role.
+# Public-repo trust boundary:
+#   - Fork `pull_request` runs cannot request `id-token: write`, so fork
+#     code cannot assume this role.
+#   - Same-repo PRs can, so the boundary is push access to pmm-qa, not
+#     code merged to main.
+#   - `pull_request_target` / `workflow_run` workflows run in the base-repo
+#     context, may hold `id-token: write`, and match this allowlist. They
+#     must never run fork-controlled code. Audit at introduction: zero
+#     `pull_request_target`, one `workflow_run` notifier without `id-token`.
 #
-# Trust shape is owned by the `github-oidc-role` module
-# (`terraform/modules/github-oidc-role/`). This file owns only the subject
-# allowlist + the workload permissions policy.
-#
-# Blast radius if a workflow's OIDC token leaks before it expires (15 min
-# default):
-#   - Attacker can call eks:DescribeCluster on clusters named `pmm-ha*` in
-#     us-east-2 (returns endpoint URL + cluster CA, not credentials).
-#   - Attacker can reach the Kubernetes API of any live `pmm-ha*` cluster
-#     whose access entries include this role (ephemeral QA clusters,
-#     reaped by the paired cleanup job on a retention timer).
-#   - Attacker CANNOT: touch any other EKS cluster (percona-ci-platform
-#     included, since it carries no access entry for this role), EC2, IAM,
-#     S3, Secrets Manager, or any AWS write action.
+# Leaked-token blast radius (STS session up to 1h, the real window):
+#   - Direct: eks:DescribeCluster on the two pmm-ha families (returns
+#     endpoint + CA, no credentials). No other AWS API, no other cluster.
+#   - Via access entries: cluster-admin on the QA clusters, including the
+#     persistent `pmm-ha`. That reaches all in-cluster Secrets, privileged
+#     pods, and node instance-profile / IRSA credentials, so transitive AWS
+#     exposure is bounded by the QA clusters' configuration, not by this
+#     policy.
 
 data "aws_iam_policy_document" "gha_pmm_qa_eks_perms" {
-  # update-kubeconfig's only required call. Name-scoped so the role cannot
-  # describe unrelated clusters in the account.
+  # update-kubeconfig's only required call, name-scoped to the two known
+  # cluster families so a future sibling sharing the pmm-ha prefix is
+  # excluded.
   statement {
-    sid       = "DescribePmmHaClustersOnly"
-    effect    = "Allow"
-    actions   = ["eks:DescribeCluster"]
-    resources = ["arn:aws:eks:us-east-2:${data.aws_caller_identity.current.account_id}:cluster/pmm-ha*"]
+    sid     = "DescribePmmHaClustersOnly"
+    effect  = "Allow"
+    actions = ["eks:DescribeCluster"]
+    resources = [
+      "arn:aws:eks:us-east-2:${data.aws_caller_identity.current.account_id}:cluster/pmm-ha",
+      "arn:aws:eks:us-east-2:${data.aws_caller_identity.current.account_id}:cluster/pmm-ha-test-*",
+    ]
   }
 }
 
@@ -65,9 +60,8 @@ module "gha_pmm_qa_eks" {
   tags = merge(local.tags, { team = "pmm" })
 }
 
-# Surface the role ARN for the `role-to-assume` input of
-# `aws-actions/configure-aws-credentials` in the pmm-qa workflows. Role ARNs
-# are not secrets; a plain output avoids console hand-copying.
+# role-to-assume for `aws-actions/configure-aws-credentials` in pmm-qa
+# workflows; role ARNs are not secrets.
 output "gha_pmm_qa_eks_role_arn" {
   description = "role-to-assume for percona/pmm-qa GHA workflows connecting to the pmm-ha* QA EKS clusters."
   value       = module.gha_pmm_qa_eks.role_arn
