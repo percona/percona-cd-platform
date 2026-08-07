@@ -8,13 +8,19 @@
  * core Slave maps a null field to RetentionStrategy.Always: the worker is
  * never reaped, lives for months, and fills its disk (observed 2026-08-07:
  * 16/16 agents immortal on cloud.cd, 13/13 on ps80.cd, 2/2 on pxc.cd).
- * Plugin v103.percona.29 fixes the creation paths; this guard cures agents
+ * Plugin v103.percona.30 fixes the creation paths; this guard cures agents
  * that predate the fix or slip through a future regression, and is a no-op
  * when there is nothing to cure.
  *
- * A Hetzner agent legitimately never runs with Always (its policies yield
- * CloudRetentionStrategy or the hour-wrap strategy), so Always is always
- * the degraded state here.
+ * Agents on an idle-period policy legitimately never run with Always, so
+ * Always is the degraded state for them. Hour-wrap agents are skipped:
+ * their policy is immune to the deserialization loss (singleton getter),
+ * and forcing idle-based retention onto one would change its intended
+ * end-of-billing-hour shutdown semantics.
+ *
+ * Plugin classes are matched by simple class name, not imports, so this
+ * script degrades to a no-op instead of failing evaluation on a master
+ * where the Hetzner plugin is absent or disabled.
  */
 import hudson.model.PeriodicWork
 import hudson.slaves.CloudRetentionStrategy
@@ -32,13 +38,17 @@ def cure = {
         if (!(node.retentionStrategy instanceof RetentionStrategy.Always)) {
             return
         }
-        int idleMinutes = 10
+        def policy = null
         try {
-            def policy = node.template?.shutdownPolicy
-            if (policy?.class?.simpleName == 'IdlePeriodPolicy') {
-                idleMinutes = policy.idleMinutes
-            }
+            policy = node.template?.shutdownPolicy
         } catch (ignored) {
+        }
+        if (policy?.class?.simpleName == 'BeforeHourWrapsPolicy') {
+            return
+        }
+        int idleMinutes = 10
+        if (policy?.class?.simpleName == 'IdlePeriodPolicy') {
+            idleMinutes = policy.idleMinutes
         }
         node.setRetentionStrategy(new CloudRetentionStrategy(idleMinutes))
         cured << node.nodeName
@@ -51,24 +61,32 @@ def cure = {
 cure()
 
 // Also cure agents created after boot (rehydrator, provisioning from a
-// deserialized template). Guard against duplicate registration when the
-// script is re-evaluated live via iac deploy: the marker property survives
-// re-evaluation and resets with the JVM, exactly like the PeriodicWork list.
-if (System.getProperty('percona.hetznerRetentionSelfheal.registered') != 'true') {
-    PeriodicWork.all().add(new PeriodicWork() {
-        long getRecurrencePeriod() {
-            return TimeUnit.MINUTES.toMillis(10)
-        }
+// deserialized template). On live re-evaluation (iac deploy) the previous
+// timer is REPLACED, not kept: an old timer would run the old script's
+// closure forever, silently ignoring any hotfix in this file. The marker
+// toString identifies our timer across evaluations.
+def MARKER = 'percona-hetznerRetentionSelfheal'
+def registry = PeriodicWork.all()
+def stale = registry.findAll { it.toString() == MARKER }
+stale.each { registry.remove(it) }
+registry.add(new PeriodicWork() {
+    long getRecurrencePeriod() {
+        return TimeUnit.MINUTES.toMillis(10)
+    }
 
-        protected void doRun() {
-            try {
-                cure()
-            } catch (Throwable t) {
-                // Never let the cure kill the shared Timer thread.
-                println "hetznerRetentionSelfheal: cure pass failed: ${t}"
-            }
+    protected void doRun() {
+        try {
+            cure()
+        } catch (Throwable t) {
+            // Never let the cure kill the shared Timer thread.
+            println "hetznerRetentionSelfheal: cure pass failed: ${t}"
         }
-    })
-    System.setProperty('percona.hetznerRetentionSelfheal.registered', 'true')
-    println 'hetznerRetentionSelfheal: periodic cure registered (10m)'
-}
+    }
+
+    String toString() {
+        return MARKER
+    }
+})
+println(stale
+        ? "hetznerRetentionSelfheal: replaced ${stale.size()} stale timer(s), cure re-registered (10m)"
+        : 'hetznerRetentionSelfheal: periodic cure registered (10m)')
