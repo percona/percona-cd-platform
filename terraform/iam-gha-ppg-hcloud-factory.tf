@@ -7,18 +7,21 @@
 # GitHub and a branch-ref dispatch fails at AssumeRole. Trust shape is owned
 # by ./modules/github-oidc-role.
 
-# The real value is set out-of-band (aws ssm put-parameter --overwrite) so
-# the token never enters git or the Terraform state.
+# The real value is set out-of-band (aws ssm put-parameter --overwrite).
+# value_wo is write-only: it never lands in state, and refresh does not read
+# the SecureString back. Never bump value_wo_version: that would overwrite
+# the live token with the placeholder (rotation happens out-of-band only).
 resource "aws_ssm_parameter" "ppg_hcloud_factory_token" {
-  name        = "/ppg/hcloud-factory-token"
-  description = "Project-scoped Hetzner Cloud API token for the PPG snapshot factory (bake, smoke, promote, prune, janitor)."
-  type        = "SecureString"
-  value       = "REPLACE-out-of-band"
+  name             = "/ppg/hcloud-factory-token"
+  description      = "Project-scoped Hetzner Cloud API token for the PPG snapshot factory (bake, smoke, promote, prune, janitor)."
+  type             = "SecureString"
+  value_wo         = "REPLACE-out-of-band"
+  value_wo_version = 1
 
   tags = merge(local.tags, { team = "postgresql" })
 
   lifecycle {
-    ignore_changes = [value]
+    prevent_destroy = true
   }
 }
 
