@@ -177,6 +177,16 @@ start_jenkins() {
     if [ "$FRESH_DATA_VOLUME" = "1" ]; then
         echo "fresh data volume; running full recursive chown of JENKINS_HOME"
         chown -hR jenkins:jenkins /mnt/$JENKINS_HOST
+    else
+        # A newer base image can hand jenkins a different uid than the one
+        # owning the volume's content (another package claims the old uid),
+        # leaving JENKINS_HOME unwritable so Jenkins exits at startup. Probe
+        # a file the JVM must own; re-own the tree only on mismatch.
+        DATA_UID=$(stat -c %u /mnt/$JENKINS_HOST/config.xml 2>/dev/null || id -u jenkins)
+        if [ "$DATA_UID" != "$(id -u jenkins)" ]; then
+            echo "uid drift: JENKINS_HOME owned by uid $DATA_UID, jenkins is $(id -u jenkins); re-owning"
+            chown -hR jenkins:jenkins /mnt/$JENKINS_HOST
+        fi
     fi
 
     printf "127.0.0.1 $(hostname) $(hostname -A)\n10.30.6.220 vbox-01.ci.percona.com\n10.30.6.9 repo.ci.percona.com\n" \
