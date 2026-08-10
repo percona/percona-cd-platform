@@ -254,6 +254,11 @@ capMap['m6a.large']   = '15' // amd64 fallback for min-*-x64 labels (PMM-15066)
 capMap['m7i.large']   = '15' // amd64 fallback for min-*-x64 labels (PMM-15066)
 capMap['m7gd.large']  = '15' // arm64 instance type
 
+// Global per-label ceiling for the on-demand min-* templates, sized to the 8-way
+// RC matrix fan-out (8 parallel package-testing runs, one stage per OS each).
+// Untyped so it enters the script binding and getTemplate() can read it, like the maps.
+onDemandCap = '8'
+
 typeMap = [:]
 typeMap['min-rhel-8-x64']     = 'm7a.large'
 typeMap['min-ol-8-x64']       = typeMap['min-rhel-8-x64']
@@ -400,7 +405,7 @@ SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null, 
         '10',                                        // String idleTerminationMinutes
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
-        onDemand ? '8' : capMap[resolvedType],      // String instanceCapStr (on-demand min-* capped at 8; spot keeps 15)
+        onDemand ? onDemandCap : capMap[resolvedType], // String instanceCapStr (on-demand min-* pool, spot keeps 15)
         '',                                         // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
