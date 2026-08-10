@@ -108,6 +108,7 @@ module "pxb" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pxb/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pxb/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the
