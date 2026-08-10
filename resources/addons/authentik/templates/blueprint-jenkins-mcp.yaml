@@ -7,10 +7,12 @@ it. The SAML source, group property mapping, and identification stage live in
 blueprint-grafana.yaml.
 
 Differs from the confidential web clients (grafana/argocd/headlamp): this is a
-PUBLIC client (client_type: public) for a CLI (Claude Code) that cannot hold a
-secret. PKCE is the result of client_type: public — Authentik requires a
-code_challenge and accepts no client secret on token exchange, so there is no
-client_secret here and therefore no Authentik env var / Secrets Manager key.
+PUBLIC client (client_type: public) that cannot hold a secret. Every MCP client
+(Claude Code, Cursor, hosted Claude) sends an S256 PKCE code_challenge and
+Authentik accepts it, but Authentik does not require PKCE per-provider, so code
+confidentiality rests on the strict redirect-URI allowlist below, not on a
+server-enforced PKCE check. No client secret means no Authentik env var /
+Secrets Manager key.
 
 The redirect is a loopback regex covering the CLI's ephemeral callback port
 (RFC 8252), modelled on the argocd provider. The MCP server is the OAuth2
@@ -50,8 +52,8 @@ data:
           # and the desktop deep link); Cursor pre-registers this same client_id.
           # The claude.ai entry covers the hosted Claude surfaces (web, Desktop,
           # mobile): the connector is added with this client_id supplied manually
-          # and a blank client secret (public client, PKCE S256), which avoids
-          # dynamic client registration entirely.
+          # and a blank client secret (public client; Claude sends S256 PKCE),
+          # which avoids dynamic client registration entirely.
           redirect_uris:
             - matching_mode: regex
               url: ^http://(127\.0\.0\.1|localhost):[0-9]+/callback$

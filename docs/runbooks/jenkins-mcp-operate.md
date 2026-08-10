@@ -94,8 +94,9 @@ service from source alone will not work without them.
   idempotently by the committed blueprint
   `resources/addons/authentik/templates/blueprint-jenkins-mcp.yaml`. The provider is a public (PKCE)
   client, so there is no client secret to rotate. Its redirect-URI allowlist is what makes a client
-  work: a loopback regex for Claude Code plus two strict Cursor URIs. A new client with a different
-  callback shape needs that list extended.
+  work: a loopback regex for Claude Code, two strict Cursor URIs, and the strict claude.ai callback
+  for hosted Claude surfaces (web, Desktop, mobile). A new client with a different callback shape
+  needs that list extended.
 - **The fleet secret** `percona-ci-platform/jenkins-mcp/fleet` is hand-edited in AWS Secrets Manager
   (see The fleet, above). No Terraform resource owns its contents.
 - **The ECR repository** `percona-cd/jenkins-mcp` was created by hand, while `terraform/ecr.tf`

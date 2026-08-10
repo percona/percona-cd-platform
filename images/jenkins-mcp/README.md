@@ -110,6 +110,16 @@ gateway already allowlists Cursor's redirect URIs, so no redirect setup is neede
 block is optional. Drop it to choose a master per call instead. If you hit `invalid_scope`, update
 Cursor to v2.6.19 or later.
 
+### Claude (web, Desktop, mobile)
+
+On the hosted Claude surfaces, add a custom connector by URL:
+`https://jenkins-mcp.cd.percona.com/mcp`. Under the connector's Advanced settings, set the OAuth
+client ID to `jenkins-mcp` and leave the client secret blank (Authentik has no DCR, so the id is
+required; the gateway is a public client with no secret). Save, then click Connect for the browser
+Duo login. The gateway already allowlists the hosted callback
+(`https://claude.ai/api/mcp/auth_callback`), so no redirect setup is needed. On Team or Enterprise
+plans only an org Owner can add a custom connector; members then enable it individually.
+
 ### pi.dev
 
 Pi does not ship MCP support in its core, so this path uses the community
