@@ -383,7 +383,7 @@ SlaveTemplate getTemplate(String OSType, String AZ, String instanceType = null) 
         ( resolvedType.startsWith("c4") || resolvedType.startsWith("m4") || resolvedType.startsWith("c5") || resolvedType.startsWith("m5") ), // boolean ebsOptimized
         OSType + ' ' + labelMap[OSType],            // String labelString
         Node.Mode.NORMAL,                           // Node.Mode mode
-        OSType,                                     // String description
+        OSType + ' (' + resolvedType + ')',         // String description: instance-type suffix disambiguates same-label spot fallbacks
         initMap[OSType],                            // String initScript
         '',                                         // String tmpDir
         '',                                         // String userData
