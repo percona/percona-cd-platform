@@ -1,7 +1,7 @@
 # Owner: pmm
 # GitHub Actions OIDC role for the public `percona/pmm-qa` repo: QA
-# workflows build a kubeconfig for the PMM HA EKS clusters (`pmm-ha`,
-# `pmm-ha-test-*`, us-east-2).
+# workflows build a kubeconfig for the ephemeral PMM HA test clusters
+# (`pmm-ha-test-*`, us-east-2). The persistent `pmm-ha` is out of scope.
 #
 # AWS-side only. Kubernetes authorization is granted by the cluster-creating
 # pmm3-ha-eks Jenkins job (Percona-Lab/jenkins-pipelines) via EKS access
@@ -10,10 +10,10 @@
 # ./modules/github-oidc-role.
 #
 # Public-repo trust boundary:
-#   - Fork `pull_request` runs cannot request `id-token: write`, so fork
-#     code cannot assume this role.
-#   - Same-repo PRs can, so the boundary is push access to pmm-qa, not
-#     code merged to main.
+#   - Only runs on refs/heads/main match the subject allowlist, so the
+#     boundary is code merged to main. Fork PRs cannot request
+#     `id-token: write` at all, and same-repo PR runs carry a
+#     pull_request subject that no longer matches.
 #   - `pull_request_target` / `workflow_run` workflows run in the base-repo
 #     context, may hold `id-token: write`, and match this allowlist. They
 #     must never run fork-controlled code. Audit at introduction: zero
@@ -22,11 +22,10 @@
 # Leaked-token blast radius (STS session up to 1h, the real window):
 #   - Direct: eks:DescribeCluster on the two pmm-ha families (returns
 #     endpoint + CA, no credentials). No other AWS API, no other cluster.
-#   - Via access entries: cluster-admin on the QA clusters, including the
-#     persistent `pmm-ha`. That reaches all in-cluster Secrets, privileged
-#     pods, and node instance-profile / IRSA credentials, so transitive AWS
-#     exposure is bounded by the QA clusters' configuration, not by this
-#     policy.
+#   - Via access entries: AmazonEKSEditPolicy scoped to the `pmm`
+#     namespace on the ephemeral test clusters only (granted by the
+#     cluster-creating Jenkins job). No cluster-scoped write, no reach
+#     into other namespaces, nothing on the persistent `pmm-ha`.
 
 data "aws_iam_policy_document" "gha_pmm_qa_eks_perms" {
   # update-kubeconfig's only required call, name-scoped to the two known
@@ -37,7 +36,6 @@ data "aws_iam_policy_document" "gha_pmm_qa_eks_perms" {
     effect  = "Allow"
     actions = ["eks:DescribeCluster"]
     resources = [
-      "arn:aws:eks:us-east-2:${data.aws_caller_identity.current.account_id}:cluster/pmm-ha",
       "arn:aws:eks:us-east-2:${data.aws_caller_identity.current.account_id}:cluster/pmm-ha-test-*",
     ]
   }
@@ -52,7 +50,6 @@ module "gha_pmm_qa_eks" {
 
   subject_claims = [
     "repo:percona/pmm-qa:ref:refs/heads/main",
-    "repo:percona/pmm-qa:pull_request",
   ]
 
   permissions_policy_json = data.aws_iam_policy_document.gha_pmm_qa_eks_perms.json
