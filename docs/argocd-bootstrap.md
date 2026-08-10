@@ -1,9 +1,9 @@
 # ArgoCD bootstrap
 
-How GitOps starts on this platform. Terraform does three things: it
-installs ArgoCD, it records the AWS-side values the charts in git will
-need, and it applies one root Application. Everything after that point
-reconciles from git.
+How GitOps starts on this platform. Terraform installs ArgoCD (and the
+priority class its pods need), records the AWS-side values the charts in
+git will need, applies one root Application, and feeds ArgoCD its OIDC
+client secret. Everything after that point reconciles from git.
 
 The middle step exists because of a simple gap: the Helm charts need real
 AWS identifiers (IAM role ARNs with generated suffixes, the ACM
@@ -18,36 +18,51 @@ hand-rolled rather than consumed as a module (the upstream repos have been
 dormant since mid-2024, and the pattern is about fifty lines of Terraform).
 Decision record: [ADR 0005](adr/0005-gitops-bridge-bootstrap.md).
 
-## The three-step chain
+## The five-step chain
 
-Terraform owns exactly three cluster-facing resources, in strict order
+Terraform owns exactly five cluster-facing resources, in strict order
 (`terraform/argocd.tf`):
 
-1. **`helm_release.argocd`**: the `argo-cd` chart, version pinned in
+1. **`kubectl_manifest.argocd_priorityclass`**: a bootstrap copy of the
+   `platform-system-critical` PriorityClass that ArgoCD's own pods
+   reference. The GitOps addon that owns the class steady-state only syncs
+   after ArgoCD runs, so on an empty cluster nothing else would create it
+   and no ArgoCD pod could schedule. Server-side apply lets Terraform and
+   the addon co-own the object; `just bootstrap-priorityclass-check` fails
+   CI if the two definitions ever diverge.
+2. **`helm_release.argocd`**: the `argo-cd` chart, version pinned in
    `terraform/versions.tf`. It depends on the coredns, kube-proxy, and
    pod-identity-agent EKS addons, so DNS, Service routing, and the
    credential agent exist before ArgoCD schedules.
-2. **The cluster Secret**: carries the Terraform-to-GitOps contract (next
+3. **The cluster Secret**: carries the Terraform-to-GitOps contract (next
    section). Depends on the release.
-3. **`kubectl_manifest.argocd_root_app`**: applies
+4. **`kubectl_manifest.argocd_root_app`**: applies
    `argocd-bootstrap/root-app.yaml` verbatim. Depends on the Secret.
+5. **`kubectl_manifest.argocd_oidc_external_secret`**: the ExternalSecret
+   that materializes ArgoCD's OIDC client secret from AWS Secrets Manager
+   (see SSO under Install shape). Terraform-owned so the Secret exists
+   before helm rolls server pods on later applies. Depends on the root
+   app: on a fresh cluster the root app must land first so GitOps installs
+   ESO at all before this resource needs its CRD.
 
 The chain, and the ownership boundary it creates:
 
 ```mermaid
 flowchart TB
     subgraph tf["Terraform owns (runs at apply time)"]
-        helm["1: helm_release argocd<br/>chart pinned in versions.tf"]
-        secret["2: cluster Secret<br/>29 annotations carry the AWS facts"]
-        root["3: root Application<br/>argocd-bootstrap/root-app.yaml"]
-        helm --> secret --> root
+        pc["1: PriorityClass<br/>bootstrap copy, CI-gated identical"]
+        helm["2: helm_release argocd<br/>chart pinned in versions.tf"]
+        secret["3: cluster Secret<br/>annotations carry the AWS facts"]
+        root["4: root Application<br/>argocd-bootstrap/root-app.yaml"]
+        es["5: ExternalSecret argocd-oidc<br/>OIDC client secret via ESO"]
+        pc --> helm --> secret --> root --> es
     end
 
     subgraph gitops["ArgoCD owns (continuous reconcile from git)"]
         proj["AppProject platform<br/>+ deny sync window"]
         as1["ApplicationSet addons"]
         as2["ApplicationSet jenkins-masters"]
-        apps1["22 addon apps<br/>auto-sync, prune, selfHeal"]
+        apps1["one app per resources/addons/ dir<br/>auto-sync, prune, selfHeal"]
         apps2["1 in-cluster master app<br/>manual sync only"]
         as1 --> apps1
         as2 --> apps2
@@ -60,13 +75,25 @@ flowchart TB
     secret -. "annotations become Helm values" .-> as2
 ```
 
-The diagram shows ownership, not network paths. After step 3, Terraform
+The diagram shows ownership, not network paths. After step 5, Terraform
 stops touching the cluster. ArgoCD is
 Terraform-installed rather than self-managed because of the bring-up
 chicken-and-egg: its OIDC config and Ingress live in chart values that must
 exist before any addon can sync. Self-managing ArgoCD later is a known
 pattern with known caveats
 ([declarative setup](https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/)).
+
+### Fresh-cluster (DR) bootstrap is two-phase
+
+Step 5 has a dependency Terraform cannot order: the ExternalSecret CRD is
+itself GitOps-installed (`resources/addons/external-secrets/`), minutes
+after ArgoCD first syncs. On an empty cluster the first apply therefore
+fails on exactly that resource, by design. `just bootstrap-dr` encodes the
+full sequence: apply (aborting unless the failure is exactly the
+ExternalSecret), wait for the CRD to exist and become Established, re-plan
+and re-apply (fail-closed), wait for ESO to materialize the OIDC secret,
+then restart argocd-server so it picks the secret up. On a non-empty
+cluster the recipe exits after a clean single apply.
 
 ## Install shape
 

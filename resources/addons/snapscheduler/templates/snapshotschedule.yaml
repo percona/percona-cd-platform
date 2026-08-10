@@ -5,8 +5,10 @@
 # platform AppProject allows namespace '*', so this addon Application manages it
 # cross-namespace. sync-wave 1 so the operator + CRD (wave 0) land first.
 # snapshotClassName ebs-csi-retain keeps the underlying EBS snapshot on a
-# GitOps prune. Daily at 02:00 UTC (one hour before the AWS Backup window),
-# 14 retained = matches the rest of the fleet's RPO.
+# GitOps prune. The retention below prunes only the VolumeSnapshot objects.
+# The snapshot-cleanup reaper (terraform/snapshot-cleanup.tf) ages the physical
+# snapshots out on the same 14-day floor. Daily at 02:00 UTC (one hour before
+# the AWS Backup window), 14 retained = matches the rest of the fleet's RPO.
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:

@@ -125,6 +125,8 @@ jobs:
             argocd-bootstrap/ resources/
       - name: arch pins (no non-arm64 kubernetes.io/arch in committed manifests)
         run: python3 scripts/check_arch_pins.py
+      - name: bootstrap PriorityClass equality (terraform copy == addon copy)
+        run: python3 scripts/check_bootstrap_priorityclass.py
 
   clouds-catalog-drift:
     name: clouds catalog drift (ADR 0029)

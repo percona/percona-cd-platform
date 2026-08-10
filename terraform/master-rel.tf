@@ -25,6 +25,7 @@ module "rel" {
   vpc_cidr                = "10.199.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   jenkins_package_version = "2.541.3"
   # rel workers have no S3 build cache: the CFN-era default named a
   # rel-build-cache bucket that was never created. null drops the dead

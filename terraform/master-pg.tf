@@ -18,6 +18,7 @@ module "pg" {
   team                    = "postgresql"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euc1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   jenkins_package_version = "2.541.3" # closes CVE-2026-27100 (pg is on 2.528.3)
 
   # Live network shape. B/C are the module's own cidrsubnet() math; B2/C2

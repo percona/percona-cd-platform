@@ -763,7 +763,7 @@ labelMap['min-bookworm-x64']  = 'min-bookworm-x64'
 labelMap['min-trixie-x64']    = 'min-trixie-x64'
 labelMap['min-rhel-10-x64']   = 'min-rhel-10-x64'
 labelMap['min-al2023-x64']    = 'min-al2023-x64'
-labelMap['min-al2023-aarch64'] = 'min-al2023-aarch64 docker-32gb-aarch64'
+labelMap['min-al2023-aarch64'] = 'min-al2023-aarch64'
 labelMap['metal-x64']     = 'metal-x64 native-kvm-x64'
 labelMap['metal-aarch64'] = 'metal-aarch64 native-kvm-aarch64'
 
@@ -970,10 +970,10 @@ String region = 'us-west-1'
             getTemplate('min-noble-x64',    "${region}${it}"),
             getTemplate('min-resolute-x64',    "${region}${it}"),
             getTemplate('min-al2023-x64',       "${region}${it}"),
-            // docker-32gb-aarch64 stays on the classic min-al2023-aarch64 template
-            // THROUGH cutover so the label is never orphaned. It is retired to the
-            // Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton) only after
-            // the Fleet is staged + a smoke build passes post-cutover. PS-11228.
+            // min-al2023-aarch64 must NOT carry docker-32gb-aarch64: that label is
+            // served solely by the Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton).
+            // Co-serving routes the label to no cloud and starves fleet provisioning,
+            // so jobs hang on "all nodes of label docker-32gb-aarch64 are offline".
             getTemplate('min-al2023-aarch64',   "${region}${it}"),
             getTemplate('metal-x64',            "${region}${it}"),
             getTemplate('metal-aarch64',        "${region}${it}"),
