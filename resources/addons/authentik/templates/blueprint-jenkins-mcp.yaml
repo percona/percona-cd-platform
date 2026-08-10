@@ -48,6 +48,10 @@ data:
           # Loopback regex covers Claude Code's ephemeral callback port (RFC 8252).
           # The two strict cursor entries cover the Cursor MCP OAuth callback (web
           # and the desktop deep link); Cursor pre-registers this same client_id.
+          # The claude.ai entry covers the hosted Claude surfaces (web, Desktop,
+          # mobile): the connector is added with this client_id supplied manually
+          # and a blank client secret (public client, PKCE S256), which avoids
+          # dynamic client registration entirely.
           redirect_uris:
             - matching_mode: regex
               url: ^http://(127\.0\.0\.1|localhost):[0-9]+/callback$
@@ -55,6 +59,8 @@ data:
               url: https://www.cursor.com/agents/mcp/oauth/callback
             - matching_mode: strict
               url: cursor://anysphere.cursor-mcp/oauth/callback
+            - matching_mode: strict
+              url: https://claude.ai/api/mcp/auth_callback
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
           # openid + profile match the working grafana/argocd providers (profile
           # carries `groups`); offline_access is bound so a refresh_token is
