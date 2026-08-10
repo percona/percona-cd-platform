@@ -110,6 +110,7 @@ module "psmdb" {
     for f in fileset("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 
