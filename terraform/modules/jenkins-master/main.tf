@@ -22,7 +22,7 @@ locals {
   worker_logical = var.worker_role_legacy_naming ? "slave" : "worker"
   worker_name    = "${var.short_name}-${local.worker_logical}"
 
-  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb.
+  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb and pg.
   subnet_indices = merge(
     { "b" = 1, "c" = 2 },
     var.extra_subnet_a ? { "a" = 0 } : {},
