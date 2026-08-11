@@ -845,12 +845,16 @@ resource "aws_launch_template" "master" {
   }
   tag_specifications {
     resource_type = "volume"
+    # No snapshot-policy here: the DLM policy covers DATA volumes only
+    # (docs/adr/0037-master-ebs-snapshot-rpo.md), and launch-created volumes
+    # are the root device. Stamping it at launch put root volumes into the
+    # snapshot policy and drifted against root_block_device tags on every
+    # rehydration.
     tags = {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
       "PerconaKeep"     = "True"
       team              = var.team
-      "snapshot-policy" = "jenkins-master"
     }
   }
 
