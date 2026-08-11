@@ -140,6 +140,7 @@ priceMap['c5.xlarge'] = '0.15'   // type=c5.xlarge, vCPU=4, memory=8GiB, saving=
 priceMap['g4ad.4xlarge'] = '0.53' // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.0.46910
 priceMap['r6a.4xlarge'] = '0.42' // type=r6a.4xlarge, vCPU=16, memory=128GiB, saving=66%, interruption='<5%', price=0.361600
 priceMap['i4i.2xlarge'] = '0.32' // type=i4i.2xlarge, vCPU=8, memory=64GiB, saving=68%, interruption='<5%', price=0.248900
+priceMap['i3en.2xlarge'] = '0.40' // type=i3en.2xlarge, vCPU=8, memory=64GiB, no GPU, boots the rel OL9 AMI (g4ad kernel-panics it)
 
 priceMap['m6g.2xlarge'] = '0.24' // aarch64 type=m6g.2xlarge, vCPU=8, memory=32GiB, saving=60%, interruption='<5%', price=0.161800
 priceMap['m7g.4xlarge'] = '0.39' // aarch64 type=m7g.4xlarge, vCPU=16, memory=64GiB, saving=58%, interruption='<5%', price=0.348600
@@ -432,6 +433,7 @@ capMap['c5.xlarge']    = '60'
 capMap['g4ad.4xlarge'] = '40'
 capMap['r6a.4xlarge']   = '40'
 capMap['i4i.2xlarge']  = '40'
+capMap['i3en.2xlarge'] = '40'
 
 capMap['m6g.2xlarge'] = '20'
 capMap['m7g.4xlarge'] = '20'
@@ -445,7 +447,7 @@ typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
 typeMap['min-centos-8-x64']  = typeMap['min-centos-7-x64']
 typeMap['min-ol-8-x64']      = typeMap['min-centos-7-x64']
-typeMap['min-ol-9-x64']      = typeMap['docker-32gb']
+typeMap['min-ol-9-x64']      = 'i3en.2xlarge'
 typeMap['min-rhel-10-x64']   = typeMap['docker']
 typeMap['min-al2023-x64']    = typeMap['docker']
 typeMap['min-amazon-2-x64']  = typeMap['docker']
