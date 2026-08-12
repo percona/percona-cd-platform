@@ -1023,7 +1023,9 @@ String region = 'us-west-2'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('docker',               "${region}${it}"),
+            // docker is served by the x86-docker-fleet EC2FleetCloud
+            // (ec2FleetCloud.groovy), not a classic template: two clouds
+            // serving one label starve provisioning.
             getTemplate('docker-32gb',          "${region}${it}"),
             getTemplate('docker-32gb-hirsute',  "${region}${it}"),
             getTemplate('docker-32gb-jammy',    "${region}${it}"),
@@ -1049,7 +1051,9 @@ String region = 'us-west-2'
             getTemplate('min-stretch-x64',      "${region}${it}"),
             getTemplate('min-xenial-x64',       "${region}${it}"),
             getTemplate('min-bullseye-x64',     "${region}${it}"),
-            getTemplate('min-bookworm-x64',     "${region}${it}"),
+            // min-bookworm-x64 is served by the x86-bookworm-fleet EC2FleetCloud
+            // (ec2FleetCloud.groovy), not a classic template: two clouds serving
+            // one label starve provisioning.
             getTemplate('min-trixie-x64',       "${region}${it}"),
             getTemplate('min-rhel-10-x64',      "${region}${it}"),
             getTemplate('docker-64gb-aarch64',  "${region}${it}"),

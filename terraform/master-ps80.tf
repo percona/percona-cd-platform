@@ -117,6 +117,60 @@ module "ps80_arm_fleet" {
   tickets                      = "PS-11179"
 }
 
+# x86_64 spot fleet for the ec2-fleet plugin -- serves the min-bookworm-x64
+# label (molecule package-test drivers). Replaces the classic single-pool
+# m6a.2xlarge spot template: a us-west-2b m6a reclaim wave (2026-08-12) took
+# out a full 22-branch innodb-cluster QA fan-out at once. Eight m-family
+# 8-vCPU/32-GiB types x two AZs, price-capacity-optimized (Spot Placement
+# Score 9 vs 1 for the single pool at the same 22-unit target).
+# ec2FleetCloud.groovy points ps80's second EC2FleetCloud at this ASG
+# (jenkins-ps80-x86-bookworm). $0 idle (min_size/desired 0); the ec2-fleet
+# plugin drives DesiredCapacity. The AMI pins the same Debian 12 image as the
+# classic template it replaces (imageMap us-west-2*.min-bookworm-x64).
+module "ps80_x86_fleet" {
+  source    = "./modules/jenkins-x86-fleet"
+  providers = { aws = aws.us-west-2 }
+
+  short_name                   = "jenkins-ps80"
+  pool_name                    = "x86-bookworm"
+  team                         = "mysql"
+  vpc_id                       = module.ps80.vpc_id
+  subnet_ids                   = module.ps80.subnet_ids
+  worker_instance_profile_name = module.ps80.worker_instance_profile_name
+  master_role_name             = module.ps80.master_iam_role_name
+  key_name                     = "percona-jenkins"
+  ami_id                       = "ami-07b2d881c67e4c30e"
+  user_data_file               = "${path.module}/modules/jenkins-x86-fleet/bookworm-worker-user-data.sh"
+  instance_types               = ["m6a.2xlarge", "m6i.2xlarge", "m7i.2xlarge", "m5a.2xlarge", "m5.2xlarge", "m6id.2xlarge", "m5d.2xlarge", "m5ad.2xlarge"]
+  max_size                     = 24
+  root_volume_gb               = 30
+  data_volume_gb               = 120
+}
+
+# Sibling x86_64 fleet for the `docker` label (general ps80 CI workers, the
+# busiest label on the master). Same diversification rationale and the same
+# reclaim wave; the AMI pins the classic docker template's image and the
+# AL2023-style user_data ports its initScript (docker on /mnt/docker,
+# awscli v2, cronie).
+module "ps80_docker_fleet" {
+  source    = "./modules/jenkins-x86-fleet"
+  providers = { aws = aws.us-west-2 }
+
+  short_name                   = "jenkins-ps80"
+  pool_name                    = "x86-docker"
+  team                         = "mysql"
+  vpc_id                       = module.ps80.vpc_id
+  subnet_ids                   = module.ps80.subnet_ids
+  worker_instance_profile_name = module.ps80.worker_instance_profile_name
+  master_role_name             = module.ps80.master_iam_role_name
+  key_name                     = "percona-jenkins"
+  ami_id                       = "ami-06a974f9b8a97ecf2"
+  user_data_file               = "${path.module}/modules/jenkins-x86-fleet/al2023-worker-user-data.sh"
+  instance_types               = ["m6a.2xlarge", "m6i.2xlarge", "m7i.2xlarge", "m5a.2xlarge", "m5.2xlarge", "m6id.2xlarge", "m5d.2xlarge", "m5ad.2xlarge"]
+  max_size                     = 32
+  data_volume_gb               = 120
+}
+
 # Rendered in the root so the ARN uses this account's caller-identity, not
 # the us-west-2 alias's. Secret lives in us-east-1 with the rest of
 # alloy-gateway.
