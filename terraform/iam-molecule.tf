@@ -1,29 +1,24 @@
 # Owner: platform
-# EC2 read-only grant for the molecule package-testing CI users, the long-lived
-# IAM users whose access keys the QA package-testing pipelines use to create
-# their EC2 test VMs (see molecule-tests.tf for the VPC substrate). The
-# pipelines do not share one credential: jobs split across jenkins-s3-do and
-# jenkins-spawn-user, so both need the same read surface. Both users predate
-# this repo and stay unmanaged, as do their other hand-made policies. This file
-# owns only the additional grant.
+# EC2 read-only grant for the two molecule package-testing CI users. Their
+# access keys let the QA pipelines create EC2 test VMs (molecule-tests.tf holds
+# the VPC substrate). Jobs split across jenkins-s3-do and jenkins-spawn-user, so
+# both need the same reads. The spawn user's other bindings are declared in
+# iam-jenkins-spawn-user.tf; jenkins-s3-do and the hand-made policies both users
+# carry stay unmanaged.
 #
-# The pipelines' pinned ansible 13 bundles amazon.aws 10.x, whose ec2_instance
-# module reconciles instance tags through DescribeTags after launch; the
-# previous collection generation read tags off DescribeInstances only, so
-# neither user ever needed the action before. DescribeTags is the one genuinely
-# new grant for both. The other six restate reads their hand-made policies
-# already hold, so this policy self-documents the full read surface the
-# playbooks use and survives any future pruning of those unmanaged policies.
-# Six of the seven reads do not support resource-level scoping at all, and the
-# one that does (DescribeInstanceAttribute) targets short-lived test VMs whose
-# ARNs cannot be known ahead of time, so resources = ["*"].
+# The pinned ansible 13 bundles amazon.aws 10.x, whose ec2_instance reconciles
+# tags through DescribeTags after launch. Earlier collections read tags off
+# DescribeInstances only, so neither user needed the action before. DescribeTags
+# is the one new grant. The other six restate reads the hand-made policies
+# already hold, so this policy survives any future pruning of those.
 #
-# The attachments reference the users by plain name on purpose: a data-source
-# lookup would fail every plan of this state at refresh time if an unmanaged
-# user were ever deleted out of band, while the plain reference confines that
-# failure to the one affected attachment at apply time. Each user gets its own
-# attachment resource rather than one for_each block, so adding the second
-# grant does not move the first one's state address.
+# Six of the seven reads cannot be resource-scoped, and DescribeInstanceAttribute
+# targets short-lived VMs whose ARNs are unknown ahead of time, so resources is
+# ["*"].
+#
+# Attachments name the users as plain strings, so a user deleted out of band
+# fails one attachment at apply time rather than every plan at refresh time.
+# Separate resources rather than one for_each keep each state address stable.
 
 data "aws_iam_policy_document" "molecule_ec2_read" {
   statement {
