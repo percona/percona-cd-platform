@@ -15,6 +15,9 @@ set -o xtrace
 # covers late volume attachment; the assert fails the boot if it never shows.
 if ! mountpoint -q /mnt; then
   device=""
+  # The whole disk backing the root filesystem, e.g. nvme0n1. Positively
+  # excluded from the pick so no naming convention can ever make it win.
+  root_disk="$(lsblk -no PKNAME "$(findmnt -n -o SOURCE /)")"
 
   for _ in $(seq 1 30); do
     for candidate in /dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_*; do
@@ -22,7 +25,19 @@ if ! mountpoint -q /mnt; then
         continue
       fi
 
+      # Whole-disk links only: the root volume's partition links resolve to
+      # unmounted slices (the 3 MB BIOS-boot partition) and must never win
+      # the pick. Namespace-qualified aliases resolve to whole disks; they
+      # are skipped as duplicates of the base link.
+      if [[ "${candidate}" == *-part* || "${candidate}" == *-ns-* ]]; then
+        continue
+      fi
+
       resolved="$(readlink -f "${candidate}")"
+
+      if [[ "$(basename "${resolved}")" == "${root_disk}" ]]; then
+        continue
+      fi
 
       if ! grep -qs "${resolved}" /proc/mounts; then
         device="${resolved}"
@@ -44,6 +59,12 @@ if ! mountpoint -q /mnt; then
   mkfs.ext4 "${device}"
   mount -o noatime "${device}" /mnt
 fi
+
+# The data volume is never smaller than 20 GiB; a tiny /mnt means the device
+# pick grabbed the wrong block device. Asserted before the SSH login user
+# exists, so a wrong pick can never yield a connectable agent.
+mnt_size_gb="$(df -BG --output=size /mnt | tail -1 | tr -d ' G')"
+[[ "${mnt_size_gb}" -ge 20 ]]
 
 # SSH login shim (ec2-user) FIRST, before any package work, so the instance
 # is reachable as the plugin's login user even while later steps retry.
