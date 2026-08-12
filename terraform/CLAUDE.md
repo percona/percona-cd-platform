@@ -11,8 +11,8 @@ the CI `tofu` job); the repo-root `CLAUDE.md` carries the platform-wide rules.
    type (`s3-lgtm.tf`), not the provider (`aws-vpc.tf`).
 2. **Repeated concerns form a prefix family**: `eks-*` (cluster lifecycle),
    `iam-*` (standalone IAM), `master-*` (one per Jenkins instance). Within
-   `iam-*`: `iam-jenkins-<role>.tf` for Jenkins pod/role policies,
-   `iam-gha-<product>-<purpose>.tf` for GitHub-OIDC roles.
+   `iam-*`: `iam-jenkins-<name>.tf` for a Jenkins pod role, worker role, or
+   long-lived CI user, `iam-gha-<product>-<purpose>.tf` for GitHub-OIDC roles.
 3. **Wiring files keep conventional Terraform names** (`backend.tf`,
    `providers.tf`, `versions.tf`, `variables.tf`, `locals.tf`, `data.tf`,
    `outputs.tf`). Every `variable` block lives in `variables.tf`, never in a
