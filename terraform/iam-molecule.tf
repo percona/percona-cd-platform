@@ -2,9 +2,10 @@
 # EC2 read-only grant for the two molecule package-testing CI users. Their
 # access keys let the QA pipelines create EC2 test VMs (molecule-tests.tf holds
 # the VPC substrate). Jobs split across jenkins-s3-do and jenkins-spawn-user, so
-# both need the same reads. The spawn user's other bindings are declared in
-# iam-jenkins-spawn-user.tf; jenkins-s3-do and the hand-made policies both users
-# carry stay unmanaged.
+# both need the same reads. Each user's other bindings are declared in
+# iam-jenkins-spawn-user.tf and iam-jenkins-s3-do.tf. The hand-made policies
+# both users carry stay unmanaged. This file owns both attachments of this
+# grant, so neither of those files repeats them.
 #
 # The pinned ansible 13 bundles amazon.aws 10.x, whose ec2_instance reconciles
 # tags through DescribeTags after launch. Earlier collections read tags off
