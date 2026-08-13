@@ -52,8 +52,8 @@ class AuthMiddleware:
         master_bytes = headers.get(b'x-jenkins-master')
         scope_copy['state']['jenkins_master'] = master_bytes.decode('latin-1') if master_bytes else None
 
-        # Wrap send to capture the response status. This is the outermost middleware, so it sees the
-        # final status including auth challenges (401/403) raised by the inner FastMCP auth layer.
+        # Wrap send to capture the final response status, including auth challenges (401/403)
+        # raised deeper in the stack by the FastMCP auth layer.
         status_code = 0
 
         async def send_wrapper(message: Message) -> None:
