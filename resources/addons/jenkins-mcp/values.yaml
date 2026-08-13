@@ -45,10 +45,10 @@ externalSecret:
 
 resources:
   requests:
-    cpu: 50m
+    cpu: 500m
     memory: 64Mi
   limits:
-    cpu: 500m
+    cpu: "2"
     memory: 256Mi
 
 # Prometheus scrape of /metrics. The cluster Alloy DaemonSet discovers every ServiceMonitor
