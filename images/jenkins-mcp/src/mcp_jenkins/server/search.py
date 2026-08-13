@@ -16,8 +16,9 @@ responsive. Do not add `async` back without moving the blocking work off the loo
 
 import re
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, TypeVar
 
 from fastmcp import Context
 from requests.exceptions import RequestException
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from mcp_jenkins.jenkins.model.build import Build
     from mcp_jenkins.jenkins.model.item import ItemType
     from mcp_jenkins.jenkins.rest_client import Jenkins
+
+_T = TypeVar('_T')
 
 _MAX_JOBS_LIMIT = 200
 _BUILDS_PER_JOB_LIMIT = 5
@@ -59,6 +62,24 @@ def _fetch_lines(client: 'Jenkins', fullname: str, number: int, pattern: str, li
     """Return one build's matching console lines. Runs in the fetch pool."""
     output = client.get_build_console_output(fullname=fullname, number=number, pattern=pattern, limit=limit)
     return [line for line in output.split('\n') if line] if output else []
+
+
+def _bounded(fn: Callable[..., _T], *args: object, deadline: float) -> _T:
+    """Run a blocking client call in the fetch pool, waiting only until the deadline.
+
+    Every Jenkins call in a scan goes through here, not just the console read: a build-history
+    request blocks too, and a scan whose budget expired inside one would otherwise return late
+    while reporting that it finished in time.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError
+    future = _fetch_pool.submit(fn, *args)
+    try:
+        return future.result(timeout=remaining)
+    except TimeoutError:
+        future.cancel()  # it keeps draining in the pool; nothing waits on it
+        raise
 
 
 def _completed_builds(client: 'Jenkins', fullname: str, count: int) -> tuple[list['Build'], int]:
@@ -96,6 +117,7 @@ def _scan(
     total_matches = 0
     builds_scanned = 0
     builds_skipped_running = 0
+    console_attempts = 0
     fetch_errors = 0
     truncated_matches = False
     timed_out = False
@@ -109,7 +131,12 @@ def _scan(
             break
 
         try:
-            builds, skipped_running = _completed_builds(client, job.fullname, builds_per_job)
+            builds, skipped_running = _bounded(
+                _completed_builds, client, job.fullname, builds_per_job, deadline=deadline
+            )
+        except TimeoutError:
+            timed_out = True
+            break
         except RequestException:
             fetch_errors += 1
             continue
@@ -119,22 +146,23 @@ def _scan(
             if total_matches >= max_total_matches:
                 truncated_matches = True
                 break
-            remaining_budget = deadline - time.monotonic()
-            if remaining_budget <= 0:
-                timed_out = True
-                break
 
             attempted_jobs.add(job.fullname)
+            console_attempts += 1
             remaining_matches = min(matches_per_build, max_total_matches - total_matches)
-            future: Future[list[str]] = _fetch_pool.submit(
-                _fetch_lines, client, job.fullname, build.number, pattern, remaining_matches
-            )
             try:
-                lines = future.result(timeout=remaining_budget)
+                lines = _bounded(
+                    _fetch_lines,
+                    client,
+                    job.fullname,
+                    build.number,
+                    pattern,
+                    remaining_matches,
+                    deadline=deadline,
+                )
             except TimeoutError:
-                # The read outlived the budget. Abandon it to drain in the pool and stop the scan:
-                # a master this slow will not serve the remaining builds any faster.
-                future.cancel()
+                # The read outlived the budget. It drains in the pool while the scan returns: a
+                # master this slow will not serve the remaining builds any faster.
                 timed_out = True
                 break
             except RequestException:
@@ -158,7 +186,9 @@ def _scan(
         'builds_skipped_running': builds_skipped_running,
         'total_matches': total_matches,
         'fetch_errors': fetch_errors,
-        'all_fetches_failed': bool(fetch_errors) and builds_scanned == 0,
+        # Only console reads count: a job skipped for having nothing finished to scan, or a job
+        # whose history request failed, is not the same as every log read failing.
+        'all_fetches_failed': console_attempts > 0 and builds_scanned == 0,
         'truncated_matches': truncated_matches,
         'timed_out': timed_out,
     }
@@ -260,7 +290,8 @@ def search_build_logs(
             'all_fetches_failed': scan['all_fetches_failed'],
             'truncated_jobs': truncated_jobs,
             'truncated_matches': scan['truncated_matches'],
-            'timed_out': scan['timed_out'],
+            # Overrunning the budget anywhere counts, including in job discovery before the scan.
+            'timed_out': scan['timed_out'] or time.monotonic() >= deadline,
             'elapsed_seconds': round(time.monotonic() - started, 1),
             'time_budget_seconds': time_budget_seconds,
             'notes': notes,

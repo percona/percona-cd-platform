@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import threading
 import time
 
 import pytest
@@ -222,15 +223,54 @@ def test_search_abandons_a_wedged_console_read(mock_jenkins, mocker):
     read inactivity, so without a bounded wait one slow log blocks the whole call indefinitely.
     """
     mock_jenkins.query_items.return_value = [_job('wedged')]
-    mock_jenkins.get_build_console_output.side_effect = lambda **kw: time.sleep(30) or 'HIT'
+    release = threading.Event()
+    mock_jenkins.get_build_console_output.side_effect = lambda **kw: release.wait(30) or 'HIT'
 
     started = time.monotonic()
-    out = search.search_build_logs(mocker.Mock(), pattern='HIT', job_pattern='wedged.*', time_budget_seconds=1)
-    elapsed = time.monotonic() - started
+    try:
+        out = search.search_build_logs(mocker.Mock(), pattern='HIT', job_pattern='wedged.*', time_budget_seconds=1)
+        elapsed = time.monotonic() - started
+    finally:
+        release.set()  # let the abandoned fetch finish instead of lingering in the pool
 
     assert out['summary']['timed_out'] is True
     assert out['summary']['builds_scanned'] == 0
-    assert elapsed < 5  # returned on budget instead of waiting out the 30s read
+    assert elapsed < 5  # returned on budget instead of waiting out the read
+
+
+def test_search_time_budget_covers_build_history(mock_jenkins, mocker):
+    """The budget must bound every blocking phase, not only the console read."""
+    mock_jenkins.query_items.return_value = [_job('slow')]
+
+    def slow_history(*, fullname, count):
+        time.sleep(1.2)
+        return [Build(number=10, url='u', building=True)]  # nothing to scan, so only history ran
+
+    mock_jenkins.get_build_history.side_effect = slow_history
+    mock_jenkins.get_build_console_output.return_value = ''
+
+    out = search.search_build_logs(mocker.Mock(), pattern='x', job_pattern='slow.*', time_budget_seconds=1)
+
+    assert out['summary']['timed_out'] is True
+
+
+def test_search_does_not_flag_an_outage_when_nothing_was_fetched(mock_jenkins, mocker):
+    """A job with only a running build plus one failed history read is not a total outage."""
+    mock_jenkins.query_items.return_value = [_job('running'), _job('broken')]
+
+    def history(*, fullname, count):
+        if fullname == 'broken':
+            msg = 'history unavailable'
+            raise RequestsConnectionError(msg)
+        return [Build(number=10, url='u', building=True)]
+
+    mock_jenkins.get_build_history.side_effect = history
+
+    out = search.search_build_logs(mocker.Mock(), pattern='x', job_pattern='r.*')
+
+    assert out['summary']['builds_scanned'] == 0
+    assert out['summary']['all_fetches_failed'] is False  # no console read was ever attempted
+    mock_jenkins.get_build_console_output.assert_not_called()
 
 
 def test_search_survives_transient_fetch_errors(mock_jenkins, mocker):
