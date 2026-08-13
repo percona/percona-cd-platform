@@ -1,6 +1,9 @@
 {{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
 {{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. The server itself fails closed to read-only without a mode flag, but the deployment must still declare its access mode explicitly." }}
 {{- end }}
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.statelessHttp) }}
+{{- fail "jenkins-mcp: replicaCount above 1 requires statelessHttp=true. A stateful transport keeps each client's session in one pod's memory and the ALB has no stickiness, so extra replicas reject session-bound requests." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -55,6 +58,10 @@ spec:
           env:
             - name: HOME
               value: /home/app
+            {{- if .Values.statelessHttp }}
+            - name: FASTMCP_STATELESS_HTTP
+              value: "true"
+            {{- end }}
             - name: MCP_JENKINS_FLEET_FILE
               value: /etc/jenkins-mcp/fleet.json
             - name: MCP_OIDC_ISSUER
