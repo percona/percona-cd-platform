@@ -15,7 +15,13 @@ image:
   tag: "0.9.1-82fbaa1f48f5"
   pullPolicy: IfNotPresent
 
-replicaCount: 1
+replicaCount: 2
+
+# Stateless streamable-http: FastMCP builds a fresh transport per request, so no replica holds a
+# client's session and the ALB needs no stickiness. Required for replicaCount above 1. In this mode
+# GET /mcp returns 405, which the MCP spec allows for a server that offers no SSE stream, and no
+# tool here pushes server-initiated messages. Read by FastMCP from the env, not from a CLI flag.
+statelessHttp: true
 # Operate mode: serve the build-lifecycle tools (build/replay/stop/cancel) after the fail-closed
 # permission preflight, gated per-call to the jenkins-mcp-writers group. Reads stay open to any
 # authenticated user, except get_item_config (config.xml) which is writers-gated; node-config and
