@@ -119,6 +119,7 @@ def _scan(
     builds_skipped_running = 0
     console_attempts = 0
     fetch_errors = 0
+    completed_jobs = 0
     truncated_matches = False
     timed_out = False
 
@@ -138,13 +139,18 @@ def _scan(
             timed_out = True
             break
         except RequestException:
+            # A dead history request would likely fail again next slice, so the job counts as
+            # processed for the resume cursor; fetch_errors carries the honesty.
             fetch_errors += 1
+            completed_jobs += 1
             continue
         builds_skipped_running += skipped_running
 
+        interrupted = False
         for build in builds:
             if total_matches >= max_total_matches:
                 truncated_matches = True
+                interrupted = True
                 break
 
             attempted_jobs.add(job.fullname)
@@ -164,6 +170,7 @@ def _scan(
                 # The read outlived the budget. It drains in the pool while the scan returns: a
                 # master this slow will not serve the remaining builds any faster.
                 timed_out = True
+                interrupted = True
                 break
             except RequestException:
                 # Build rotated away mid-scan, or a master blip on one log: skip it, never abort.
@@ -176,6 +183,10 @@ def _scan(
             results.append({'job_fullname': job.fullname, 'build_number': build.number, 'matching_lines': lines})
             total_matches += len(lines)
 
+        if not interrupted:
+            # Only a job whose builds were all covered advances the resume cursor. An interrupted
+            # job is re-scanned by the next slice, so pagination never silently skips its builds.
+            completed_jobs += 1
         if timed_out:
             break
 
@@ -189,6 +200,7 @@ def _scan(
         # Only console reads count: a job skipped for having nothing finished to scan, or a job
         # whose history request failed, is not the same as every log read failing.
         'all_fetches_failed': console_attempts > 0 and builds_scanned == 0,
+        'completed_jobs': completed_jobs,
         'truncated_matches': truncated_matches,
         'timed_out': timed_out,
     }
@@ -205,6 +217,7 @@ def search_build_logs(
     matches_per_build: int = 20,
     max_total_matches: int = 100,
     time_budget_seconds: int = 60,
+    start_after_job: str | None = None,
     folder_depth: int | None = None,
     master: MasterArg = None,
 ) -> dict:
@@ -216,17 +229,27 @@ def search_build_logs(
     jobs, builds-per-job, matches, and wall-clock time are capped. A scan that runs out of budget
     returns the matches it already has with summary.timed_out set. Any clipping is in the summary.
 
+    A clipped scan is resumable: when summary.has_more is true, call again with identical arguments
+    plus start_after_job=summary.next_start_after_job to continue in slices until has_more is false.
+    A job interrupted mid-scan is re-scanned by the next slice, so slices never skip builds. If
+    next_start_after_job comes back equal to the start_after_job just sent, the slice made no
+    progress (one job is slower than the whole budget): raise time_budget_seconds or lower
+    builds_per_job instead of retrying.
+
     Args:
         pattern: Regex matched against each console line (only matching lines are returned).
         job_pattern: Regex selecting jobs by fullname. Required; a catch-all (e.g. ".*") is rejected.
         ignore_case: Case-insensitive line matching (applied to pattern).
-        max_jobs: Max jobs to scan (capped at 200).
+        max_jobs: Max jobs to scan per call (capped at 200).
         builds_per_job: Recent finished builds to scan per job, newest first (capped at 5).
         matches_per_build: Max matching lines kept per build (capped at 100).
         max_total_matches: Global cap on matching lines across all jobs (capped at 500).
         time_budget_seconds: Wall-clock budget for job discovery plus the scan (capped at 300). On
             expiry the scan stops and returns partial results with summary.timed_out true. A slow
             discovery therefore leaves less budget for the scan, by design.
+        start_after_job: Resume cursor from a previous call's summary.next_start_after_job. Skips
+            matched jobs up to and including this fullname. An unknown value scans from the
+            beginning and says so in summary.notes.
         folder_depth: Folder recursion depth for job selection (None = all levels).
         master: Which configured master to target.
 
@@ -234,7 +257,7 @@ def search_build_logs(
         A dict with results (per job/build matching lines) and a summary including counts plus
         truncated_jobs / truncated_matches / timed_out flags, builds_skipped_running, fetch_errors,
         all_fetches_failed (every fetch failed, so an empty result is an outage rather than a clean
-        miss), and any clamp notes.
+        miss), has_more with next_start_after_job (the resume cursor), and any clamp notes.
     """
     if not job_pattern or job_pattern.strip() in _CATCH_ALL:
         msg = 'job_pattern is required and must not be a catch-all (e.g. ".*"); narrow it.'
@@ -260,8 +283,16 @@ def search_build_logs(
 
     matched = client.query_items(fullname_pattern=job_pattern, folder_depth=folder_depth)
     buildable = [job for job in matched if getattr(job, 'lastBuild', None) is not None]
-    truncated_jobs = len(buildable) > max_jobs
-    jobs = buildable[:max_jobs]
+
+    remaining = buildable
+    if start_after_job is not None:
+        cursor_index = next((i for i, job in enumerate(buildable) if job.fullname == start_after_job), None)
+        if cursor_index is None:
+            notes.append(f'start_after_job {start_after_job!r} not found; scanning from the beginning')
+        else:
+            remaining = buildable[cursor_index + 1 :]
+    truncated_jobs = len(remaining) > max_jobs
+    jobs = remaining[:max_jobs]
 
     scan = _scan(
         client=client,
@@ -272,6 +303,23 @@ def search_build_logs(
         max_total_matches=max_total_matches,
         deadline=deadline,
     )
+
+    # Anything past the fully-processed prefix (an interrupted job, unreached jobs in this slice,
+    # or the truncated tail beyond max_jobs) is still unscanned, so a follow-up slice has work. A
+    # cursor equal to the incoming one signals a stall rather than progress; the docstring tells
+    # the caller how to break it.
+    completed = scan['completed_jobs']
+    has_more = completed < len(remaining)
+    next_start_after_job = None
+    if has_more:
+        next_start_after_job = jobs[completed - 1].fullname if completed > 0 else start_after_job
+        if completed == 0 and scan['timed_out'] and jobs:
+            # Name the job so skipping it stays an explicit caller decision instead of a guess.
+            stalled = jobs[0].fullname
+            notes.append(
+                f'job {stalled!r} did not finish within the budget; '
+                f'pass start_after_job={stalled!r} to skip it, or lower builds_per_job'
+            )
 
     return {
         'pattern': pattern,
@@ -292,6 +340,8 @@ def search_build_logs(
             'truncated_matches': scan['truncated_matches'],
             # Overrunning the budget anywhere counts, including in job discovery before the scan.
             'timed_out': scan['timed_out'] or time.monotonic() >= deadline,
+            'has_more': has_more,
+            'next_start_after_job': next_start_after_job,
             'elapsed_seconds': round(time.monotonic() - started, 1),
             'time_budget_seconds': time_budget_seconds,
             'notes': notes,
