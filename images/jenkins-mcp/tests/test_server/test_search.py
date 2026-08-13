@@ -305,6 +305,114 @@ def test_search_flags_a_total_fetch_outage(mock_jenkins, mocker):
     assert out['summary']['jobs_scanned'] == 2  # attempted, so an outage is not reported as "scanned nothing"
 
 
+def test_search_cursor_skips_jobs_up_to_and_including(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [_job('a'), _job('b'), _job('c')]
+    mock_jenkins.get_build_console_output.return_value = 'HIT'
+
+    out = search.search_build_logs(mocker.Mock(), pattern='HIT', job_pattern='j.*', start_after_job='a')
+
+    scanned = {call.kwargs['fullname'] for call in mock_jenkins.get_build_console_output.call_args_list}
+    assert scanned == {'b', 'c'}
+    assert out['summary']['has_more'] is False
+    assert out['summary']['next_start_after_job'] is None
+
+
+def test_search_unknown_cursor_scans_from_start_with_note(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [_job('a'), _job('b')]
+    mock_jenkins.get_build_console_output.return_value = ''
+
+    out = search.search_build_logs(mocker.Mock(), pattern='x', job_pattern='j.*', start_after_job='gone')
+
+    scanned = {call.kwargs['fullname'] for call in mock_jenkins.get_build_console_output.call_args_list}
+    assert scanned == {'a', 'b'}
+    assert any("'gone' not found" in n for n in out['summary']['notes'])
+
+
+def test_search_emits_cursor_when_max_jobs_clips(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [_job(f'j{i}') for i in range(5)]
+    mock_jenkins.get_build_console_output.return_value = ''
+
+    out = search.search_build_logs(mocker.Mock(), pattern='x', job_pattern='j.*', max_jobs=2)
+
+    assert out['summary']['truncated_jobs'] is True
+    assert out['summary']['has_more'] is True
+    assert out['summary']['next_start_after_job'] == 'j1'  # last fully-scanned job of this slice
+
+
+def test_search_cursor_rescans_the_interrupted_job(mock_jenkins, mocker):
+    """A slice that dies mid-job must hand back a cursor BEFORE that job, so no build is skipped."""
+    mock_jenkins.query_items.return_value = [_job('fast'), _job('wedged'), _job('later')]
+    release = threading.Event()
+
+    def console(**kw: object) -> str:
+        if kw['fullname'] == 'wedged':
+            release.wait(30)
+        return ''
+
+    mock_jenkins.get_build_console_output.side_effect = console
+
+    try:
+        out = search.search_build_logs(
+            mocker.Mock(), pattern='x', job_pattern='j.*', builds_per_job=2, time_budget_seconds=1
+        )
+    finally:
+        release.set()
+
+    assert out['summary']['timed_out'] is True
+    assert out['summary']['has_more'] is True
+    # The cursor points at the last COMPLETED job, so the next slice starts at 'wedged' again.
+    assert out['summary']['next_start_after_job'] == 'fast'
+
+
+def test_search_stalled_slice_returns_the_incoming_cursor(mock_jenkins, mocker):
+    """Zero completed jobs in a slice: the cursor comes back unchanged so the caller can detect it."""
+    mock_jenkins.query_items.return_value = [_job('a'), _job('wedged'), _job('c')]
+    release = threading.Event()
+    mock_jenkins.get_build_console_output.side_effect = lambda **kw: release.wait(30) or ''
+
+    try:
+        out = search.search_build_logs(
+            mocker.Mock(), pattern='x', job_pattern='j.*', start_after_job='a', time_budget_seconds=1
+        )
+    finally:
+        release.set()
+
+    assert out['summary']['has_more'] is True
+    assert out['summary']['next_start_after_job'] == 'a'  # unchanged: no progress this slice
+    # The stalling job is named, so skipping it is an informed caller decision.
+    assert any("job 'wedged' did not finish" in n for n in out['summary']['notes'])
+
+
+def test_search_pagination_covers_every_build_across_slices(mock_jenkins, mocker):
+    """Follow has_more/next_start_after_job to exhaustion: the union covers every finished build."""
+    jobs = [_job(f'j{i}') for i in range(7)]
+    mock_jenkins.query_items.return_value = jobs
+    seen: list[tuple[str, int]] = []
+    mock_jenkins.get_build_console_output.side_effect = lambda **kw: (
+        seen.append((kw['fullname'], kw['number'])) or 'HIT'
+    )
+
+    cursor = None
+    slices = 0
+    while True:
+        out = search.search_build_logs(
+            mocker.Mock(),
+            pattern='HIT',
+            job_pattern='j.*',
+            builds_per_job=2,
+            max_jobs=3,
+            start_after_job=cursor,
+        )
+        slices += 1
+        if not out['summary']['has_more']:
+            break
+        cursor = out['summary']['next_start_after_job']
+        assert slices < 10, 'pagination failed to terminate'
+
+    assert slices == 3  # 7 jobs in windows of 3
+    assert set(seen) == {(f'j{i}', n) for i in range(7) for n in (10, 9)}
+
+
 def test_search_clamps_time_budget(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = []
 
