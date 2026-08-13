@@ -24,6 +24,18 @@ spec:
       priorityClassName: platform-default
       serviceAccountName: {{ .Release.Name }}
       automountServiceAccountToken: false
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: jenkins-mcp
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            - pod-template-hash
+      {{- end }}
       containers:
         - name: jenkins-mcp
           image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
