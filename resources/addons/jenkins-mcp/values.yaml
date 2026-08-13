@@ -49,7 +49,18 @@ resources:
     memory: 64Mi
   limits:
     cpu: "2"
-    memory: 256Mi
+    memory: 1Gi
+
+# One pod per node. matchLabelKeys scopes the constraint to the current ReplicaSet, so a
+# rolling update is not blocked by the outgoing revision still holding a node.
+topologySpread:
+  enabled: true
+
+# maxUnavailable (not minAvailable): at a single replica a minAvailable budget would block
+# every node drain, which is the PodEvictionFailure trap that stalls managed node group updates.
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
 
 # Prometheus scrape of /metrics. The cluster Alloy DaemonSet discovers every ServiceMonitor
 # cluster-wide and remote-writes to Mimir; no selector label is needed. Set enabled: false to stop.
