@@ -1730,7 +1730,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -1839,7 +1839,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -1958,11 +1958,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -2038,7 +2038,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -2154,11 +2154,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -2244,11 +2244,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -3046,7 +3046,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3160,7 +3160,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3274,7 +3274,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3388,7 +3388,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3610,7 +3610,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -4277,7 +4277,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -4390,7 +4390,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -4499,7 +4499,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -4618,11 +4618,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -4698,7 +4698,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -4814,11 +4814,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -4904,11 +4904,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -5706,7 +5706,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -5820,7 +5820,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -5934,7 +5934,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -6048,7 +6048,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -6270,7 +6270,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -6937,7 +6937,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
