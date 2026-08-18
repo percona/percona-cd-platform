@@ -453,11 +453,19 @@ initScripts:
 
         DEB_VER=$(lsb_release -sc)
 
-        if [[ ^${DEB_VER} == "trixie" ]]; then
-            JAVA_VER="openjdk-21-jre-headless"
-        else
-            JAVA_VER="openjdk-17-jre-headless"
-        fi
+        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+        # openjdk-21 in their own archives, so no third-party JDK repo is added
+        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+        # and xenial and stretch have no Java 21 build from any source.
+        case "^${DEB_VER}" in
+            trixie|jammy|noble|resolute)
+                JAVA_VER="openjdk-21-jre-headless"
+                ;;
+            *)
+                JAVA_VER="openjdk-17-jre-headless"
+                ;;
+        esac
 
         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
             sudo apt-get -y install ^${JAVA_VER} git
