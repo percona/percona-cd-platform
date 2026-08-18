@@ -110,6 +110,23 @@ jenkins:
       # silently blanking the OAuth secret and locking everyone out.
       - name: CASC_STRICT_SECRET_RESOLUTION
         value: "true"
+      # Let the baked plugin set actually reach this restored home. Of 257 plugins
+      # on disk only 50 carry a .version_from_image marker, and without this the
+      # entrypoint skips every unmarked one whatever its version, so a plugins.txt
+      # bump never lands. That is why versions pinned months ago left the live
+      # security warnings open.
+      #
+      # It cannot downgrade: jenkins-support skips when the image version is older,
+      # and once it upgrades or matches it writes a marker, after which the marker
+      # branch skips anything a human upgraded past the image. So this converges the
+      # home to the image once and then stays out of the way.
+      #
+      # Forcing these through .jpi.override instead would be wrong: override files
+      # are copied unconditionally with no version compare, which would downgrade
+      # the 32 plugins this home carries ahead of the image (git, okhttp-api,
+      # disk-usage among them).
+      - name: TRY_UPGRADE_IF_NO_MARKER
+        value: "true"
     JCasC:
       # Suppress the chart's default local-admin securityRealm + authorizationStrategy
       # (they default truthy and are NOT gated by defaultConfig); ps3-security owns both.
