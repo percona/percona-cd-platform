@@ -231,6 +231,13 @@ def main():
 
     if args.apply:
         assert moved, "nothing moved; refusing to rewrite the manifest"
+        # A blocked target means a requested fix is NOT in the written manifest.
+        # Writing anyway would look like the fix landed, so fail closed and make
+        # the caller decide (raise --core, or drop the target).
+        assert not blocked, (
+            f"refusing to apply with {len(blocked)} blocked plugin(s): "
+            + ", ".join(sorted(blocked))
+        )
         rewritten = []
         for line in lines:
             if line.startswith("#") or ":" not in line:
