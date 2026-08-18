@@ -112,12 +112,22 @@ We exploit those two behaviors deliberately:
   plugin as 0 bytes and it would fail to load (`ZipException: archive is not a
   ZIP archive`). Fork files are COPYed `--chown=jenkins:jenkins` so the seeder
   (which runs as the jenkins user) can read them.
-- **Community plugins stay SOFT.** They are left as plain `<id>.jpi`, so the
-  seeder version-compares and seeds only when the home lacks the plugin or has an
-  older build. A community plugin a human installed or upgraded via the Jenkins
-  UI on a live master is NOT clobbered on the next pod restart unless the image
-  pins a newer version. The image is the **floor** for community plugins, the
-  **source of truth** for the forks.
+- **Community plugins stay SOFT.** They are left as plain `<id>.jpi`, and what the
+  seeder does with one already in the home depends on its
+  `<id>.jpi.version_from_image` marker (see `jenkins-support`):
+  - **No marker**, which is every plugin on a home restored from an EC2 master:
+    SKIPPED whatever the versions, unless `TRY_UPGRADE_IF_NO_MARKER` is set. This
+    is the case that matters in practice and the reason a `plugins.txt` bump alone
+    does not reach a live controller.
+  - **Marker matching what is installed**: version-compared, and the image wins
+    only when it is newer.
+  - **Marker older than what is installed**, so a human upgraded via the UI:
+    SKIPPED, unless `PLUGINS_FORCE_UPGRADE` is set.
+
+  So the image is the floor for community plugins only once they carry a marker.
+  ps3 sets `TRY_UPGRADE_IF_NO_MARKER=true` to close that gap, which upgrades
+  unmarked plugins where the image is newer, never downgrades, and writes a marker
+  so later UI upgrades are protected.
 
 We do NOT set `overwritePluginsFromImage: true` (inert here, and it would force
 the WHOLE baked set, defeating the soft-community half of this policy), and we do
@@ -127,12 +137,19 @@ the byte-identical-to-EC2 restore property).
 
 > **Operator note:** the two forks win on EVERY pod boot, so to change a fork
 > version rebuild the image (bump `percona-plugins.lock.json`). A hand-edit on
-> the PVC is reset on the next restart. Community plugins are the opposite: a UI
-> upgrade persists, and a `plugins.txt` bump only raises the **floor** (the
-> seeder still skips it when the home carries an equal-or-newer build). To FORCE
-> a community plugin on every boot the way the forks are forced, add its id to
-> `PINNED_PLUGINS` in the `Dockerfile` (it is renamed to `<id>.jpi.override` and
-> force-installed unconditionally); `ec2-fleet` is pinned that way today.
+> the PVC is reset on the next restart. Community plugins differ: a UI upgrade
+> persists, and a `plugins.txt` bump reaches an existing home only through the
+> marker rules above, which on a restored home means only when
+> `TRY_UPGRADE_IF_NO_MARKER` is set.
+>
+> Adding a community plugin to `PINNED_PLUGINS` is NOT the way to deliver a
+> version bump. Those become `<id>.jpi.override`, which is copied with no version
+> compare, so it will happily replace a NEWER plugin on the PVC with an older
+> baked one. Measured on ps3: 32 of its plugins sit ahead of the image (`git`,
+> `okhttp-api` and `disk-usage` among them), and pinning them would downgrade all
+> 32. Reserve `PINNED_PLUGINS` for plugins the image must own outright, and use
+> `TRY_UPGRADE_IF_NO_MARKER` to deliver ordinary upgrades. `ec2-fleet` is pinned
+> today because ps3 and the EC2 masters must agree on it exactly.
 
 ## Image reference: TAG, not digest (today)
 
