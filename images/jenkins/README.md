@@ -89,11 +89,19 @@ In the upstream `jenkins` chart, `overwritePluginsFromImage` only does anything
 when `installPlugins: true`, so with `installPlugins: false` it is **inert**, and
 `/usr/share/jenkins/ref/plugins/` seeds `$JENKINS_HOME/plugins` per the ref-dir
 seeder's own rules: a plain `<id>.jpi` is seeded ONLY when the home lacks that
-plugin or carries an OLDER build (version-compare), while a `<id>.jpi.override`
-is force-installed UNCONDITIONALLY (its content is COPYed over
-`$JENKINS_HOME/plugins/<id>.jpi` on every boot). On a PVC restored from a real
-EC2 master's `$JENKINS_HOME` the plugins dir is already populated, so for a plain
-`.jpi` the on-disk copy wins unless the baked one is strictly newer.
+plugin entirely, while a `<id>.jpi.override` is force-installed UNCONDITIONALLY
+(its content is COPYed over `$JENKINS_HOME/plugins/<id>.jpi` on every boot). On a
+PVC restored from a real master's `$JENKINS_HOME` the plugins dir is already
+populated, so for a plain `.jpi` the on-disk copy wins **regardless of version**.
+
+An earlier revision of this section claimed a plain `.jpi` also wins when the
+home carries an older build. It does not, and the difference matters: it is why
+bumping a version in `plugins.txt` never reaches a live controller. Measured
+against this image (2026-08-18): a home seeded with `credentials-binding`
+`719.v80e905ef14eb_` still ran `719` after booting an image baking `728`, while
+`ec2-fleet` seeded at `4.2.3.539` was replaced by the baked `4.4.0.554` because
+it carries an `.override`. Upstream offers `TRY_UPGRADE_IF_NO_MARKER=true` for a
+one-time upgrade of unmarked plugins if a controlled migration is ever wanted.
 
 We exploit those two behaviors deliberately:
 

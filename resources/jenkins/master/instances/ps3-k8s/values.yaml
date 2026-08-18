@@ -219,11 +219,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+                  labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: nbg1
-                  name: deb12-x64-nbg1-min
+                  name: ubuntu2404-x64-nbg1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -248,25 +248,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -305,11 +317,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+                  labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: nbg1
-                  name: deb12-aarch64-nbg1-min
+                  name: ubuntu2404-aarch64-nbg1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -334,25 +346,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -391,11 +415,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+                  labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: hel1
-                  name: deb12-x64-hel1-min
+                  name: ubuntu2404-x64-hel1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -420,25 +444,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -477,11 +513,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+                  labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: hel1
-                  name: deb12-aarch64-hel1-min
+                  name: ubuntu2404-aarch64-hel1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -506,25 +542,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -563,11 +611,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+                  labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: fsn1
-                  name: deb12-x64-fsn1-min
+                  name: ubuntu2404-x64-fsn1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -592,25 +640,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -649,11 +709,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+                  labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: fsn1
-                  name: deb12-aarch64-fsn1-min
+                  name: ubuntu2404-aarch64-fsn1-min
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -678,25 +738,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -735,11 +807,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64 docker-deb12-x64 deb12-x64
+                  labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: nbg1
-                  name: deb12-x64-nbg1
+                  name: ubuntu2404-x64-nbg1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -764,25 +836,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -821,11 +905,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+                  labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: nbg1
-                  name: deb12-aarch64-nbg1
+                  name: ubuntu2404-aarch64-nbg1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -850,25 +934,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -907,11 +1003,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64 docker-deb12-x64 deb12-x64
+                  labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: hel1
-                  name: deb12-x64-hel1
+                  name: ubuntu2404-x64-hel1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -936,25 +1032,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -993,11 +1101,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+                  labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: hel1
-                  name: deb12-aarch64-hel1
+                  name: ubuntu2404-aarch64-hel1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -1022,25 +1130,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1079,11 +1199,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-x64 docker-deb12-x64 deb12-x64
+                  labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: fsn1
-                  name: deb12-x64-fsn1
+                  name: ubuntu2404-x64-fsn1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -1108,25 +1228,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1165,11 +1297,11 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690389'
+                  image: '161547270'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+                  labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: fsn1
-                  name: deb12-aarch64-fsn1
+                  name: ubuntu2404-aarch64-fsn1
                   network: '10442325'
                   primaryIp: default
                   remoteFs: /mnt/jenkins/
@@ -1194,25 +1326,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1251,7 +1395,7 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
                   location: nbg1
@@ -1281,25 +1425,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1338,7 +1494,7 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
                   location: hel1
@@ -1368,25 +1524,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1425,7 +1593,7 @@ jenkins:
                     root:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
-                  image: '114690387'
+                  image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
                   labelStr: launcher-x64
                   location: fsn1
@@ -1455,25 +1623,37 @@ jenkins:
                         sudo mkswap /swapfile
                         sudo swapon /swapfile
 
-                        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-                        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-                    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-                    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-                    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+                        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+                        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+                        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+                        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+                    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
                     APT_EOF
+                        else
+                            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+                    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+                    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+                    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+                    APT_EOF
+                        fi
 
                         export DEBIAN_FRONTEND=noninteractive
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
                         done
-                        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
                             sleep 1
                             echo try again
                         done
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                         until sudo apt-get update; do
                             sleep 1
                             echo try again
@@ -1550,7 +1730,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -1659,7 +1839,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -1778,11 +1958,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -1858,7 +2038,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -1974,11 +2154,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -2064,11 +2244,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -2223,11 +2403,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2316,11 +2504,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2409,11 +2605,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2502,11 +2706,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2595,11 +2807,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2688,11 +2908,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2781,11 +3009,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -2866,7 +3102,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -2980,7 +3216,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3094,7 +3330,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3208,7 +3444,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -3430,7 +3666,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -3546,11 +3782,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -3639,11 +3883,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -3732,11 +3984,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -3825,11 +4085,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -3918,11 +4186,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -4011,11 +4287,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -4097,7 +4381,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -4210,7 +4494,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -4319,7 +4603,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -4438,11 +4722,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -4518,7 +4802,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 
@@ -4634,11 +4918,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -4724,11 +5008,11 @@ jenkins:
 
                         # Install Java based on RHEL version and OS type
                         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-                            sudo yum -y install java-17-amazon-corretto-headless || :
+                            sudo yum -y install java-21-amazon-corretto-headless || :
                         elif [[ ^${RHVER} -eq 7 ]]; then
                             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
                         else
-                            sudo yum -y install java-17-openjdk-headless || :
+                            sudo yum -y install java-21-openjdk-headless || :
                         fi
 
                         sudo yum -y install git tzdata-java || :
@@ -4883,11 +5167,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -4976,11 +5268,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5069,11 +5369,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5162,11 +5470,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5255,11 +5571,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5348,11 +5672,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5441,11 +5773,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -5526,7 +5866,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -5640,7 +5980,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -5754,7 +6094,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -5868,7 +6208,7 @@ jenkins:
                             echo try again
                         done
 
-                        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+                        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
                             sleep 1
                             echo try again
                         done
@@ -6090,7 +6430,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+                        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
                         sudo yum -y install git docker
                         sudo yum -y remove awscli
 
@@ -6206,11 +6546,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6299,11 +6647,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6392,11 +6748,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6485,11 +6849,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6578,11 +6950,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6671,11 +7051,19 @@ jenkins:
 
                         DEB_VER=$(lsb_release -sc)
 
-                        if [[ ^${DEB_VER} == "trixie" ]]; then
-                            JAVA_VER="openjdk-21-jre-headless"
-                        else
-                            JAVA_VER="openjdk-17-jre-headless"
-                        fi
+                        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+                        # openjdk-21 in their own archives, so no third-party JDK repo is added
+                        # to a package-test box. The rest stay on 17 and cannot join a 2.555.1+
+                        # controller: bionic, buster, bullseye and bookworm would need Adoptium,
+                        # and xenial and stretch have no Java 21 build from any source.
+                        case "^${DEB_VER}" in
+                            trixie|jammy|noble|resolute)
+                                JAVA_VER="openjdk-21-jre-headless"
+                                ;;
+                            *)
+                                JAVA_VER="openjdk-17-jre-headless"
+                                ;;
+                        esac
 
                         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
                             sudo apt-get -y install ^${JAVA_VER} git
@@ -6757,7 +7145,7 @@ jenkins:
                             echo try again
                         done
 
-                        sudo yum -y install java-17-amazon-corretto-headless || :
+                        sudo yum -y install java-21-amazon-corretto-headless || :
                         sudo yum -y install git docker p7zip
                         sudo yum -y remove awscli
 

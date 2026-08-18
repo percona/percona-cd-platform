@@ -1,10 +1,12 @@
-# Base: Jenkins LTS 2.541.3 (matches the live fleet). Pinned BY DIGEST so an
+# Base: Jenkins LTS 2.541.3 on Java 21. Pinned BY DIGEST so an
 # upstream re-push of the same tag cannot change our base. Multi-arch INDEX
 # digest (carries linux/amd64 + linux/arm64) so the one pin builds both platforms.
 # Obtain/refresh with:
-#   docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 --format '{{.Manifest.Digest}}'
-# Last refreshed 2026-06-09 (#114); the pinned digest is on the FROM line below.
-FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:cce1eeb79902722f3cf7a8831c41e95c39f4a42b9a2981959630cc66539b3c2d
+#   docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk21 --format '{{.Manifest.Digest}}'
+# Core stays at 2.541.3 here so the JVM move is the only variable; 2.541.x runs
+# on Java 17, 21, or 25, so reverting to the jdk17 digest rolls this back.
+# Java 21 is a prerequisite for 2.555.1+, which publishes no jdk17 image at all.
+FROM jenkins/jenkins:2.541.3-lts-jdk21@sha256:c4098086090ca98491d4bf66182f5e3b015a8232f2acf2df209a212a5801aa8e
 
 # Skip the setup wizard (configuration comes from the persistent volume)
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
