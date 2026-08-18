@@ -11,7 +11,7 @@ asm-api:9.9.1-189.vb_5ef2964da_91
 atlassian-jira-software-cloud:2.0.15
 authentication-tokens:1.144.v5ff4a_5ec5c33
 authorize-project:2.0.0
-aws-credentials:254.v978a_5e206a_d7
+aws-credentials:265.v8422a_f384cd9
 aws-java-sdk:1.12.780-480.v4a_0819121a_9e
 aws-java-sdk-api-gateway:1.12.780-480.v4a_0819121a_9e
 aws-java-sdk-autoscaling:1.12.780-480.v4a_0819121a_9e
@@ -36,10 +36,10 @@ aws-java-sdk-secretsmanager:1.12.780-480.v4a_0819121a_9e
 aws-java-sdk-sns:1.12.780-480.v4a_0819121a_9e
 aws-java-sdk-sqs:1.12.780-480.v4a_0819121a_9e
 aws-java-sdk-ssm:1.12.780-480.v4a_0819121a_9e
-aws-java-sdk2-autoscaling:2.33.4-62.vc1a_8df64b_4c9
-aws-java-sdk2-cloudformation:2.33.4-62.vc1a_8df64b_4c9
-aws-java-sdk2-core:2.33.4-62.vc1a_8df64b_4c9
-aws-java-sdk2-ec2:2.33.4-62.vc1a_8df64b_4c9
+aws-java-sdk2-autoscaling:2.42.33-70.vd69c0763fa_60
+aws-java-sdk2-cloudformation:2.42.33-70.vd69c0763fa_60
+aws-java-sdk2-core:2.42.33-70.vd69c0763fa_60
+aws-java-sdk2-ec2:2.42.33-70.vd69c0763fa_60
 # REP 2.1 (TIER 8): chart-mandatory secrets provider for JCasC-backed
 # credentials. Pin is a plausible 2.541.3-compatible version; CI MUST regenerate
 # plugins.effective.txt against the 2.541.3 base and re-pin if the resolver
@@ -71,7 +71,7 @@ blueocean-rest-impl:1.27.25
 blueocean-web:1.27.25
 bootstrap4-api:4.6.0-6
 bootstrap5-api:5.3.8-895.v4d0d8e47fea_d
-bouncycastle-api:2.30.1.82-277.v70ca_0b_877184
+bouncycastle-api:2.30.1.84-291.v9f17b_21896e2
 branch-api:2.1280.v0d4e5b_b_460ef
 build-blocker-plugin:171.ve0716a_f69636
 build-timeout:1.39
@@ -97,7 +97,7 @@ conditional-buildstep:1.5.0
 # the 2.541.3 base and re-pin if the resolver disagrees. See README.md "CI".
 configuration-as-code:2081.v2d0940662a_34
 copyartifact:795.ve8e151429b_27
-credentials:1490.ve7532596f1fd
+credentials:1511.v2e3cb_0008ef0
 credentials-binding:728.v902a_273b_8947
 data-tables-api:2.3.5-1497.v38449eb_7d5a_1
 description-setter:264.v1957f215dcd5
@@ -107,7 +107,7 @@ display-url-api:2.217.va_6b_de84cc74b_
 docker-commons:457.v0f62a_94f11a_3
 docker-workflow:634.vedc7242b_eda_7
 durable-task:651.v1f5e074fc83f
-ec2-fleet:4.2.3.539.v8fedff2a_81c3
+ec2-fleet:4.4.0.554.ve1d40b_c02e16
 echarts-api:6.0.0-1165.vd1283a_3e37d4
 eddsa-api:0.3.0.1-29.v67e9a_1c969b_b_
 email-ext:1933.1935.v276319e3cc47
@@ -248,7 +248,7 @@ workflow-basic-steps:1098.v808b_fd7f8cf4
 workflow-cps:4370.v49a_6937566b_6
 workflow-cps-global-lib:615.vb_b_0664a_b_19f3
 workflow-durable-task-step:1464.v2d3f5c68f84c
-workflow-job:1571.vb_423c255d6d9
+workflow-job:1571.1580.v18e46842c125
 workflow-multibranch:821.vc3b_4ea_780798
 workflow-scm-step:466.va_d69e602552b_
 workflow-step-api:724.v538c2362b_dfb_
