@@ -24,7 +24,7 @@ fi
 ethtool -K eth0 sg off || true
 until yum makecache; do sleep 1; echo try again; done
 
-yum -y install java-17-amazon-corretto-headless tzdata-java unzip || yum -y install java-17-openjdk-headless tzdata-java unzip || :
+yum -y install java-21-amazon-corretto-headless tzdata-java unzip || yum -y install java-21-openjdk-headless tzdata-java unzip || :
 yum -y install git docker
 yum -y remove awscli || :
 
