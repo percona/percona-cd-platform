@@ -427,79 +427,79 @@ hetzner:
   instanceCapStr: '100'
   name: ps3-htz
   serverTemplates:
-  - image: '114690387'
-    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+  - image: '161547269'
+    labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
     location: nbg1
-    name: deb12-x64-nbg1-min
+    name: ubuntu2404-x64-nbg1-min
     serverType: cpx42
-  - image: '114690389'
-    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+  - image: '161547270'
+    labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
     location: nbg1
-    name: deb12-aarch64-nbg1-min
+    name: ubuntu2404-aarch64-nbg1-min
     serverType: cax31
-  - image: '114690387'
-    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+  - image: '161547269'
+    labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
     location: hel1
-    name: deb12-x64-hel1-min
+    name: ubuntu2404-x64-hel1-min
     serverType: cpx42
-  - image: '114690389'
-    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+  - image: '161547270'
+    labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
     location: hel1
-    name: deb12-aarch64-hel1-min
+    name: ubuntu2404-aarch64-hel1-min
     serverType: cax31
-  - image: '114690387'
-    labelStr: docker-x64-min docker-deb12-x64-min deb12-x64-min
+  - image: '161547269'
+    labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
     location: fsn1
-    name: deb12-x64-fsn1-min
+    name: ubuntu2404-x64-fsn1-min
     serverType: cpx42
-  - image: '114690389'
-    labelStr: docker-aarch64-min docker-deb12-aarch64-min deb12-aarch64-min
+  - image: '161547270'
+    labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
     location: fsn1
-    name: deb12-aarch64-fsn1-min
+    name: ubuntu2404-aarch64-fsn1-min
     serverType: cax31
-  - image: '114690387'
-    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+  - image: '161547269'
+    labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
     location: nbg1
-    name: deb12-x64-nbg1
+    name: ubuntu2404-x64-nbg1
     serverType: cpx62
-  - image: '114690389'
-    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+  - image: '161547270'
+    labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
     location: nbg1
-    name: deb12-aarch64-nbg1
+    name: ubuntu2404-aarch64-nbg1
     serverType: cax41
-  - image: '114690387'
-    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+  - image: '161547269'
+    labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
     location: hel1
-    name: deb12-x64-hel1
+    name: ubuntu2404-x64-hel1
     serverType: cpx62
-  - image: '114690389'
-    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+  - image: '161547270'
+    labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
     location: hel1
-    name: deb12-aarch64-hel1
+    name: ubuntu2404-aarch64-hel1
     serverType: cax41
-  - image: '114690387'
-    labelStr: docker-x64 docker-deb12-x64 deb12-x64
+  - image: '161547269'
+    labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
     location: fsn1
-    name: deb12-x64-fsn1
+    name: ubuntu2404-x64-fsn1
     serverType: cpx62
-  - image: '114690389'
-    labelStr: docker-aarch64 docker-deb12-aarch64 deb12-aarch64
+  - image: '161547270'
+    labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
     location: fsn1
-    name: deb12-aarch64-fsn1
+    name: ubuntu2404-aarch64-fsn1
     serverType: cax41
-  - image: '114690387'
+  - image: '161547269'
     labelStr: launcher-x64
     location: nbg1
     name: launcher-x64-nbg1
     numExecutors: 30
     serverType: cpx22
-  - image: '114690387'
+  - image: '161547269'
     labelStr: launcher-x64
     location: hel1
     name: launcher-x64-hel1
     numExecutors: 30
     serverType: cpx22
-  - image: '114690387'
+  - image: '161547269'
     labelStr: launcher-x64
     location: fsn1
     name: launcher-x64-fsn1
