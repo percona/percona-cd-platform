@@ -173,8 +173,13 @@ DCR, so every client must be told `jenkins-mcp` explicitly, and the field name d
 (`--client-id` / `oauth.clientId` in Claude Code, `auth.CLIENT_ID` in Cursor).
 
 **A tool returns 403 or "requires the jenkins-mcp-writers Authentik group"** means the call needs the
-operate, manage, or config-read tier. Ask a platform engineer to add you to `jenkins-mcp-writers`, then
+operate, manage, or config-read tier. Ask in #opensource-jenkins to be added to
+`jenkins-mcp-writers`. You need an Authentik account first, which is created automatically
+on your first Duo SSO login, so connect and authenticate before asking. Once added, disconnect and
 re-authenticate so the new token carries the group claim. Reconnecting alone does not refresh it.
+One exception: the manage tools (`create_item`, `set_item_config`, `delete_item`) return 403 even
+for writers, because the backend grant is pending (PS-11341). That 403 is not a membership problem.
+Manage job definitions through the Jenkins API/CLI instead.
 
 **A transient 503 right after a gateway release** is the ALB re-registering its target, which takes
 roughly 60 to 90 seconds. Retry before reporting it.

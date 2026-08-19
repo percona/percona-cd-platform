@@ -509,7 +509,7 @@ async def replay_build(ctx: Context, fullname: str, number: int | None = None, m
     """Re-run a job using the same parameters as a previous build (retrigger a probe).
 
     Triggers a fresh build with the parameters of build `number` (or the last build). Does not
-    modify the job config. Requires the jenkins-mcp-writers group.
+    modify the job config. Requires the jenkins-mcp-writers group (get_readme covers how to join).
 
     Args:
         fullname: The fullname of the job

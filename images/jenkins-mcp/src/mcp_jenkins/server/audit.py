@@ -180,7 +180,19 @@ class AuditMiddleware(Middleware):
             if denied:
                 record['status'] = 'denied'
                 _DENIED.labels(tool=tool, reason='not_writer').inc()
-                msg = f'{tool} requires the {_WRITERS_GROUP} Authentik group.'
+                msg = (
+                    f'{tool} requires the {_WRITERS_GROUP} Authentik group. To get access, ask in '
+                    f'#opensource-jenkins. Once added, disconnect and re-authenticate this MCP '
+                    f'connection (reconnecting alone keeps the old group-less token).'
+                )
+                if tool in _MANAGE_TOOLS:
+                    # Do not send manage callers through the onboarding loop for nothing: the
+                    # backend grant is pending, so manage tools return 403 even for writers.
+                    msg += (
+                        ' Note: manage tools return 403 even for writers today (backend grant'
+                        ' pending, PS-11341); manage job definitions via the Jenkins API/CLI'
+                        ' instead.'
+                    )
                 raise ToolError(msg)
             result = await call_next(context)
             record['status'] = 'ok'
