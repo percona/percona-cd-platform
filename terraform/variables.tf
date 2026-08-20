@@ -32,7 +32,7 @@ variable "cluster_version" {
 }
 
 variable "vpc_cidr" {
-  description = "Cluster VPC CIDR. Avoid the Jenkins-VPC ranges 10.144/.155/.166/.177/.179/.188/.199 (multi-region masters)."
+  description = "Cluster VPC CIDR. Avoid the Jenkins-VPC ranges 10.144/.145/.155/.156/.157/.158/.166/.177/.179/.181/.188/.199 (multi-region masters and fleets)."
   type        = string
   default     = "10.220.0.0/16"
 }

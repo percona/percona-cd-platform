@@ -48,6 +48,13 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: ps57.cd.percona.com
+  - name: ps57-upgraded
+    # TEMPORARY fenced clone of ps57 for the core 2.568.2 + Java 21 upgrade
+    # validation (terraform/master-ps57-upgraded.tf). Remove with it.
+    upstream: jenkins-ps57-upgraded.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: ps57-upgraded.cd.percona.com
   - name: pxb
     # EndpointSlice kept in sync with the live pxb master private IP by the
     # jenkins-endpoint-reconciler over the us-west-2 <-> us-east-1 peering.

@@ -86,13 +86,13 @@ install_software() {
     sed -i 's/^repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/jenkins.repo
     grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
     rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2026.key
-    retry yum -y install java-17-amazon-corretto
+    retry yum -y install ${java_package}
     retry yum -y update --security
     retry yum -y install jenkins-${jenkins_package_version} git dnf-automatic aws-cli xfsprogs
 
     sed -i 's/upgrade_type = default/upgrade_type = security/' /etc/dnf/automatic.conf
     sed -i 's/apply_updates = no/apply_updates = yes/'         /etc/dnf/automatic.conf
-    echo "exclude=java-17-amazon-corretto* jenkins*" >> /etc/dnf/automatic.conf
+    echo "exclude=${java_package}* jenkins*" >> /etc/dnf/automatic.conf
     systemctl enable --now dnf-automatic.timer
 
     # amazon-ssm-agent ships preinstalled on STANDARD AL2023 but NOT on the
@@ -381,7 +381,7 @@ main() {
     # fetch the same content from a thin pass-through at
     # Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh
     # until they migrate to TF.
-    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="%{ if observability_label != "" }${observability_label}%{ else }$JENKINS_HOST%{ endif }" bash
 %{ endif ~}
 }
 
