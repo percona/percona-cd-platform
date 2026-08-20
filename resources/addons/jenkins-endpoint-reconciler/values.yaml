@@ -49,6 +49,16 @@ hosts:
     region: us-west-2
     tag: jenkins-ps80-upgraded
     port: 8080
+  - name: pxc-upgraded
+    # TEMPORARY fenced clone of pxc (terraform/master-pxc-upgraded.tf).
+    region: us-west-1
+    tag: jenkins-pxc-upgraded
+    port: 8080
+  - name: pxb-upgraded
+    # TEMPORARY fenced clone of pxb (terraform/master-pxb-upgraded.tf).
+    region: us-west-2
+    tag: jenkins-pxb-upgraded
+    port: 8080
   - name: pxb
     region: us-west-2
     tag: jenkins-pxb
