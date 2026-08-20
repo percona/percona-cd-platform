@@ -40,6 +40,10 @@ CONTEXT = "percona-ci-platform"
 TENANT = "percona-ci"
 GAUGE = "hetzner_api_rate_limit_remaining"  # every master pushes this via Alloy
 
+# Fenced clones run no Hetzner cloud, so they never push the gauge and are
+# excluded from the freshness gate. Remove an entry when its clone is deleted.
+FENCED = {"ps57-upgraded"}
+
 
 def enumerate_masters() -> list[dict]:
     """Return [{inst, arch, label}] derived from repo source-of-truth."""
@@ -61,6 +65,8 @@ def enumerate_masters() -> list[dict]:
     # master-*.tf is an ARM-fleet remnant, not a separate EC2 master.
     for tf in sorted(glob.glob(os.path.join(ROOT, "terraform", "master-*.tf"))):
         inst = os.path.basename(tf)[len("master-"):-len(".tf")]
+        if inst in FENCED:
+            continue
         if any(k == inst or k.startswith(inst + "-") for k in k8s_names):
             continue
         with open(tf, encoding="utf-8") as fh:
