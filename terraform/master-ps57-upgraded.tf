@@ -17,7 +17,7 @@
 #        --snapshot-id <newest completed DLM snapshot of vol-07070c2c983c2cc5f> \
 #        --volume-type gp2 \
 #        --tag-specifications 'ResourceType=volume,Tags=[{Key=Name,Value=jenkins-ps57-upgraded},{Key=iit-billing-tag,Value=jenkins-ps57-upgraded},{Key=PerconaKeep,Value=True}]'
-#   2. just tf-import 'module.ps57_upgraded.aws_ebs_volume.data' vol-XXXX
+#   2. tofu -chdir=terraform import module.ps57_upgraded.aws_ebs_volume.data vol-XXXX (raw-tofu exception)
 #      (zero-diff adopt: size/type/AZ match and snapshot_id is in the module's
 #      lifecycle ignore_changes; expect a tags-only in-place change)
 #   3. just tf-apply, then upgrade all plugins on the clone and validate.
@@ -169,8 +169,10 @@ resource "aws_route" "eks_private_to_ps57_upgraded" {
 }
 
 resource "aws_route" "ps57_upgraded_to_eks" {
-  provider                  = aws.eu-central-1
-  for_each                  = toset(module.ps57_upgraded.private_route_table_ids)
+  provider = aws.eu-central-1
+  # Index-keyed (not toset) so the keys stay known before the clone's route
+  # tables exist; a value-keyed set fails plan/import while the VPC is unbuilt.
+  for_each                  = { for idx, rt in module.ps57_upgraded.private_route_table_ids : tostring(idx) => rt }
   route_table_id            = each.value
   destination_cidr_block    = module.vpc.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.ps57_upgraded.id
