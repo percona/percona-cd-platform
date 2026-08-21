@@ -108,6 +108,28 @@ APT_EOF
         sleep 1
         echo try again
     done
+
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM and Debian 12
+    # ships no openjdk-21 package, so the agent JVM is a pinned Temurin 21 JRE
+    # tarball (no third-party apt repo). The symlink wins PATH resolution
+    # (/usr/local/bin precedes /usr/bin for the SSH launcher), so remoting runs
+    # on 21 while the openjdk-17 package above stays the system java.
+    if [ "$(uname -m)" = "aarch64" ]; then
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+        T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+    else
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+    fi
+    until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+        sleep 1
+        echo try again
+    done
+    echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+    sudo mkdir -p /opt/temurin-21
+    sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+    sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+    /opt/temurin-21/bin/java -version
     curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     until sudo apt-get update; do
