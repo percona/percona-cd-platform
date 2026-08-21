@@ -42,7 +42,7 @@ GAUGE = "hetzner_api_rate_limit_remaining"  # every master pushes this via Alloy
 
 # Fenced clones run no Hetzner cloud, so they never push the gauge and are
 # excluded from the freshness gate. Remove an entry when its clone is deleted.
-FENCED = {"ps80-upgraded", "pxc-upgraded"}
+FENCED = {"ps80-upgraded"}
 
 
 def enumerate_masters() -> list[dict]:
