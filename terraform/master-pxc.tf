@@ -27,7 +27,8 @@ module "pxc" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.2"
+  java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "pxc-build-cache"
 
   # Retained CFN data volume vol-03b3852ad6dd6c553 is 300 GiB gp2 in us-west-1b
