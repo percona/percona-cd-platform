@@ -81,7 +81,9 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
     sudo yum -y remove java-1.7.0-openjdk awscli
 
@@ -157,7 +159,19 @@ initMap['rpmMap'] = '''
         sleep 1
         echo try again
     done
-    sudo yum -y install java-17-openjdk tzdata-java git ${PKGLIST} || :
+
+    # Determine Java version based on OS. Jenkins 2.555.1+ requires Java 21 on
+    # the agent remoting JVM; EL8/EL9 carry java-21-openjdk since 8.10/9.3 and
+    # AL2023 carries Corretto 21. Older EL (CentOS 7 and below) has no Java 21
+    # package and those agents cannot join a 2.555.1+ controller.
+    if [[ ${RHVER} -eq 10 ]] || [[ ${RHVER} -eq 9 ]] || [[ ${RHVER} -eq 8 ]]; then
+        JAVA_VER="java-21-openjdk"
+    elif [[ $SYSREL -eq 2023 ]]; then
+        JAVA_VER="java-21-amazon-corretto-headless"
+    else
+        JAVA_VER="java-17-openjdk"
+    fi
+    sudo yum -y install ${JAVA_VER} tzdata-java git ${PKGLIST} || :
     sudo yum -y remove java-1.7.0-openjdk || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
     # CentOS 6 x32 workarounds
@@ -213,7 +227,14 @@ initMap['debMap'] = '''
         echo try again
     done
     DEB_VER=$(lsb_release -sc)
-    if [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "resolute" ]]; then
+
+    # Determine Java version based on distribution. Jenkins 2.555.1+ requires
+    # Java 21 on the agent remoting JVM; resolute, jammy and noble carry
+    # openjdk-21 in their own archives. The rest keep their distro package for
+    # tooling and get a pinned Temurin 21 JRE below for remoting.
+    if [[ ${DEB_VER} == "resolute" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]]; then
+        JAVA_VER="openjdk-21-jre-headless"
+    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
@@ -227,6 +248,33 @@ initMap['debMap'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
     fi
+
+    # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
+    # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
+    # 21; the distro package above stays the system java.
+    case "${DEB_VER}" in
+        bookworm|bullseye|buster|focal|bionic)
+            sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
+
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 
