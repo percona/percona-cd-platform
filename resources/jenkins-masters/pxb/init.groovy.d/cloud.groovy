@@ -39,7 +39,7 @@ imageMap['min-bookworm-x64'] = 'ami-0544719b13af6edc3'
 
 priceMap = [:]
 priceMap['c5a.large'] = '0.08'    // type=c5a.large, vCPU=2, memory=4GiB, saving=55%, interruption='<5%', price=0.043400
-priceMap['m5n.2xlarge'] = '0.32'  // type=m5n.2xlarge, vCPU=8, memory=32GiB, saving=48%, interruption='<5%', price=0.253000
+priceMap['m6a.2xlarge'] = '0.32'  // vCPU=8, memory=32GiB
 priceMap['g4ad.4xlarge'] = '0.62'  // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=48%, interruption='<5%', price=0.512200
 
 userMap = [:]
@@ -131,7 +131,7 @@ initMap['rpmMap'] = '''
     RHVER=$(rpm --eval %rhel)
     ARCH=$(uname -m)
     SYSREL=$(cat /etc/system-release | tr -dc '0-9.'|awk -F'.' {'print $1'})
-    
+
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
             if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
@@ -195,7 +195,7 @@ initMap['rpmMap'] = '''
                 sleep 1
                 echo try again
             done
-            7za -o/tmp x /tmp/awscliv2.zip 
+            7za -o/tmp x /tmp/awscliv2.zip
             cd /tmp/aws && sudo ./install
         fi
     fi
@@ -295,13 +295,13 @@ initMap['min-noble-x64']  = initMap['debMap']
 initMap['min-resolute-x64']  = initMap['debMap']
 
 capMap = [:]
-capMap['m5n.2xlarge'] = '120'
+capMap['m6a.2xlarge'] = '120'
 capMap['g4ad.4xlarge'] = '80'
 capMap['c5a.large'] = '15'
 
 typeMap = [:]
 typeMap['micro-amazon'] = 'c5a.large'
-typeMap['docker'] = 'm5n.2xlarge'
+typeMap['docker'] = 'm6a.2xlarge'
 typeMap['docker-32gb'] = 'g4ad.4xlarge'
 typeMap['min-centos-7-x64'] = typeMap['docker']
 typeMap['fips-centos-7-x64'] = typeMap['min-centos-7-x64']

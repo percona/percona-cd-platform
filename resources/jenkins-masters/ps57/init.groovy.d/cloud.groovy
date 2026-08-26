@@ -98,7 +98,7 @@ priceMap['m5a.large'] = '0.09' // type=m5a.large, vCPU=2, memory=8GiB, saving=52
 priceMap['m1.medium'] = '0.05' // centos6 x32
 priceMap['m6i.xlarge'] = '0.15' // type=m6i.xlarge, vCPU=4, memory=16GiB, saving=65%, interruption='<5%', price=0.104100
 priceMap['r6a.4xlarge'] = '0.58' // type=r6a.4xlarge, vCPU=16, memory=128GiB, saving=60%, interruption='<5%', price=0.503000
-priceMap['c5d.xlarge'] = '0.17' // type=c5d.xlarge, vCPU=4, memory=8GiB, saving=60%, interruption='<5%', price=0.100700
+priceMap['c6id.xlarge'] = '0.17' // vCPU=4, memory=8GiB, 237GB NVMe
 priceMap['i3en.2xlarge'] = '0.40' // type=i3en.2xlarge, vCPU=8, memory=64GiB, saving=70%, interruption='<5%', price=0.324000
 
 userMap = [:]
@@ -421,12 +421,12 @@ capMap = [:]
 capMap['m5a.large']  = '5'
 capMap['i3en.2xlarge'] = '40'
 capMap['r6a.4xlarge'] = '40'
-capMap['c5d.xlarge'] = '60'
+capMap['c6id.xlarge'] = '60'
 capMap['i3en.2xlarge'] = '40'
 
 typeMap = [:]
 typeMap['micro-amazon']      = 'm5a.large'
-typeMap['docker']            = 'c5d.xlarge'
+typeMap['docker']            = 'c6id.xlarge'
 typeMap['docker-32gb']       = 'i3en.2xlarge'
 typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker']
