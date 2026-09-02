@@ -137,13 +137,13 @@ imageMap['eu-west-1c.min-trixie-aarch64']   = imageMap['eu-west-1a.min-trixie-aa
 priceMap = [:]
 priceMap['t2.small'] = '0.02'    // type=t2.small, vCPU=1, memory=2GiB, saving=68%, interruption='<5%', price=0.008000
 priceMap['c5.xlarge'] = '0.15'   // type=c5.xlarge, vCPU=4, memory=8GiB, saving=58%, interruption='<5%', price=0.086400
-priceMap['g4ad.4xlarge'] = '0.53' // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.0.46910
-priceMap['r6a.4xlarge'] = '0.42' // type=r6a.4xlarge, vCPU=16, memory=128GiB, saving=66%, interruption='<5%', price=0.361600
+priceMap['m6a.4xlarge'] = '0.78' // type=m6a.4xlarge, vCPU=16, memory=64GiB, on-demand=0.7704, 7-day spot max 0.4732 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
+priceMap['r6a.4xlarge'] = '1.02' // bid at on-demand (1.0152) so spot is never rejected as price-too-low, 7-day spot max was 0.57 against the old bid
 priceMap['i4i.2xlarge'] = '0.32' // type=i4i.2xlarge, vCPU=8, memory=64GiB, saving=68%, interruption='<5%', price=0.248900
-priceMap['i3en.2xlarge'] = '0.40' // type=i3en.2xlarge, vCPU=8, memory=64GiB, no GPU, boots the rel OL9 AMI (g4ad kernel-panics it)
+priceMap['i3en.2xlarge'] = '1.00' // bid at on-demand (1.00) so spot is never rejected as price-too-low, 7-day spot max was 0.43 against the old bid
 
 priceMap['m6g.2xlarge'] = '0.24' // aarch64 type=m6g.2xlarge, vCPU=8, memory=32GiB, saving=60%, interruption='<5%', price=0.161800
-priceMap['m7g.4xlarge'] = '0.39' // aarch64 type=m7g.4xlarge, vCPU=16, memory=64GiB, saving=58%, interruption='<5%', price=0.348600
+priceMap['m7g.4xlarge'] = '0.73' // bid at on-demand (0.7276) so spot is never rejected as price-too-low, 7-day spot max was 0.40 against the old bid
 
 userMap = [:]
 userMap['docker']            = 'ec2-user'
@@ -430,7 +430,8 @@ initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 
 capMap = [:]
 capMap['c5.xlarge']    = '60'
-capMap['g4ad.4xlarge'] = '40'
+capMap['m6a.4xlarge'] = '40'
+capMap['t2.small']     = '10' // micro-amazon
 capMap['r6a.4xlarge']   = '40'
 capMap['i4i.2xlarge']  = '40'
 capMap['i3en.2xlarge'] = '40'
@@ -441,8 +442,8 @@ capMap['m7g.4xlarge'] = '20'
 typeMap = [:]
 typeMap['micro-amazon']      = 't2.small'
 typeMap['docker']            = 'c5.xlarge'
-typeMap['docker-32gb']       = 'g4ad.4xlarge'
-typeMap['docker-64gb']       = 'g4ad.4xlarge'
+typeMap['docker-32gb']       = 'm6a.4xlarge' // g4ad.4xlarge spot no longer fulfills in eu-west-1, every launch fell back to on-demand
+typeMap['docker-64gb']       = typeMap['docker-32gb']
 typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
 typeMap['min-centos-8-x64']  = typeMap['min-centos-7-x64']
@@ -515,8 +516,8 @@ execMap['min-trixie-aarch64']   = '1'
 devMap = [:]
 devMap['docker']                = '/dev/xvda=:8:true:gp2,/dev/xvdd=:320:true:gp2'
 devMap['docker2']               = '/dev/xvda=:8:true:gp2,/dev/xvdd=:220:true:gp2'
-devMap['docker-32gb']           = devMap['docker']
-devMap['docker-64gb']           = devMap['docker']
+devMap['docker-32gb']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s, m6a has no instance store
+devMap['docker-64gb']           = devMap['docker-32gb']
 devMap['micro-amazon']          = devMap['docker']
 devMap['min-amazon-2-x64']      = '/dev/xvda=:30:true:gp2,/dev/xvdd=:220:true:gp2'
 devMap['min-bionic-x64']        = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
