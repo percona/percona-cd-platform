@@ -418,6 +418,8 @@ initMap['min-stretch-x64']  = initMap['debMap']
 initMap['min-xenial-x64']   = initMap['debMap']
 
 capMap = [:]
+capMap['m1.medium']   = '5'  // min-centos-6-x32
+capMap['m6i.xlarge']  = '20' // min-centos-6-x64
 capMap['m5a.large']  = '5'
 capMap['i3en.2xlarge'] = '40'
 capMap['r6a.4xlarge'] = '40'

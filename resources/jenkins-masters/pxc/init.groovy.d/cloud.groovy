@@ -694,6 +694,8 @@ initMap['min-rhel-10-x64'] = '''
 '''
 
 capMap = [:]
+capMap['m4.xlarge']    = '20' // micro-amazon
+capMap['m1.medium']    = '5'  // min-centos-6-x32
 capMap['c5.2xlarge'] = '40'
 capMap['c5.4xlarge'] = '80'
 capMap['r3.2xlarge'] = '40'
@@ -924,6 +926,12 @@ timeoutMap = [:]
 timeoutMap['metal-x64']     = '2400'
 timeoutMap['metal-aarch64'] = '2400'
 
+// Spot to on-demand fallback per OS type. Bare metal stays spot-only: on-demand
+// c5.metal and c7g.metal cost 6 to 7 times their spot price and both pools score 3.
+fallbackMap = [:]
+fallbackMap['metal-x64']     = false
+fallbackMap['metal-aarch64'] = false
+
 maxUseMap['ramdisk-centos-6-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-7-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-8-x64'] = maxUseMap['singleUse']
@@ -993,7 +1001,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], fallbackMap.getOrDefault(OSType, true), '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable, except bare metal)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
