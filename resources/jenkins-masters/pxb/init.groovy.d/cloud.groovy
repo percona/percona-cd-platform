@@ -335,7 +335,7 @@ execMap['min-bookworm-x64'] = '1'
 
 devMap = [:]
 devMap['docker'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
-devMap['docker-32gb'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3' // g4ad.4xlarge carried a 600 GB local NVMe that the init script mounted at /mnt, m5.4xlarge has no instance store
+devMap['docker-32gb'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s. g4ad.4xlarge carried a 600 GB local NVMe that the init script mounted at /mnt, m5.4xlarge has no instance store
 devMap['micro-amazon'] = devMap['docker']
 devMap['min-bionic-x64'] = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
 devMap['min-focal-x64'] = devMap['min-bionic-x64']
