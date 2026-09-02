@@ -40,7 +40,7 @@ imageMap['min-bookworm-x64'] = 'ami-0544719b13af6edc3'
 priceMap = [:]
 priceMap['c5a.large'] = '0.08'    // type=c5a.large, vCPU=2, memory=4GiB, saving=55%, interruption='<5%', price=0.043400
 priceMap['m5n.2xlarge'] = '0.32'  // type=m5n.2xlarge, vCPU=8, memory=32GiB, saving=48%, interruption='<5%', price=0.253000
-priceMap['g4ad.4xlarge'] = '0.62'  // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=48%, interruption='<5%', price=0.512200
+priceMap['m5.4xlarge'] = '0.77'  // type=m5.4xlarge, vCPU=16, memory=64GiB, on-demand=0.768, spot us-west-2a=0.3242 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
 
 userMap = [:]
 userMap['docker'] = 'ec2-user'
@@ -131,7 +131,7 @@ initMap['rpmMap'] = '''
     RHVER=$(rpm --eval %rhel)
     ARCH=$(uname -m)
     SYSREL=$(cat /etc/system-release | tr -dc '0-9.'|awk -F'.' {'print $1'})
-    
+
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
             if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
@@ -195,7 +195,7 @@ initMap['rpmMap'] = '''
                 sleep 1
                 echo try again
             done
-            7za -o/tmp x /tmp/awscliv2.zip 
+            7za -o/tmp x /tmp/awscliv2.zip
             cd /tmp/aws && sudo ./install
         fi
     fi
@@ -296,13 +296,13 @@ initMap['min-resolute-x64']  = initMap['debMap']
 
 capMap = [:]
 capMap['m5n.2xlarge'] = '120'
-capMap['g4ad.4xlarge'] = '80'
+capMap['m5.4xlarge'] = '80'
 capMap['c5a.large'] = '15'
 
 typeMap = [:]
 typeMap['micro-amazon'] = 'c5a.large'
 typeMap['docker'] = 'm5n.2xlarge'
-typeMap['docker-32gb'] = 'g4ad.4xlarge'
+typeMap['docker-32gb'] = 'm5.4xlarge' // g4ad.4xlarge spot is unavailable in us-west-2a, the only AZ this cloud uses
 typeMap['min-centos-7-x64'] = typeMap['docker']
 typeMap['fips-centos-7-x64'] = typeMap['min-centos-7-x64']
 typeMap['min-ol-8-x64'] = typeMap['min-centos-7-x64']
@@ -335,7 +335,7 @@ execMap['min-bookworm-x64'] = '1'
 
 devMap = [:]
 devMap['docker'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
-devMap['docker-32gb'] = devMap['docker']
+devMap['docker-32gb'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s. m5.4xlarge has no instance store, so /mnt is this volume
 devMap['micro-amazon'] = devMap['docker']
 devMap['min-bionic-x64'] = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
 devMap['min-focal-x64'] = devMap['min-bionic-x64']
@@ -389,7 +389,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -418,7 +418,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        '900',                                      // String launchTimeoutStr (terminate agents stuck launching after 15 min so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess

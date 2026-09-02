@@ -73,9 +73,9 @@ priceMap = [:]
 priceMap['m4.xlarge'] = '0.15' // type=m4.xlarge, vCPU=4, memory=16GiB, saving=62%, interruption='<5%', price=0.090300
 priceMap['m1.medium'] = '0.13' // centos6
 priceMap['c5.2xlarge'] = '0.28' // type=c5.2xlarge, vCPU=8, memory=16GiB, saving=53%, interruption='<5%', price=0.216700
-priceMap['r3.2xlarge'] = '0.21' // centos6
+priceMap['r3.2xlarge'] = '0.75' // bid at on-demand (0.741) so spot is never rejected as price-too-low, 7-day spot max was 0.25 against the old bid
 priceMap['c5.4xlarge'] = '0.40' // type=c5.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.200200
-priceMap['m6gd.4xlarge'] = '0.40' // aarch64 type=m6gd.4xlarge, vCPU=16, memory=64GiB, saving=62%, interruption='<5%', price=0.290000
+priceMap['m6gd.4xlarge'] = '0.85' // bid at on-demand (0.848) so spot is never rejected as price-too-low, 7-day spot max was 0.47 against the old bid
 priceMap['c5.metal']    = '5.10' // amd64 bare-metal, vCPU=96, memory=192GiB, on-demand=5.088 (us-west-1)
 priceMap['c7g.metal']   = '2.89' // arm64 bare-metal, vCPU=64, memory=128GiB, on-demand=2.8832 (us-west-1)
 
@@ -694,6 +694,8 @@ initMap['min-rhel-10-x64'] = '''
 '''
 
 capMap = [:]
+capMap['m4.xlarge']    = '20' // micro-amazon
+capMap['m1.medium']    = '5'  // min-centos-6-x32
 capMap['c5.2xlarge'] = '40'
 capMap['c5.4xlarge'] = '80'
 capMap['r3.2xlarge'] = '40'
@@ -917,6 +919,19 @@ maxUseMap['min-al2023-aarch64'] = maxUseMap['singleUse']
 maxUseMap['metal-x64']     = maxUseMap['multipleUse']
 maxUseMap['metal-aarch64'] = maxUseMap['multipleUse']
 
+// Launch-timeout budget per OS type. The value doubles as the SSH wait budget,
+// so bare metal needs a longer one: a c5.metal or c7g.metal power-on takes far
+// longer than a virtualised instance, and reaping it early would loop.
+timeoutMap = [:]
+timeoutMap['metal-x64']     = '2400'
+timeoutMap['metal-aarch64'] = '2400'
+
+// Spot to on-demand fallback per OS type. Bare metal stays spot-only: on-demand
+// c5.metal and c7g.metal cost 6 to 7 times their spot price and both pools score 3.
+fallbackMap = [:]
+fallbackMap['metal-x64']     = false
+fallbackMap['metal-aarch64'] = false
+
 maxUseMap['ramdisk-centos-6-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-7-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-8-x64'] = maxUseMap['singleUse']
@@ -986,7 +1001,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], fallbackMap.getOrDefault(OSType, true), '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable, except bare metal)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -1015,7 +1030,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        timeoutMap[OSType] ?: '900',                // String launchTimeoutStr (terminate agents stuck launching so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess
