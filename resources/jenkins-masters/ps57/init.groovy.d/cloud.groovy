@@ -97,9 +97,9 @@ priceMap = [:]
 priceMap['m5a.large'] = '0.09' // type=m5a.large, vCPU=2, memory=8GiB, saving=52%, interruption='<5%', price=0.056500
 priceMap['m1.medium'] = '0.05' // centos6 x32
 priceMap['m6i.xlarge'] = '0.15' // type=m6i.xlarge, vCPU=4, memory=16GiB, saving=65%, interruption='<5%', price=0.104100
-priceMap['r6a.4xlarge'] = '0.58' // type=r6a.4xlarge, vCPU=16, memory=128GiB, saving=60%, interruption='<5%', price=0.503000
+priceMap['r6a.4xlarge'] = '1.10' // bid at on-demand (1.0944) so spot is never rejected as price-too-low, 7-day spot max was 0.54 against the old bid
 priceMap['c5d.xlarge'] = '0.17' // type=c5d.xlarge, vCPU=4, memory=8GiB, saving=60%, interruption='<5%', price=0.100700
-priceMap['i3en.2xlarge'] = '0.40' // type=i3en.2xlarge, vCPU=8, memory=64GiB, saving=70%, interruption='<5%', price=0.324000
+priceMap['i3en.2xlarge'] = '1.08' // bid at on-demand (1.08) so spot is never rejected as price-too-low, 7-day spot max was 0.41 against the old bid
 
 userMap = [:]
 userMap['docker']            = 'ec2-user'

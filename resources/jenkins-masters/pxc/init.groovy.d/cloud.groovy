@@ -73,9 +73,9 @@ priceMap = [:]
 priceMap['m4.xlarge'] = '0.15' // type=m4.xlarge, vCPU=4, memory=16GiB, saving=62%, interruption='<5%', price=0.090300
 priceMap['m1.medium'] = '0.13' // centos6
 priceMap['c5.2xlarge'] = '0.28' // type=c5.2xlarge, vCPU=8, memory=16GiB, saving=53%, interruption='<5%', price=0.216700
-priceMap['r3.2xlarge'] = '0.21' // centos6
+priceMap['r3.2xlarge'] = '0.75' // bid at on-demand (0.741) so spot is never rejected as price-too-low, 7-day spot max was 0.25 against the old bid
 priceMap['c5.4xlarge'] = '0.40' // type=c5.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.200200
-priceMap['m6gd.4xlarge'] = '0.40' // aarch64 type=m6gd.4xlarge, vCPU=16, memory=64GiB, saving=62%, interruption='<5%', price=0.290000
+priceMap['m6gd.4xlarge'] = '0.85' // bid at on-demand (0.848) so spot is never rejected as price-too-low, 7-day spot max was 0.47 against the old bid
 priceMap['c5.metal']    = '5.10' // amd64 bare-metal, vCPU=96, memory=192GiB, on-demand=5.088 (us-west-1)
 priceMap['c7g.metal']   = '2.89' // arm64 bare-metal, vCPU=64, memory=128GiB, on-demand=2.8832 (us-west-1)
 
