@@ -917,6 +917,13 @@ maxUseMap['min-al2023-aarch64'] = maxUseMap['singleUse']
 maxUseMap['metal-x64']     = maxUseMap['multipleUse']
 maxUseMap['metal-aarch64'] = maxUseMap['multipleUse']
 
+// Launch-timeout budget per OS type. The value doubles as the SSH wait budget,
+// so bare metal needs a longer one: a c5.metal or c7g.metal power-on takes far
+// longer than a virtualised instance, and reaping it early would loop.
+timeoutMap = [:]
+timeoutMap['metal-x64']     = '2400'
+timeoutMap['metal-aarch64'] = '2400'
+
 maxUseMap['ramdisk-centos-6-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-7-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-8-x64'] = maxUseMap['singleUse']
@@ -986,7 +993,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -1015,7 +1022,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        timeoutMap[OSType] ?: '900',                // String launchTimeoutStr (terminate agents stuck launching so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess
