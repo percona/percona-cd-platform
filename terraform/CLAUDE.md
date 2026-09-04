@@ -25,6 +25,8 @@ the CI `tofu` job); the repo-root `CLAUDE.md` carries the platform-wide rules.
    shape (full TF master, fleet-only against a CFN master, or ps3's
    fleet-remnant). When a CFN master migrates, its fleet file grows the
    master module under the same name; pmm lands as `master-pmm.tf`.
+   (The fleet-only-against-a-CFN-master shape is now historical; all masters
+   are full TF.)
    Before cutover, diff the LIVE worker/master roles
    (`aws iam list-role-policies` + `list-attached-role-policies` +
    `get-role-policy` per inline name) against the CFN template: live roles

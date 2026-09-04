@@ -1,6 +1,6 @@
 # Inputs are deliberately minimal so the module attaches to both Terraform-
-# managed masters (feed module.<master>.* outputs) and still-CloudFormation
-# masters (feed existing resource IDs via data sources / literals).
+# managed masters (feed module.<master>.* outputs) and masters not managed by
+# `jenkins-master` (feed existing resource IDs via data sources / literals).
 
 variable "short_name" {
   description = "Master short name, e.g. jenkins-ps3. Prefixes fleet resource names + sets the cleanup-safe iit-billing-tag."

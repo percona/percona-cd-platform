@@ -160,8 +160,8 @@ End-to-end push pipeline live on every master. `Percona-Lab/jenkins-pipelines`
 PR #4037 (commit 83adb97) codified `alloy.service` + `amazon-ssm-agent` + the
 scoped `AlloyGatewayBearerRead` IAM policy on every `jenkins-<inst>-master`
 role via CFN (9 masters) and Terraform (`pxb.cd`). The split has since
-inverted: the jenkins-master module carries the same policy for the 8 TF
-masters and only `pg.cd` remains CFN.
+fully inverted: the jenkins-master module now carries the same policy for all
+nine TF masters and no master remains on CloudFormation.
 
 Verified against Mimir / Loki via `scripts/check-master-ingest.sh`: each
 master pushes ~180 datapoints per 3 hours on `hetzner_api_rate_limit_remaining`
@@ -185,11 +185,7 @@ secret rotation is a `systemctl restart alloy` away.
 
 ### Rotation forcing pattern
 
-On `pg.cd` (the one remaining CFN spot master), a change-set that updates the
-`LaunchTemplate` version without forcing SpotFleet replacement (e.g., a
-userData-only diff) needs `aws ec2 terminate-instances` on the active master;
-SpotFleet re-launches on the new template and the EIP follows automatically,
-so DNS stays stable. The 8 TF masters run on-demand `aws_instance` with
+All nine TF masters run on-demand `aws_instance` with
 `ignore_changes = [user_data, ami]`: a userData or AMI diff only bumps the
 launch-template version and lands on the NEXT instance replacement, never on
 a plain apply (no `terraform taint` needed). Their DNS is ALB-fronted and

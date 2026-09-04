@@ -4,7 +4,7 @@
 **Status:** Accepted (2026-06-18)
 **Related:** [ADR 0026](0026-canary-dr-operating-model.md) (closes its flagged "24h EBS-RPO floor as an unmade decision"), [ADR 0028](0028-jenkins-dynamic-config-data-lifecycle.md) (the `workload=jenkins` vault-leak constraint, and the in-cluster snapscheduler vehicle this reconciles with), [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (ownership boundary: out-of-band resources have no owner), [docs/eks-hardening.md](../eks-hardening.md) item #14.
 
-> **Implementation status: APPLIED (2026-06-18).** The Terraform DLM module and `ebs-snapshots.tf` are applied to AWS: one ENABLED policy per master region on the new role, and all nine master data volumes carry `snapshot-policy=jenkins-master` (pg tagged in place via `aws_ec2_tag`). Coverage is verified live. STILL PENDING one daily cycle: the first daily snapshot firing per master volume, the cross-region copy landing in us-east-1, and the retirement of the 12 legacy console DLM policies (which includes the fb and ps3 orphans).
+> **Implementation status: APPLIED (2026-06-18).** The Terraform DLM module and `ebs-snapshots.tf` are applied to AWS: one ENABLED policy per master region on the new role, and all nine master data volumes carry `snapshot-policy=jenkins-master` (pg tagged in place via `aws_ec2_tag`). Coverage is verified live. Update (2026-07-07): pg migrated to Terraform (PKG-1341); its data volume now carries the tag via `modules/jenkins-master` like the rest, retiring the `aws_ec2_tag` stopgap. STILL PENDING one daily cycle: the first daily snapshot firing per master volume, the cross-region copy landing in us-east-1, and the retirement of the 12 legacy console DLM policies (which includes the fb and ps3 orphans).
 
 ## Context
 

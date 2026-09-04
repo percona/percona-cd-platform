@@ -1,9 +1,9 @@
 # EC2 Jenkins master resilience
 
-The eight Terraform-managed masters run as single ON-DEMAND instances
-since the CFN→TF migrations (the wave completed 2026-06-10), which ended
-the master-side spot reclamations; only pg's legacy CloudFormation master
-still rides a SpotFleet. Without help, an abrupt instance loss or JVM
+The nine Terraform-managed masters run as single ON-DEMAND instances
+since the CFN to TF migrations (the fleet wave completed 2026-06-10, pg
+last on 2026-07-07), which ended the master-side spot reclamations across
+the whole fleet. Without help, an abrupt instance loss or JVM
 crash loses in-flight pipelines and reaps every Hetzner worker the master
 had provisioned. This doc covers the four layered mechanisms the platform
 puts in place — built for the spot era, retained as defense-in-depth —
@@ -23,7 +23,7 @@ the original `ps3` validation is kept as the reference run.
 |---|---|---|
 | **SpotFleet Capacity Rebalancing** | AWS launches a replacement on a rebalance recommendation, minutes to hours before a spot interruption notice. The replacement is booting while the old instance still serves traffic. | `terraform/modules/jenkins-master/main.tf` (`spot_maintenance_strategies.capacity_rebalance`) |
 | **Graceful spot-interrupt drain** | A 30-second cron on the master detects `spot/instance-action` IMDS metadata and runs a script that: quietDown, polls `busyExecutors` up to 85 s, safeExit, copies the log, unmounts the data EBS. `flock` prevents concurrent runs. | `terraform/modules/jenkins-master/user-data.sh.tftpl` (`jenkins-graceful-stop.sh` install + cron) |
-| **Pipeline durability** | `MAX_SURVIVABILITY` global default. Every pipeline step is persisted to disk so an abrupt JVM stop resumes at the same step on the next start. | `resources/jenkins-masters/<host>/init.groovy.d/durability.groovy` (S3-delivered; pg still from `Percona-Lab/jenkins-pipelines:IaC/pg.cd/`) |
+| **Pipeline durability** | `MAX_SURVIVABILITY` global default. Every pipeline step is persisted to disk so an abrupt JVM stop resumes at the same step on the next start. | `resources/jenkins-masters/<host>/init.groovy.d/durability.groovy` (S3-delivered) |
 | **Hetzner worker rehydrate** | After a hard JVM stop, the Percona-patched Hetzner plugin re-adopts surviving Hetzner VMs as Jenkins agents instead of letting `OrphanedNodesCleaner` reap them. DC circuit-breaker state is also persisted so a restart does not stampede a still-sick datacenter. | `Percona-Lab/jenkins-hetzner-cloud-plugin` (rehydrate since v103.percona.22), `init.groovy.d` |
 
 The four layers compose: rebalancing reduces the chance of needing the

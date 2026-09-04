@@ -15,10 +15,9 @@ The AWS substrate, applied only through the repo justfile (`just tf-plan` /
 
 ## Jenkins masters
 
-Eight EC2 masters are fully Terraform-managed here (ps57, ps80, pxb, pxc,
-psmdb, rel, cloud, pmm), each EKS-fronted for HTTPS; ps3 runs in-cluster and
-keeps only its ARM fleet substrate here; pg still runs on CloudFormation
-(`Percona-Lab/jenkins-pipelines/IaC/pg.cd`) with only its ARM fleet here.
+Nine EC2 masters are fully Terraform-managed here (ps57, ps80, pxb, pxc,
+psmdb, rel, cloud, pmm, pg), each EKS-fronted for HTTPS; ps3 runs in-cluster
+and keeps only its ARM fleet substrate here.
 
 Shell access to the masters: [`docs/runbooks/master-shell-access.md`](../docs/runbooks/master-shell-access.md).
 

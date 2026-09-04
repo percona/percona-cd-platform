@@ -113,8 +113,7 @@ flowchart TB
 
     subgraph masters["Jenkins controllers (5 regions)"]
         ps3["ps3: in-cluster StatefulSet<br/>(Mode A, PoC)"]
-        ec2m["8 EC2 on-demand controllers<br/>pmm, ps57, ps80, psmdb,<br/>pxb, pxc, rel, cloud<br/>(Mode B, transitional)"]
-        pg["pg: legacy CloudFormation<br/>SpotFleet, direct DNS"]
+        ec2m["9 EC2 on-demand controllers<br/>pmm, ps57, ps80, psmdb,<br/>pxb, pxc, rel, cloud, pg<br/>(Mode B, transitional)"]
     end
 
     cdp -- "tofu apply (operator)" --> masters
@@ -132,8 +131,7 @@ ways. The table is the map, details follow.
 | Mode | Hosts | Path | Status |
 |---|---|---|---|
 | A: in-cluster | `ps3` | ALB to pod, directly | Target shape for every controller, proof of concept today |
-| B: proxied EC2 | `pmm`, `ps57`, `ps80`, `psmdb`, `pxb`, `pxc`, `rel`, `cloud` | ALB to in-cluster NGINX, then VPC peering to the EC2 controller | Today's production, transitional by design |
-| Legacy direct | `pg` | DNS to the master's own EIP, on-box TLS | Pre-migration shape, last master to move |
+| B: proxied EC2 | `pmm`, `ps57`, `ps80`, `psmdb`, `pxb`, `pxc`, `rel`, `cloud`, `pg` | ALB to in-cluster NGINX, then VPC peering to the EC2 controller | Today's production, transitional by design |
 
 **Shared ingress (modes A and B).** Master DNS points at the dedicated
 `jenkins-masters` ALB group. Platform UIs (Grafana, ArgoCD, Authentik) and
@@ -168,10 +166,6 @@ private IP into the Service's EndpointSlice, so instance replacement
 converges without DNS changes. The entire Mode B chain is transitional:
 every controller that moves in-cluster deletes its share of the proxy, the
 reconciliation, and the peering.
-
-**Legacy direct.** `pg` predates the migration: DNS points at its own EIP
-with on-box TLS, still CloudFormation-managed in jenkins-pipelines. Details:
-[`connectivity.md`](connectivity.md), [`tls-strategy.md`](tls-strategy.md).
 
 **Internal network.** The private topology is a hub and spoke: the EKS cell
 VPC peers to each EC2 master VPC, one peering per master, across regions.
@@ -344,9 +338,7 @@ Most of these are properties of the intermediate step and retire as
 controllers move in-cluster. They are listed because the middle step is
 today's production.
 
-- `pg` remains on CloudFormation and a SpotFleet, with on-box TLS. Its
-  migration must follow the live-IAM-parity preflight.
-- Eight identity volumes are irreplaceable state. They are now covered by
+- Nine identity volumes are irreplaceable state. They are now covered by
   Terraform-managed daily snapshots (one DLM policy per master region, 14
   retained, copied to us-east-1 for cross-region durability), so a single
   region loss is survivable at an explicit 24h RPO
@@ -395,8 +387,7 @@ Proposed ADR when picked up.
 
 | Host(s) | Mode | Notes |
 |---|---|---|
-| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `ps57`, `rel`, `cloud` (`.cd.percona.com`) | B: ALB to in-cluster NGINX to EC2 controller | Single on-demand instances, Terraform-managed (`terraform/master-<host>.tf`), EIP-less (dynamic public IP, shell via SSM). pxc exceptionally keeps an EIP for a pinned inbound JNLP agent |
-| `pg.cd.percona.com` | Legacy direct | Own EIP, on-box openresty + certbot, CloudFormation SpotFleet (`Percona-Lab/jenkins-pipelines/IaC/pg.cd/`). The only remaining master on this shape |
+| `pmm`, `ps80`, `pxc`, `pxb`, `psmdb`, `ps57`, `rel`, `cloud`, `pg` (`.cd.percona.com`) | B: ALB to in-cluster NGINX to EC2 controller | Single on-demand instances, Terraform-managed (`terraform/master-<host>.tf`), EIP-less (dynamic public IP, shell via SSM). pxc exceptionally keeps an EIP for a pinned inbound JNLP agent |
 | `ps3.cd.percona.com` | A: in-cluster StatefulSet (PoC) | Served directly by the pod. Seeded from the former EC2 master via cross-region EBS snapshot ([`runbooks/migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md)). The EC2 pet was retired 2026-06-07, and its still-load-bearing substrate moved to `jenkins-arm-standalone` ([`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md)) |
 | `grafana.cd.percona.com`, `argo.cd.percona.com`, `auth.cd.percona.com` | In-cluster services | Platform UIs on the `jenkins-cd` ALB group |
 
@@ -454,7 +445,8 @@ stay active and cover any abrupt instance loss:
 
 - **Replacement before interruption.** Capacity rebalancing requests a
   substitute when AWS signals reclaim risk, ahead of the two-minute notice
-  (relevant to pg, the one master still on a SpotFleet).
+  (no master runs on a SpotFleet since pg migrated 2026-07-07; this
+  rebalancing path is dormant fleet-wide).
 - **Graceful drain.** A boot-installed hook watches instance metadata for
   an interruption notice and runs quiet-down, wait, safe-exit, so running
   builds checkpoint instead of dying mid-step.

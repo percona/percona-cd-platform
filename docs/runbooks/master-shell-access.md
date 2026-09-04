@@ -146,9 +146,8 @@ Two separate things are at play here, do not conflate them:
 - **The master's public IP** (where you connect TO) is dynamic. The masters
   carry no Elastic IPs, so each gets a subnet-auto-assigned public IPv4 that
   CHANGES on every instance rotation or stop/start. Never pin anything to it;
-  discover the current one with `just ssh` (the PUBLIC-IP column). The exceptions
-  are pxc (keeps an EIP for an inbound JNLP agent pinned to it) and pg (still
-  CFN, the EIP terminates its TLS).
+  discover the current one with `just ssh` (the PUBLIC-IP column). The exception
+  is pxc (keeps an EIP for an inbound JNLP agent pinned to it).
 - **`ssh_allowed_cidrs`** is the list of SOURCE IPs (yours) allowed to reach
   port 22. It is the SG ingress allow-list, unrelated to the master's own
   dynamic IP. Default is the 6-CIDR fleet baseline; per-master deltas are set in
