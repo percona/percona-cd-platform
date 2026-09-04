@@ -14,10 +14,10 @@
 # is fleet-unique, freed when the CFN stack deletes); legacy JSlave naming
 # (the worker instance profile is jenkins-psmdb-slave, referenced by name in
 # cloud.groovy); a third subnet in AZ a (the CFN VPC carried a/b/c;
-# cloud.groovy's netMap maps all three, the classic EC2 cloud instantiates
-# only AZ b, and the ARM fleet spreads across every subnet). The retained 300 GiB
-# gp2 data volume is imported in us-west-2b (az_index 1, the module default;
-# EBS is AZ-bound so the on-demand instance lands there too).
+# cloud.groovy's netMap maps all three, the classic EC2 cloud round-robins
+# its launches across them, and the ARM fleet spreads across every subnet).
+# The retained 300 GiB gp2 data volume is imported in us-west-2b (az_index 1,
+# the module default; EBS is AZ-bound so the on-demand instance lands there too).
 module "psmdb" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.us-west-2 }
