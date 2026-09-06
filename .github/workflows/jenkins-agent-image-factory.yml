@@ -96,13 +96,13 @@ jobs:
             echo "FATAL: no AMI id in packer manifest"
             exit 1
           fi
+          echo "ami=$ami" >> "$GITHUB_OUTPUT"
           arch_tag=$(aws ec2 describe-images --region "$AGENT_FACTORY_REGION" --image-ids "$ami" \
             --query "Images[0].Tags[?Key=='arch']|[0].Value" --output text)
           if [ "$arch_tag" != "$ARCH" ]; then
             echo "FATAL: manifest AMI $ami carries arch=$arch_tag, expected $ARCH"
             exit 1
           fi
-          echo "ami=$ami" >> "$GITHUB_OUTPUT"
           echo "- bake ($ARCH): $ami" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke (fresh boot + assertions, no by-product AMI)
@@ -129,8 +129,8 @@ jobs:
           done
           echo "- promote ($ARCH): $AMI is role=jenkins-agent" >> "$GITHUB_STEP_SUMMARY"
 
-      # A candidate that exists but never promoted (smoke failure, cancellation,
-      # parse failure) must not linger: deregister it with its snapshots.
+      # Deregister a reported candidate that never promoted, with its snapshots.
+      # Runner loss before the candidate ID is reported needs separate recovery.
       - name: Cleanup unpromoted candidate
         if: always() && steps.bake.outputs.ami != '' && steps.promote.outcome != 'success'
         env:
