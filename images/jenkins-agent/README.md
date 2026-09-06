@@ -14,9 +14,9 @@ x86_64-only containers run on Graviton workers.
 | Path | Role |
 |------|------|
 | `agent.pkr.hcl` | The single parameterized template. New (os, arch) combos extend variables, never copy the file |
-| `provisioners/00-common.sh` | Fleet-common payload (java, git, docker, awscli, archive tools) |
+| `provisioners/00-common.sh` | Fleet-common payload (Java 21, git, docker, awscli, archive tools and license files) |
 | `provisioners/10-qemu-binfmt.sh` | arm64 capability profile: digest-pinned qemu + persistent binfmt. Self-guards on arch |
-| `smoke/` | Fresh-boot assertion build. A candidate promotes only after this passes |
+| `smoke/` | Fresh-boot runtime and emulation checks. This is not a Jenkins agent connection test |
 | `justfile` | Local recipes mirroring the workflow: `fmt-check`, `validate`, `bake`, `smoke`, `promote`, `list` |
 
 To add an image family: add a provisioner script (numbered, self-guarded),
@@ -36,11 +36,33 @@ roles, loud no-op).
 ## Consumption
 
 Worker fleets consume committed per-region literal AMI ids (ADR 0029), bumped
-by PR after promotion. The Graviton fleets (`modules/jenkins-arm-fleet`)
-currently resolve the latest Amazon Linux 2 arm64 dynamically; adopting a
-baked image means passing `ami_id` explicitly per fleet, starting with a pxb
-canary, and slimming the boot user data to the instance-shape-specific steps
+by PR after promotion. Adopting a baked image requires a real Jenkins worker
+canary, starting with pxb, before changing any fleet's `ami_id`.
+Slim the boot user data only after that canary proves the image, retaining
+the instance-shape-specific steps
 (ephemeral /mnt mount, docker data-root) that stay out of the bake.
+
+## Verification boundary
+
+The smoke checks the native CPU architecture, Java 21, Docker access as the
+agent user, packaged license files and remoting class loading from
+`jenkins_url` (default: the pxb controller). On arm64 it also checks persistent
+binfmt registration and an x86_64 container. Remoting's `-version` verifies
+that the JVM can load it, not that an agent connects or runs a Jenkins job.
+
+The JVM requirement follows the
+[Jenkins Java support policy](https://www.jenkins.io/doc/book/platform-information/support-policy-java/).
+Local command-boundary regressions run with:
+
+```sh
+uv run --no-project python -m unittest discover -s images/jenkins-agent/tests -v
+```
+
+These tests also run in the workflow's credential-free validation job.
+They do not replace a real candidate bake, fresh boot or worker canary.
+`LICENSE`, `NOTICE`, this README and `LICENSE.qemu` are installed in
+`/licenses/`. Preserve upstream corresponding-source obligations when
+redistributing the extracted QEMU binary.
 
 ## Roadmap
 
