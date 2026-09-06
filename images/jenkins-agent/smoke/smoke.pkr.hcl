@@ -19,6 +19,19 @@ variable "candidate_ami" {
 
 variable "arch" {
   type = string
+  validation {
+    condition     = contains(["x86_64", "arm64"], var.arch)
+    error_message = "The arch value must be x86_64 or arm64."
+  }
+}
+
+variable "jenkins_url" {
+  type    = string
+  default = "https://pxb.cd.percona.com"
+  validation {
+    condition     = can(regex("^https://[^/]+$", var.jenkins_url))
+    error_message = "The Jenkins URL must be an HTTPS origin without a trailing slash."
+  }
 }
 
 variable "region" {
@@ -67,6 +80,13 @@ source "amazon-ebs" "smoke" {
   run_tags = {
     Name              = "jenkins-agent-smoke-${local.timestamp}"
     "iit-billing-tag" = var.billing_tag
+    PerconaKeep       = "True"
+    team              = "platform"
+  }
+  run_volume_tags = {
+    "iit-billing-tag" = var.billing_tag
+    PerconaKeep       = "True"
+    team              = "platform"
   }
 }
 
@@ -75,7 +95,8 @@ build {
 
   provisioner "shell" {
     env = {
-      SMOKE_ARCH = var.arch
+      SMOKE_ARCH        = var.arch
+      SMOKE_JENKINS_URL = var.jenkins_url
     }
     script = "smoke/verify.sh"
   }

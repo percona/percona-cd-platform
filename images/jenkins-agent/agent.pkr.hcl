@@ -50,6 +50,7 @@ locals {
   timestamp     = regex_replace(timestamp(), "[- TZ:]", "")
   image_name    = "jenkins-agent-${var.os_name}-${var.arch}-${local.timestamp}"
   instance_type = var.arch == "arm64" ? "c7g.large" : "c6i.large"
+  license_files = ["LICENSE", "NOTICE", "README.md", "LICENSE.qemu"]
 
   # Standard (not minimal) AL2023: the SSM agent ships preinstalled, which the
   # session_manager communicator and the fleet's shell access both rely on.
@@ -61,6 +62,8 @@ locals {
     os                = var.os_name
     arch              = var.arch
     source            = "factory"
+    PerconaKeep       = "True"
+    team              = "platform"
     "iit-billing-tag" = var.billing_tag
   }
 }
@@ -96,13 +99,19 @@ source "amazon-ebs" "agent" {
     delete_on_termination = true
   }
 
-  run_tags      = merge(local.common_tags, { Name = "${local.image_name}-builder" })
-  tags          = local.common_tags
-  snapshot_tags = local.common_tags
+  run_tags        = merge(local.common_tags, { Name = "${local.image_name}-builder" })
+  run_volume_tags = local.common_tags
+  tags            = local.common_tags
+  snapshot_tags   = local.common_tags
 }
 
 build {
   sources = ["source.amazon-ebs.agent"]
+
+  provisioner "file" {
+    sources     = local.license_files
+    destination = "/tmp/"
+  }
 
   # 10-qemu-binfmt self-guards on uname and no-ops on x86_64 builders, so the
   # provisioner list stays arch-agnostic.

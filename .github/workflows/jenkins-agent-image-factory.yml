@@ -49,6 +49,8 @@ jobs:
           done
       - name: shellcheck provisioners + smoke
         run: shellcheck images/jenkins-agent/provisioners/*.sh images/jenkins-agent/smoke/*.sh
+      - name: Smoke contract regressions (no AWS)
+        run: python3 -m unittest discover -s images/jenkins-agent/tests -v
 
   bake:
     name: Bake + smoke + promote (${{ matrix.arch }})
