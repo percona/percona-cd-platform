@@ -48,3 +48,30 @@ def test_main(mocker):
 
     mock_mcp.run_async.assert_called_once_with(transport='stdio')
     mock_mcp.enable.assert_called_once_with(tags={'read'}, only=True)
+
+
+def test_main_default_mode_fails_closed_to_read_only(mocker):
+    # No mode flag must apply the read-tags-only filter. Without it every tool stays registered,
+    # including the RCE-class run_groovy_script. A forgotten flag must not silently expose writes.
+    mocker.patch('mcp_jenkins.asyncio')
+    mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
+    mock_logger = mocker.patch('mcp_jenkins.logger')
+
+    result = CliRunner().invoke(main, ['--transport', 'stdio'])
+
+    assert result.exit_code == 0
+    mock_mcp.enable.assert_called_once_with(tags={'read'}, only=True)
+    mock_mcp.run_async.assert_called_once_with(transport='stdio')
+    mock_logger.warning.assert_called_once()  # warned that no mode flag was given
+
+
+def test_main_both_mode_flags_are_mutually_exclusive(mocker):
+    # --read-only + --enable-operate is a contradiction; refuse to start rather than pick one.
+    mocker.patch('mcp_jenkins.asyncio')
+    mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
+
+    result = CliRunner().invoke(main, ['--transport', 'stdio', '--read-only', '--enable-operate'])
+
+    assert result.exit_code != 0
+    mock_mcp.enable.assert_not_called()  # no tools enabled when the flags conflict
+    mock_mcp.run_async.assert_not_called()  # server never starts

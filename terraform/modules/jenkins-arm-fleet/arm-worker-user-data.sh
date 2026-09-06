@@ -24,18 +24,17 @@ fi
 ethtool -K eth0 sg off || true
 until yum makecache; do sleep 1; echo try again; done
 
-if command -v amazon-linux-extras >/dev/null 2>&1; then
-    amazon-linux-extras install epel -y || true
-fi
-yum -y install java-17-amazon-corretto-headless tzdata-java || yum -y install java-17-openjdk-headless tzdata-java || :
-yum -y install git docker p7zip
+# Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; 21 also
+# connects fine to the 2.541.x controllers still awaiting their core bump.
+yum -y install java-21-amazon-corretto-headless tzdata-java unzip || yum -y install java-21-openjdk-headless tzdata-java unzip || yum -y install java-17-amazon-corretto-headless tzdata-java unzip || :
+yum -y install git docker
 yum -y remove awscli || :
 
 # awscli v2, arch-aware ($(uname -m) -> aarch64), not the hardcoded x86_64 URL.
 if ! aws --version 2>/dev/null | grep -q 'aws-cli/2'; then
     find /tmp -maxdepth 1 -name "*aws*" | xargs rm -rf || true
     until curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "/tmp/awscliv2.zip"; do sleep 1; echo try again; done
-    7za -aoa -o/tmp x /tmp/awscliv2.zip
+    unzip -q -o /tmp/awscliv2.zip -d /tmp
     (cd /tmp/aws && ./install)
 fi
 
@@ -55,7 +54,7 @@ sysctl -w fs.file-max=6815744 || true
 echo "*  soft  core  unlimited" >> /etc/security/limits.conf
 
 echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' >> /etc/sysconfig/docker-storage || true
-sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service || true
+sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service || true
 systemctl daemon-reload || true
 install -o root -g root -d /mnt/docker
 usermod -aG docker ec2-user

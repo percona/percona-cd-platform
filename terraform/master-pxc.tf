@@ -26,7 +26,9 @@ module "pxc" {
   vpc_cidr                = "10.156.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  jenkins_package_version = "2.568.2"
+  java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "pxc-build-cache"
 
   # Retained CFN data volume vol-03b3852ad6dd6c553 is 300 GiB gp2 in us-west-1b
@@ -104,10 +106,11 @@ module "pxc" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pxc/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pxc/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the
-# docker-aarch64 fallback. capacity-optimized across m8g/m7g/m6g.2xlarge.
+# docker-aarch64 fallback. capacity-optimized across m8g/m7g/m6g.4xlarge.
 # ec2FleetCloud.groovy points pxc's EC2FleetCloud at this ASG
 # (jenkins-pxc-arm-graviton) on the docker-32gb-aarch64 label. $0 idle
 # (min_size/desired 0); the ec2-fleet plugin drives DesiredCapacity. Consumes
@@ -123,7 +126,7 @@ module "pxc_arm_fleet" {
   worker_instance_profile_name = module.pxc.worker_instance_profile_name
   master_role_name             = module.pxc.master_iam_role_name
   key_name                     = "percona-jenkins"
-  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
+  instance_types               = ["m8g.4xlarge", "m7g.4xlarge", "m6g.4xlarge", "m7gd.4xlarge", "m6gd.4xlarge", "r8g.4xlarge", "r7g.4xlarge", "r6g.4xlarge"]
   max_size                     = 16
   tickets                      = "PS-11228"
 }

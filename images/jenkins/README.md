@@ -20,10 +20,11 @@ forks (Hetzner cloud, EC2 cloud). Built and pushed to ECR by
 ## Base image: pinned by DIGEST
 
 ```dockerfile
-FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:<DIGEST>
+FROM jenkins/jenkins:2.568.2-lts-jdk21@sha256:<DIGEST>
 ```
 
-2.541.3 matches the live EC2 fleet. The image is built **multi-arch**
+2.568.2 is the current LTS with the open core security batches fixed
+(the EC2 fleet trails on 2.541.3 until its own upgrade). The image is built **multi-arch**
 (`linux/amd64` + `linux/arm64`) so it can run on Graviton EKS nodes. CI builds
 both arches (arm64 via QEMU on the amd64 runner) and pushes one manifest list. We
 pin the **multi-arch index digest**, so an upstream re-push of the same tag cannot
@@ -33,7 +34,7 @@ Refresh the digest on every LTS bump (use the multi-arch index digest, not a
 per-platform child):
 
 ```bash
-docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 \
+docker buildx imagetools inspect jenkins/jenkins:2.568.2-lts-jdk21 \
   --format '{{ .Manifest.Digest }}'
 ```
 
@@ -89,11 +90,19 @@ In the upstream `jenkins` chart, `overwritePluginsFromImage` only does anything
 when `installPlugins: true`, so with `installPlugins: false` it is **inert**, and
 `/usr/share/jenkins/ref/plugins/` seeds `$JENKINS_HOME/plugins` per the ref-dir
 seeder's own rules: a plain `<id>.jpi` is seeded ONLY when the home lacks that
-plugin or carries an OLDER build (version-compare), while a `<id>.jpi.override`
-is force-installed UNCONDITIONALLY (its content is COPYed over
-`$JENKINS_HOME/plugins/<id>.jpi` on every boot). On a PVC restored from a real
-EC2 master's `$JENKINS_HOME` the plugins dir is already populated, so for a plain
-`.jpi` the on-disk copy wins unless the baked one is strictly newer.
+plugin entirely, while a `<id>.jpi.override` is force-installed UNCONDITIONALLY
+(its content is COPYed over `$JENKINS_HOME/plugins/<id>.jpi` on every boot). On a
+PVC restored from a real master's `$JENKINS_HOME` the plugins dir is already
+populated, so for a plain `.jpi` the on-disk copy wins **regardless of version**.
+
+An earlier revision of this section claimed a plain `.jpi` also wins when the
+home carries an older build. It does not, and the difference matters: it is why
+bumping a version in `plugins.txt` never reaches a live controller. Measured
+against this image (2026-08-18): a home seeded with `credentials-binding`
+`719.v80e905ef14eb_` still ran `719` after booting an image baking `728`, while
+`ec2-fleet` seeded at `4.2.3.539` was replaced by the baked `4.4.0.554` because
+it carries an `.override`. Upstream offers `TRY_UPGRADE_IF_NO_MARKER=true` for a
+one-time upgrade of unmarked plugins if a controlled migration is ever wanted.
 
 We exploit those two behaviors deliberately:
 
@@ -104,12 +113,22 @@ We exploit those two behaviors deliberately:
   plugin as 0 bytes and it would fail to load (`ZipException: archive is not a
   ZIP archive`). Fork files are COPYed `--chown=jenkins:jenkins` so the seeder
   (which runs as the jenkins user) can read them.
-- **Community plugins stay SOFT.** They are left as plain `<id>.jpi`, so the
-  seeder version-compares and seeds only when the home lacks the plugin or has an
-  older build. A community plugin a human installed or upgraded via the Jenkins
-  UI on a live master is NOT clobbered on the next pod restart unless the image
-  pins a newer version. The image is the **floor** for community plugins, the
-  **source of truth** for the forks.
+- **Community plugins stay SOFT.** They are left as plain `<id>.jpi`, and what the
+  seeder does with one already in the home depends on its
+  `<id>.jpi.version_from_image` marker (see `jenkins-support`):
+  - **No marker**, which is every plugin on a home restored from an EC2 master:
+    SKIPPED whatever the versions, unless `TRY_UPGRADE_IF_NO_MARKER` is set. This
+    is the case that matters in practice and the reason a `plugins.txt` bump alone
+    does not reach a live controller.
+  - **Marker matching what is installed**: version-compared, and the image wins
+    only when it is newer.
+  - **Marker older than what is installed**, so a human upgraded via the UI:
+    SKIPPED, unless `PLUGINS_FORCE_UPGRADE` is set.
+
+  So the image is the floor for community plugins only once they carry a marker.
+  ps3 sets `TRY_UPGRADE_IF_NO_MARKER=true` to close that gap, which upgrades
+  unmarked plugins where the image is newer, never downgrades, and writes a marker
+  so later UI upgrades are protected.
 
 We do NOT set `overwritePluginsFromImage: true` (inert here, and it would force
 the WHOLE baked set, defeating the soft-community half of this policy), and we do
@@ -119,17 +138,24 @@ the byte-identical-to-EC2 restore property).
 
 > **Operator note:** the two forks win on EVERY pod boot, so to change a fork
 > version rebuild the image (bump `percona-plugins.lock.json`). A hand-edit on
-> the PVC is reset on the next restart. Community plugins are the opposite: a UI
-> upgrade persists, and a `plugins.txt` bump only raises the **floor** (the
-> seeder still skips it when the home carries an equal-or-newer build). To FORCE
-> a community plugin on every boot the way the forks are forced, add its id to
-> `PINNED_PLUGINS` in the `Dockerfile` (it is renamed to `<id>.jpi.override` and
-> force-installed unconditionally); `ec2-fleet` is pinned that way today.
+> the PVC is reset on the next restart. Community plugins differ: a UI upgrade
+> persists, and a `plugins.txt` bump reaches an existing home only through the
+> marker rules above, which on a restored home means only when
+> `TRY_UPGRADE_IF_NO_MARKER` is set.
+>
+> Adding a community plugin to `PINNED_PLUGINS` is NOT the way to deliver a
+> version bump. Those become `<id>.jpi.override`, which is copied with no version
+> compare, so it will happily replace a NEWER plugin on the PVC with an older
+> baked one. Measured on ps3: 32 of its plugins sit ahead of the image (`git`,
+> `okhttp-api` and `disk-usage` among them), and pinning them would downgrade all
+> 32. Reserve `PINNED_PLUGINS` for plugins the image must own outright, and use
+> `TRY_UPGRADE_IF_NO_MARKER` to deliver ordinary upgrades. `ec2-fleet` is pinned
+> today because ps3 and the EC2 masters must agree on it exactly.
 
 ## Image reference: TAG, not digest (today)
 
 The chart pins the image by an **immutable SHA-TAG** `<lts>-<gitsha>` (e.g.
-`2.541.3-a1b2c3d`), not by a true `@sha256:` digest. The upstream `jenkins`
+`2.568.2-a1b2c3d`), not by a true `@sha256:` digest. The upstream `jenkins`
 subchart (5.9.18) has no `digest` key, so a real digest pin waits on the pilot
 chart rebuild. The ECR repo is IMMUTABLE, so the SHA-tag cannot be overwritten,
 which gets most of the immutability benefit. Be honest in bump PRs: this is a

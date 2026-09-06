@@ -24,7 +24,9 @@ module "ps57" {
   vpc_cidr                = "10.157.0.0/22"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euc1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  jenkins_package_version = "2.568.2"
+  java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "ps-build-cache"
 
   # Retained CFN data volume vol-07070c2c983c2cc5f is 100 GiB gp2 in
@@ -93,6 +95,7 @@ module "ps57" {
     for f in fileset("${path.module}/../resources/jenkins-masters/ps57/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/ps57/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the

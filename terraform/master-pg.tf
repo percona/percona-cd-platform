@@ -18,6 +18,7 @@ module "pg" {
   team                    = "postgresql"
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euc1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
+  ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   jenkins_package_version = "2.541.3" # closes CVE-2026-27100 (pg is on 2.528.3)
 
   # Live network shape. B/C are the module's own cidrsubnet() math; B2/C2
@@ -28,6 +29,9 @@ module "pg" {
     b2 = { az_index = 1, cidr = "10.145.0.0/22" }
     c2 = { az_index = 2, cidr = "10.145.4.0/22" }
   }
+
+  # A, B and C primary subnets enabled, one per AZ.
+  extra_subnet_a = true
 
   # Retained data volume: live 500 GiB gp3 in eu-central-1b (the template
   # still said 100). encrypted=false is covered by the module's
@@ -85,6 +89,7 @@ module "pg" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pg/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pg/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64

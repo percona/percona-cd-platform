@@ -1,10 +1,13 @@
-# Base: Jenkins LTS 2.541.3 (matches the live fleet). Pinned BY DIGEST so an
+# Base: Jenkins LTS 2.568.2 on Java 21. Pinned BY DIGEST so an
 # upstream re-push of the same tag cannot change our base. Multi-arch INDEX
 # digest (carries linux/amd64 + linux/arm64) so the one pin builds both platforms.
 # Obtain/refresh with:
-#   docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 --format '{{.Manifest.Digest}}'
-# Last refreshed 2026-06-09 (#114); the pinned digest is on the FROM line below.
-FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:cce1eeb79902722f3cf7a8831c41e95c39f4a42b9a2981959630cc66539b3c2d
+#   docker buildx imagetools inspect jenkins/jenkins:2.568.2-lts-jdk21 --format '{{.Manifest.Digest}}'
+# 2.568.2 carries the 2026-06-10 and 2026-08-05 core security batches
+# (CVE-2026-53435..53442, CVE-2026-70426..70430), which are never backported
+# to 2.541.x. Since 2.555.1 the controller AND the agent remoting JVMs require
+# Java 21 or 25; this image line has run Java 21 since the 2.541.3-jdk21 pin.
+FROM jenkins/jenkins:2.568.2-lts-jdk21@sha256:8547df3b0db2803d158ecc9499207a056bb30c23fddc18bb5b4a4dc14e77dd09
 
 # Skip the setup wizard (configuration comes from the persistent volume)
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"

@@ -73,9 +73,9 @@ priceMap = [:]
 priceMap['m4.xlarge'] = '0.15' // type=m4.xlarge, vCPU=4, memory=16GiB, saving=62%, interruption='<5%', price=0.090300
 priceMap['m1.medium'] = '0.13' // centos6
 priceMap['c5.2xlarge'] = '0.28' // type=c5.2xlarge, vCPU=8, memory=16GiB, saving=53%, interruption='<5%', price=0.216700
-priceMap['r3.2xlarge'] = '0.21' // centos6
+priceMap['r3.2xlarge'] = '0.75' // bid at on-demand (0.741) so spot is never rejected as price-too-low, 7-day spot max was 0.25 against the old bid
 priceMap['c5.4xlarge'] = '0.40' // type=c5.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.200200
-priceMap['m6gd.4xlarge'] = '0.40' // aarch64 type=m6gd.4xlarge, vCPU=16, memory=64GiB, saving=62%, interruption='<5%', price=0.290000
+priceMap['m6gd.4xlarge'] = '0.85' // bid at on-demand (0.848) so spot is never rejected as price-too-low, 7-day spot max was 0.47 against the old bid
 priceMap['c5.metal']    = '5.10' // amd64 bare-metal, vCPU=96, memory=192GiB, on-demand=5.088 (us-west-1)
 priceMap['c7g.metal']   = '2.89' // arm64 bare-metal, vCPU=64, memory=128GiB, on-demand=2.8832 (us-west-1)
 
@@ -148,7 +148,9 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
     sudo yum -y remove awscli || :
 
@@ -251,20 +253,40 @@ initMap['rpmMap'] = '''
     done
 
     if [[ ${RHVER} -le 7 ]]; then
-        # CentOS 6/7 - Java 11
+        # CentOS 6/7 - Java 11 from the distro; CentOS 7 remoting moves to a
+        # pinned Temurin 21 below
         sudo yum -y install java-11-openjdk tzdata-java git ${PKGLIST} || :
     else
-        # CentOS 8, OL-8/9 - Java 17
+        # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8/OL9,
+        # RHEL 10 and AL2023 carry a Java 21 package in live repos.
         if [ -f /etc/os-release ]; then
             . /etc/os-release
         fi
         if [ "${ID}" = "amzn" ]; then
-            JAVA_PKG="java-17-amazon-corretto-headless"
+            JAVA_PKG="java-21-amazon-corretto-headless"
         else
-            JAVA_PKG="java-17-openjdk-headless"
+            JAVA_PKG="java-21-openjdk-headless"
         fi
-        sudo yum -y install ${JAVA_PKG} || :
+        sudo yum -y install ${JAVA_PKG} || sudo yum -y install java-17-openjdk-headless || :
         sudo yum -y install git tzdata-java || :
+    fi
+
+    # CentOS 7 and CentOS 8 track frozen vault repos with no Java 21 package,
+    # so their agent JVM is a pinned Temurin 21 JRE symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Needs glibc 2.17+, so
+    # CentOS 6 keeps its distro java and cannot join a 2.555.1+ controller.
+    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
     fi
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
     # CentOS 6 x32 workarounds
@@ -324,7 +346,24 @@ initMap['rpmMapRamdisk'] = '''
         sleep 1
         echo try again
     done
-    sudo yum -y install java-17-openjdk-headless tzdata-java git || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8/OL9
+    # carry java-21-openjdk in live repos; vault CentOS 7/8 get the pinned
+    # Temurin 21 below.
+    RHVER=$(rpm --eval %rhel)
+    sudo yum -y install java-21-openjdk-headless tzdata-java git || sudo yum -y install java-17-openjdk-headless tzdata-java git || :
+    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
+    fi
     sudo yum -y install aws-cli || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
@@ -357,9 +396,13 @@ initMap['debMap'] = '''
         echo try again
     done
     DEB_VER=$(lsb_release -sc)
-    if [[ ${DEB_VER} == "trixie" ]]; then
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; trixie,
+    # jammy, noble and resolute carry openjdk-21 in their own archives. The
+    # rest keep their distro package for tooling and get a pinned Temurin 21
+    # JRE below for remoting.
+    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
+    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
@@ -373,6 +416,33 @@ initMap['debMap'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
     fi
+
+    # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
+    # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
+    # 21; the distro package above stays the system java.
+    case "${DEB_VER}" in
+        bookworm|bullseye|buster|focal|bionic)
+            sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
+
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 
@@ -391,9 +461,13 @@ initMap['debMapRamdisk'] = '''
         echo try again
     done
     DEB_VER=$(lsb_release -sc)
-    if [[ ${DEB_VER} == "trixie" ]]; then
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; trixie,
+    # jammy, noble and resolute carry openjdk-21 in their own archives. The
+    # rest keep their distro package for tooling and get a pinned Temurin 21
+    # JRE below for remoting.
+    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
+    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
@@ -407,6 +481,33 @@ initMap['debMapRamdisk'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
     fi
+
+    # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
+    # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
+    # 21; the distro package above stays the system java.
+    case "${DEB_VER}" in
+        bookworm|bullseye|buster|focal|bionic)
+            sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
+
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 
@@ -429,7 +530,7 @@ initMap['metalDebMap'] = '''
         echo try again
     done
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \\
-        openjdk-17-jre-headless git \\
+        openjdk-21-jre-headless git \\
         qemu-kvm libvirt-daemon-system qemu-utils \\
         bridge-utils virtinst cpu-checker
     sudo usermod -aG libvirt,kvm $(id -u -n)
@@ -593,6 +694,8 @@ initMap['min-rhel-10-x64'] = '''
 '''
 
 capMap = [:]
+capMap['m4.xlarge']    = '20' // micro-amazon
+capMap['m1.medium']    = '5'  // min-centos-6-x32
 capMap['c5.2xlarge'] = '40'
 capMap['c5.4xlarge'] = '80'
 capMap['r3.2xlarge'] = '40'
@@ -763,7 +866,7 @@ labelMap['min-bookworm-x64']  = 'min-bookworm-x64'
 labelMap['min-trixie-x64']    = 'min-trixie-x64'
 labelMap['min-rhel-10-x64']   = 'min-rhel-10-x64'
 labelMap['min-al2023-x64']    = 'min-al2023-x64'
-labelMap['min-al2023-aarch64'] = 'min-al2023-aarch64 docker-32gb-aarch64'
+labelMap['min-al2023-aarch64'] = 'min-al2023-aarch64'
 labelMap['metal-x64']     = 'metal-x64 native-kvm-x64'
 labelMap['metal-aarch64'] = 'metal-aarch64 native-kvm-aarch64'
 
@@ -815,6 +918,19 @@ maxUseMap['min-al2023-x64']    = maxUseMap['singleUse']
 maxUseMap['min-al2023-aarch64'] = maxUseMap['singleUse']
 maxUseMap['metal-x64']     = maxUseMap['multipleUse']
 maxUseMap['metal-aarch64'] = maxUseMap['multipleUse']
+
+// Launch-timeout budget per OS type. The value doubles as the SSH wait budget,
+// so bare metal needs a longer one: a c5.metal or c7g.metal power-on takes far
+// longer than a virtualised instance, and reaping it early would loop.
+timeoutMap = [:]
+timeoutMap['metal-x64']     = '2400'
+timeoutMap['metal-aarch64'] = '2400'
+
+// Spot to on-demand fallback per OS type. Bare metal stays spot-only: on-demand
+// c5.metal and c7g.metal cost 6 to 7 times their spot price and both pools score 3.
+fallbackMap = [:]
+fallbackMap['metal-x64']     = false
+fallbackMap['metal-aarch64'] = false
 
 maxUseMap['ramdisk-centos-6-x64'] = maxUseMap['singleUse']
 maxUseMap['ramdisk-centos-7-x64'] = maxUseMap['singleUse']
@@ -885,7 +1001,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], fallbackMap.getOrDefault(OSType, true), '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable, except bare metal)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -914,7 +1030,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        timeoutMap[OSType] ?: '900',                // String launchTimeoutStr (terminate agents stuck launching so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess
@@ -970,10 +1086,10 @@ String region = 'us-west-1'
             getTemplate('min-noble-x64',    "${region}${it}"),
             getTemplate('min-resolute-x64',    "${region}${it}"),
             getTemplate('min-al2023-x64',       "${region}${it}"),
-            // docker-32gb-aarch64 stays on the classic min-al2023-aarch64 template
-            // THROUGH cutover so the label is never orphaned. It is retired to the
-            // Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton) only after
-            // the Fleet is staged + a smoke build passes post-cutover. PS-11228.
+            // min-al2023-aarch64 must NOT carry docker-32gb-aarch64: that label is
+            // served solely by the Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton).
+            // Co-serving routes the label to no cloud and starves fleet provisioning,
+            // so jobs hang on "all nodes of label docker-32gb-aarch64 are offline".
             getTemplate('min-al2023-aarch64',   "${region}${it}"),
             getTemplate('metal-x64',            "${region}${it}"),
             getTemplate('metal-aarch64',        "${region}${it}"),

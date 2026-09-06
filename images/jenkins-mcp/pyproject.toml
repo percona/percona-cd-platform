@@ -1,6 +1,6 @@
 [project]
 name = "mcp-jenkins"
-version = "0.9.1"
+version = "0.9.5"
 description = "Token-free Jenkins fleet MCP gateway for Percona developers. Authenticates callers via Authentik (Duo) OIDC and holds a single Jenkins credential; serves open read tools plus writers-gated operate (build) and manage (job-config CRUD) tiers."
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "boto3~=1.35",
-    "fastmcp>=3.0.2,<4",
+    "fastmcp>=3.4.7,<4",
     "loguru>=0.7.3",
     "prometheus-client>=0.21.0",
     "requests>=2.32.5",
@@ -22,6 +22,8 @@ mcp-jenkins = "mcp_jenkins:main"
 
 [dependency-groups]
 dev = [
+    # starlette >=1.2 TestClient prefers httpx2 and warns (then errors) on the plain-httpx fallback.
+    "httpx2>=2.10",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",

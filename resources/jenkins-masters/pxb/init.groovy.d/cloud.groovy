@@ -22,7 +22,7 @@ netMap['us-west-2b'] = 'subnet-011f09cf273aeef73'
 netMap['us-west-2c'] = 'subnet-00b0d1d8bd8af5c07'
 
 imageMap = [:]
-imageMap['docker'] = 'ami-0f64dfdea96e44686'
+imageMap['docker'] = 'ami-06a974f9b8a97ecf2'
 imageMap['docker-32gb'] = imageMap['docker']
 imageMap['micro-amazon'] = imageMap['docker']
 imageMap['min-centos-7-x64'] = 'ami-04f798ca92cc13f74'
@@ -40,7 +40,7 @@ imageMap['min-bookworm-x64'] = 'ami-0544719b13af6edc3'
 priceMap = [:]
 priceMap['c5a.large'] = '0.08'    // type=c5a.large, vCPU=2, memory=4GiB, saving=55%, interruption='<5%', price=0.043400
 priceMap['m5n.2xlarge'] = '0.32'  // type=m5n.2xlarge, vCPU=8, memory=32GiB, saving=48%, interruption='<5%', price=0.253000
-priceMap['g4ad.4xlarge'] = '0.62'  // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=48%, interruption='<5%', price=0.512200
+priceMap['m5.4xlarge'] = '0.77'  // type=m5.4xlarge, vCPU=16, memory=64GiB, on-demand=0.768, spot us-west-2a=0.3242 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
 
 userMap = [:]
 userMap['docker'] = 'ec2-user'
@@ -81,12 +81,14 @@ initMap['docker'] = '''
         echo try again
     done
 
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove java-1.7.0-openjdk awscli
+
+    sudo systemctl enable crond
+    sudo systemctl start crond
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
@@ -96,7 +98,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -o/tmp x /tmp/awscliv2.zip 
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -129,7 +131,7 @@ initMap['rpmMap'] = '''
     RHVER=$(rpm --eval %rhel)
     ARCH=$(uname -m)
     SYSREL=$(cat /etc/system-release | tr -dc '0-9.'|awk -F'.' {'print $1'})
-    
+
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
             if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
@@ -157,7 +159,19 @@ initMap['rpmMap'] = '''
         sleep 1
         echo try again
     done
-    sudo yum -y install java-17-openjdk tzdata-java git ${PKGLIST} || :
+
+    # Determine Java version based on OS. Jenkins 2.555.1+ requires Java 21 on
+    # the agent remoting JVM; EL8/EL9 carry java-21-openjdk since 8.10/9.3 and
+    # AL2023 carries Corretto 21. Older EL (CentOS 7 and below) has no Java 21
+    # package and those agents cannot join a 2.555.1+ controller.
+    if [[ ${RHVER} -eq 10 ]] || [[ ${RHVER} -eq 9 ]] || [[ ${RHVER} -eq 8 ]]; then
+        JAVA_VER="java-21-openjdk"
+    elif [[ $SYSREL -eq 2023 ]]; then
+        JAVA_VER="java-21-amazon-corretto-headless"
+    else
+        JAVA_VER="java-17-openjdk"
+    fi
+    sudo yum -y install ${JAVA_VER} tzdata-java git ${PKGLIST} || :
     sudo yum -y remove java-1.7.0-openjdk || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
     # CentOS 6 x32 workarounds
@@ -181,7 +195,7 @@ initMap['rpmMap'] = '''
                 sleep 1
                 echo try again
             done
-            7za -o/tmp x /tmp/awscliv2.zip 
+            7za -o/tmp x /tmp/awscliv2.zip
             cd /tmp/aws && sudo ./install
         fi
     fi
@@ -213,7 +227,14 @@ initMap['debMap'] = '''
         echo try again
     done
     DEB_VER=$(lsb_release -sc)
-    if [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "resolute" ]]; then
+
+    # Determine Java version based on distribution. Jenkins 2.555.1+ requires
+    # Java 21 on the agent remoting JVM; resolute, jammy and noble carry
+    # openjdk-21 in their own archives. The rest keep their distro package for
+    # tooling and get a pinned Temurin 21 JRE below for remoting.
+    if [[ ${DEB_VER} == "resolute" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]]; then
+        JAVA_VER="openjdk-21-jre-headless"
+    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
@@ -227,6 +248,33 @@ initMap['debMap'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
     fi
+
+    # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
+    # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
+    # 21; the distro package above stays the system java.
+    case "${DEB_VER}" in
+        bookworm|bullseye|buster|focal|bionic)
+            sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
+
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 
@@ -248,13 +296,13 @@ initMap['min-resolute-x64']  = initMap['debMap']
 
 capMap = [:]
 capMap['m5n.2xlarge'] = '120'
-capMap['g4ad.4xlarge'] = '80'
+capMap['m5.4xlarge'] = '80'
 capMap['c5a.large'] = '15'
 
 typeMap = [:]
 typeMap['micro-amazon'] = 'c5a.large'
 typeMap['docker'] = 'm5n.2xlarge'
-typeMap['docker-32gb'] = 'g4ad.4xlarge'
+typeMap['docker-32gb'] = 'm5.4xlarge' // g4ad.4xlarge spot is unavailable in us-west-2a, the only AZ this cloud uses
 typeMap['min-centos-7-x64'] = typeMap['docker']
 typeMap['fips-centos-7-x64'] = typeMap['min-centos-7-x64']
 typeMap['min-ol-8-x64'] = typeMap['min-centos-7-x64']
@@ -287,7 +335,7 @@ execMap['min-bookworm-x64'] = '1'
 
 devMap = [:]
 devMap['docker'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
-devMap['docker-32gb'] = devMap['docker']
+devMap['docker-32gb'] = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s. m5.4xlarge has no instance store, so /mnt is this volume
 devMap['micro-amazon'] = devMap['docker']
 devMap['min-bionic-x64'] = '/dev/sda1=:30:true:gp3,/dev/sdd=:80:true:gp3'
 devMap['min-focal-x64'] = devMap['min-bionic-x64']
@@ -341,7 +389,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -370,7 +418,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        '900',                                      // String launchTimeoutStr (terminate agents stuck launching after 15 min so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess

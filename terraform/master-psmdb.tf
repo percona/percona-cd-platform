@@ -29,18 +29,11 @@ module "psmdb" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
+  # psmdb workers have no S3 build cache: no psmdb build cache bucket is
+  # wired through this module, so null drops the dead worker S3 IAM grant.
+  cache_bucket_name = null
 
-  # Baseline 6-CIDR fleet allowlist plus an operator's :22 source CIDR;
-  # codified so an apply does not strip the live rule (matches the pmm pattern).
-  ssh_allowed_cidrs = [
-    "46.149.86.84/32",
-    "54.214.47.252/32",
-    "54.214.47.254/32",
-    "176.37.55.60/32",
-    "188.163.20.103/32",
-    "213.159.239.48/32",
-    "86.127.231.233/32",
-  ]
+  ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 
   # Retained CFN data volume vol-090299a14ad3da940 is 300 GiB gp2 in
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
@@ -117,6 +110,7 @@ module "psmdb" {
     for f in fileset("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 

@@ -134,16 +134,9 @@ variable "extra_http_ingress" {
 }
 
 variable "ssh_allowed_cidrs" {
-  description = "Source CIDRs allowed on :22. Default is the 6-CIDR fleet baseline; pmm differs."
+  description = "Source CIDRs allowed on :22. No committed baseline: the fleet allowlist lives in SSM (/<cluster>/allowlist/master-ssh, ADR 0036) and every master-*.tf passes the resolved list. Empty means no :22 ingress."
   type        = list(string)
-  default = [
-    "46.149.86.84/32",
-    "54.214.47.252/32",
-    "54.214.47.254/32",
-    "176.37.55.60/32",
-    "188.163.20.103/32",
-    "213.159.239.48/32",
-  ]
+  default     = []
 }
 
 variable "create_eip" {
@@ -156,6 +149,18 @@ variable "jenkins_package_version" {
   description = "Jenkins yum package version."
   type        = string
   default     = "2.541.3"
+}
+
+variable "java_package" {
+  description = "Controller JVM yum package. Jenkins LTS 2.555.1 and later require Java 21 or 25 (java-21-amazon-corretto-headless); older cores run the default Java 17."
+  type        = string
+  default     = "java-17-amazon-corretto"
+}
+
+variable "jenkins_home_dirname" {
+  description = "Directory name under /mnt used as JENKINS_HOME. Defaults to hostname. Set to the SOURCE master's hostname when booting from a snapshot-restored data volume, so the restored tree is adopted in place without a rename. The observability master label stays this module's hostname either way."
+  type        = string
+  default     = null
 }
 
 variable "base_packages" {
@@ -190,7 +195,7 @@ variable "worker_role_legacy_naming" {
 }
 
 variable "extra_subnet_a" {
-  description = "Create an extra subnet in AZ index 0. Only psmdb."
+  description = "Create an extra subnet in AZ index 0. Only psmdb and pg."
   type        = bool
   default     = false
 }

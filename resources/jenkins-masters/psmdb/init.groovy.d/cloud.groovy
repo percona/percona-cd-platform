@@ -56,7 +56,8 @@ imageMap['min-trixie-aarch64']  = 'ami-021bb099085248f4c'
 priceMap = [:]
 priceMap['m5d.large']   = '0.13' // type=m5d.large, vCPU=2, memory=4GiB, saving=29%, interruption='<5%', price=0.071400
 priceMap['c5a.2xlarge']  = '0.25'  //type=c5a.2xlarge, vCPU=8, memory=16GiB, saving=58%, interruption='<5%', price=0.182000
-priceMap['g4ad.2xlarge'] = '0.33' //type=g4ad.2xlarge, vCPU=8, memory=32GiB, saving=63%, interruption='<5%', price=0.20
+priceMap['m6a.2xlarge']  = '0.35' // type=m6a.2xlarge, vCPU=8, memory=32GiB, on-demand=0.3456, spot us-west-2b=0.1718 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
+priceMap['m5.2xlarge']   = '0.39' // type=m5.2xlarge, vCPU=8, memory=32GiB, on-demand=0.384, spot us-west-2b=0.1497 (2026-09-02). Intel, for the Ubuntu 16.04 AMI that kernel-panics on m6a
 priceMap['i3en.3xlarge'] = '0.72' // type=i3en.3xlarge, vCPU=16, memory=64GiB, saving=70%, interruption='<5%'
 priceMap['i4g.4xlarge'] = '0.57' // aarch64 type=i4g.4xlarge, vCPU=16, memory=64GiB, saving=38%, interruption='<5%', price=0.488500
 
@@ -393,14 +394,15 @@ initMap['min-trixie-aarch64']   = initMap['debMap']
 
 capMap = [:]
 capMap['c5a.2xlarge'] = '60'
-capMap['g4ad.2xlarge'] = '80'
+capMap['m6a.2xlarge'] = '80'
+capMap['m5.2xlarge'] = '20'
 capMap['i3en.3xlarge'] = '30'
 capMap['i4g.4xlarge'] = '20'
 
 typeMap = [:]
 typeMap['micro-amazon']      = 'm5d.large'
 typeMap['docker']            = 'c5a.2xlarge'
-typeMap['docker-32gb']       = 'g4ad.2xlarge'
+typeMap['docker-32gb']       = 'm6a.2xlarge' // g4ad.2xlarge spot pool in us-west-2 dried up 2026-09-02, m6a is the same 8 vCPU / 32 GiB without the GPU
 typeMap['docker-64gb']       = 'i3en.3xlarge'
 typeMap['min-al2023-x64']    = typeMap['docker-32gb']
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
@@ -413,12 +415,12 @@ typeMap['min-buster-x64']    = typeMap['docker-32gb']
 typeMap['min-bullseye-x64']  = typeMap['docker-32gb']
 typeMap['min-bookworm-x64']  = typeMap['docker-32gb']
 typeMap['min-trixie-x64']    = typeMap['docker-32gb']
-typeMap['min-xenial-x64']    = typeMap['docker-32gb']
+typeMap['min-xenial-x64']    = 'm5.2xlarge' // 4.4 kernel panics at boot on m6a (AMD Zen 3), boots on Intel m5
 typeMap['min-bionic-x64']    = typeMap['docker-32gb']
 typeMap['min-focal-x64']     = typeMap['docker-32gb']
 typeMap['min-jammy-x64']     = typeMap['docker-32gb']
 typeMap['min-noble-x64']     = typeMap['docker-32gb']
-typeMap['psmdb']             = typeMap['docker-32gb']
+typeMap['psmdb']             = typeMap['min-xenial-x64'] // same Ubuntu 16.04 AMI
 typeMap['psmdb-bionic']      = typeMap['docker-32gb']
 
 typeMap['docker-64gb-aarch64']  = 'i4g.4xlarge'
@@ -565,7 +567,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -594,7 +596,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        '900',                                      // String launchTimeoutStr (terminate agents stuck launching after 15 min so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess

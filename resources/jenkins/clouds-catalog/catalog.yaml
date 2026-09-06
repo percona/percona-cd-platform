@@ -69,25 +69,37 @@ hetzner_defaults:
         sudo mkswap /swapfile
         sudo swapon /swapfile
 
-        # Pin apt to deb.debian.org (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324)
-        sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
-    deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-    deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-    deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
-    deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+        # Pin apt to Ubuntu's canonical archives (avoid Hetzner mirror lottery, see PKG-1323/PKG-1324).
+        # 24.04 ships DEB822 sources, so drop them first or every suite is configured twice.
+        # x86 is served by archive.ubuntu.com, arm64 by ports.ubuntu.com, so the list is per-arch.
+        sudo rm -f /etc/apt/sources.list.d/ubuntu.sources
+        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
+            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+    deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
     APT_EOF
+        else
+            sudo tee /etc/apt/sources.list > /dev/null <<'APT_EOF'
+    deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+    deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+    deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+    deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+    APT_EOF
+        fi
 
         export DEBIAN_FRONTEND=noninteractive
         until sudo apt-get update; do
             sleep 1
             echo try again
         done
-        until sudo apt-get -y install openjdk-17-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
+        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip git qemu-user-static binfmt-support; do
             sleep 1
             echo try again
         done
-        curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
         until sudo apt-get update; do
             sleep 1
             echo try again
@@ -143,11 +155,12 @@ initScripts:
             echo try again
         done
 
-        sudo amazon-linux-extras install epel -y
-        sudo amazon-linux-extras install java-openjdk11 -y
-        sudo yum -y install java-17-amazon-corretto-headless
-        sudo yum -y install git docker p7zip tzdata-java
+        sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-21-openjdk-headless tzdata-java cronie unzip || :
+        sudo yum -y install git docker
         sudo yum -y remove awscli
+
+        sudo systemctl enable crond
+        sudo systemctl start crond
 
         if ! $(aws --version | grep -q 'aws-cli/2'); then
             sudo rm -rf /tmp/aws* || true
@@ -157,7 +170,7 @@ initScripts:
                 echo try again
             done
 
-            7za -aoa -o/tmp x /tmp/awscliv2.zip
+            cd /tmp && unzip -q awscliv2.zip
             cd /tmp/aws && sudo ./install
         fi
 
@@ -173,7 +186,7 @@ initScripts:
         echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
         sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
         echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+        sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
         sudo systemctl daemon-reload
         sudo install -o root -g root -d /mnt/docker
         sudo usermod -aG docker $(id -u -n)
@@ -242,6 +255,20 @@ initScripts:
         echo '{"experimental": true, "ipv6": true, "fixed-cidr-v6": "fd3c:a8b0:18eb:5c06::/64"}' | sudo tee /etc/docker/daemon.json
         sudo systemctl restart docker
         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
+        # bullseye ships no openjdk-21 package, so the agent JVM is a pinned
+        # Temurin 21 JRE tarball under /opt (no third-party apt repo touches the
+        # box). The template sets javaPath to /opt/temurin-21/bin/java, so only
+        # remoting runs on 21; the openjdk-11 package above stays the system java.
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "^${T21_URL}"; do
+            sleep 1
+            echo try again
+        done
+        echo "^${T21_SHA}  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        /opt/temurin-21/bin/java -version
   docker-32gb-focal: |2
 
         set -o xtrace
@@ -263,7 +290,7 @@ initScripts:
             echo try again
         done
 
-        until sudo apt-get -y install openjdk-11-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
+        until sudo apt-get -y install openjdk-21-jre-headless apt-transport-https ca-certificates curl gnupg lsb-release unzip; do
             sleep 1
             echo try again
         done
@@ -341,11 +368,11 @@ initScripts:
 
         # Install Java based on RHEL version and OS type
         if [[ -f /etc/system-release ]] && grep -q "Amazon Linux" /etc/system-release; then
-            sudo yum -y install java-17-amazon-corretto-headless || :
+            sudo yum -y install java-21-amazon-corretto-headless || :
         elif [[ ^${RHVER} -eq 7 ]]; then
             sudo yum -y install java-17-openjdk-headless || sudo yum -y install java-11-openjdk-headless || :
         else
-            sudo yum -y install java-17-openjdk-headless || :
+            sudo yum -y install java-21-openjdk-headless || :
         fi
 
         sudo yum -y install git tzdata-java || :
@@ -374,7 +401,7 @@ initScripts:
             echo try again
         done
 
-        sudo yum -y install java-17-amazon-corretto-headless || :
+        sudo yum -y install java-21-amazon-corretto-headless || :
         sudo yum -y install git docker p7zip
         sudo yum -y remove awscli
 
@@ -440,11 +467,22 @@ initScripts:
 
         DEB_VER=$(lsb_release -sc)
 
-        if [[ ^${DEB_VER} == "trixie" ]]; then
-            JAVA_VER="openjdk-21-jre-headless"
-        else
-            JAVA_VER="openjdk-17-jre-headless"
-        fi
+        # Jenkins 2.555.1+ needs Java 21 on the agent JVM. These releases carry
+        # openjdk-21 in their own archives, so no third-party JDK repo is added
+        # to a package-test box. bionic, bullseye and bookworm keep their distro
+        # 17 package for any tooling that expects a system java; their agent JVM
+        # comes from the pinned Temurin 21 tarball below. xenial, stretch and
+        # buster cannot join a 2.555.1+ controller at all: their apt mirrors are
+        # archived, the until-apt-update loop above never exits, and the agent
+        # launch times out before any java is installed.
+        case "^${DEB_VER}" in
+            trixie|jammy|noble|resolute)
+                JAVA_VER="openjdk-21-jre-headless"
+                ;;
+            *)
+                JAVA_VER="openjdk-17-jre-headless"
+                ;;
+        esac
 
         if [[ ^${DEB_VER} == "trixie" ]] || [[ ^${DEB_VER} == "bookworm" ]] || [[ ^${DEB_VER} == "buster" ]]; then
             sudo apt-get -y install ^${JAVA_VER} git
@@ -455,6 +493,32 @@ initScripts:
         else
             sudo apt-get -y install ^${JAVA_VER} git
         fi
+
+        # bionic, bullseye and bookworm ship no openjdk-21 package, so the
+        # agent JVM is a pinned Temurin 21 JRE tarball under /opt (no
+        # third-party apt repo touches the box). The template sets javaPath to
+        # /opt/temurin-21/bin/java, so only remoting runs on 21; the distro
+        # packages above stay the system java.
+        case "^${DEB_VER}" in
+            bionic|bullseye|bookworm)
+                sudo apt-get -y install curl ca-certificates
+                if [ "$(uname -m)" = "aarch64" ]; then
+                    T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                    T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+                else
+                    T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                    T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+                fi
+                until curl -fsSL -o /tmp/temurin-21.tar.gz "^${T21_URL}"; do
+                    sleep 1
+                    echo try again
+                done
+                echo "^${T21_SHA}  /tmp/temurin-21.tar.gz" | sha256sum -c
+                sudo mkdir -p /opt/temurin-21
+                sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+                /opt/temurin-21/bin/java -version
+                ;;
+        esac
 
         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
   min-rhel-10-x64: |2

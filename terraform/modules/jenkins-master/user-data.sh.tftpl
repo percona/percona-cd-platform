@@ -86,13 +86,13 @@ install_software() {
     sed -i 's/^repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/jenkins.repo
     grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
     rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2026.key
-    retry yum -y install java-17-amazon-corretto
+    retry yum -y install ${java_package}
     retry yum -y update --security
     retry yum -y install jenkins-${jenkins_package_version} git dnf-automatic aws-cli xfsprogs
 
     sed -i 's/upgrade_type = default/upgrade_type = security/' /etc/dnf/automatic.conf
     sed -i 's/apply_updates = no/apply_updates = yes/'         /etc/dnf/automatic.conf
-    echo "exclude=java-17-amazon-corretto* jenkins*" >> /etc/dnf/automatic.conf
+    echo "exclude=${java_package}* jenkins*" >> /etc/dnf/automatic.conf
     systemctl enable --now dnf-automatic.timer
 
     # amazon-ssm-agent ships preinstalled on STANDARD AL2023 but NOT on the
@@ -177,6 +177,16 @@ start_jenkins() {
     if [ "$FRESH_DATA_VOLUME" = "1" ]; then
         echo "fresh data volume; running full recursive chown of JENKINS_HOME"
         chown -hR jenkins:jenkins /mnt/$JENKINS_HOST
+    else
+        # A newer base image can hand jenkins a different uid than the one
+        # owning the volume's content (another package claims the old uid),
+        # leaving JENKINS_HOME unwritable so Jenkins exits at startup. Probe
+        # a file the JVM must own; re-own the tree only on mismatch.
+        DATA_UID=$(stat -c %u /mnt/$JENKINS_HOST/config.xml 2>/dev/null || id -u jenkins)
+        if [ "$DATA_UID" != "$(id -u jenkins)" ]; then
+            echo "uid drift: JENKINS_HOME owned by uid $DATA_UID, jenkins is $(id -u jenkins); re-owning"
+            chown -hR jenkins:jenkins /mnt/$JENKINS_HOST
+        fi
     fi
 
     printf "127.0.0.1 $(hostname) $(hostname -A)\n10.30.6.220 vbox-01.ci.percona.com\n10.30.6.9 repo.ci.percona.com\n" \
@@ -329,14 +339,22 @@ install_init_groovy_files() {
     # bucket at boot. The repo is the source of truth (objects are uploaded
     # by Terraform), so a fresh-volume rebuild re-materializes the master's
     # full wiring set instead of relying on the carried-forward EBS data
-    # volume. Transits the S3 gateway VPC endpoint (same-region bucket). A
-    # failed fetch warns but never blocks boot. `jenkins iac deploy` remains
+    # volume. Transits the S3 gateway VPC endpoint (same-region bucket).
+    # Each file is staged and verified against the sha256 Terraform computed
+    # from the reviewed repo content; a mismatch or failed fetch warns and
+    # installs nothing, but never blocks boot. `jenkins iac deploy` remains
     # the no-restart hot-reload path for live edits.
-%{ for fname in init_groovy_files ~}
-    aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/${fname}" "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" --region "$INSTANCE_REGION" \
-        && chown jenkins:jenkins "/mnt/$JENKINS_HOST/init.groovy.d/${fname}" \
-        || echo "WARN: failed to fetch init.groovy.d/${fname} from s3://${init_groovy_s3_bucket}"
+    IGD_STAGE=$(mktemp -d)
+    igd_fetch() {
+        aws s3 cp "s3://${init_groovy_s3_bucket}/init.groovy.d/$1" "$IGD_STAGE/$1" --region "$INSTANCE_REGION" \
+            && echo "$2  $IGD_STAGE/$1" | sha256sum -c - \
+            && install -o jenkins -g jenkins -m 0644 "$IGD_STAGE/$1" "/mnt/$JENKINS_HOST/init.groovy.d/$1" \
+            || echo "WARN: fetch or sha256 verify failed for init.groovy.d/$1, not installed"
+    }
+%{ for fname, fsha in init_groovy_files ~}
+    igd_fetch "${fname}" "${fsha}"
 %{ endfor ~}
+    rm -rf "$IGD_STAGE"
 }
 %{ endif ~}
 
@@ -363,7 +381,7 @@ main() {
     # fetch the same content from a thin pass-through at
     # Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh
     # until they migrate to TF.
-    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="$JENKINS_HOST" bash
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="%{ if observability_label != "" }${observability_label}%{ else }$JENKINS_HOST%{ endif }" bash
 %{ endif ~}
 }
 

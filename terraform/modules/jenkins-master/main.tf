@@ -22,7 +22,7 @@ locals {
   worker_logical = var.worker_role_legacy_naming ? "slave" : "worker"
   worker_name    = "${var.short_name}-${local.worker_logical}"
 
-  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb.
+  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb and pg.
   subnet_indices = merge(
     { "b" = 1, "c" = 2 },
     var.extra_subnet_a ? { "a" = 0 } : {},
@@ -172,6 +172,11 @@ locals {
     })
   }
   init_groovy_all = merge(var.init_groovy_files, local.init_groovy_rendered)
+
+  # Integrity anchors for the S3-delivered files: the hash of what Terraform
+  # uploads renders into user-data and the SSM sync, so a fetched file is
+  # installed only when its content matches the reviewed repo state.
+  init_groovy_sha256 = { for name, content in local.init_groovy_all : name => sha256(content) }
 }
 
 resource "aws_s3_bucket" "init_config" {
@@ -232,13 +237,35 @@ resource "aws_ssm_association" "init_groovy_sync" {
     values = [aws_instance.master[0].id]
   }
 
+  # Two-phase: stage and verify EVERY file against its committed sha256,
+  # then install the whole set. set -eu means any fetch or hash failure
+  # aborts before phase two, so the live init.groovy.d is never left as a
+  # mix of old and new content. Still additive like the old `s3 sync`:
+  # only bucket-managed names are written.
   parameters = {
-    commands = join("\n", [
-      "set -eu",
-      "aws s3 sync s3://${aws_s3_bucket.init_config[0].id}/init.groovy.d/ /mnt/${var.hostname}/init.groovy.d/",
-      "chown -R jenkins:jenkins /mnt/${var.hostname}/init.groovy.d",
-    ])
+    commands = join("\n", concat(
+      [
+        "set -eu",
+        "STAGE=$(mktemp -d)",
+        "trap 'rm -rf $STAGE' EXIT",
+      ],
+      flatten([
+        for name, sha in local.init_groovy_sha256 : [
+          "aws s3 cp s3://${aws_s3_bucket.init_config[0].id}/init.groovy.d/${name} $STAGE/${name}",
+          "echo \"${sha}  $STAGE/${name}\" | sha256sum -c -",
+        ]
+      ]),
+      [
+        for name, sha in local.init_groovy_sha256 :
+        "install -o jenkins -g jenkins -m 0644 $STAGE/${name} /mnt/${var.hostname}/init.groovy.d/${name}"
+      ],
+    ))
   }
+
+  # The commands above embed the hashes of the NEW content. Without this
+  # edge the association (which re-applies immediately on update) can run
+  # against not-yet-updated S3 objects and fail its first run.
+  depends_on = [aws_s3_object.init_config]
 }
 
 resource "aws_security_group" "ssh" {
@@ -743,18 +770,20 @@ resource "aws_cloudwatch_event_target" "termination" {
 
 locals {
   user_data_rendered = templatefile("${path.module}/user-data.sh.tftpl", {
-    jenkins_host            = var.hostname
+    jenkins_host            = coalesce(var.jenkins_home_dirname, var.hostname)
     jenkins_short           = var.short_name
     eip_allocation_id       = var.create_eip ? aws_eip.master[0].id : ""
     data_volume_id          = aws_ebs_volume.data.id
     jenkins_package_version = var.jenkins_package_version
+    java_package            = var.java_package
+    observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
     init_groovy_hooks       = var.init_groovy_hooks
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""
-    init_groovy_files       = keys(local.init_groovy_all)
+    init_groovy_files       = local.init_groovy_sha256
     jvm_memory_opts         = var.jvm_memory_opts
   })
 }
@@ -818,12 +847,16 @@ resource "aws_launch_template" "master" {
   }
   tag_specifications {
     resource_type = "volume"
+    # No snapshot-policy here: the DLM policy covers DATA volumes only
+    # (docs/adr/0037-master-ebs-snapshot-rpo.md), and launch-created volumes
+    # are the root device. Stamping it at launch put root volumes into the
+    # snapshot policy and drifted against root_block_device tags on every
+    # rehydration.
     tags = {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
       "PerconaKeep"     = "True"
       team              = var.team
-      "snapshot-policy" = "jenkins-master"
     }
   }
 
