@@ -770,11 +770,13 @@ resource "aws_cloudwatch_event_target" "termination" {
 
 locals {
   user_data_rendered = templatefile("${path.module}/user-data.sh.tftpl", {
-    jenkins_host            = var.hostname
+    jenkins_host            = coalesce(var.jenkins_home_dirname, var.hostname)
     jenkins_short           = var.short_name
     eip_allocation_id       = var.create_eip ? aws_eip.master[0].id : ""
     data_volume_id          = aws_ebs_volume.data.id
     jenkins_package_version = var.jenkins_package_version
+    java_package            = var.java_package
+    observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)

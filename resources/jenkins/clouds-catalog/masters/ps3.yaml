@@ -146,6 +146,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m
     labelString: min-bionic-x64 asan
     numExecutors: 1
@@ -174,6 +175,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
     labelString: 'min-bookworm-x64 '
     numExecutors: 1
@@ -188,6 +190,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m
     labelString: 'min-bullseye-x64 '
     numExecutors: 1
@@ -300,6 +303,7 @@ ec2:
     ebsOptimized: false
     init: docker-32gb-bullseye
     instanceCapStr: '40'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m
     labelString: 'docker-32gb-bullseye '
     numExecutors: 1
@@ -328,6 +332,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m
     labelString: 'min-bookworm-aarch64 '
     numExecutors: 1
@@ -342,6 +347,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
+    javaPath: /opt/temurin-21/bin/java
     jvmopts: -Xmx512m -Xms512m
     labelString: 'min-bullseye-aarch64 '
     numExecutors: 1

@@ -20,10 +20,11 @@ forks (Hetzner cloud, EC2 cloud). Built and pushed to ECR by
 ## Base image: pinned by DIGEST
 
 ```dockerfile
-FROM jenkins/jenkins:2.541.3-lts-jdk17@sha256:<DIGEST>
+FROM jenkins/jenkins:2.568.2-lts-jdk21@sha256:<DIGEST>
 ```
 
-2.541.3 matches the live EC2 fleet. The image is built **multi-arch**
+2.568.2 is the current LTS with the open core security batches fixed
+(the EC2 fleet trails on 2.541.3 until its own upgrade). The image is built **multi-arch**
 (`linux/amd64` + `linux/arm64`) so it can run on Graviton EKS nodes. CI builds
 both arches (arm64 via QEMU on the amd64 runner) and pushes one manifest list. We
 pin the **multi-arch index digest**, so an upstream re-push of the same tag cannot
@@ -33,7 +34,7 @@ Refresh the digest on every LTS bump (use the multi-arch index digest, not a
 per-platform child):
 
 ```bash
-docker buildx imagetools inspect jenkins/jenkins:2.541.3-lts-jdk17 \
+docker buildx imagetools inspect jenkins/jenkins:2.568.2-lts-jdk21 \
   --format '{{ .Manifest.Digest }}'
 ```
 
@@ -154,7 +155,7 @@ the byte-identical-to-EC2 restore property).
 ## Image reference: TAG, not digest (today)
 
 The chart pins the image by an **immutable SHA-TAG** `<lts>-<gitsha>` (e.g.
-`2.541.3-a1b2c3d`), not by a true `@sha256:` digest. The upstream `jenkins`
+`2.568.2-a1b2c3d`), not by a true `@sha256:` digest. The upstream `jenkins`
 subchart (5.9.18) has no `digest` key, so a real digest pin waits on the pilot
 chart rebuild. The ECR repo is IMMUTABLE, so the SHA-tag cannot be overwritten,
 which gets most of the immutability benefit. Be honest in bump PRs: this is a

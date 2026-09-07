@@ -34,7 +34,8 @@ module "pxb" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.2"
+  java_package            = "java-21-amazon-corretto-headless"
   # pxb workers do not use an S3 build cache (null disables the worker S3 IAM
   # policy), matching the legacy pxb worker role.
   cache_bucket_name = null

@@ -67,6 +67,10 @@ def render_clouds(catalog, overlay):
                 "tags": [{"name": "Name", "value": f'{o["tagPrefix"]}{r["os"]}'},
                          {"name": "iit-billing-tag", "value": o["billingTag"]}],
             })
+            # Per-row javaPath override (agent JVM from a non-PATH install,
+            # e.g. the Temurin 21 tarball); default comes from ec2_defaults.
+            if "javaPath" in r:
+                t["javaPath"] = r["javaPath"]
             tmpls.append(t)
         ec2_clouds.append({"amazonEC2": {
             "name": cl["name"], "region": o["region"],

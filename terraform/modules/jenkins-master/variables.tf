@@ -151,6 +151,18 @@ variable "jenkins_package_version" {
   default     = "2.541.3"
 }
 
+variable "java_package" {
+  description = "Controller JVM yum package. Jenkins LTS 2.555.1 and later require Java 21 or 25 (java-21-amazon-corretto-headless); older cores run the default Java 17."
+  type        = string
+  default     = "java-17-amazon-corretto"
+}
+
+variable "jenkins_home_dirname" {
+  description = "Directory name under /mnt used as JENKINS_HOME. Defaults to hostname. Set to the SOURCE master's hostname when booting from a snapshot-restored data volume, so the restored tree is adopted in place without a rename. The observability master label stays this module's hostname either way."
+  type        = string
+  default     = null
+}
+
 variable "base_packages" {
   description = "Baseline packages yum-installed on every master. Defaults restore diagnostic/operator tools standard AL2023 bundles but the minimal AMI omits (dig, vim, etc.). Set [] to install none."
   type        = list(string)
