@@ -70,6 +70,22 @@ loki:
     # distributed Loki running on a churning K8s scheduler.
     ingester:
       autoforget_unhealthy: true
+    # Ruler: the Alloy DS syncs PrometheusRule resources labelled
+    # percona.com/ruler=loki here (loki.rules.kubernetes "loki_ruler" in
+    # resources/addons/alloy/values.yaml). The recorded samples go to Mimir
+    # so PromQL rules can join them with the metric series (first consumer:
+    # jenkins:master_log_lines:count15m in the jenkins-uptime addon). The
+    # tenant header is spelled out to match every other in-cluster writer
+    # instead of the ruler's own single-tenant id.
+    rulerConfig:
+      remote_write:
+        enabled: true
+        add_org_id_header: false
+        clients:
+          mimir:
+            url: http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push
+            headers:
+              X-Scope-OrgID: percona-ci
 
   # Distributed-mode replicas. Stateful tier (ingester/compactor/indexGateway/
   # ruler) pinned to the `lgtm-stateful` Karpenter pool via nodeSelector +
