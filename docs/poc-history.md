@@ -19,6 +19,7 @@ page is the timeline only. The technical lessons live in
 | 2026-06-07 | The ps3 EC2 pet is retired, its substrate re-parented ([runbook](runbooks/decommission-ps3-ec2-master.md)) |
 | Early June | ps57, pxb, pxc follow ps80 onto Terraform |
 | 2026-06-10 | The one-night wave: psmdb, rel, cloud, and pmm migrate (PRs 134, 136, 139, 141), the old CloudFormation stacks and VPCs are deleted, and the fleet goes EIP-less. Only pg remains on CloudFormation |
+| 2026-07-07 | pg migrates to Terraform (PKG-1341), the last CloudFormation master; zero CloudFormation masters remain (PRs 360, 362, 363) |
 
 ## What the PoC proved and what it cost
 

@@ -4,6 +4,8 @@
 **Status:** Accepted (2026-06-11)
 **Related:** [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (EKS fronting; named the EC2 Instance Connect Endpoint as preferred operator access, amended by this ADR), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (every master is SSM-managed: `AmazonSSMManagedInstanceCore` is universal).
 
+> **Update (2026-07-07):** pg migrated to Terraform (PKG-1341); its user-data codification now lives in the module.
+
 ## Context
 
 After the CloudFormation-to-Terraform migration the master hostnames resolve to the shared `jenkins-cd` ALB (HTTPS only), so direct hostname SSH times out. Operators reach the masters through SSM Session Manager (the `AWS-StartSSHSession` tunnel) or, as a break-glass path, the dynamic public IP behind a `/32` allowlist. SSH key authentication was satisfied only by static keys baked into `ec2-user`'s `authorized_keys` from each master's `ssh_key_engineers` list.
