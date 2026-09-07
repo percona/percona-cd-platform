@@ -36,8 +36,11 @@ _OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'cancel_
 # secrets (e.g. the <authToken> "trigger builds remotely" token). It is served as a 'read' tool but
 # gated to the writers group so it is NOT exposed to every authenticated SSO user. See PS-11341.
 _CONFIG_READ_TOOLS = frozenset({'get_item_config'})
-# Every tool whose call requires the writers group (build lifecycle + job-config CRUD + config read).
-_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_READ_TOOLS
+# Every tool whose call requires the writers group: build lifecycle, job-config CRUD, config-write,
+# config read. _CONFIG_TOOLS (run_groovy_script, set_node_config) are normally never registered (they
+# are write-tagged and no mode serves them), but they are gated here too so a mode-filter regression
+# that registered one keeps it writers-gated rather than open to any authenticated SSO user.
+_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS | _CONFIG_READ_TOOLS
 # All MUTATING tools, for the is_write audit flag. get_item_config is gated but NOT a write, so it is
 # deliberately excluded here and stays is_write=false in the audit record.
 _WRITE_TOOLS = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS
@@ -177,7 +180,19 @@ class AuditMiddleware(Middleware):
             if denied:
                 record['status'] = 'denied'
                 _DENIED.labels(tool=tool, reason='not_writer').inc()
-                msg = f'{tool} requires the {_WRITERS_GROUP} Authentik group.'
+                msg = (
+                    f'{tool} requires the {_WRITERS_GROUP} Authentik group. To get access, ask in '
+                    f'#opensource-jenkins. Once added, disconnect and re-authenticate this MCP '
+                    f'connection (reconnecting alone keeps the old group-less token).'
+                )
+                if tool in _MANAGE_TOOLS:
+                    # Do not send manage callers through the onboarding loop for nothing: the
+                    # backend grant is pending, so manage tools return 403 even for writers.
+                    msg += (
+                        ' Note: manage tools return 403 even for writers today (backend grant'
+                        ' pending, PS-11341); manage job definitions via the Jenkins API/CLI'
+                        ' instead.'
+                    )
                 raise ToolError(msg)
             result = await call_next(context)
             record['status'] = 'ok'

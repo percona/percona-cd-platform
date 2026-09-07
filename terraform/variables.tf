@@ -32,7 +32,7 @@ variable "cluster_version" {
 }
 
 variable "vpc_cidr" {
-  description = "Cluster VPC CIDR. Avoid the Jenkins-VPC ranges 10.144/.155/.166/.177/.179/.188/.199 (multi-region masters)."
+  description = "Cluster VPC CIDR. Avoid the Jenkins-VPC ranges 10.144/.145/.155/.156/.157/.158/.159/.160/.161/.166/.177/.179/.181/.188/.199 (multi-region masters and fleets)."
   type        = string
   default     = "10.220.0.0/16"
 }
@@ -242,6 +242,12 @@ variable "ppg_ami_factory_region" {
 
 variable "ppg_ami_factory_subject_claims" {
   description = "GitHub Actions sub claims allowed to assume the PPG AMI-factory role. Production is master-only on Percona-Lab/jenkins-pipelines. A temporary fork subject may be supplied at apply time for end-to-end testing, then removed."
+  type        = list(string)
+  default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
+}
+
+variable "ppg_hcloud_factory_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the PPG Hetzner-factory role. Master-only on Percona-Lab/jenkins-pipelines; this role reads the factory token, so the allowlist stays exactly this subject."
   type        = list(string)
   default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
 }

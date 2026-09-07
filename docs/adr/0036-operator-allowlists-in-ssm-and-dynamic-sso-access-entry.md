@@ -19,4 +19,4 @@ The repo is public. Two security-critical EKS inputs (the API endpoint allowlist
 - The reviewable surface (who is cluster admin, where the allowlist lives, its guards) is committed. Only the IP values stay out of the repo, in one shared, audited location instead of N operator laptops.
 - Resolved values still transit Terraform state (private S3 bucket), which is accepted.
 - A fresh fork or DR rebuild must seed its parameters before the first plan (`ParameterNotFound` otherwise). See [docs/runbooks/eks-api-access.md](../runbooks/eks-api-access.md). CI is unaffected: `tofu validate` reads no data sources.
-- The break-glass :22 allowlist (ADR 0032) joins as `/<cluster>/allowlist/master-ssh` once its CIDR owners are confirmed. Until then it stays a module default plus per-master overrides.
+- The break-glass :22 allowlist (ADR 0032) joined as `/<cluster>/allowlist/master-ssh`: the module default is now empty (no committed IPs) and every `master-*.tf` passes the SSM-resolved list. The seed value is the union of the previously committed 6-CIDR baseline and the psmdb/pmm extras, so nobody loses access at cutover.

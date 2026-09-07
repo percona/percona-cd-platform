@@ -86,6 +86,12 @@ resource "aws_s3_bucket" "lgtm" {
   # below (per-component `expiration.days`), which is the right tool for
   # log/metric/trace chunks (constant churn, short shelf life).
 
+  lifecycle {
+    # Holds up to 395-day metrics: a for_each key rename must never
+    # destroy-and-recreate the bucket (matches ps3-home-archive and EFS).
+    prevent_destroy = true
+  }
+
   tags = merge(local.tags, {
     Name      = "${local.cluster_name}-${each.value.suffix}"
     component = each.key

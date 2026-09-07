@@ -274,6 +274,8 @@ async def get_readme() -> str:
         f'  - Manage (create / update / delete job definitions): {manage_status}',
         '    Backend create/configure/delete is NOT granted, so these return 403 today. Manage job',
         '    definitions through the Jenkins API/CLI directly for now (see PS-11341).',
+        '  - To join jenkins-mcp-writers: ask in #opensource-jenkins. After you are added, disconnect and',
+        '    re-authenticate your MCP client; reconnecting alone keeps the old group-less token.',
         '  - Node config and Groovy script-console mutation are NEVER exposed here, in any mode. There is',
         '    no tool for them. Use the Jenkins UI for that.',
         '',

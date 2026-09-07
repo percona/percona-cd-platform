@@ -36,7 +36,8 @@ if sys.platform == 'win32':
     '--read-only',
     default=False,
     is_flag=True,
-    help='Whether to run in read-only mode, default is False',
+    help='Serve read-tagged tools only. Also the fail-closed default when neither mode flag is '
+    'given. Mutually exclusive with --enable-operate',
 )
 @click.option(
     '--enable-operate',
@@ -84,9 +85,11 @@ def main(
 
     from mcp_jenkins.server import mcp
 
-    if read_only:
-        mcp.enable(tags={'read'}, only=True)
-    elif enable_operate:
+    if read_only and enable_operate:
+        logger.error('--read-only and --enable-operate are mutually exclusive; pass at most one.')
+        sys.exit(1)
+
+    if enable_operate:
         from mcp_jenkins.core.fleet import write_preflight
 
         violations = write_preflight()
@@ -100,6 +103,13 @@ def main(
             'Operate (write) mode enabled: read + operate (build) + manage (job-config CRUD) tools; '
             'operate and manage are gated per call to the jenkins-mcp-writers group.'
         )
+    else:
+        # Fail closed: explicit --read-only, OR no mode flag at all, applies the read-tags-only filter.
+        # Without a filter EVERY tool stays registered, including the write-tagged RCE-class tools
+        # (run_groovy_script, set_node_config), so a forgotten flag must default to read-only, not open.
+        if not read_only:
+            logger.warning('No mode flag given (--read-only / --enable-operate); defaulting to read-only.')
+        mcp.enable(tags={'read'}, only=True)
 
     if transport == 'stdio':
         asyncio.run(mcp.run_async(transport=transport))

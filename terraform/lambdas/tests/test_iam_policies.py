@@ -55,9 +55,21 @@ def test_volume_delete_scoped_to_volume_arn() -> None:
     assert ":volume/*" in tf
 
 
+def test_snapshot_delete_scoped_and_tag_conditioned() -> None:
+    """The snapshot reaper must only ever delete CSI-class snapshots: the
+    DeleteSnapshot grant is scoped to snapshot ARNs AND carries the
+    managed-by=ebs-csi-driver ResourceTag condition, so even a handler bug
+    cannot reach DLM, AWS Backup, AMI or CloudFormation snapshots."""
+    tf = _tf("snapshot-cleanup.tf")
+    assert "ec2:DeleteSnapshot" in tf
+    assert ":snapshot/*" in tf
+    assert 'variable = "aws:ResourceTag/managed-by"' in tf
+    assert "ebs-csi-driver" in tf
+
+
 def test_no_requested_region_condition_anywhere() -> None:
     """The reapers iterate regions in code, so an aws:RequestedRegion condition
     would silently break cross-region cleanup."""
     # Match the HCL condition form, not the comment that explains its absence.
-    for name in ("ec2-cleanup.tf", "volume-cleanup.tf"):
+    for name in ("ec2-cleanup.tf", "volume-cleanup.tf", "snapshot-cleanup.tf"):
         assert 'variable = "aws:RequestedRegion"' not in _tf(name), f"{name} must not pin RequestedRegion"

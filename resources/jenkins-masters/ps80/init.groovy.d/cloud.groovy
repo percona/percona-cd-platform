@@ -21,17 +21,17 @@ netMap['us-west-2b'] = 'subnet-028f5265edd1581c3'
 netMap['us-west-2c'] = 'subnet-0fe430aa745b0116f'
 
 imageMap = [:]
-imageMap['us-west-2a.docker']            = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.docker-32gb']       = 'ami-024e4b8b6ef78434a'
+imageMap['us-west-2a.docker']            = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.docker-32gb']       = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.docker-32gb-hirsute']  = 'ami-0cbdf6c0f39fd3950'
 imageMap['us-west-2a.docker-32gb-jammy']    = 'ami-005f7acd8475ac91c'
 imageMap['us-west-2a.docker-32gb-noble']    = 'ami-0cf2b4e024cdb6960'
 imageMap['us-west-2a.docker-32gb-resolute']    = 'ami-0d13e2317a7e75c95'
 imageMap['us-west-2a.docker-32gb-focal']    = 'ami-0db245b76e5c21ca1'
 imageMap['us-west-2a.docker-32gb-bullseye'] = 'ami-0c1b4dff690b5d229'
-imageMap['us-west-2a.docker2']           = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.micro-amazon']      = 'ami-024e4b8b6ef78434a'
-imageMap['us-west-2a.min-amazon-2-x64']  = 'ami-024e4b8b6ef78434a'
+imageMap['us-west-2a.docker2']           = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.micro-amazon']      = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.min-amazon-2-x64']  = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.min-al2023-x64']    = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.min-centos-8-x64']  = 'ami-0155c31ea13d4abd2'
 imageMap['us-west-2a.min-ol-8-x64']      = 'ami-0f47366880b6cce9f'
@@ -52,7 +52,7 @@ imageMap['us-west-2a.min-bookworm-x64']  = 'ami-07b2d881c67e4c30e'
 imageMap['us-west-2a.min-trixie-x64']    = 'ami-088afd31387a0ee3a'
 imageMap['us-west-2a.min-rhel-10-x64']   = 'ami-0598edb0ace40eb9a'
 
-imageMap['us-west-2a.docker-64gb-aarch64']  = 'ami-0af666b6014514a13'
+imageMap['us-west-2a.docker-64gb-aarch64']  = 'ami-0c5777a14602ab4b9'
 imageMap['us-west-2a.min-al2023-aarch64']   = 'ami-0c5777a14602ab4b9'
 imageMap['us-west-2a.min-jammy-aarch64']    = 'ami-039aad0ef6d1c0b87'
 imageMap['us-west-2a.min-noble-aarch64']    = 'ami-0c29a2c5cf69b5a9c'
@@ -182,10 +182,10 @@ imageMap['us-west-2d.min-bookworm-aarch64'] = imageMap['us-west-2a.min-bookworm-
 imageMap['us-west-2d.min-trixie-aarch64']   = imageMap['us-west-2a.min-trixie-aarch64']
 
 priceMap = [:]
-priceMap['t2.medium'] = '0.07'   // type=t2.medium, vCPU=2, memory=4GiB, saving=69%, interruption='<5%', price=0.032000
-priceMap['c5d.4xlarge'] = '0.40'  // type=c5d.4xlarge, vCPU=16, memory=32GiB, saving=62%, interruption='<5%', price=0.272000
-priceMap['r5a.4xlarge'] = '0.65' // type=r5a.4xlarge, vCPU=16, memory=128GiB, saving=67%, interruption='<5%', price=0.583900
-priceMap['m5n.2xlarge'] = '0.37' // type=m5n.2xlarge, vCPU=8, memory=32GiB, saving=64%, interruption='<5%', price=0.201900
+priceMap['c6a.large'] = '0.07'   // vCPU=2, memory=4GiB
+priceMap['c6id.4xlarge'] = '0.40'  // vCPU=16, memory=32GiB, 950GB NVMe
+priceMap['r6a.4xlarge'] = '0.65' // vCPU=16, memory=128GiB
+priceMap['m6a.2xlarge'] = '0.37' // vCPU=8, memory=32GiB
 
 priceMap['i4g.2xlarge'] = '0.34' // aarch
 
@@ -295,12 +295,12 @@ initMap['docker'] = '''
         echo try again
     done
 
-    if command -v amazon-linux-extras >/dev/null 2>&1; then
-        sudo amazon-linux-extras install epel -y
-    fi
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove awscli
+
+    sudo systemctl enable crond
+    sudo systemctl start crond
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
@@ -310,7 +310,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -aoa -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -328,7 +328,7 @@ initMap['docker'] = '''
     echo "*  soft  core  unlimited" | sudo tee -a /etc/security/limits.conf
     sudo sed -i.bak -e 's/nofile=1024:4096/nofile=900000:900000/; s/DAEMON_MAXFILES=.*/DAEMON_MAXFILES=990000/' /etc/sysconfig/docker
     echo 'DOCKER_STORAGE_OPTIONS="--data-root=/mnt/docker"' | sudo tee -a /etc/sysconfig/docker-storage
-    sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /lib/systemd/system/docker.service
+    sudo sed -i.bak -e 's^ExecStart=.*^ExecStart=/usr/bin/dockerd --data-root=/mnt/docker --default-ulimit nofile=900000:900000^' /usr/lib/systemd/system/docker.service
     sudo systemctl daemon-reload
     sudo install -o root -g root -d /mnt/docker
     sudo usermod -aG docker $(id -u -n)
@@ -745,38 +745,38 @@ initMap['min-bookworm-aarch64'] = initMap['min-buster-x64']
 initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 
 capMap = [:]
-capMap['c5d.4xlarge'] = '80'
-capMap['r5a.4xlarge'] = '60'
-capMap['m5n.2xlarge'] = '60'
+capMap['c6id.4xlarge'] = '80'
+capMap['r6a.4xlarge'] = '60'
+capMap['m6a.2xlarge'] = '60'
 capMap['i4g.2xlarge'] = '40'
 
 typeMap = [:]
-typeMap['micro-amazon']      = 't2.medium'
-typeMap['docker']            = 'm5n.2xlarge'
-typeMap['docker-32gb']       = 'c5d.4xlarge'
-typeMap['docker-32gb-hirsute']  = 'r5a.4xlarge'
-typeMap['docker-32gb-jammy']    = 'r5a.4xlarge'
-typeMap['docker-32gb-noble']    = 'r5a.4xlarge'
-typeMap['docker-32gb-resolute']    = 'r5a.4xlarge'
-typeMap['docker-32gb-focal']    = 'r5a.4xlarge'
-typeMap['docker-32gb-bullseye'] = 'r5a.4xlarge'
-typeMap['docker2']           = 'r5a.4xlarge'
+typeMap['micro-amazon']      = 'c6a.large'
+typeMap['docker']            = 'm6a.2xlarge'
+typeMap['docker-32gb']       = 'c6id.4xlarge'
+typeMap['docker-32gb-hirsute']  = 'r6a.4xlarge'
+typeMap['docker-32gb-jammy']    = 'r6a.4xlarge'
+typeMap['docker-32gb-noble']    = 'r6a.4xlarge'
+typeMap['docker-32gb-resolute']    = 'r6a.4xlarge'
+typeMap['docker-32gb-focal']    = 'r6a.4xlarge'
+typeMap['docker-32gb-bullseye'] = 'r6a.4xlarge'
+typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker']
 typeMap['min-centos-8-x64']  = typeMap['docker']
 typeMap['min-ol-8-x64']      = typeMap['docker']
 typeMap['min-ol-9-x64']      = typeMap['docker']
 typeMap['fips-centos-7-x64'] = typeMap['docker-32gb']
-typeMap['min-jammy-x64']     = 'r5a.4xlarge'
-typeMap['min-noble-x64']     = 'r5a.4xlarge'
-typeMap['min-resolute-x64']     = 'r5a.4xlarge'
+typeMap['min-jammy-x64']     = 'r6a.4xlarge'
+typeMap['min-noble-x64']     = 'r6a.4xlarge'
+typeMap['min-resolute-x64']     = 'r6a.4xlarge'
 typeMap['min-focal-x64']     = typeMap['docker']
 typeMap['min-bionic-x64']    = typeMap['min-centos-7-x64']
 typeMap['min-buster-x64']    = typeMap['min-centos-7-x64']
-typeMap['min-centos-6-x64']  = 'm5n.2xlarge'
+typeMap['min-centos-6-x64']  = 'm6a.2xlarge'
 typeMap['min-stretch-x64']   = typeMap['docker']
 typeMap['min-xenial-x64']    = typeMap['docker']
 typeMap['min-amazon-2-x64']  = typeMap['docker']
-typeMap['min-al2023-x64']    = 'm5n.2xlarge'
+typeMap['min-al2023-x64']    = 'm6a.2xlarge'
 typeMap['min-bullseye-x64']  = typeMap['docker']
 typeMap['min-bookworm-x64']  = typeMap['docker']
 typeMap['min-trixie-x64']    = typeMap['docker']
@@ -960,7 +960,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[AZ + '.' + OSType],                // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -1023,7 +1023,9 @@ String region = 'us-west-2'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('docker',               "${region}${it}"),
+            // docker is served by the x86-docker-fleet EC2FleetCloud
+            // (ec2FleetCloud.groovy), not a classic template: two clouds
+            // serving one label starve provisioning.
             getTemplate('docker-32gb',          "${region}${it}"),
             getTemplate('docker-32gb-hirsute',  "${region}${it}"),
             getTemplate('docker-32gb-jammy',    "${region}${it}"),
@@ -1049,7 +1051,9 @@ String region = 'us-west-2'
             getTemplate('min-stretch-x64',      "${region}${it}"),
             getTemplate('min-xenial-x64',       "${region}${it}"),
             getTemplate('min-bullseye-x64',     "${region}${it}"),
-            getTemplate('min-bookworm-x64',     "${region}${it}"),
+            // min-bookworm-x64 is served by the x86-bookworm-fleet EC2FleetCloud
+            // (ec2FleetCloud.groovy), not a classic template: two clouds serving
+            // one label starve provisioning.
             getTemplate('min-trixie-x64',       "${region}${it}"),
             getTemplate('min-rhel-10-x64',      "${region}${it}"),
             getTemplate('docker-64gb-aarch64',  "${region}${it}"),

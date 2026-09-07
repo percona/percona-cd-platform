@@ -1,17 +1,19 @@
-# Operating the cleanup reapers (volume + EC2)
+# Operating the cleanup reapers (volume + EC2 + snapshot)
 
-Two scheduled AWS Lambda reapers keep the `percona-dev-admin` account tidy by
-deleting resources that lack the mandatory cleanup tags. This runbook is how an
-operator deploys them, reads their dry-run decisions, arms them for live
-deletion, protects resources from them, and pauses or rolls them back.
+Three scheduled AWS Lambda reapers keep the `percona-dev-admin` account tidy by
+deleting resources that lack the mandatory cleanup tags or have aged past their
+retention. This runbook is how an operator deploys them, reads their dry-run
+decisions, arms them for live deletion, protects resources from them, and
+pauses or rolls them back.
 
-Both reapers ship `DRY_RUN="true"`: they log every WOULD-delete decision but
-delete nothing until deliberately armed. Arming is a reviewed code change, never
-a one-off CLI flag.
+Every reaper ships `DRY_RUN="true"`: it logs every WOULD-delete decision but
+deletes nothing until deliberately armed. Arming is a reviewed code change,
+never a one-off CLI flag. Current state: volume and EC2 are armed, the
+snapshot reaper is still dry-run.
 
-These reapers act on EBS volumes and EC2 instances only, never on snapshots.
+The snapshot reaper covers ONLY the ebs-csi (snapscheduler) snapshot class.
 Orphaned EBS snapshots left by CloudFormation `DeletionPolicy: Snapshot` are
-cleaned up by hand; see
+still cleaned up by hand; see
 [`orphaned-snapshot-cleanup.md`](orphaned-snapshot-cleanup.md).
 
 ## What runs
@@ -20,20 +22,31 @@ cleaned up by hand; see
 |--------|----------|----------|--------|---------|
 | Volume | `percona-ci-platform-volume-cleanup` | `rate(1 day)` | A fixed 8-region list in code | `available` (unattached) EBS volumes missing the cleanup opt-outs |
 | EC2 | `percona-ci-platform-ec2-cleanup` | `rate(5 minutes)` | All regions via `describe_regions()` | Untagged EC2 instances; orphan `eksctl-<cluster>-cluster` stacks |
+| Snapshot | `percona-ci-platform-snapshot-cleanup` | `rate(1 day)` | `us-east-1` (the cluster region) | `managed-by=ebs-csi-driver` EBS snapshots outside the newest 14 per volume and older than 14 days |
 
-Both deploy as a single function in `us-east-1` (the default provider region);
-the handlers iterate regions in code, so neither IAM policy carries an
+All three deploy as a single function in `us-east-1` (the default provider
+region); the handlers iterate regions in code, so no IAM policy carries an
 `aws:RequestedRegion` condition. Each function logs to
 `/aws/lambda/<function-name>`. Reserved concurrency is `1`, so a slow run can
 never overlap itself.
+
+The snapshot reaper exists because the in-cluster retention cannot delete
+physical snapshots: snapscheduler prunes only the `VolumeSnapshot` objects, and
+the `ebs-csi-retain` class keeps the EBS snapshot on purpose (a GitOps prune
+must not erase recovery points). Its blast radius is enforced twice: the
+handler selects only `managed-by=ebs-csi-driver` snapshots, and the
+`ec2:DeleteSnapshot` IAM grant carries the same tag as a `StringEquals`
+condition, so DLM, AWS Backup, AMI and CloudFormation snapshots are
+unreachable even under a handler bug.
 
 The wiring (Lambda, EventBridge rule, log group, execution role) lives in the
 `scheduled-lambda` module; see
 [`terraform/modules/scheduled-lambda/README.md`](../../terraform/modules/scheduled-lambda/README.md).
 The per-reaper policy and instantiation live in
-[`terraform/volume-cleanup.tf`](../../terraform/volume-cleanup.tf)
-and [`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf).
-All tunables (schedules, `dry_run`, EKS skip regex, volume age floor) live in the
+[`terraform/volume-cleanup.tf`](../../terraform/volume-cleanup.tf),
+[`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf)
+and [`terraform/snapshot-cleanup.tf`](../../terraform/snapshot-cleanup.tf).
+All tunables (schedules, `dry_run`, EKS skip regex, age floors) live in the
 `Cleanup Lambda parameters` block of
 [`terraform/locals.tf`](../../terraform/locals.tf).
 
@@ -58,16 +71,18 @@ apply.
 
 ### Step 2 -- review the dry-run decisions in CloudWatch Logs
 
-Both reapers ship `DRY_RUN="true"`, so they log WOULD-delete decisions and delete
-nothing. Tail each log group and confirm the decisions look right before arming.
+A reaper in dry-run logs WOULD-delete decisions and deletes nothing (today:
+the snapshot reaper; volume and EC2 are already armed). Tail each log group
+and confirm the decisions look right before arming.
 
 ```sh
 just lambda-logs ec2-cleanup        # wraps: aws logs tail /aws/lambda/percona-ci-platform-ec2-cleanup
 just lambda-logs volume-cleanup     # wraps: aws logs tail /aws/lambda/percona-ci-platform-volume-cleanup
+just lambda-logs snapshot-cleanup   # wraps: aws logs tail /aws/lambda/percona-ci-platform-snapshot-cleanup
 ```
 
 The EC2 reaper runs every 5 minutes, so a window appears quickly. The volume
-reaper runs once a day; invoke it by hand to see a cycle now.
+and snapshot reapers run once a day; invoke them by hand to see a cycle now.
 
 ### Step 3 -- invoke by hand and read the structured return
 
@@ -88,8 +103,39 @@ torn down.
 aws lambda invoke --function-name percona-ci-platform-ec2-cleanup /tmp/out.json && cat /tmp/out.json
 ```
 
-Let both bake in dry-run long enough to trust the decisions (one full daily cycle
-for volume, several 5-minute cycles for EC2) before arming.
+The snapshot reaper returns `{deleted, skipped, dry_run}`. Each `deleted` row is
+`(region, snapshot_id, volume_id, size_gib)`; each `skipped` row is
+`(region, snapshot_id, reason)`, where reason `newest-14` marks the retained
+window, `PerconaKeep` marks the pre-reaper backlog (see the untag step below),
+and `younger-than-14d` marks the retention floor.
+
+```sh
+aws lambda invoke --function-name percona-ci-platform-snapshot-cleanup /tmp/out.json && cat /tmp/out.json
+```
+
+Let each reaper bake in dry-run long enough to trust the decisions (one full
+daily cycle for volume and snapshot, several 5-minute cycles for EC2) before
+arming.
+
+### Snapshot reaper only: untag the pre-reaper backlog
+
+Snapshots created before the reaper existed carry `PerconaKeep=True` from the
+old `ebs-csi-retain` tagSpecification, so the reaper skips every one of them
+(`skipped` reason `PerconaKeep`). After the dry-run review, remove that tag from
+the CSI class snapshots so they age out; this is the only by-hand step:
+
+```sh
+AWS_PROFILE=percona-dev-admin aws ec2 describe-snapshots --region us-east-1 \
+  --owner-ids self \
+  --filters Name=tag:managed-by,Values=ebs-csi-driver Name=tag:PerconaKeep,Values=True \
+  --query 'Snapshots[].SnapshotId' --output text | tr '\t' '\n' > /tmp/csi-snaps.txt
+wc -l /tmp/csi-snaps.txt   # expect the backlog count from the dry-run skips
+xargs -a /tmp/csi-snaps.txt -n 50 aws ec2 delete-tags --region us-east-1 \
+  --tags Key=PerconaKeep --resources
+```
+
+The next dry-run cycle then reports them under `deleted` (WOULD delete); review
+that list before arming.
 
 ## Arming a reaper
 
@@ -106,19 +152,20 @@ volume_cleanup = {
 }
 ```
 
-A contract test gates this on purpose. `test_dry_run_ships_true` in
+A contract test gates this on purpose. `test_dry_run_locked_to_committed_state`
+in
 [`terraform/lambdas/tests/test_terraform_contract.py`](../../terraform/lambdas/tests/test_terraform_contract.py)
-asserts that the committed `dry_run` for both the `volume_cleanup` and
-`ec2_cleanup` blocks is exactly `"true"`. The committed default must be the safe
-one; arming is meant to be a deliberate, reviewed change rather than a value that
-can drift unnoticed.
+asserts that each reaper's committed `dry_run` matches the reviewed
+expectation (volume and EC2 armed `"false"`, snapshot `"true"` until its
+bake-in review). The lock works in both directions; arming is meant to be a
+deliberate, reviewed change rather than a value that can drift unnoticed.
 
 Because of that test, arming is a single PR that does two things together, by
 design:
 
 1. Edit `dry_run = "false"` in the relevant `locals.tf` block.
-2. Adjust or remove the `test_dry_run_ships_true` expectation for that block in
-   the same PR, so the test and the live state agree.
+2. Update the `test_dry_run_locked_to_committed_state` expectation for that
+   block in the same PR, so the test and the live state agree.
 
 Editing only `locals.tf` turns the test red and blocks the merge; that red is the
 review gate working. Then plan, apply, and verify one real cycle in the logs:
@@ -143,6 +190,19 @@ Volume reaper. A volume is spared when any of these hold:
 
 Only `available` (unattached) volumes are ever candidates; an in-use volume is
 never touched.
+
+Snapshot reaper. A snapshot is spared when any of these hold:
+
+- It does not carry `managed-by=ebs-csi-driver` (out of scope entirely; the IAM
+  condition enforces the same boundary a second time).
+- It is among the newest `keep_count` (default 14) snapshots of its source
+  volume, regardless of age.
+- It is younger than `retention_days` (default 14).
+- It carries a `PerconaKeep` tag (capital P, capital K).
+- Its `Name` tag contains `do not remove` (case-insensitive).
+- It carries a foreign lifecycle marker (`aws:dlm:*` or `aws:backup:*` tag).
+- It has no `VolumeId` in the API response (the keep-newest grouping would be
+  undefined, so it fails closed).
 
 EC2 reaper. An instance or its cluster is spared when any of these hold:
 
@@ -170,8 +230,8 @@ To pause a reaper, reverse the arming change: set `dry_run = "true"` in its
 log-only and deletes nothing.
 
 For a hard stop (no invocations at all), set the module's `schedule_enabled =
-false` on the relevant instantiation in `volume-cleanup.tf` or
-`ec2-cleanup.tf`, then plan and apply. That disables the EventBridge rule
+false` on the relevant instantiation in `volume-cleanup.tf`, `ec2-cleanup.tf`
+or `snapshot-cleanup.tf`, then plan and apply. That disables the EventBridge rule
 so the function is never triggered. Reserved concurrency `1` already guarantees a
 stuck run cannot overlap the next schedule.
 
@@ -205,7 +265,7 @@ aws events list-targets-by-rule --rule EventVolumeCleanup --region us-east-1
 
 ## Tests
 
-The reaper handlers and their Terraform wiring are covered by 41 tests (moto
+The reaper handlers and their Terraform wiring are covered by 59 tests (moto
 behavior plus the IAM-policy and Terraform-contract checks). Run them locally:
 
 ```sh
@@ -213,15 +273,18 @@ just lambda-test    # also part of `just ci` / the cleanup-lambda tests CI job
 ```
 
 The same suite runs in CI as the `cleanup-lambda tests` job, so a contract break
-(for example arming `locals.tf` without updating `test_dry_run_ships_true`) fails
-the PR.
+(for example arming `locals.tf` without updating
+`test_dry_run_locked_to_committed_state`) fails the PR.
 
 ## Related
 
 - [`terraform/modules/scheduled-lambda/README.md`](../../terraform/modules/scheduled-lambda/README.md)
   -- the generic cron-Lambda module the reapers instantiate.
 - [`terraform/volume-cleanup.tf`](../../terraform/volume-cleanup.tf),
-  [`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf)
+  [`terraform/ec2-cleanup.tf`](../../terraform/ec2-cleanup.tf),
+  [`terraform/snapshot-cleanup.tf`](../../terraform/snapshot-cleanup.tf)
   -- per-reaper least-privilege policy and module instantiation.
 - [`terraform/locals.tf`](../../terraform/locals.tf) -- the `Cleanup Lambda
-  parameters` block (schedules, `dry_run`, age floor, EKS skip regex).
+  parameters` block (schedules, `dry_run`, age floors, EKS skip regex).
+- [`orphaned-snapshot-cleanup.md`](orphaned-snapshot-cleanup.md) -- the manual
+  sweep for CloudFormation orphan snapshots, which stay out of reaper scope.

@@ -56,6 +56,18 @@ grafana:
     repository: grafana/grafana
     tag: "12.3.6"
 
+  # Requests + memory limit so the pod is Burstable, not BestEffort. It shares
+  # the single obs-state node with Authentik and the MTR Postgres, so with no
+  # request it is the first OOM-kill victim under node memory pressure. No CPU
+  # limit (avoids throttling a UI workload); the memory limit caps blast radius.
+  # Sized for Grafana 12 on the obs-state m7g.large.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
   # Not cluster-critical (data lives in datasources, not Grafana itself).
   # With a single replica, maxUnavailable=1 lets a node drain evict the one
   # pod gracefully; minAvailable=1 would block every voluntary eviction and

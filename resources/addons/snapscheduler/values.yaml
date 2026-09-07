@@ -10,6 +10,9 @@
 snapscheduler:
   replicaCount: 1
   manageCRDs: true
+  # Preemptible controller; assign the tier explicitly for parity with the
+  # other addons rather than relying on the implicit priority 0.
+  priorityClassName: platform-default
   image:
     tagOverride: "3.5.0-r1"
   nodeSelector:

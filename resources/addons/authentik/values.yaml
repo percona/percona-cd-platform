@@ -83,6 +83,16 @@ authentik:
   # node drains can roll the single pod cleanly.
   server:
     replicas: 1
+    # priorityClassName platform-system-critical (global, above) protects it,
+    # but with no request it still runs BestEffort and is the first OOM victim
+    # on the shared obs-state node. Requests + memory limit make it Burstable.
+    # No CPU limit (avoids throttling the auth data plane).
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
     pdb:
       enabled: true
       minAvailable: 0
@@ -127,6 +137,14 @@ authentik:
 
   worker:
     replicas: 1
+    # Background task runner (blueprints, outposts, email). Lighter than the
+    # server; requests + memory limit keep it Burstable on the shared node.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
     # Same hardening rationale as server above.
     securityContext:
       runAsNonRoot: true
@@ -168,6 +186,15 @@ authentik:
         userPasswordKey: AUTHENTIK_POSTGRESQL__PASSWORD
         adminPasswordKey: AUTHENTIK_POSTGRESQL__PASSWORD
     primary:
+      # Explicit requests + memory limit. Setting resources overrides the
+      # Bitnami chart's resourcesPreset (nano), which the chart itself flags as
+      # the production path. Session + task-queue DB for the whole SSO plane.
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
       persistence:
         enabled: true
         storageClass: gp3-monitoring-1a-retain

@@ -110,6 +110,16 @@ gateway already allowlists Cursor's redirect URIs, so no redirect setup is neede
 block is optional. Drop it to choose a master per call instead. If you hit `invalid_scope`, update
 Cursor to v2.6.19 or later.
 
+### Claude (web, Desktop, mobile)
+
+On the hosted Claude surfaces, add a custom connector by URL:
+`https://jenkins-mcp.cd.percona.com/mcp`. Under the connector's Advanced settings, set the OAuth
+client ID to `jenkins-mcp` and leave the client secret blank (Authentik has no DCR, so the id is
+required; the gateway is a public client with no secret). Save, then click Connect for the browser
+Duo login. The gateway already allowlists the hosted callback
+(`https://claude.ai/api/mcp/auth_callback`), so no redirect setup is needed. On Team or Enterprise
+plans only an org Owner can add a custom connector; members then enable it individually.
+
 ### pi.dev
 
 Pi does not ship MCP support in its core, so this path uses the community
@@ -137,6 +147,42 @@ then add the gateway to `~/.config/mcp/mcp.json`:
 The `redirectUri` port is free to choose (Authentik allowlists any
 `http://localhost:<port>/callback`). The first connection opens the Authentik / Duo login. Select a
 master with the per-call `master` argument.
+
+### Troubleshooting a connection
+
+**Opening the endpoint URL in a browser always returns `invalid_token`.** That is not a fault. The
+endpoint speaks MCP, not HTML, and it has no browser-facing page. The login happens inside your MCP
+client, never by visiting the URL. Ignore what the browser shows and connect from the client.
+
+**`invalid_token` from the client itself** ("clear authentication tokens in your MCP client and
+reconnect") means a stale registration or an expired refresh token. In Claude Code, clear it and
+start over:
+
+```sh
+claude mcp list                 # the name you registered it under may differ
+claude mcp logout jenkins-mcp   # drop the cached OAuth credentials
+claude mcp remove jenkins-mcp   # add -s local|user|project if it was scoped
+```
+
+Then re-add it as above and authenticate again. `claude mcp get jenkins-mcp` health-checks the result.
+In Cursor, delete the entry from `mcp.json`, fully restart Cursor (toggling the server is not enough),
+then click Connect.
+
+**"does not support dynamic client registration"** means the client id is missing. Authentik has no
+DCR, so every client must be told `jenkins-mcp` explicitly, and the field name differs per client
+(`--client-id` / `oauth.clientId` in Claude Code, `auth.CLIENT_ID` in Cursor).
+
+**A tool returns 403 or "requires the jenkins-mcp-writers Authentik group"** means the call needs the
+operate, manage, or config-read tier. Ask in #opensource-jenkins to be added to
+`jenkins-mcp-writers`. You need an Authentik account first, which is created automatically
+on your first Duo SSO login, so connect and authenticate before asking. Once added, disconnect and
+re-authenticate so the new token carries the group claim. Reconnecting alone does not refresh it.
+One exception: the manage tools (`create_item`, `set_item_config`, `delete_item`) return 403 even
+for writers, because the backend grant is pending (PS-11341). That 403 is not a membership problem.
+Manage job definitions through the Jenkins API/CLI instead.
+
+**A transient 503 right after a gateway release** is the ALB re-registering its target, which takes
+roughly 60 to 90 seconds. Retry before reporting it.
 
 ### Auto-deploy
 
@@ -172,11 +218,18 @@ Operators: to add or remove a master, or grant the build (operate) tier, see
 
 ## Develop
 
+CI runs these with `--frozen`, so run them that way locally too. Without it a stale `uv.lock` passes
+here and fails in CI:
+
 ```
-uv sync --all-extras --dev
-uv run pytest
-uv run ruff check . && uv run ruff format --check .
+uv sync --all-extras --dev --frozen
+uv run --frozen pytest -q
+uv run --frozen ruff check . && uv run --frozen ruff format --check .
 ```
+
+Any change that should reach the cluster must bump `version` in `pyproject.toml` **and** refresh
+`uv.lock` in the same commit. The image tag is `<pyproject.version>-<short-sha>`, so shipping without
+the version bump produces a tag that is confusing to trace back.
 
 ## Image
 

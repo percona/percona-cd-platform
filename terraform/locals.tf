@@ -76,9 +76,9 @@ locals {
   }
 
   # ---- Cleanup Lambda parameters ----
-  # Tunables for the scheduled cleanup reapers (terraform/{volume,ec2}-cleanup.tf):
-  # schedules, dry-run flags, the EKS skip regex, and the volume age floor, all
-  # in one reviewable place. The scheduled-lambda module stays generic; these
+  # Tunables for the scheduled cleanup reapers
+  # (terraform/{volume,ec2,snapshot}-cleanup.tf): schedules, dry-run flags, the
+  # EKS skip regex, and the age floors, all in one reviewable place. The scheduled-lambda module stays generic; these
   # are the workload knobs. Arm a reaper by flipping its dry_run to "false" here
   # (a reviewed edit, not a CLI -var) once its dry-run logs look right.
   cleanup_lambda_runtime = "python3.14" # latest supported Lambda Python runtime
@@ -101,5 +101,15 @@ locals {
     # builds) while reclaiming leaks.
     molecule_billing_pattern = ".*_package_testing$"
     molecule_max_age_hours   = "7"
+  }
+
+  snapshot_cleanup = {
+    schedule = "rate(1 day)"
+    dry_run  = "true" # ships dry-run; arm after the bake-in review (cleanup-reapers.md)
+    # Both mirror the ps3 SnapshotSchedule (maxCount 14 / expires 336h): a
+    # physical snapshot is deleted only once it is BOTH outside the newest
+    # keep_count for its source volume AND older than retention_days.
+    retention_days = "14"
+    keep_count     = "14"
   }
 }

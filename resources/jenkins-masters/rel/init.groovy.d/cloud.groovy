@@ -21,12 +21,12 @@ netMap['eu-west-1b'] = 'subnet-0ceb482387d4f3861' // TF VPC vpc-0216bcc2777ad678
 netMap['eu-west-1c'] = 'subnet-0fd9ecce73cef8c48' // TF VPC vpc-0216bcc2777ad6780
 
 imageMap = [:]
-imageMap['eu-west-1a.docker'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker-32gb'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker-64gb'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.docker2'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.micro-amazon'] = 'ami-0e8b5d4aece7e1ce8'
-imageMap['eu-west-1a.min-amazon-2-x64'] = 'ami-0e8b5d4aece7e1ce8'
+imageMap['eu-west-1a.docker'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker-32gb'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker-64gb'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.docker2'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.micro-amazon'] = 'ami-091a906f2e1e40076'
+imageMap['eu-west-1a.min-amazon-2-x64'] = 'ami-091a906f2e1e40076'
 
 imageMap['eu-west-1a.min-centos-7-x64']  = 'ami-00d464afa64e1fc69'
 imageMap['eu-west-1a.fips-centos-7-x64'] = 'ami-00d464afa64e1fc69'
@@ -105,8 +105,8 @@ imageMap['eu-west-1c.min-hirsute-x64-zenfs'] = imageMap['eu-west-1a.min-hirsute-
 imageMap['eu-west-1c.min-focal-x64-zenfs'] = imageMap['eu-west-1a.min-focal-x64-zenfs']
 imageMap['eu-west-1c.min-bionic-x64-zenfs']  = imageMap['eu-west-1a.min-bionic-x64-zenfs']
 
-imageMap['eu-west-1a.docker-32gb-aarch64']  = 'ami-0b3f5005d71118f36'
-imageMap['eu-west-1a.docker-64gb-aarch64']  = 'ami-0b3f5005d71118f36'
+imageMap['eu-west-1a.docker-32gb-aarch64']  = 'ami-0b24063151d1c59e7'
+imageMap['eu-west-1a.docker-64gb-aarch64']  = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.min-al2023-aarch64']   = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.min-jammy-aarch64']    = 'ami-0fd301a23be2fbe30'
 imageMap['eu-west-1a.min-noble-aarch64']    = 'ami-0a636034c582e2138'
@@ -137,12 +137,13 @@ imageMap['eu-west-1c.min-trixie-aarch64']   = imageMap['eu-west-1a.min-trixie-aa
 priceMap = [:]
 priceMap['t2.small'] = '0.02'    // type=t2.small, vCPU=1, memory=2GiB, saving=68%, interruption='<5%', price=0.008000
 priceMap['c5.xlarge'] = '0.15'   // type=c5.xlarge, vCPU=4, memory=8GiB, saving=58%, interruption='<5%', price=0.086400
-priceMap['g4ad.4xlarge'] = '0.53' // type=g4ad.4xlarge, vCPU=16, memory=64GiB, saving=65%, interruption='<5%', price=0.0.46910
-priceMap['r6a.4xlarge'] = '0.42' // type=r6a.4xlarge, vCPU=16, memory=128GiB, saving=66%, interruption='<5%', price=0.361600
+priceMap['m6a.4xlarge'] = '0.78' // type=m6a.4xlarge, vCPU=16, memory=64GiB, on-demand=0.7704, 7-day spot max 0.4732 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
+priceMap['r6a.4xlarge'] = '1.02' // bid at on-demand (1.0152) so spot is never rejected as price-too-low, 7-day spot max was 0.57 against the old bid
 priceMap['i4i.2xlarge'] = '0.32' // type=i4i.2xlarge, vCPU=8, memory=64GiB, saving=68%, interruption='<5%', price=0.248900
+priceMap['i3en.2xlarge'] = '1.00' // bid at on-demand (1.00) so spot is never rejected as price-too-low, 7-day spot max was 0.43 against the old bid
 
 priceMap['m6g.2xlarge'] = '0.24' // aarch64 type=m6g.2xlarge, vCPU=8, memory=32GiB, saving=60%, interruption='<5%', price=0.161800
-priceMap['m7g.4xlarge'] = '0.39' // aarch64 type=m7g.4xlarge, vCPU=16, memory=64GiB, saving=58%, interruption='<5%', price=0.348600
+priceMap['m7g.4xlarge'] = '0.73' // bid at on-demand (0.7276) so spot is never rejected as price-too-low, 7-day spot max was 0.40 against the old bid
 
 userMap = [:]
 userMap['docker']            = 'ec2-user'
@@ -206,10 +207,12 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo amazon-linux-extras install epel -y
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || :
-    sudo yum -y install git docker p7zip
+    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install git docker
     sudo yum -y remove awscli
+
+    sudo systemctl enable crond
+    sudo systemctl start crond
 
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
@@ -219,7 +222,7 @@ initMap['docker'] = '''
             echo try again
         done
 
-        7za -o/tmp x /tmp/awscliv2.zip
+        cd /tmp && unzip -q awscliv2.zip
         cd /tmp/aws && sudo ./install
     fi
 
@@ -250,6 +253,16 @@ initMap['docker-64gb'] = initMap['docker']
 initMap['docker2'] = initMap['docker']
 initMap['micro-amazon'] = '''
     set -o xtrace
+    # AL2023 mounts /tmp as tmpfs capped at half of RAM, which on small
+    # instances stays below the Jenkins free-temp-space threshold and the
+    # monitor takes every agent offline. Unmount so /tmp uses the root
+    # volume, and mask the unit so systemd cannot re-mount it. This script
+    # runs from tmpDir=/var/tmp, so nothing here holds /tmp open.
+    if mountpoint -q /tmp && grep -qs ' /tmp tmpfs ' /proc/mounts; then
+        sudo umount /tmp || { echo "ERROR: failed to unmount tmpfs /tmp" >&2; exit 1; }
+        sudo systemctl mask tmp.mount
+        sudo chmod 1777 /tmp
+    fi
     RHVER=$(rpm --eval %rhel)
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
@@ -417,9 +430,11 @@ initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 
 capMap = [:]
 capMap['c5.xlarge']    = '60'
-capMap['g4ad.4xlarge'] = '40'
+capMap['m6a.4xlarge'] = '40'
+capMap['t2.small']     = '10' // micro-amazon
 capMap['r6a.4xlarge']   = '40'
 capMap['i4i.2xlarge']  = '40'
+capMap['i3en.2xlarge'] = '40'
 
 capMap['m6g.2xlarge'] = '20'
 capMap['m7g.4xlarge'] = '20'
@@ -427,13 +442,13 @@ capMap['m7g.4xlarge'] = '20'
 typeMap = [:]
 typeMap['micro-amazon']      = 't2.small'
 typeMap['docker']            = 'c5.xlarge'
-typeMap['docker-32gb']       = 'g4ad.4xlarge'
-typeMap['docker-64gb']       = 'g4ad.4xlarge'
+typeMap['docker-32gb']       = 'm6a.4xlarge' // g4ad.4xlarge spot no longer fulfills in eu-west-1, every launch fell back to on-demand
+typeMap['docker-64gb']       = typeMap['docker-32gb']
 typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
 typeMap['min-centos-8-x64']  = typeMap['min-centos-7-x64']
 typeMap['min-ol-8-x64']      = typeMap['min-centos-7-x64']
-typeMap['min-ol-9-x64']      = 'i4i.2xlarge'
+typeMap['min-ol-9-x64']      = 'i3en.2xlarge'
 typeMap['min-rhel-10-x64']   = typeMap['docker']
 typeMap['min-al2023-x64']    = typeMap['docker']
 typeMap['min-amazon-2-x64']  = typeMap['docker']
@@ -501,8 +516,8 @@ execMap['min-trixie-aarch64']   = '1'
 devMap = [:]
 devMap['docker']                = '/dev/xvda=:8:true:gp2,/dev/xvdd=:320:true:gp2'
 devMap['docker2']               = '/dev/xvda=:8:true:gp2,/dev/xvdd=:220:true:gp2'
-devMap['docker-32gb']           = devMap['docker']
-devMap['docker-64gb']           = devMap['docker']
+devMap['docker-32gb']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s, m6a has no instance store
+devMap['docker-64gb']           = devMap['docker-32gb']
 devMap['micro-amazon']          = devMap['docker']
 devMap['min-amazon-2-x64']      = '/dev/xvda=:30:true:gp2,/dev/xvdd=:220:true:gp2'
 devMap['min-bionic-x64']        = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
@@ -614,7 +629,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[AZ + '.' + OSType],                // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -623,7 +638,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         Node.Mode.NORMAL,                           // Node.Mode mode
         OSType,                                     // String description
         initMap[OSType],                            // String initScript
-        '',                                         // String tmpDir
+        '/var/tmp',                                 // String tmpDir
         '',                                         // String userData
         execMap[OSType],                            // String numExecutors
         userMap[OSType],                            // String remoteAdmin
@@ -643,7 +658,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        '900',                                      // String launchTimeoutStr (terminate agents stuck launching after 15 min so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess

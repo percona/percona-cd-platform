@@ -19,6 +19,10 @@
 headlamp:
   replicaCount: 1
 
+  # Stateless UI, fully preemptible. Assign the tier explicitly so it matches
+  # every other addon instead of relying on the implicit priority 0.
+  priorityClassName: platform-default
+
   config:
     inCluster: true
     # Dedicated subdomain, served at root. A path-mounted baseURL needs

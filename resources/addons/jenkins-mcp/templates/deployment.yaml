@@ -1,5 +1,8 @@
 {{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
-{{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. Refusing to render with no access mode, the server would otherwise serve every tool (including config/script mutation)." }}
+{{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. The server itself fails closed to read-only without a mode flag, but the deployment must still declare its access mode explicitly." }}
+{{- end }}
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.statelessHttp) }}
+{{- fail "jenkins-mcp: replicaCount above 1 requires statelessHttp=true. A stateful transport keeps each client's session in one pod's memory and the ALB has no stickiness, so extra replicas reject session-bound requests." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -24,6 +27,18 @@ spec:
       priorityClassName: platform-default
       serviceAccountName: {{ .Release.Name }}
       automountServiceAccountToken: false
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: jenkins-mcp
+              app.kubernetes.io/instance: {{ .Release.Name }}
+          matchLabelKeys:
+            - pod-template-hash
+      {{- end }}
       containers:
         - name: jenkins-mcp
           image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -43,6 +58,10 @@ spec:
           env:
             - name: HOME
               value: /home/app
+            {{- if .Values.statelessHttp }}
+            - name: FASTMCP_STATELESS_HTTP
+              value: "true"
+            {{- end }}
             - name: MCP_JENKINS_FLEET_FILE
               value: /etc/jenkins-mcp/fleet.json
             - name: MCP_OIDC_ISSUER
@@ -62,18 +81,26 @@ spec:
           ports:
             - name: http
               containerPort: 9887
+          # timeoutSeconds defaults to 1, which a Python server under a heavy read can miss even
+          # with the request work off the event loop: Python's regex engine never releases the GIL,
+          # so filtering a large console measurably stalls the loop for whole seconds (worst
+          # observed 2.7s while scanning a real master). Give the probes headroom so a slow reply
+          # costs a retry, not a SIGKILL that drops every in-flight MCP session on the pod. A truly
+          # hung process still fails three consecutive probes and restarts.
           readinessProbe:
             httpGet:
               path: /healthz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:

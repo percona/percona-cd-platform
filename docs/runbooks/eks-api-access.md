@@ -48,6 +48,19 @@ aws ssm put-parameter --region us-east-1 \
   --tags Key=iit-billing-tag,Value=<cluster> Key=repo,Value=github.com/Percona/percona-cd-platform
 ```
 
-## Planned second tenant
+## Second tenant: master-ssh
 
-`/percona-ci-platform/allowlist/master-ssh`, the [ADR 0032](../adr/0032-ec2-instance-connect-over-ssm-for-operator-ssh.md) break-glass :22 list, joins once its CIDR owners are confirmed. That gate protects master SSH, not the EKS API. See `master-shell-access.md`.
+`/percona-ci-platform/allowlist/master-ssh` is the [ADR 0032](../adr/0032-ec2-instance-connect-over-ssm-for-operator-ssh.md) break-glass :22 list for the EC2 Jenkins masters. That gate protects master SSH, not the EKS API. See `master-shell-access.md`.
+
+Same mechanics as eks-api: amend with `just allowlist-set master-ssh "<full,list>"`, then `just tf-plan` and `just tf-apply`. The module default is empty, so a master with no parameter value gets NO :22 ingress, and the plan fails closed if the parameter is missing, empty, or contains `0.0.0.0/0`.
+
+Bootstrap (must exist before the first plan that includes this change):
+
+```bash
+aws ssm put-parameter --region us-east-1 \
+  --name /<cluster>/allowlist/master-ssh --type StringList \
+  --value "<operator-egress-cidrs,comma-separated>" \
+  --tags Key=iit-billing-tag,Value=<cluster> Key=repo,Value=github.com/Percona/percona-cd-platform
+```
+
+The cutover seed is the union of the previously committed module default and the psmdb/pmm per-master extras (8 CIDRs). Total reachability is preserved, and the two per-master extras gain :22 on every master where they previously reached one master each; the six baseline CIDRs are unchanged.

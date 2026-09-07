@@ -14,10 +14,10 @@
 # is fleet-unique, freed when the CFN stack deletes); legacy JSlave naming
 # (the worker instance profile is jenkins-psmdb-slave, referenced by name in
 # cloud.groovy); a third subnet in AZ a (the CFN VPC carried a/b/c;
-# cloud.groovy's netMap maps all three, the classic EC2 cloud instantiates
-# only AZ b, and the ARM fleet spreads across every subnet). The retained 300 GiB
-# gp2 data volume is imported in us-west-2b (az_index 1, the module default;
-# EBS is AZ-bound so the on-demand instance lands there too).
+# cloud.groovy's netMap maps all three, the classic EC2 cloud round-robins
+# its launches across them, and the ARM fleet spreads across every subnet).
+# The retained 300 GiB gp2 data volume is imported in us-west-2b (az_index 1,
+# the module default; EBS is AZ-bound so the on-demand instance lands there too).
 module "psmdb" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.us-west-2 }
@@ -29,18 +29,11 @@ module "psmdb" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
+  # psmdb workers have no S3 build cache: no psmdb build cache bucket is
+  # wired through this module, so null drops the dead worker S3 IAM grant.
+  cache_bucket_name = null
 
-  # Baseline 6-CIDR fleet allowlist plus an operator's :22 source CIDR;
-  # codified so an apply does not strip the live rule (matches the pmm pattern).
-  ssh_allowed_cidrs = [
-    "46.149.86.84/32",
-    "54.214.47.252/32",
-    "54.214.47.254/32",
-    "176.37.55.60/32",
-    "188.163.20.103/32",
-    "213.159.239.48/32",
-    "86.127.231.233/32",
-  ]
+  ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 
   # Retained CFN data volume vol-090299a14ad3da940 is 300 GiB gp2 in
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
@@ -117,6 +110,7 @@ module "psmdb" {
     for f in fileset("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/psmdb/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 

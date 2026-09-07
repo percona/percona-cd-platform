@@ -83,6 +83,11 @@ provider "kubectl" {
   host                   = try(module.eks.cluster_endpoint, "")
   cluster_ca_certificate = try(base64decode(module.eks.cluster_certificate_authority_data), "")
   load_config_file       = false
+  # Retry failed applies (provider-level; the resource schema has no per-
+  # resource knob). kubectl applies are declarative, so retries are
+  # idempotent. Absorbs transient API blips only; a missing CRD still
+  # fails after the retries (see `just bootstrap-dr`).
+  apply_retry_count = 5
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"

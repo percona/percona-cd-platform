@@ -98,6 +98,22 @@ initMap['fedora-docker'] = '''#!/bin/bash -x
         sleep 1
         echo "try again"
     done
+    # gsutil for operator e2e jobs, best-effort: boot continues if the install fails (el9 repo, Google ships none for Fedora)
+    sudo tee /etc/yum.repos.d/google-cloud-sdk.repo > /dev/null <<'GCLOUDREPO'
+[google-cloud-cli]
+name=Google Cloud CLI
+baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=0
+skip_if_unavailable=1
+gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+GCLOUDREPO
+    for attempt in 1 2 3; do
+        sudo dnf install -y google-cloud-cli && break
+        sleep 5
+    done
+    command -v gsutil || echo "WARN: gsutil install failed, operator e2e jobs fall back to self-install" >&2
     if ! $(aws --version | grep -q 'aws-cli/2'); then
         find /tmp -maxdepth 1 -name "*aws*" | xargs sudo rm -rf
         until curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "/tmp/awscliv2.zip"; do

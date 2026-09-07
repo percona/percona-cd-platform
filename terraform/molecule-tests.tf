@@ -298,6 +298,9 @@ import {
   id       = each.value.id
 }
 
+# Workers SSH to the test VMs over their public IPs from arbitrary egress
+# points (AWS workers, Hetzner, ARM fleet), so 22/tcp and ICMP echo stay
+# world-open by design; mirrors create.yml exactly (see header above).
 #trivy:ignore:AVD-AWS-0107
 resource "aws_security_group" "molecule_tests_pxc_runtime" {
   for_each = local.molecule_tests_pxc_runtime_sgs

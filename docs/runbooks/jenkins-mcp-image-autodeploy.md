@@ -23,6 +23,16 @@ publish: build + smoke + push          ->  bump: open a verified PR    ->  revie
 
 ## Operate
 
+### Ship a code change
+
+Bump `version` in `images/jenkins-mcp/pyproject.toml` and refresh `uv.lock` in the same commit as the
+code. Two independent reasons:
+
+- The `test` job runs `uv` with `--frozen`, so a lock that does not match `pyproject.toml` fails CI
+  even though the same commands pass locally without the flag.
+- The image tag is `<pyproject.version>-<short-sha>`. Skipping the version bump still produces a
+  deployable tag, but one that cannot be traced back to a release.
+
 ### Trigger or re-trigger a deploy PR
 
 A deploy PR opens automatically on every push to `main` that rebuilds the image. To force one (for example after closing a stale PR), re-run the `build-jenkins-mcp-image` workflow on `main` from the Actions tab ("Re-run all jobs"), or push a no-op change under `images/jenkins-mcp/`. The `bump` job no-ops if `values.yaml` already pins the latest tag.
