@@ -30,6 +30,9 @@ module "pg" {
     c2 = { az_index = 2, cidr = "10.145.4.0/22" }
   }
 
+  # A, B and C primary subnets enabled, one per AZ.
+  extra_subnet_a = true
+
   # Retained data volume: live 500 GiB gp3 in eu-central-1b (the template
   # still said 100). encrypted=false is covered by the module's
   # ignore_changes.
@@ -86,6 +89,7 @@ module "pg" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pg/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pg/init.groovy.d/${f}")
   }
+  init_groovy_sync_schedule = "rate(30 minutes)"
 }
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64

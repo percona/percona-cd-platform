@@ -69,6 +69,7 @@ secrets/
 node_modules/
 __pycache__/
 *.pyc
+*.egg-info/
 .serena/
 
 # Helm chart deps — `helm dep update` materialises these locally during

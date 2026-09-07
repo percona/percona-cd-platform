@@ -21,6 +21,18 @@ netMap['us-west-2a'] = 'subnet-0777bf4ef1b471abe' // TF VPC vpc-08eb4de1376aba83
 netMap['us-west-2b'] = 'subnet-0c3f94b95538a5984' // TF VPC vpc-08eb4de1376aba839 (10.188.1.0/24)
 netMap['us-west-2c'] = 'subnet-07f71e1a3117a32f9' // TF VPC vpc-08eb4de1376aba839 (10.188.2.0/24)
 
+// Launch subnets for the classic EC2 templates. The plugin round-robins each
+// launch request over a comma-separated subnet list (one multi-instance request
+// still lands in one AZ), so spot workers spread across the three AZ pools and
+// one reclaiming pool no longer takes every x64 worker. The rotation counter
+// lives per template and restarts at the first entry on every reload, so each
+// template starts at a different AZ to keep first launches from piling into one.
+subnetRing = [netMap['us-west-2b'], netMap['us-west-2c'], netMap['us-west-2a']]
+String subnetsFor(String OSType) {
+    int start = Math.abs(OSType.hashCode()) % subnetRing.size()
+    return (subnetRing.drop(start) + subnetRing.take(start)).join(',')
+}
+
 imageMap = [:]
 imageMap['micro-amazon']     = 'ami-06a974f9b8a97ecf2'
 imageMap['min-al2023-x64']   = 'ami-06a974f9b8a97ecf2'
@@ -56,7 +68,8 @@ imageMap['min-trixie-aarch64']  = 'ami-021bb099085248f4c'
 priceMap = [:]
 priceMap['m5d.large']   = '0.13' // type=m5d.large, vCPU=2, memory=4GiB, saving=29%, interruption='<5%', price=0.071400
 priceMap['c5a.2xlarge']  = '0.25'  //type=c5a.2xlarge, vCPU=8, memory=16GiB, saving=58%, interruption='<5%', price=0.182000
-priceMap['g4ad.2xlarge'] = '0.33' //type=g4ad.2xlarge, vCPU=8, memory=32GiB, saving=63%, interruption='<5%', price=0.20
+priceMap['m6a.2xlarge']  = '0.35' // type=m6a.2xlarge, vCPU=8, memory=32GiB, on-demand=0.3456, spot us-west-2b=0.1718 (2026-09-02), interruption='5-10%'. Bid at on-demand so spot is never rejected as price-too-low
+priceMap['m5.2xlarge']   = '0.39' // type=m5.2xlarge, vCPU=8, memory=32GiB, on-demand=0.384, spot us-west-2b=0.1497 (2026-09-02). Intel, for the Ubuntu 16.04 AMI that kernel-panics on m6a
 priceMap['i3en.3xlarge'] = '0.72' // type=i3en.3xlarge, vCPU=16, memory=64GiB, saving=70%, interruption='<5%'
 priceMap['i4g.4xlarge'] = '0.57' // aarch64 type=i4g.4xlarge, vCPU=16, memory=64GiB, saving=38%, interruption='<5%', price=0.488500
 
@@ -393,14 +406,15 @@ initMap['min-trixie-aarch64']   = initMap['debMap']
 
 capMap = [:]
 capMap['c5a.2xlarge'] = '60'
-capMap['g4ad.2xlarge'] = '80'
+capMap['m6a.2xlarge'] = '80'
+capMap['m5.2xlarge'] = '20'
 capMap['i3en.3xlarge'] = '30'
 capMap['i4g.4xlarge'] = '20'
 
 typeMap = [:]
 typeMap['micro-amazon']      = 'm5d.large'
 typeMap['docker']            = 'c5a.2xlarge'
-typeMap['docker-32gb']       = 'g4ad.2xlarge'
+typeMap['docker-32gb']       = 'm6a.2xlarge' // g4ad.2xlarge spot pool in us-west-2 dried up 2026-09-02, m6a is the same 8 vCPU / 32 GiB without the GPU
 typeMap['docker-64gb']       = 'i3en.3xlarge'
 typeMap['min-al2023-x64']    = typeMap['docker-32gb']
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
@@ -413,12 +427,12 @@ typeMap['min-buster-x64']    = typeMap['docker-32gb']
 typeMap['min-bullseye-x64']  = typeMap['docker-32gb']
 typeMap['min-bookworm-x64']  = typeMap['docker-32gb']
 typeMap['min-trixie-x64']    = typeMap['docker-32gb']
-typeMap['min-xenial-x64']    = typeMap['docker-32gb']
+typeMap['min-xenial-x64']    = 'm5.2xlarge' // 4.4 kernel panics at boot on m6a (AMD Zen 3), boots on Intel m5
 typeMap['min-bionic-x64']    = typeMap['docker-32gb']
 typeMap['min-focal-x64']     = typeMap['docker-32gb']
 typeMap['min-jammy-x64']     = typeMap['docker-32gb']
 typeMap['min-noble-x64']     = typeMap['docker-32gb']
-typeMap['psmdb']             = typeMap['docker-32gb']
+typeMap['psmdb']             = typeMap['min-xenial-x64'] // same Ubuntu 16.04 AMI
 typeMap['psmdb-bionic']      = typeMap['docker-32gb']
 
 typeMap['docker-64gb-aarch64']  = 'i4g.4xlarge'
@@ -428,6 +442,12 @@ typeMap['min-noble-aarch64']    = 'i4g.4xlarge'
 typeMap['min-bullseye-aarch64'] = 'i4g.4xlarge'
 typeMap['min-bookworm-aarch64'] = 'i4g.4xlarge'
 typeMap['min-trixie-aarch64']   = 'i4g.4xlarge'
+
+// Labels that launch on-demand instead of spot. The PCSM test orchestrator runs
+// on min-bookworm-x64 for hours and drives a fleet of on-demand test VMs, so a
+// spot reclaim of the orchestrator throws the whole run away.
+ondemandMap = [:]
+ondemandMap['min-bookworm-x64'] = true
 
 execMap = [:]
 execMap['docker']            = '1'
@@ -561,11 +581,11 @@ jvmoptsMap['min-bookworm-aarch64'] = '-Xmx512m -Xms512m --add-opens=java.base/ja
 jvmoptsMap['min-trixie-aarch64']   = jvmoptsMap['min-bookworm-aarch64']
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.39/src/main/java/hudson/plugins/ec2/SlaveTemplate.java
-SlaveTemplate getTemplate(String OSType, String AZ) {
+SlaveTemplate getTemplate(String OSType) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], false, '0'), // SpotConfiguration spotConfig
+        ondemandMap.getOrDefault(OSType, false) ? null : new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (null = on-demand, otherwise spot falling back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -581,7 +601,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         new UnixData('', '', '', '22', ''),         // AMITypeData amiType
         jvmoptsMap[OSType],                         // String jvmopts
         false,                                      // boolean stopOnTerminate
-        netMap[AZ],                                 // String subnetId
+        subnetsFor(OSType),                         // String subnetId (round-robin over the three AZ subnets, staggered start)
         [
             new EC2Tag('Name', 'jenkins-psmdb-' + OSType),
             new EC2Tag('iit-billing-tag', 'jenkins-psmdb-slave')
@@ -594,7 +614,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
-        '',                                         // String launchTimeoutStr
+        '900',                                      // String launchTimeoutStr (terminate agents stuck launching after 15 min so provisioning retries)
         true,                                       // boolean associatePublicIp
         devMap[OSType],                             // String customDeviceMapping
         true,                                       // boolean connectBySSHProcess
@@ -628,35 +648,35 @@ String region = 'us-west-2'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('docker',                  "${region}${it}"),
-            getTemplate('docker-32gb',             "${region}${it}"),
-            getTemplate('docker-64gb',             "${region}${it}"),
-            getTemplate('micro-amazon',            "${region}${it}"),
-            getTemplate('min-al2023-x64',          "${region}${it}"),
-            getTemplate('min-centos-7-x64',        "${region}${it}"),
-            getTemplate('min-centos-8-x64',        "${region}${it}"),
-            getTemplate('min-ol-8-x64',            "${region}${it}"),
-            getTemplate('min-ol-9-x64',            "${region}${it}"),
-            getTemplate('min-rhel-10-x64',         "${region}${it}"),
-            getTemplate('min-stretch-x64',         "${region}${it}"),
-            getTemplate('min-buster-x64',          "${region}${it}"),
-            getTemplate('min-bullseye-x64',        "${region}${it}"),
-            getTemplate('min-bookworm-x64',        "${region}${it}"),
-            getTemplate('min-trixie-x64',          "${region}${it}"),
-            getTemplate('min-xenial-x64',          "${region}${it}"),
-            getTemplate('min-bionic-x64',          "${region}${it}"),
-            getTemplate('min-focal-x64',           "${region}${it}"),
-            getTemplate('min-jammy-x64',           "${region}${it}"),
-            getTemplate('min-noble-x64',           "${region}${it}"),
-            getTemplate('psmdb',                   "${region}${it}"),
-            getTemplate('psmdb-bionic',            "${region}${it}"),
-            getTemplate('docker-64gb-aarch64',     "${region}${it}"),
-            getTemplate('min-al2023-aarch64',      "${region}${it}"),
-            getTemplate('min-jammy-aarch64',       "${region}${it}"),
-            getTemplate('min-noble-aarch64',       "${region}${it}"),
-            getTemplate('min-bullseye-aarch64',    "${region}${it}"),
-            getTemplate('min-bookworm-aarch64',    "${region}${it}"),
-            getTemplate('min-trixie-aarch64',      "${region}${it}"),
+            getTemplate('docker'),
+            getTemplate('docker-32gb'),
+            getTemplate('docker-64gb'),
+            getTemplate('micro-amazon'),
+            getTemplate('min-al2023-x64'),
+            getTemplate('min-centos-7-x64'),
+            getTemplate('min-centos-8-x64'),
+            getTemplate('min-ol-8-x64'),
+            getTemplate('min-ol-9-x64'),
+            getTemplate('min-rhel-10-x64'),
+            getTemplate('min-stretch-x64'),
+            getTemplate('min-buster-x64'),
+            getTemplate('min-bullseye-x64'),
+            getTemplate('min-bookworm-x64'),
+            getTemplate('min-trixie-x64'),
+            getTemplate('min-xenial-x64'),
+            getTemplate('min-bionic-x64'),
+            getTemplate('min-focal-x64'),
+            getTemplate('min-jammy-x64'),
+            getTemplate('min-noble-x64'),
+            getTemplate('psmdb'),
+            getTemplate('psmdb-bionic'),
+            getTemplate('docker-64gb-aarch64'),
+            getTemplate('min-al2023-aarch64'),
+            getTemplate('min-jammy-aarch64'),
+            getTemplate('min-noble-aarch64'),
+            getTemplate('min-bullseye-aarch64'),
+            getTemplate('min-bookworm-aarch64'),
+            getTemplate('min-trixie-aarch64'),
         ],
         '',
         ''                                    // List<? extends SlaveTemplate> templates

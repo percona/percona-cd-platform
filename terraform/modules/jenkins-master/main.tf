@@ -22,7 +22,7 @@ locals {
   worker_logical = var.worker_role_legacy_naming ? "slave" : "worker"
   worker_name    = "${var.short_name}-${local.worker_logical}"
 
-  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb.
+  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb and pg.
   subnet_indices = merge(
     { "b" = 1, "c" = 2 },
     var.extra_subnet_a ? { "a" = 0 } : {},
@@ -770,11 +770,13 @@ resource "aws_cloudwatch_event_target" "termination" {
 
 locals {
   user_data_rendered = templatefile("${path.module}/user-data.sh.tftpl", {
-    jenkins_host            = var.hostname
+    jenkins_host            = coalesce(var.jenkins_home_dirname, var.hostname)
     jenkins_short           = var.short_name
     eip_allocation_id       = var.create_eip ? aws_eip.master[0].id : ""
     data_volume_id          = aws_ebs_volume.data.id
     jenkins_package_version = var.jenkins_package_version
+    java_package            = var.java_package
+    observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
     ssh_key_engineers       = join(" ", var.ssh_key_engineers)
@@ -845,12 +847,16 @@ resource "aws_launch_template" "master" {
   }
   tag_specifications {
     resource_type = "volume"
+    # No snapshot-policy here: the DLM policy covers DATA volumes only
+    # (docs/adr/0037-master-ebs-snapshot-rpo.md), and launch-created volumes
+    # are the root device. Stamping it at launch put root volumes into the
+    # snapshot policy and drifted against root_block_device tags on every
+    # rehydration.
     tags = {
       Name              = var.short_name
       "iit-billing-tag" = var.short_name
       "PerconaKeep"     = "True"
       team              = var.team
-      "snapshot-policy" = "jenkins-master"
     }
   }
 

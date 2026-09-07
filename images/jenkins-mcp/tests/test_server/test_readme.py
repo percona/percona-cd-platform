@@ -73,6 +73,9 @@ async def test_get_readme_lists_fleet_and_key_sections(mocker):
     assert 'list_masters()' in text
     assert 'query_items' in text
     assert 'Read (everyone)' in text  # access tiers documented
+    assert 'To join jenkins-mcp-writers: ask in #opensource-jenkins' in text  # self-service onboarding path
+    assert 'After you are added, disconnect and' in text  # the disconnect step is load-bearing
+    assert 'reconnecting alone keeps the old group-less token' in text  # re-auth-after-add gotcha
     assert 'NEVER exposed' in text  # config/script mutation guarantee
 
 
@@ -184,3 +187,15 @@ def test_server_instructions_point_to_get_readme():
     # automatically; it must be set and steer the model to the get_readme guide.
     assert mcp.instructions
     assert 'get_readme()' in mcp.instructions
+
+
+def test_readme_md_onboarding_guidance_pinned():
+    # The writer-onboarding guidance is hand-duplicated across three surfaces (denial message,
+    # get_readme, README.md). The first two are pinned by their own tests; pin the README copy
+    # too so a reword of one surface cannot leave this one silently stale.
+    readme_md = Path(__file__).resolve().parents[2] / 'README.md'
+    text = readme_md.read_text()
+    assert 'Ask in #opensource-jenkins' in text  # the venue
+    assert 'first Duo SSO login' in text  # account is JIT-provisioned; connect before asking
+    assert 'Reconnecting alone does not refresh it' in text  # re-auth-after-add gotcha
+    assert 'PS-11341' in text  # manage tools 403 even for writers (pending backend grant)

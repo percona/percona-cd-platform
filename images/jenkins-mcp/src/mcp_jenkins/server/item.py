@@ -50,7 +50,8 @@ async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None)
 
     Served as a read tool but gated per call to the jenkins-mcp-writers group (see audit.py),
     because config.xml can carry plaintext secrets such as the <authToken> "trigger builds remotely"
-    token. Reads config.xml via the service identity's Job/ExtendedRead.
+    token. Reads config.xml via the service identity's Job/ExtendedRead. get_readme covers how
+    to join the group.
 
     Args:
         fullname: The fullname of the item
@@ -65,8 +66,9 @@ async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None)
 async def set_item_config(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
     """Update an existing item's config.xml in Jenkins (writers only).
 
-    Gated to the jenkins-mcp-writers group and served only in operate mode. Posts the full
-    config.xml to an existing job; use create_item for an item that does not exist yet.
+    Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
+    operate mode. Posts the full config.xml to an existing job; use create_item for an item that
+    does not exist yet.
 
     Args:
         fullname: The fullname of the item
@@ -79,7 +81,8 @@ async def set_item_config(ctx: Context, fullname: str, config_xml: str, master: 
 async def create_item(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
     """Create a new Jenkins item (job/folder) from a config.xml (writers only).
 
-    Gated to the jenkins-mcp-writers group and served only in operate mode. The parent folder
+    Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
+    operate mode. The parent folder
     must already exist; fails if an item with this fullname already exists (use set_item_config
     to update an existing one).
 
@@ -94,7 +97,8 @@ async def create_item(ctx: Context, fullname: str, config_xml: str, master: Mast
 async def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> None:
     """Delete a Jenkins item (job/folder) by fullname (writers only).
 
-    Gated to the jenkins-mcp-writers group and served only in operate mode. Irreversible: removes
+    Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
+    operate mode. Irreversible: removes
     the item and its build history.
 
     Args:

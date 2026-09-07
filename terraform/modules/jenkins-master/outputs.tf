@@ -61,6 +61,11 @@ output "data_volume_id" {
 output "subnet_ids" {
   description = "Master VPC subnet IDs (primary subnets plus any extra_worker_subnets), for attaching the jenkins-arm-fleet module."
   value       = concat([for s in aws_subnet.this : s.id], [for s in aws_subnet.extra : s.id])
+
+  # Consumers put these straight into ASG vpc_zone_identifier. Without this,
+  # a widened ASG can launch into a new subnet before its route-table
+  # association exists, leaving the worker briefly unrouted.
+  depends_on = [aws_route_table_association.this, aws_route_table_association.extra]
 }
 
 output "worker_instance_profile_name" {

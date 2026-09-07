@@ -130,9 +130,14 @@ async def test_operate_tool_denied_without_writers_group(capture_audit, mocker):
         called['ran'] = True
         return 'ran'
 
-    with pytest.raises(ToolError):
+    # The denial message must tell the user how to get access: where to ask, the disconnect +
+    # re-authenticate step, and why a plain reconnect is not enough.
+    with pytest.raises(
+        ToolError, match=r'ask in #opensource-jenkins.*disconnect and re-authenticate.*group-less token'
+    ) as excinfo:
         await audit.AuditMiddleware().on_call_tool(ctx, call_next)
 
+    assert 'PS-11341' not in str(excinfo.value)  # the manage-only backend-403 caveat must not leak here
     assert called['ran'] is False  # denied before the tool executed
     rec = json.loads(capture_audit[-1])
     assert rec['tool'] == 'build_item'
@@ -181,7 +186,9 @@ async def test_manage_tool_denied_without_writers_group(capture_audit, mocker):
         called['ran'] = True
         return 'ran'
 
-    with pytest.raises(ToolError):
+    # Manage denials must NOT send the caller through onboarding for nothing: the backend grant
+    # is pending (PS-11341), so manage tools 403 even for writers. The caveat rides the message.
+    with pytest.raises(ToolError, match=r'403 even for writers today.*PS-11341'):
         await audit.AuditMiddleware().on_call_tool(ctx, call_next)
 
     assert called['ran'] is False  # denied before the tool executed

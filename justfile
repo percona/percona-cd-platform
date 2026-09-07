@@ -396,6 +396,7 @@ _ssm-resolve inst:
       pxb)   region=us-west-2;    tag=jenkins-pxb ;;
       pxc)   region=us-west-1;    tag=jenkins-pxc ;;
       ps57)  region=eu-central-1; tag=jenkins-ps57 ;;
+      ps80-upgraded) region=us-west-2;    tag=jenkins-ps80-upgraded ;;
       pg)    region=eu-central-1; tag=jenkins-pg ;;
       rel)   region=eu-west-1;    tag=jenkins-rel ;;
       cloud) region=eu-west-1;    tag=jenkins-cloud ;;
