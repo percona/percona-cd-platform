@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: ./.github/actions/actions-lint
@@ -41,10 +41,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7.6.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
           enable-cache: true
       - name: pytest
@@ -64,17 +64,17 @@ jobs:
     permissions:
       contents: read            # explicitly NO id-token
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       # docker/* is SHA-pinned (not in the repo zizmor ref-pin allowlist). Refresh with:
       #   gh api repos/docker/<repo>/git/refs/tags/<tag> --jq .object.sha
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
-      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a  # v4.3.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
       # A multi-arch manifest cannot be loaded into the daemon, so build + smoke
       # each arch single-platform with --load. arm64 runs under QEMU binfmt.
       - name: build amd64 (load, no push)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: images/mtr-ingest
           platforms: linux/amd64
@@ -84,7 +84,7 @@ jobs:
       - name: smoke amd64 (CLI runs)
         run: docker run --rm mtr-ingest:pr-amd64-${{ github.sha }} --help
       - name: build arm64 (load, no push)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: images/mtr-ingest
           platforms: linux/arm64
@@ -110,11 +110,11 @@ jobs:
       # Third-party actions pinned by commit SHA below this line (the job holds
       # AWS creds after configure-aws-credentials). Resolve/refresh SHAs with:
       #   gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3.6.0
-      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a  # v4.3.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
       - name: compute image tag (<version>-<short-sha>)
         id: meta
         run: |
@@ -131,7 +131,7 @@ jobs:
           esac
           echo "tag=${ver}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - name: build amd64 (load, NO push yet)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: images/mtr-ingest
           platforms: linux/amd64
@@ -141,7 +141,7 @@ jobs:
       - name: smoke amd64 BEFORE push (CLI runs)
         run: docker run --rm mtr-ingest:amd64-${{ github.sha }} --help
       - name: build arm64 (load, NO push yet)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: images/mtr-ingest
           platforms: linux/arm64
@@ -153,16 +153,16 @@ jobs:
 
       # --- AWS creds appear here; everything after is privileged ---
       - name: configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c  # v6.2.4
         with:
           role-to-assume: ${{ secrets.MTR_INGEST_IMAGE_PUSH_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: ECR login
         id: ecr
-        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419  # v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd  # v2
       - name: push (multi-arch manifest list) with SBOM + provenance
         id: push
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: images/mtr-ingest
           platforms: linux/amd64,linux/arm64
@@ -202,7 +202,7 @@ jobs:
       contents: write           # createCommitOnBranch on the bump branch
       pull-requests: write      # gh pr create
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: open bump PR
