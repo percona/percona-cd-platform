@@ -6,8 +6,10 @@ ruler, where they evaluate against the probe_* series (this addon's Probe
 CRs) and the hetzner_* series the masters push through alloy-gateway.
 
 Rules within a group evaluate sequentially per cycle, so the chained
-references below are safe. Alert rules are deliberately deferred until
-probe flap behaviour has been observed (see Chart.yaml).
+references below are safe. The uptime alert group (MasterDown,
+PushPipelineStale, ...) stays deferred until probe flap behaviour has been
+observed (see Chart.yaml). The one alert below rides on a 15-minute window
+plus a heartbeat and does not depend on probe flap.
 */}}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -59,3 +61,38 @@ spec:
             )
             * on (master)
             jenkins:master_push_fresh
+        # Log liveness. jenkins:master_log_lines:count15m is recorded by
+        # the Loki ruler (prometheusrule-jenkins-logs-loki.yaml) and
+        # remote-written here. A master with no line in the window has no
+        # sample rather than 0, so the `or` fills a 0 for every master that
+        # has a push-freshness series. logHeartbeat.groovy (init.groovy.d)
+        # writes one INFO line per minute on every master, so 0 here means
+        # the JUL root level dropped, the file handler detached, or the
+        # Alloy tail or Loki push died, never an idle master.
+        - record: jenkins:master_logs_fresh
+          expr: |
+            (jenkins:master_log_lines:count15m > bool 0)
+              or
+            (jenkins:master_push_fresh * 0)
+    - name: jenkins-uptime.alerts
+      rules:
+        # Metrics still arrive but no jenkins.log line (heartbeat included)
+        # reached Loki for 15 minutes. Gated on push freshness so a master
+        # that is down entirely does not also page here. `for` absorbs a
+        # Loki ruler restart, which leaves a short remote-write gap.
+        # The Mimir Alertmanager routes to a receiver without integrations
+        # (ADR 0031), so this shows in Alertmanager and the dashboards
+        # until a Slack receiver lands.
+        - alert: JenkinsMasterLogsSilent
+          expr: jenkins:master_logs_fresh == 0 and on (master) jenkins:master_push_fresh == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: No jenkins.log line reached Loki for 15 minutes while metrics still arrive
+            description: >-
+              Check the java.util.logging root level and handlers on the master
+              (Manage Jenkins > System Log, or the Script Console), that
+              /var/log/jenkins/jenkins.log grows, that the master-side Alloy
+              tails it, and the loki-push path. Runbook: docs/observability.md,
+              Log liveness.
