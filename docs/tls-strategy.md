@@ -41,17 +41,8 @@ TLS terminates at the two ALB groups and nowhere else in the cluster path:
 
 ## Exceptions
 
-- `pg` still terminates its own TLS on-box (openresty plus certbot),
-  CloudFormation-era. Certbot renewal there is the one TLS path that can
-  still fail operationally, and it retires with pg's migration. The
-  certbot-fatality class of incident on the other masters ended when the
-  ALB took over.
+- The certbot-fatality class of incident ended fleet-wide when the ALB took
+  over TLS termination (pg, the last on-box TLS master, migrated 2026-07-07).
+  No master terminates TLS on-box any longer.
 - The internal signing and repo server manages its own transport and is
   out of this platform's scope.
-
-## The lock-down owed
-
-Master security groups still allow :80/:443 from anywhere, a leftover from
-the pre-ALB era kept until pg migrates. The module carries the lock-down
-note, and the closure is tracked in the architecture doc's
-[risks](architecture.md#risks-and-technical-debt).

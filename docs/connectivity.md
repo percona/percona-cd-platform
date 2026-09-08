@@ -24,7 +24,7 @@ PrivateLink) and
 | `jenkins-rel` | eu-west-1 | 10.199.0.0/22 | `terraform/master-rel.tf` |
 | `molecule-tests-ps80` | us-west-2 | 10.177.0.0/22 | `terraform/molecule-tests.tf` |
 | `molecule-tests-pxc` | us-west-1 | 10.177.0.0/22 | `terraform/molecule-tests.tf` |
-| `jenkins-pg` (CFN-owned, referenced via data sources) | eu-central-1 | not declared here | `terraform/master-pg.tf` |
+| `jenkins-pg` (imported live VPC, kept) | eu-central-1 | 10.144.0.0/22 (+ secondary 10.145.0.0/21) | `terraform/master-pg.tf` |
 
 Every peered CIDR is unique fleet-wide. This is a standing migration
 precondition (ps57 and pxc were re-CIDRed off 10.177 for it). The
@@ -41,7 +41,7 @@ single NAT gateway in us-east-1a.
 
 ## Peering mesh
 
-Strict hub and spoke ([VPC peering](https://docs.aws.amazon.com/vpc/latest/peering/what-is-vpc-peering.html)), nine peerings, all defined one-per-master-file:
+Strict hub and spoke ([VPC peering](https://docs.aws.amazon.com/vpc/latest/peering/what-is-vpc-peering.html)), ten peerings, all defined one-per-master-file:
 
 - Requester is always the hub (us-east-1). Accepter uses the master
   region's provider alias. Name tag
@@ -61,7 +61,7 @@ Strict hub and spoke ([VPC peering](https://docs.aws.amazon.com/vpc/latest/peeri
 
 ## Request paths
 
-### Mode B web path (eight EC2 masters)
+### Mode B web path (nine EC2 masters)
 
 ```
 user
@@ -183,10 +183,7 @@ degrades web access and observability, not running builds.
 - The CFN-era world-open :80/:443 ingress was removed from the module once
   every consumer moved behind the ALB: nothing on a Terraform master listens on
   those ports (TLS terminates at the ALB, the user-data installs no
-  openresty or certbot). pg, the one CFN-managed master outside this
-  module, still terminates TLS on-box and keeps :80/:443 world-open
-  (Let's Encrypt HTTP-01 renewals plus the openresty OAuth gate) until it
-  migrates.
+  openresty or certbot).
 - ARM worker SGs allow :22 from their own VPC CIDR (ps3's also from the
   EKS CIDR). Classic-plugin worker SGs are defined in each master's cloud
   config, not in Terraform.
@@ -232,8 +229,8 @@ mechanical, not conventional.
   its TXT registry: each managed record is paired with a TXT record
   stamped `txtOwnerId: percona-ci-platform`, and the sync policy only
   creates, updates, or deletes records carrying that stamp. Records it
-  does not own, such as the CloudFormation-era `pg.cd` entry or anything
-  predating the platform, are invisible to it and cannot be clobbered.
+  does not own, such as records predating the platform, are invisible to it
+  and cannot be clobbered.
 - Terraform owns only the ACM validation records. The jenkins-master module
   creates no public DNS records, so no master ever publishes its raw address.
 
@@ -247,6 +244,5 @@ any instance replacement. The operational rule that follows is absolute:
 nothing may pin to a master's public address, and discovery is always
 live (`just ssh` lists the current addresses). Dropping the four wave EIPs
 also removed their hourly public-IPv4 charges, but the pinning hazard was
-the real motive. Exceptions: pxc keeps one EIP because an inbound JNLP
-agent is pinned to it (see the worker-plane table), and pg's addressing
-lives with its CloudFormation stack outside this repo.
+the real motive. The one exception is pxc, which keeps an EIP because an
+inbound JNLP agent is pinned to it (see the worker-plane table).

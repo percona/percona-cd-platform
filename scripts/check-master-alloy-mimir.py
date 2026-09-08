@@ -9,8 +9,9 @@ list), classified by architecture:
   tf-managed  terraform/master-<inst>.tf declaring the jenkins-master module
               (EKS-fronted on-demand EC2); Mimir label master="<inst>.cd".
   cf-managed  terraform/master-<inst>.tf WITHOUT that module and not already
-              represented in-cluster (legacy CloudFormation EC2, i.e. pg);
-              Mimir label master="<inst>.cd".
+              represented in-cluster; Mimir label master="<inst>.cd". (No
+              master is in this state today; pg migrated to the module on
+              2026-07-07.)
 
 For each master it queries the in-cluster Mimir query-frontend for the gauge
 every master pushes, hetzner_api_rate_limit_remaining, and reports the series
@@ -60,7 +61,7 @@ def enumerate_masters() -> list[dict]:
                 masters.append({"inst": name, "arch": "k8s", "label": name})
 
     # EC2 masters: terraform/master-<inst>.tf. Carrying the jenkins-master
-    # module => tf-managed; otherwise it is the legacy CFN master (pg). A master
+    # module => tf-managed; otherwise it is a legacy non-module master. A master
     # already represented in-cluster (ps3 -> ps3-k8s) is skipped: its
     # master-*.tf is an ARM-fleet remnant, not a separate EC2 master.
     for tf in sorted(glob.glob(os.path.join(ROOT, "terraform", "master-*.tf"))):
