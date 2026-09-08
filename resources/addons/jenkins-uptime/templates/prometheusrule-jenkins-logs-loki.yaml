@@ -1,0 +1,38 @@
+{{/*
+Loki-ruler recording rule: jenkins.log lines per master over 15 minutes.
+
+The Alloy DS `loki.rules.kubernetes "loki_ruler"` component syncs
+PrometheusRule resources labelled `percona.com/ruler: loki` to the Loki
+ruler, which evaluates the LogQL and remote-writes the samples to Mimir
+(loki.rulerConfig.remote_write in the loki addon). The Mimir-bound rules in
+prometheusrule-jenkins-uptime.yaml join the result on (master). The Mimir
+sync excludes this label, so Mimir's ruler never sees LogQL.
+
+The stream selector is the masters inventory, so fenced clones such as
+ps80-upgraded.cd stay out. EC2 masters carry `master` from the master-side
+Alloy external labels; the in-cluster controller gets it from the Alloy DS
+`loki.relabel "jenkins_master"` rule (namespace jenkins-<inst>-k8s).
+
+A master with no line in the window yields no sample, not 0; the Mimir-side
+jenkins:master_logs_fresh rule turns that absence into 0.
+*/}}
+{{- $masters := list }}
+{{- range .Values.masters }}
+{{- $masters = append $masters .master }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: jenkins-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: jenkins-uptime
+    app.kubernetes.io/component: rules
+    percona.com/ruler: loki
+spec:
+  groups:
+    - name: jenkins-logs.rules
+      interval: 1m
+      rules:
+        - record: jenkins:master_log_lines:count15m
+          expr: sum by (master) (count_over_time({master=~"{{ join "|" $masters }}"}[15m]))

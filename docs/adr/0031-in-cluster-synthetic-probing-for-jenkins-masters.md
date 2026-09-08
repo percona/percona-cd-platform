@@ -3,6 +3,7 @@
 
 **Status:** Accepted (2026-06-10)
 **Related:** [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (push model), [ADR 0009](0009-scrape-vs-remote-write-for-jenkins-fleet.md) (why pull was unreachable), [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (EKS fronting), [ADR 0016](0016-lgtm-only-metrics-stack.md) (LGTM-only stack), [ADR 0027](0027-baked-jenkins-controller-image.md) (in-cluster ps3-k8s controller).
+**Amended by:** [ADR 0045](0045-jenkins-log-liveness-heartbeat-and-loki-ruler.md) (one alert rule, JenkinsMasterLogsSilent, lands ahead of the deferred uptime alert group)
 
 ## Context
 

@@ -193,9 +193,67 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 - `scripts/verify-observability.sh [<inst>]` — full push-pipeline walk for
   one master (Alloy systemd, ALB + bearer, gateway, Mimir/Loki, Grafana).
 
+## Log liveness
+
+Every master writes one INFO heartbeat line per minute to `jenkins.log`
+(`logHeartbeat.groovy` in `init.groovy.d`, delivered through the S3 init
+buckets for the EC2 masters and the boot-time init ConfigMap for ps3-k8s).
+The Loki ruler counts the lines that reach Loki per master
+(`jenkins:master_log_lines:count15m`, from the PrometheusRule labelled
+`percona.com/ruler: loki` in the jenkins-uptime addon) and remote-writes
+the samples to Mimir. There `jenkins:master_logs_fresh` turns a missing
+sample into 0, the Jenkins / Uptime dashboard shows it per master, and
+`JenkinsMasterLogsSilent` fires after five more minutes when a master
+still pushes metrics but no line landed for 15 minutes. Reasoning in
+[ADR 0045](adr/0045-jenkins-log-liveness-heartbeat-and-loki-ruler.md).
+
+When it fires for `<inst>.cd`:
+
+1. Confirm the file still grows. A stale mtime means the JVM stopped
+   writing (step 2). A fresh mtime means the tail or the push died (step 3).
+
+   ```sh
+   just ssm-run <inst> 'stat -c %y /var/log/jenkins/jenkins.log; tail -n 2 /var/log/jenkins/jenkins.log'
+   ```
+
+2. Read the JUL state before touching anything. Expect `INFO` with the
+   winstone, `hudson.WebAppMain` and `WeakLogHandler` handlers present.
+   Manage Jenkins > System Log > Log Levels resets a lowered level without
+   a restart. Record level, handlers and the last log line first: the
+   2026-05-14 restart on ps80 cured the symptom and destroyed the evidence.
+
+   ```sh
+   jenkins -i <inst> admin groovy -e 'def root = java.util.logging.Logger.getLogger(""); println root.level; root.handlers.each { println it }'
+   ```
+
+3. Check the master-side tail and push. The position must track the file
+   size, and the journal must be free of 4xx from loki-push.
+
+   ```sh
+   just ssm-run <inst> 'journalctl -u alloy --since -30m --no-pager | tail -n 20; cat /var/lib/alloy/data/loki.source.file.jenkins/positions.yml'
+   scripts/verify-observability.sh <inst>
+   ```
+
+4. For `ps3-k8s` the stream is the controller's stdout, tailed by the Alloy
+   DaemonSet pod on its node.
+
+   ```sh
+   kubectl -n alloy logs <alloy-pod-on-the-ps3-node> | grep jenkins-ps3-k8s-0:jenkins
+   ```
+
+Rule-path checks: the Loki ruler lists `jenkins-logs.rules`, and Mimir
+holds `jenkins:master_logs_fresh` with one series per master.
+
+```sh
+kubectl -n loki port-forward svc/loki-ruler 3100 &
+curl -s localhost:3100/loki/api/v1/rules
+scripts/check-uptime-queries.py
+```
+
 ## Related decisions
 
 - [ADR 0010 — distributed LGTM](adr/0010-distributed-lgtm.md) (this stack)
+- [ADR 0045 — Jenkins log liveness](adr/0045-jenkins-log-liveness-heartbeat-and-loki-ruler.md) (heartbeat + Loki ruler to Mimir)
 - [ADR 0006 — kube-prometheus-stack-only](adr/0006-kube-prometheus-stack-over-mimir.md) (superseded)
 - [ADR 0008 — managed NG for stateful workloads](adr/0008-managed-ng-for-stateful-system-workloads.md)
 - [ADR 0009 — scrape vs remote_write for Jenkins fleet](adr/0009-scrape-vs-remote-write-for-jenkins-fleet.md)
