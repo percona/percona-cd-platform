@@ -223,6 +223,10 @@ allowlist-show: _require-aws-profile
 # bound ONCE via quote() into shell variables before any other use; embedding
 # quote() inside a double-quoted string would let $(...) re-evaluate, so only
 # the two assignments below may interpolate the operands (docs/adr/0036).
+# Overwrites without prompting so it runs unattended. The previous value is
+# echoed first and every PutParameter is CloudTrail-audited. The 0.0.0.0/0
+# and at-least-one-valid-CIDR guards in terraform/allowlists.tf still gate
+# the apply.
 allowlist-set name cidrs: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
@@ -235,8 +239,6 @@ allowlist-set name cidrs: _require-aws-profile
       --query Parameter.Value --output text | tr ',' '\n'
     echo "new:"
     tr ',' '\n' <<< "$cidrs"
-    read -r -p "overwrite $param? [y/N] " a
-    [ "$a" = "y" ]
     aws ssm put-parameter --name "$param" --type StringList \
       --value "$cidrs" --overwrite --region "${AWS_REGION:-us-east-1}"
     echo "saved. Apply it: just tf-plan && just tf-apply"

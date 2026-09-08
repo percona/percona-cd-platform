@@ -50,7 +50,7 @@ Do NOT use it for smaller failures, which now self-heal:
      --query 'Reservations[].Instances[].PublicIpAddress' --output text
    ```
 
-   `pxc` keeps an EIP; `pg` (last CFN master) has a stable address too.
+   `pxc` keeps an EIP (stable address); every other master, pg included, is EIP-less.
 
 3. **Open the master security group for operator access on `:8080`.** TF masters
    serve plain `:8080` (openresty/TLS was stripped at cutover); the module SG
@@ -72,7 +72,6 @@ Do NOT use it for smaller failures, which now self-heal:
 
 5. **Access the master.** TF masters: `http://<host>-bg.cd.percona.com:8080`
    (HTTP only, no TLS in break-glass; treat as operator-only emergency access).
-   `pg` (CFN, on-box openresty + TLS): `https://pg-bg.cd.percona.com` on `:443`.
    Login is unchanged. masters keep native GitHub OAuth, and Authentik is not in
    the Jenkins path, so authentication works independent of the cell.
 
