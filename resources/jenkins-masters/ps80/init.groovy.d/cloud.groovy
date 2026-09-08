@@ -295,7 +295,9 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
     sudo yum -y remove awscli
 
@@ -362,6 +364,39 @@ initMap['docker-32gb-hirsute'] = '''
         sleep 1
         echo try again
     done
+
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
+    # noble, resolute and trixie carry openjdk-21 in their own archives. The
+    # rest keep the distro package above for tooling and get a pinned
+    # Temurin 21 JRE symlinked into /usr/local/bin (first on the SSH
+    # launcher PATH), so only remoting moves to 21.
+    case "$(lsb_release -sc)" in
+        jammy|noble|resolute|trixie)
+            until sudo DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-21-jre-headless; do
+                sleep 1
+                echo try again
+            done
+            ;;
+        *)
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
 
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -436,6 +471,39 @@ initMap['docker-32gb-bullseye'] = '''
         sleep 1
         echo try again
     done
+
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
+    # noble, resolute and trixie carry openjdk-21 in their own archives. The
+    # rest keep the distro package above for tooling and get a pinned
+    # Temurin 21 JRE symlinked into /usr/local/bin (first on the SSH
+    # launcher PATH), so only remoting moves to 21.
+    case "$(lsb_release -sc)" in
+        jammy|noble|resolute|trixie)
+            until sudo DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-21-jre-headless; do
+                sleep 1
+                echo try again
+            done
+            ;;
+        *)
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
 
     curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -514,12 +582,32 @@ initMap['micro-amazon'] = '''
     if [ -f /etc/os-release ]; then
         . /etc/os-release
     fi
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8, OL9
+    # and Amazon Linux carry a Java 21 package in live repos.
     if [ "${ID}" = "amzn" ]; then
-        JAVA_PKG="java-17-amazon-corretto-headless"
+        JAVA_PKG="java-21-amazon-corretto-headless"
     else
-        JAVA_PKG="java-17-openjdk-headless"
+        JAVA_PKG="java-21-openjdk-headless"
     fi
-    sudo yum -y install ${JAVA_PKG} tzdata-java || :
+    sudo yum -y install ${JAVA_PKG} tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
+
+    # CentOS 7 and CentOS 8 track frozen vault repos with no Java 21 package,
+    # so their agent JVM is a pinned Temurin 21 JRE symlinked into
+    # /usr/local/bin (first on the SSH launcher PATH). Needs glibc 2.17+, so
+    # CentOS 6 keeps its distro java and cannot join a 2.555.1+ controller.
+    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+        T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+        T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
+    fi
     sudo yum -y install aws-cli || :
     sudo yum -y install git || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
@@ -546,7 +634,9 @@ initMap['min-al2023-x64'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM; AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless || sudo yum -y install java-17-amazon-corretto-headless || :
     sudo yum -y install git docker p7zip
     sudo yum -y remove awscli
 
@@ -645,6 +735,39 @@ initMap['min-bionic-x64'] = '''
         echo try again
     done
     sudo DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-17-jre-headless git
+
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
+    # noble, resolute and trixie carry openjdk-21 in their own archives. The
+    # rest keep the distro package above for tooling and get a pinned
+    # Temurin 21 JRE symlinked into /usr/local/bin (first on the SSH
+    # launcher PATH), so only remoting moves to 21.
+    case "$(lsb_release -sc)" in
+        jammy|noble|resolute|trixie)
+            until sudo DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-21-jre-headless; do
+                sleep 1
+                echo try again
+            done
+            ;;
+        *)
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
@@ -695,6 +818,39 @@ initMap['min-buster-x64'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
     fi
+
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
+    # noble, resolute and trixie carry openjdk-21 in their own archives. The
+    # rest keep the distro package above for tooling and get a pinned
+    # Temurin 21 JRE symlinked into /usr/local/bin (first on the SSH
+    # launcher PATH), so only remoting moves to 21.
+    case "$(lsb_release -sc)" in
+        jammy|noble|resolute|trixie)
+            until sudo DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-21-jre-headless; do
+                sleep 1
+                echo try again
+            done
+            ;;
+        *)
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+            if [ "$(uname -m)" = "aarch64" ]; then
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+                T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+            else
+                T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+                T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+            fi
+            until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+                sleep 1
+                echo try again
+            done
+            echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+            sudo mkdir -p /opt/temurin-21
+            sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+            sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+            /opt/temurin-21/bin/java -version
+            ;;
+    esac
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
