@@ -9,8 +9,12 @@ description: |
   user path, which also yields TLS cert expiry). The Probe CRs are
   discovered by the Alloy DS prometheus.operator.probes component and the
   recording rules sync to the Mimir ruler via mimir.rules.kubernetes —
-  this addon plugs into both hooks with zero Alloy changes. Alert rules
-  are deliberately deferred until probe flap behaviour has been observed.
+  this addon plugs into both hooks with zero Alloy changes. A second
+  PrometheusRule (labelled percona.com/ruler=loki) is synced to the Loki
+  ruler instead and records jenkins.log lines per master, remote-written
+  to Mimir for the log-liveness rule and the JenkinsMasterLogsSilent alert.
+  The uptime alert group is deferred until probe flap behaviour has been
+  observed.
 type: application
 dependencies:
   - name: prometheus-blackbox-exporter

@@ -894,6 +894,89 @@
       ],
       "title": "JVM restarts (rolling 24h)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "Per-master jenkins.log liveness right now (jenkins:master_logs_fresh): at least one line reached Loki in the last 15 minutes. Every master writes a heartbeat line per minute (logHeartbeat.groovy), so SILENT while the master keeps pushing metrics means the JUL root level dropped, the file handler detached, or the Alloy tail or loki-push path died. Feeds the JenkinsMasterLogsSilent alert.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "SILENT"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "LOGGING"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "editorMode": "code",
+          "expr": "jenkins:master_logs_fresh",
+          "instant": true,
+          "legendFormat": "{{master}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Log liveness (last 15m)",
+      "type": "stat"
     }
   ],
   "refresh": "1m",

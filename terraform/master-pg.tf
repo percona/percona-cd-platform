@@ -46,11 +46,11 @@ module "pg" {
   on_demand_instance_type = "c7i-flex.xlarge"
   jvm_memory_opts         = "-Xms3072m -Xmx4096m -Xss4m"
 
-  # Distinct name: the CFN PGMasterTemplate coexists during the cutover.
+  # Distinct name: the CFN PGMasterTemplate coexisted during the cutover.
   launch_template_name = "PGMasterTemplateTF"
 
-  # EIP-less like the fleet: pg has no inbound agents, and DNS flips to
-  # the ALB once the CFN record dies with the stack.
+  # EIP-less like the fleet: pg has no inbound agents, and DNS flipped to
+  # the ALB when the CFN record died with the stack.
   create_eip      = false
   master_key_name = "percona-jenkins"
 
