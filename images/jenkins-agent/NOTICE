@@ -1,0 +1,22 @@
+Jenkins agent image factory (Percona)
+Copyright (c) Percona, LLC
+
+The first-party factory templates, provisioners and smoke scripts are licensed
+under the GNU Affero General Public License v3.0, consistent with this
+repository. The verbatim license is included as LICENSE. Source:
+https://github.com/Percona/percona-cd-platform/tree/main/images/jenkins-agent
+
+Third-party components retain their upstream copyrights and licenses.
+Amazon Linux packages, including Amazon Corretto, Docker, Git, AWS CLI and
+archive tools, carry their package-provided notices and license files.
+
+The arm64 profile extracts QEMU's x86_64 user-mode emulator from the
+digest-pinned image identified in provisioners/10-qemu-binfmt.sh.
+QEMU is distributed under GPL version 2, with file-specific exceptions.
+The GPL text is included as LICENSE.qemu. Upstream license details and sources:
+https://www.qemu.org/docs/master/about/license.html
+https://gitlab.com/qemu-project/qemu
+https://github.com/tonistiigi/binfmt
+
+The fresh-boot smoke downloads Jenkins remoting temporarily from the target
+controller to check JVM compatibility. It is not baked into this AMI.

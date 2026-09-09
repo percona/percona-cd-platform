@@ -246,6 +246,18 @@ variable "ppg_ami_factory_subject_claims" {
   default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
 }
 
+variable "agent_image_factory_region" {
+  description = "AWS region the jenkins-agent image factory bakes in. Consumer fleets span five regions; copies are per-region follow-ups gated on per-region smokes."
+  type        = string
+  default     = "eu-central-1"
+}
+
+variable "agent_image_factory_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the agent image-factory role. Production is main-only on Percona/percona-cd-platform."
+  type        = list(string)
+  default     = ["repo:Percona/percona-cd-platform:ref:refs/heads/main"]
+}
+
 variable "ppg_hcloud_factory_subject_claims" {
   description = "GitHub Actions sub claims allowed to assume the PPG Hetzner-factory role. Master-only on Percona-Lab/jenkins-pipelines; this role reads the factory token, so the allowlist stays exactly this subject."
   type        = list(string)
