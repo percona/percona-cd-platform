@@ -39,7 +39,7 @@ imageMap['min-bookworm-x64'] = 'ami-0544719b13af6edc3'
 
 priceMap = [:]
 priceMap['c5a.large'] = '0.08'    // type=c5a.large, vCPU=2, memory=4GiB, saving=55%, interruption='<5%', price=0.043400
-priceMap['m6a.2xlarge'] = '0.32'  // vCPU=8, memory=32GiB
+priceMap['m6a.2xlarge'] = '0.35'  // bid at on-demand (0.3456) so spot is never rejected as price-too-low, 7-day spot max was 0.186500, vCPU=8, memory=32GiB
 priceMap['m5.4xlarge'] = '0.77'  // type=m5.4xlarge, vCPU=16, memory=64GiB, on-demand=0.768, spot us-west-2a=0.3242 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
 
 userMap = [:]
