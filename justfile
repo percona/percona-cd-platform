@@ -109,6 +109,18 @@ lambda-logs name since="1h": _require-aws-profile
 _require-aws-profile:
     @: "${AWS_PROFILE:?AWS_PROFILE must be exported (e.g. export AWS_PROFILE=percona-dev-admin); do NOT set aws_profile in local.auto.tfvars}"
 
+
+# Operator overrides live in the gitignored terraform/local.auto.tfvars. A plan
+# or apply without it renders the variable defaults and silently reverts
+# operator state (an apply from a fresh worktree turned the Authentik SAML flag
+# off on 2026-08-20 and it stayed off for weeks). Fail closed instead.
+_require-tfvars:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f terraform/local.auto.tfvars ]; then
+      echo "ERROR: terraform/local.auto.tfvars is missing. Copy it from the operator checkout, or start from terraform/local.auto.tfvars.example." >&2
+      exit 1
+    fi
 # ---------- terraform / opentofu ----------
 # Offline init — no backend, no credentials, no -upgrade (matches CI's
 # `tofu init -backend=false`, so `just ci` does not rewrite .terraform.lock.hcl).
@@ -150,15 +162,15 @@ tf-trivy:
       --skip-files terraform/tfplan \
       --ignorefile .trivyignore terraform/
 
-tf-plan: _require-aws-profile
+tf-plan: _require-aws-profile _require-tfvars
     tofu -chdir=terraform plan -out=tfplan
 
 # Applies the SAVED plan from `just tf-plan`. NEVER auto-approve. Re-run tf-plan
 # first if terraform/tfplan is stale; tofu rejects an out-of-date saved plan.
-tf-apply: _require-aws-profile
+tf-apply: _require-aws-profile _require-tfvars
     tofu -chdir=terraform apply tfplan
 
-tf-destroy: _require-aws-profile
+tf-destroy: _require-aws-profile _require-tfvars
     tofu -chdir=terraform destroy
 
 # Back up live state to a local, gitignored snapshot before any risky apply.
@@ -192,7 +204,7 @@ tf-state-versioning-check: _require-aws-profile
 # hand-maintained list missed all four masters of one migration wave).
 # There is intentionally NO tf-apply-masters: apply the full saved plan via
 # `just tf-plan` + `just tf-apply` after review.
-tf-plan-masters: _require-aws-profile
+tf-plan-masters: _require-aws-profile _require-tfvars
     #!/usr/bin/env bash
     set -euo pipefail
     targets=()
