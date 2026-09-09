@@ -78,6 +78,8 @@ priceMap['c5.4xlarge'] = '0.40' // type=c5.4xlarge, vCPU=16, memory=64GiB, savin
 priceMap['m6gd.4xlarge'] = '0.85' // bid at on-demand (0.848) so spot is never rejected as price-too-low, 7-day spot max was 0.47 against the old bid
 priceMap['c5.metal']    = '5.10' // amd64 bare-metal, vCPU=96, memory=192GiB, on-demand=5.088 (us-west-1)
 priceMap['c7g.metal']   = '2.89' // arm64 bare-metal, vCPU=64, memory=128GiB, on-demand=2.8832 (us-west-1)
+// Per-label overrides (checked before the per-type price in getTemplate).
+priceMap['min-rhel-10-x64'] = '0.60' // paid RHEL AMI bills as the 'Red Hat Enterprise Linux' spot product (~0.45-0.53 for c5.4xlarge in us-west-1), so the shared 0.40 c5.4xlarge bid never fulfills
 
 userMap = [:]
 userMap['docker']            = 'ec2-user'
@@ -1001,7 +1003,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[OSType],                           // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], fallbackMap.getOrDefault(OSType, true), '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable, except bare metal)
+        new SpotConfiguration(true, priceMap[OSType] ?: priceMap[typeMap[OSType]], fallbackMap.getOrDefault(OSType, true), '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable, except bare metal)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
