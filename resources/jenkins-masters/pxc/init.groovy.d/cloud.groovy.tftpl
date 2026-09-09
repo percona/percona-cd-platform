@@ -70,7 +70,7 @@ imageMap['ramdisk-bookworm-x64'] = imageMap['min-bookworm-x64']
 imageMap['performance-centos-6-x64']   = imageMap['min-centos-7-x64']
 
 priceMap = [:]
-priceMap['m6i.xlarge'] = '0.15' // vCPU=4, memory=16GiB
+priceMap['m6i.xlarge'] = '0.23' // bid at on-demand (0.2240) so spot is never rejected as price-too-low, 7-day spot max was 0.111000, vCPU=4, memory=16GiB
 priceMap['m1.medium'] = '0.13' // centos6
 priceMap['c5.2xlarge'] = '0.28' // type=c5.2xlarge, vCPU=8, memory=16GiB, saving=53%, interruption='<5%', price=0.216700
 priceMap['r3.2xlarge'] = '0.75' // bid at on-demand (0.741) so spot is never rejected as price-too-low, 7-day spot max was 0.25 against the old bid
