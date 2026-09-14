@@ -31,13 +31,13 @@ module "pxc" {
   java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "pxc-build-cache"
 
-  # Retained CFN data volume vol-03b3852ad6dd6c553 is 300 GiB gp2 in us-west-1b
+  # Retained CFN data volume vol-03b3852ad6dd6c553 is 340 GiB gp2 in us-west-1b
   # (the live volume; the CFN template still declares 100 GiB). ebs_type must be
   # gp2 (not the module default gp3) and az_index 1 (us-west-1b) so the tofu
   # import is a zero-diff adopt and the on-demand instance lands in the volume's
   # AZ (EBS is AZ-bound). NOTE: aws_availability_zones.available.names[1] must
   # resolve to us-west-1b in this account; hard-gate that before apply.
-  ebs_size = 300
+  ebs_size = 340
   ebs_type = "gp2"
   az_index = 1
 
