@@ -171,8 +171,9 @@ degrades web access and observability, not running builds.
 - Each EC2 master attaches three SGs: the VPC default (intra-VPC worker
   traffic), `HTTP` (ingress only from `extra_http_ingress`: :8080 from the
   EKS VPC CIDR over the peering, plus pxc's :50000 JNLP exception), and
-  `SSH` (:22 from `ssh_allowed_cidrs`, a six-CIDR operator baseline, plus
-  one extra on pmm).
+  `SSH` (:22 from `ssh_allowed_cidrs`, the fleet break-glass list resolved
+  from SSM `/percona-ci-platform/allowlist/master-ssh`, ADR 0036, no
+  committed default).
 - SSH identity is a fleet roster, not code: one SSM parameter names the
   engineers whose percona.com public keys every master's engineer-keys
   association syncs into `/etc/ssh/authorized_keys.d` on a 30-minute cadence

@@ -287,6 +287,7 @@ through `just engineers-set`, never a host edit.
 
 - [ADR 0010 — distributed LGTM](adr/0010-distributed-lgtm.md) (this stack)
 - [ADR 0045 — Jenkins log liveness](adr/0045-jenkins-log-liveness-heartbeat-and-loki-ruler.md) (heartbeat + Loki ruler to Mimir)
+- [ADR 0046 - Engineer SSH roster in SSM](adr/0046-engineer-ssh-roster-in-ssm-synced-by-state-manager.md) (textfile gauges from the per-master sync, three alerts)
 - [ADR 0006 — kube-prometheus-stack-only](adr/0006-kube-prometheus-stack-over-mimir.md) (superseded)
 - [ADR 0008 — managed NG for stateful workloads](adr/0008-managed-ng-for-stateful-system-workloads.md)
 - [ADR 0009 — scrape vs remote_write for Jenkins fleet](adr/0009-scrape-vs-remote-write-for-jenkins-fleet.md)

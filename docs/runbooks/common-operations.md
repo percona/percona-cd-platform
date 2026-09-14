@@ -11,8 +11,9 @@ first (builds in flight die).
 | Worker template on ps3-k8s | `resources/jenkins/clouds-catalog/` | none, JCasC hot-reload | `argocd app sync jenkins-ps3-k8s` |
 | Resize or retype a master | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook master-resize` |
 | Bump Jenkins core | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook core-bump` |
-| Engineer SSH key | `terraform/master-<inst>.tf` | at next replacement | `just runbook ssh-key` |
-| Port or SSH allow-list | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
+| Engineer SSH key | SSM roster, no code | within minutes, no rebuild | `just engineers-set "<full roster>"` |
+| Port allow-list | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
+| SSH break-glass allow-list | SSM, no code | in place after apply | `just allowlist-set master-ssh "<full list>"` then plan and apply |
 | Graviton fleet size or types | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
 
 `just runbook` lists the subcommands. `template-change` enforces the
