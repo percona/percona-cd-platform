@@ -393,3 +393,213 @@ def test_cleanup_failed_stack_remediates_resources(ec2_cleanup, monkeypatch):
     assert ("disassociate", "rtbassoc-0def") in calls
     assert ("delete_route", "rtb-0123", "10.0.0.0/16") in calls
     assert len(calls) == 3  # the DELETE_COMPLETE event triggered nothing
+
+
+# ---- persistent spot requests (otherwise a relaunch loop with the reaper) ----
+
+class _FakeSpotEc2:
+    """Stub EC2 client for the spot-request calls. moto launches an instance for
+    a spot request but does not link the instance back to the request, so the
+    request side is stubbed and records what was cancelled."""
+
+    def __init__(self, request_type, state="active", fail=None):
+        self.request_type = request_type
+        self.state = state
+        self.fail = fail
+        self.cancelled = []
+
+    def describe_spot_instance_requests(self, SpotInstanceRequestIds):
+        if self.fail == "describe":
+            raise _client_error("UnauthorizedOperation", "denied")
+        return {"SpotInstanceRequests": [
+            {"SpotInstanceRequestId": SpotInstanceRequestIds[0], "Type": self.request_type, "State": self.state},
+        ]}
+
+    def cancel_spot_instance_requests(self, SpotInstanceRequestIds):
+        if self.fail == "cancel":
+            raise _client_error("UnauthorizedOperation", "denied")
+        self.cancelled.extend(SpotInstanceRequestIds)
+        return {"CancelledSpotInstanceRequests": [
+            {"SpotInstanceRequestId": s, "State": "cancelled"} for s in SpotInstanceRequestIds
+        ]}
+
+
+def _spot_instance(request_id):
+    return SimpleNamespace(id="i-spot", spot_instance_request_id=request_id)
+
+
+def test_boto3_instance_exposes_spot_request_attribute(ec2_cleanup):
+    """Pins the attribute name the lookup relies on to the real SDK resource
+    model: a renamed or misspelled attribute would otherwise send every spot
+    instance down the on-demand path and keep the relaunch loop alive."""
+    with mock_aws():
+        inst = boto3.resource("ec2", region_name=REGION).Instance(_mk_instance(REGION))
+        assert hasattr(inst, "spot_instance_request_id")
+        assert ec2_cleanup.spot_request_id(inst) is None  # on-demand
+    assert ec2_cleanup.spot_request_id(SimpleNamespace(spot_instance_request_id="sir-9")) == "sir-9"
+
+
+def test_persistent_spot_request_cancelled(ec2_cleanup):
+    fake = _FakeSpotEc2("persistent")
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-1"), REGION, False, fake) == ("sir-1", None)
+    assert fake.cancelled == ["sir-1"]
+
+
+def test_one_time_spot_request_left_alone(ec2_cleanup):
+    """A one-time request closes with its instance; cancelling it is noise."""
+    fake = _FakeSpotEc2("one-time")
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-2"), REGION, False, fake) == (None, None)
+    assert fake.cancelled == []
+
+
+def test_already_cancelled_request_not_cancelled_again(ec2_cleanup):
+    """The PMM robot or a previous cycle may have cancelled it first."""
+    fake = _FakeSpotEc2("persistent", state="cancelled")
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-5"), REGION, False, fake) == (None, None)
+    assert fake.cancelled == []
+
+
+def test_on_demand_instance_makes_no_spot_call(ec2_cleanup):
+    class NoCalls:
+        def __getattr__(self, name):
+            pytest.fail(f"no EC2 call expected, got {name}")
+
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance(None), REGION, False, NoCalls()) == (None, None)
+
+
+def test_persistent_request_dry_run_reports_without_cancelling(ec2_cleanup):
+    fake = _FakeSpotEc2("persistent")
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-3"), REGION, True, fake) == ("sir-3", None)
+    assert fake.cancelled == []
+
+
+def test_spot_request_error_is_reported_not_raised(ec2_cleanup):
+    """A denied describe or cancel, or a failing attribute lookup, comes back
+    as an error string so the caller still terminates and the result shows the
+    cancel did not happen."""
+    for fail in ("describe", "cancel"):
+        fake = _FakeSpotEc2("persistent", fail=fail)
+        cancelled, error = ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-4"), REGION, False, fake)
+        assert cancelled is None and "UnauthorizedOperation" in error
+        assert fake.cancelled == []
+
+    class Exploding:
+        id = "i-boom"
+
+        @property
+        def spot_instance_request_id(self):
+            raise RuntimeError("lazy load failed")
+
+    cancelled, error = ec2_cleanup.cancel_persistent_spot_request(Exploding(), REGION, False, _FakeSpotEc2("persistent"))
+    assert cancelled is None and "lazy load failed" in error
+
+
+def _patch_spot_client(ec2_cleanup, monkeypatch, fake):
+    """Route the handler's per-region EC2 client to the fake and leave every
+    other client, and the moto EC2 resource, untouched."""
+    real_client = ec2_cleanup.boto3.client
+    monkeypatch.setattr(
+        ec2_cleanup.boto3, "client",
+        lambda service, region_name=None: fake if service == "ec2" else real_client(service, region_name=region_name),
+    )
+
+
+def test_untagged_spot_instance_cancels_request_then_terminates(ec2_cleanup, monkeypatch):
+    """Through the real handler path: the request behind an untagged spot
+    instance is cancelled while the instance is still running, then the
+    instance is terminated, and the result names the cancelled request. The
+    request id comes from a patched lookup because moto does not link the
+    instance to its request."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    with mock_aws():
+        iid = _mk_instance(REGION)  # untagged, launched by a persistent request in this story
+        state_at_cancel = []
+
+        class OrderedFake(_FakeSpotEc2):
+            def cancel_spot_instance_requests(self, SpotInstanceRequestIds):
+                state_at_cancel.append(_state(REGION, iid))
+                return super().cancel_spot_instance_requests(SpotInstanceRequestIds)
+
+        fake = OrderedFake("persistent")
+        _patch_spot_client(ec2_cleanup, monkeypatch, fake)
+        monkeypatch.setattr(ec2_cleanup, "spot_request_id", lambda instance: "sir-e2e")
+        with freeze_time(FUTURE):
+            result = ec2_cleanup.lambda_handler({}, None)
+        row = next(t for t in result["terminated"] if t["InstanceId"] == iid)
+        assert row["CancelledSpotRequest"] == "sir-e2e"
+        assert row["SpotRequestError"] is None
+        assert fake.cancelled == ["sir-e2e"]
+        assert state_at_cancel == ["running"]  # cancelled before the terminate call
+        assert _state(REGION, iid) == "terminated"
+        assert result["spot_request_errors"] == 0
+
+
+def test_failed_cancel_still_terminates_and_is_counted(ec2_cleanup, monkeypatch):
+    """A denied cancel must not leave the untagged instance running, and must
+    be visible: the row carries the error and the result counts it."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    with mock_aws():
+        iid = _mk_instance(REGION)
+        fake = _FakeSpotEc2("persistent", fail="cancel")
+        _patch_spot_client(ec2_cleanup, monkeypatch, fake)
+        monkeypatch.setattr(ec2_cleanup, "spot_request_id", lambda instance: "sir-denied")
+        with freeze_time(FUTURE):
+            result = ec2_cleanup.lambda_handler({}, None)
+        row = next(t for t in result["terminated"] if t["InstanceId"] == iid)
+        assert row["CancelledSpotRequest"] is None
+        assert "UnauthorizedOperation" in row["SpotRequestError"]
+        assert result["spot_request_errors"] == 1
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_purged_spot_request_is_nothing_to_cancel(ec2_cleanup):
+    """A request record that no longer exists behind a long-lived instance is not
+    an error: there is nothing left to relaunch from."""
+    class Purged(_FakeSpotEc2):
+        def describe_spot_instance_requests(self, SpotInstanceRequestIds):
+            raise _client_error("InvalidSpotInstanceRequestID.NotFound", "does not exist")
+
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-gone"), REGION, False, Purged("persistent")) == (None, None)
+
+
+def test_disabled_request_is_still_cancelled(ec2_cleanup):
+    """The instance stopped between the scan and this lookup, so the request is
+    disabled. Terminating the stopped instance would re-open a persistent
+    request, so the cancel must still happen."""
+    fake = _FakeSpotEc2("persistent", state="disabled")
+    assert ec2_cleanup.cancel_persistent_spot_request(_spot_instance("sir-6"), REGION, False, fake) == ("sir-6", None)
+    assert fake.cancelled == ["sir-6"]
+
+
+def test_failed_cancel_is_counted_even_when_terminate_fails(ec2_cleanup, monkeypatch):
+    """A denied cancel followed by a denied terminate must still count as a spot
+    request error, and the skipped row must carry both errors."""
+    old = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
+
+    class DoomedInstance:
+        id = "i-doomed"
+        tags = []
+        launch_time = old
+        key_name = "k"
+        placement = {"AvailabilityZone": f"{REGION}a"}
+        spot_instance_request_id = "sir-doomed"
+
+        def terminate(self):
+            raise _client_error("UnauthorizedOperation", "terminate denied")
+
+    class FakeResource:
+        class instances:  # noqa: N801 - mirrors the boto3 collection attribute
+            @staticmethod
+            def filter(Filters):
+                return [DoomedInstance()]
+
+    fake_spot = _FakeSpotEc2("persistent", fail="cancel")
+    monkeypatch.setattr(ec2_cleanup.boto3, "resource", lambda service, region_name=None: FakeResource())
+    monkeypatch.setattr(ec2_cleanup.boto3, "client", lambda service, region_name=None: fake_spot)
+    terminated, skipped, spot_errors = ec2_cleanup.process_region(REGION, False, "pe-.*", {})
+    assert terminated == []
+    assert spot_errors == 1
+    assert len(skipped) == 1 and "terminate denied" in skipped[0]["reason"] and "spot request error" in skipped[0]["reason"]
+

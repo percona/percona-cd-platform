@@ -1,7 +1,8 @@
 # Owner: platform
 #
 # Reaper of untagged EC2 instances (+ orphan eksctl-* stack cleanup) across
-# all regions.
+# all regions. Cancels the persistent spot request behind an untagged spot
+# instance before terminating it.
 #
 # One function in us-east-1 (default provider); the handler enumerates regions
 # via describe_regions(), so the policy carries NO aws:RequestedRegion
@@ -17,8 +18,18 @@ data "aws_iam_policy_document" "ec2_cleanup" {
   statement {
     sid       = "DescribeForScan"
     effect    = "Allow"
-    actions   = ["ec2:DescribeRegions", "ec2:DescribeInstances", "ec2:DescribeSecurityGroups"]
+    actions   = ["ec2:DescribeRegions", "ec2:DescribeInstances", "ec2:DescribeSecurityGroups", "ec2:DescribeSpotInstanceRequests"]
     resources = ["*"] # Describe* has no resource-level scoping.
+  }
+
+  # A persistent spot request relaunches an instance the moment the reaper
+  # terminates it, so the handler cancels the request first. Scoped to the
+  # account's spot request ARNs.
+  statement {
+    sid       = "CancelPersistentSpotRequests"
+    effect    = "Allow"
+    actions   = ["ec2:CancelSpotInstanceRequests"]
+    resources = ["arn:aws:ec2:*:${local.ec2_cleanup_acct}:spot-instances-request/*"]
   }
 
   # NO tag condition: iit-billing-tag is a unix-epoch expiry when numeric, so

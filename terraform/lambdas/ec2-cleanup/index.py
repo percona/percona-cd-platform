@@ -14,7 +14,11 @@ For every region it:
   ``iit-billing-tag`` (e.g. ``ps_80_package_testing``) would otherwise exempt
   them forever, but an aborted build skips ``molecule destroy`` and leaks
   them, so tags matching ``MOLECULE_BILLING_PATTERN`` are terminated past
-  ``MOLECULE_MAX_AGE_HOURS`` instead (7h clears the worst genuine run, 4.34h).
+  ``MOLECULE_MAX_AGE_HOURS`` instead (7h clears the worst genuine run, 4.34h),
+* cancels the persistent spot request behind an untagged spot instance before
+  terminating it. Otherwise AWS launches a replacement the moment the instance
+  dies and the reaper terminates that one on its next cycle, forever. An
+  aborted Jenkins build left exactly that loop running for a week in 2026-09.
 
 The original Lambda also auto-tagged Cirrus CI instances to protect them;
 Cirrus CI shut down on 2026-06-01, so that path was dropped: a leftover
@@ -218,6 +222,59 @@ def get_name_tag(instance: Any) -> str | None:
     return convert_tags_to_dict(instance.tags).get("Name")
 
 
+def spot_request_id(instance: Any) -> str | None:
+    """The spot request that launched ``instance``, None for on-demand."""
+    return getattr(instance, "spot_instance_request_id", None)
+
+
+def cancel_persistent_spot_request(
+    instance: Any, region: str, dry_run: bool, ec2_client: Any = None,
+) -> tuple[str | None, str | None]:
+    """Cancel the persistent spot request behind ``instance`` before it is
+    terminated, so AWS does not launch a replacement the reaper would terminate
+    again next cycle.
+
+    Returns ``(request_id, None)`` when the request was (or in dry-run would be)
+    cancelled, ``(None, None)`` when there is nothing to cancel (on-demand, a
+    one-time request, which closes with its instance, or a request already
+    cancelled or closed), and ``(None, error)`` when the lookup or the cancel
+    failed. The caller terminates the instance in every case: a swallowed error
+    must never leave an untagged instance running. The error is reported rather
+    than only logged so a permanently failing cancel (an IAM regression, say) is
+    visible in the result instead of silently feeding the relaunch loop."""
+    request_id = None
+    try:
+        request_id = spot_request_id(instance)
+        if not request_id:
+            return None, None
+        ec2 = ec2_client or boto3.client("ec2", region_name=region)
+        requests = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])["SpotInstanceRequests"]
+        if not requests or requests[0].get("Type") != "persistent":
+            return None, None
+        # open, active and disabled all relaunch or re-open when their instance is terminated. A disabled
+        # request is one whose instance stopped between our scan and this lookup, cancel it too.
+        state = requests[0].get("State")
+        if state in ("cancelled", "closed", "completed", "failed"):
+            logger.info(f"Spot request {request_id} behind {instance.id} is already {state}, nothing to cancel")
+            return None, None
+        if dry_run:
+            logger.info(f"DRY_RUN: would cancel persistent spot request {request_id} behind {instance.id}")
+            return request_id, None
+        ec2.cancel_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+        logger.info(f"Cancelled persistent spot request {request_id} behind {instance.id} in {region}")
+        return request_id, None
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") == "InvalidSpotInstanceRequestID.NotFound":
+            # the request record was purged behind a long-lived instance: nothing left to relaunch from
+            logger.info(f"Spot request {request_id} behind {instance.id} no longer exists, nothing to cancel")
+            return None, None
+        logger.error(f"Spot request {request_id or 'lookup'} behind {instance.id} in {region}: {e}")
+        return None, f"{request_id or 'lookup'}: {e}"
+    except Exception as e:  # noqa: BLE001 - the request lookup must never block the termination
+        logger.error(f"Spot request {request_id or 'lookup'} behind {instance.id} in {region}: {e}")
+        return None, f"{request_id or 'lookup'}: {e}"
+
+
 def cleanup_failed_stack(stack_name: str, region: str) -> bool:
     """Best-effort remediation of DELETE_FAILED resources so the retry can
     proceed: revoke leftover SG ingress, disassociate route tables, delete
@@ -316,13 +373,15 @@ def process_region(
     clusters_to_delete: dict[str, set[str]],
     molecule_re: re.Pattern[str] | None = None,
     molecule_max_age_s: int = 0,
-) -> tuple[list[TerminatedInfo], list[SkippedInfo]]:
+) -> tuple[list[TerminatedInfo], list[SkippedInfo], int]:
     ec2 = boto3.resource("ec2", region_name=region)
+    ec2_client = boto3.client("ec2", region_name=region)  # one per region for the spot request calls
     instances = ec2.instances.filter(
         Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
     )
     terminated: list[TerminatedInfo] = []
     skipped: list[SkippedInfo] = []
+    spot_request_errors = 0  # counted here, not from the rows, so a failed terminate cannot hide a failed cancel
 
     for instance in instances:
         try:
@@ -332,12 +391,18 @@ def process_region(
                 continue
 
             if should_terminate(instance, molecule_re, molecule_max_age_s):
+                # A persistent spot request relaunches the moment its instance dies, so cancel it first.
+                cancelled_request, spot_error = cancel_persistent_spot_request(instance, region, dry_run, ec2_client)
+                if spot_error:
+                    spot_request_errors += 1
                 info: TerminatedInfo = {
                     "InstanceId": instance.id,
                     "SSHKeyName": instance.key_name,
                     "NameTag": get_name_tag(instance),
                     "AvailabilityZone": instance.placement["AvailabilityZone"],
                     "Region": region,
+                    "CancelledSpotRequest": cancelled_request,
+                    "SpotRequestError": spot_error,
                 }
                 if dry_run:
                     # Report it in `terminated` (the action list), same convention as the
@@ -352,14 +417,17 @@ def process_region(
                         logger.info(f"Terminated {instance.id} in {region}")
                     except ClientError as e:
                         logger.error(f"Failed to terminate {instance.id}: {e}")
-                        skipped.append({"id": instance.id, "reason": f"Error: {e}"})
+                        reason = f"Error: {e}"
+                        if spot_error:
+                            reason += f" (spot request error: {spot_error})"
+                        skipped.append({"id": instance.id, "reason": reason})
         except Exception as e:  # noqa: BLE001 - one bad instance must not abort the region
             logger.error(f"Error processing {instance.id} in {region}: {e}")
             continue
 
     if skipped:
         logger.info(f"Skipped {len(skipped)} in {region}")
-    return terminated, skipped
+    return terminated, skipped, spot_request_errors
 
 
 def lambda_handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
@@ -372,15 +440,17 @@ def lambda_handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]
     all_terminated: list[TerminatedInfo] = []
     all_skipped: list[SkippedInfo] = []
     deleted_clusters: list[str] = []
+    spot_request_errors = 0
 
     for region in _regions():
         try:
-            term, skip = process_region(
+            term, skip, spot_errors = process_region(
                 region, dry_run, eks_skip_pattern, clusters_to_delete,
                 molecule_re, molecule_max_age_s,
             )
             all_terminated.extend(term)
             all_skipped.extend(skip)
+            spot_request_errors += spot_errors
         except Exception as e:  # noqa: BLE001
             logger.error(f"Region {region} error: {e}")
             continue
@@ -395,11 +465,12 @@ def lambda_handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]
 
     logger.info(
         f"Summary: {len(all_terminated)} terminated, {len(deleted_clusters)} EKS stacks, "
-        f"{len(all_skipped)} skipped (DRY_RUN={dry_run})"
+        f"{len(all_skipped)} skipped, {spot_request_errors} spot request errors (DRY_RUN={dry_run})"
     )
     return {
         "terminated": all_terminated,
         "deleted_clusters": deleted_clusters,
         "skipped": all_skipped,
+        "spot_request_errors": spot_request_errors,
         "dry_run": dry_run,
     }
