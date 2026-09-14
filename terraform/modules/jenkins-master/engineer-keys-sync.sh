@@ -366,6 +366,10 @@ ensure_dropin() {
   current="$(sha256_of "${DROPIN_FILE}")"
   live="$(cat "${DROPIN_LIVE_MARKER}" 2>/dev/null || echo absent)"
   if [[ "${current}" == "${wanted}" && "${live}" == "${wanted}" ]]; then
+    # Same content, same live marker: only the mode and owner are re-asserted,
+    # so a drop-in installed by an older run converges without a reload.
+    chmod 0600 "${DROPIN_FILE}" || { log "chmod on ${DROPIN_FILE} failed"; return 1; }
+    own root "${DROPIN_FILE}" || { log "chown on ${DROPIN_FILE} failed"; return 1; }
     DROPIN_STATE="kept"
     return 0
   fi

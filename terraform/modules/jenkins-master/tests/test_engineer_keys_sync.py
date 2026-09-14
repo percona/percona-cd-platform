@@ -662,3 +662,19 @@ def test_prune_refuses_to_remove_a_key_the_roster_does_not_serve(harness: Harnes
     assert "prune=done" in result.out
     assert "prune removes SHA256:" in result.out
     assert harness.marker.exists()
+
+
+def test_kept_dropin_gets_its_mode_repaired_without_a_reload(harness: Harness, tmp_path: Path) -> None:
+    """A drop-in an older run installed as 0644 converges to 0600 on the next
+    run with identical content, and sshd is not reloaded for it."""
+    _two_engineers(harness, tmp_path / "gen")
+    assert harness.run().returncode == 0
+    harness.dropin.chmod(0o644)
+    reloads_before = len(harness.calls("systemctl reload"))
+
+    result = harness.run()
+
+    assert result.returncode == 0, result.out
+    assert "sshd=kept" in result.out
+    assert stat.S_IMODE(harness.dropin.stat().st_mode) == 0o600
+    assert len(harness.calls("systemctl reload")) == reloads_before
