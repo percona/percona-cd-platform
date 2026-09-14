@@ -55,3 +55,13 @@ variable "role_name_prefix" {
   type        = string
   default     = ""
 }
+
+variable "max_session_duration" {
+  description = "Maximum STS session length in seconds for the role. The default matches the AWS default (3600). Raise it only for a workload whose single job legitimately runs longer than an hour, and set the same value as role-duration-seconds on the GHA side."
+  type        = number
+  default     = 3600
+  validation {
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration must be between 3600 and 43200 seconds."
+  }
+}
