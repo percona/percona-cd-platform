@@ -34,6 +34,7 @@ module "cloud" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  engineer_roster         = local.master_ssh_engineer_roster
   jenkins_package_version = "2.541.3"
   # cloud workers have no S3 build cache: the CFN-era default named
   # cloud-build-cache, a bucket this account never created and that exists
