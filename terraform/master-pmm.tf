@@ -97,6 +97,8 @@ module "pmm" {
 
   ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 
+  engineer_roster = local.master_ssh_engineer_roster
+
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-pmm-amzn2-init-config). Content moved byte-identically off the
   # live master's EBS copy; cloud.groovy's netMap subnet IDs are patched to
