@@ -64,3 +64,30 @@ aws ssm put-parameter --region us-east-1 \
 ```
 
 The cutover seed is the union of the previously committed module default and the psmdb/pmm per-master extras (8 CIDRs). Total reachability is preserved, and the two per-master extras gain :22 on every master where they previously reached one master each; the six baseline CIDRs are unchanged.
+
+## Third tenant: master-ssh-engineers
+
+`/percona-ci-platform/access/master-ssh-engineers` is the [ADR 0046](../adr/0046-engineer-ssh-roster-in-ssm-synced-by-state-manager.md) roster of engineer slugs whose percona.com public keys land on the EC2 Jenkins masters as the static break-glass fallback. Different mechanics from the two allowlists: a JSON `String`, not a StringList, and Terraform never reads it. A per-master SSM association pulls it onto the running masters every 30 minutes, so a write needs no plan and no apply.
+
+Read:
+
+```bash
+just engineers-status
+```
+
+Amend (the value is the full roster, an empty list revokes every engineer key, the recipe triggers the associations right away):
+
+```bash
+just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
+```
+
+Bootstrap (must exist before the associations first run, otherwise the masters carry no engineer keys and the association reports failure):
+
+```bash
+aws ssm put-parameter --region us-east-1 \
+  --name /<cluster>/access/master-ssh-engineers --type String \
+  --value '{"schema":1,"engineers":["<slug>"]}' \
+  --tags Key=iit-billing-tag,Value=<cluster> Key=repo,Value=github.com/Percona/percona-cd-platform
+```
+
+The parameter holds names, never keys. Keys stay at `https://www.percona.com/get/engineer/KEY/<slug>.pub`.

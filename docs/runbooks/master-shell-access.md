@@ -97,16 +97,17 @@ authenticates. Two ways to satisfy it:
   IAM-gated (`ec2-instance-connect:SendSSHPublicKey`) and every push is logged in
   CloudTrail. Requires the `ec2-instance-connect` package, installed fleet-wide
   and baked into user-data so it survives rebuilds (ADR 0032).
-- **Static key (drop the EIC line).** If your key's public half is already in the
-  master's `ssh_key_engineers`, remove the `send-ssh-public-key` line and point
-  `IdentityFile` at that key; the shared `percona-jenkins.pem` is the fallback.
-  `ssh_key_engineers` is set per master in `terraform/master-<inst>.tf` (declared
-  in `terraform/modules/jenkins-master/variables.tf`); user-data writes the keys
-  into `authorized_keys` on the next boot. Note the key TYPE must match exactly.
-  Check yours is present:
+- **Static key (drop the EIC line).** If your slug is in the fleet roster
+  (SSM `/percona-ci-platform/access/master-ssh-engineers`, ADR 0046), the key
+  percona.com publishes for you is synced to every master's
+  `/etc/ssh/authorized_keys.d/ec2-user.engineers` within 30 minutes. Remove the
+  `send-ssh-public-key` line and point `IdentityFile` at that key; the shared
+  `percona-jenkins.pem` is the fallback. Roster changes go through
+  `just engineers-set`, never through Terraform. Note the key TYPE must match
+  exactly. Check yours is present:
 
   ```sh
-  just ssm-run psmdb 'grep -qF "$(cut -d" " -f2 ~/.ssh/id_rsa.pub)" /home/ec2-user/.ssh/authorized_keys && echo provisioned || echo MISSING'
+  just ssm-run psmdb 'grep -qF "$(cut -d" " -f2 ~/.ssh/id_rsa.pub)" /etc/ssh/authorized_keys.d/ec2-user.engineers && echo provisioned || echo MISSING'
   ```
 
 > The pure-shell paths (`just ssh` / `just ssm` / `just ssm-run`) need NO key at
@@ -150,13 +151,15 @@ Two separate things are at play here, do not conflate them:
   is pxc (keeps an EIP for an inbound JNLP agent pinned to it).
 - **`ssh_allowed_cidrs`** is the list of SOURCE IPs (yours) allowed to reach
   port 22. It is the SG ingress allow-list, unrelated to the master's own
-  dynamic IP. Default is the 6-CIDR fleet baseline; per-master deltas are set in
-  that master's `terraform/master-<inst>.tf`.
+  dynamic IP. The fleet list lives in SSM
+  `/percona-ci-platform/allowlist/master-ssh` (ADR 0036) and every master
+  receives it. There is no committed default and no per-master delta.
 
-Engineer keys come from `ssh_key_engineers` in the same file (the same keys as
-the SSM file-transfer path). If your IP changed, add it to `ssh_allowed_cidrs`
-via PR; do not hand-edit the security group, a manual rule is stripped by the
-next `tofu apply`.
+Engineer keys come from the SSM roster (ADR 0046, the same keys as the SSM
+file-transfer path). If your IP changed, run `just allowlist-set master-ssh`
+with the full list, then `just tf-plan` and `just tf-apply`; do not hand-edit
+the security group, a manual rule is stripped by the next apply. Both
+procedures: [`eks-api-access.md`](eks-api-access.md).
 
 ## Background
 
