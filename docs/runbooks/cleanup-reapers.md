@@ -95,9 +95,18 @@ The volume reaper returns `{deleted, skipped, dry_run}`. Each `deleted` row is
 volumes it WOULD delete, not volumes it deleted; each `skipped` row is
 `(region, volume_id, reason)`.
 
-The EC2 reaper returns `{terminated, deleted_clusters, skipped, dry_run}`. In
+The EC2 reaper returns `{terminated, deleted_clusters, skipped, spot_request_errors, dry_run}`. In
 dry-run, `terminated` and `deleted_clusters` are what it WOULD have terminated or
-torn down.
+torn down. Each `terminated` row carries `CancelledSpotRequest` (the persistent
+spot request cancelled before the terminate, in dry-run the one that would have
+been, or null) and `SpotRequestError`
+(null unless the describe or cancel failed). `spot_request_errors` counts the
+instances whose request lookup or cancel did not resolve, in dry-run too, and
+whether or not the terminate that followed succeeded. When it is non-zero and
+the reaper is armed, read the error text: a denied `CancelSpotInstanceRequests`
+means the instance was terminated with its persistent request still active, so
+it relaunches and the reaper terminates again next cycle. The return value is
+only visible in the logs, nothing alerts on it yet.
 
 ```sh
 aws lambda invoke --function-name percona-ci-platform-ec2-cleanup /tmp/out.json && cat /tmp/out.json
@@ -222,6 +231,15 @@ An EKS instance with no valid billing tag (instance or stack) gets its
 `eksctl-<cluster>-cluster` stack marked for deletion. The reaper's own backing
 resources carry `PerconaKeep=True` from the root `local.tags`, so it never reaps
 itself.
+
+When the instance it is about to terminate was launched by a persistent spot
+request, the reaper cancels that request first (`CancelledSpotRequest` in the
+`terminated` row). Without the cancel, AWS launches a replacement the moment the
+instance dies and the reaper terminates that one on its next cycle, forever. An
+aborted Jenkins build left exactly that loop running for a week in 2026-09, one
+new instance and volume every 15 minutes. A one-time request needs nothing, it
+closes with its instance. A failed describe or cancel is logged and the
+instance is still terminated.
 
 ## Pause and rollback
 

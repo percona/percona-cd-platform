@@ -73,3 +73,16 @@ def test_no_requested_region_condition_anywhere() -> None:
     # Match the HCL condition form, not the comment that explains its absence.
     for name in ("ec2-cleanup.tf", "volume-cleanup.tf", "snapshot-cleanup.tf"):
         assert 'variable = "aws:RequestedRegion"' not in _tf(name), f"{name} must not pin RequestedRegion"
+
+
+def test_ec2_cancel_spot_request_grant_scoped_to_request_arn() -> None:
+    """The reaper cancels the persistent spot request behind an untagged spot
+    instance before terminating it, so both the describe and the cancel must be
+    granted, and the cancel must stay scoped to the account's request ARNs."""
+    tf = _tf("ec2-cleanup.tf")
+    assert "ec2:DescribeSpotInstanceRequests" in tf  # Describe* has no resource-level scoping
+    statements = [s for s in tf.split("statement {") if "ec2:CancelSpotInstanceRequests" in s]
+    assert len(statements) == 1, "the cancel grant must live in exactly one statement"
+    # the exact account-qualified ARN, the resource type AWS defines for the action, and nothing else
+    assert 'resources = ["arn:aws:ec2:*:${local.ec2_cleanup_acct}:spot-instances-request/*"]' in statements[0]
+    assert statements[0].count("resources") == 1
