@@ -87,12 +87,12 @@ operator-driven on the EC2 masters, image-driven on ps3-k8s
 
 ## Engineer SSH keys
 
-`just runbook ssh-key`. Edit `ssh_key_engineers` in
-`terraform/master-<inst>.tf`. Keys are fetched from percona.com at
-boot, so the change takes effect at the next instance replacement.
-Urgent removal: also delete the key from
-`/home/ec2-user/.ssh/authorized_keys` over SSM
-([`master-shell-access.md`](master-shell-access.md)).
+`just runbook ssh-key`. The roster is one SSM parameter, never Terraform:
+`just engineers-set "<full,comma-separated,roster>"` writes it and triggers
+every master's engineer-keys association, `just engineers-status` shows the
+version and per-master convergence. Keys land in
+`/etc/ssh/authorized_keys.d/ec2-user.engineers` within minutes, no rebuild.
+Mechanics: [`eks-api-access.md`](eks-api-access.md), decision ADR 0046.
 
 ## Ports and SSH allow-list
 

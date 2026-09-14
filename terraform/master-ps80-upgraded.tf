@@ -85,17 +85,6 @@ module "ps80_upgraded" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Fence set, NOT ps80's files: a-fence.groovy clears clouds/agents/executors
   # and fixes the URL, same-name stubs neutralize the restored cloud.groovy,
   # htz.cloud.groovy, ec2FleetCloud.groovy, hetzner* and matrix.groovy, and

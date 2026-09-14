@@ -72,17 +72,6 @@ module "pg" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # init.groovy.d via the module S3 bucket, byte-identical to the live
   # EBS copy minus the dead EC2-side repo.ci /etc/hosts pin. netMap
   # subnet IDs are unchanged because the subnets are imported.

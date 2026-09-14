@@ -81,7 +81,7 @@ Amend (the value is the full roster, an empty list revokes every engineer key, t
 just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
 ```
 
-Bootstrap (must exist before the associations first run, otherwise the association reports failure, and a master built after the boot-time list was removed carries no engineer keys):
+Bootstrap (must exist before the associations first run, otherwise the association reports failure and the master carries no engineer keys):
 
 ```bash
 aws ssm put-parameter --region us-east-1 \

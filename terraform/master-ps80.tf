@@ -71,17 +71,6 @@ module "ps80" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d wiring delivered via the
   # module-created S3 bucket (jenkins-ps80-init-config). The repo is now the
   # source of truth: each file under resources/jenkins-masters/ps80/init.groovy.d/

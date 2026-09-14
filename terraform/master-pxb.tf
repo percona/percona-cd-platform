@@ -86,17 +86,6 @@ module "pxb" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created
   # S3 bucket (jenkins-pxb-init-config). Each file under
   # resources/jenkins-masters/pxb/init.groovy.d/ is uploaded by Terraform and

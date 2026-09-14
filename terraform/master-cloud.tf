@@ -92,17 +92,6 @@ module "cloud" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-cloud-init-config). cloud.groovy renders from a template, so its
   # netMap subnet IDs come from module state instead of hand-edited literals
@@ -120,7 +109,6 @@ module "cloud" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned

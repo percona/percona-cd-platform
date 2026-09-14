@@ -843,7 +843,6 @@ locals {
     observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
-    ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
     init_groovy_hooks       = var.init_groovy_hooks
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""

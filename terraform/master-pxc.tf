@@ -84,17 +84,6 @@ module "pxc" {
     { port = 50000, cidr = "40.143.89.204/30" },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the
   # module-created S3 bucket (jenkins-pxc-init-config). Each file under
   # resources/jenkins-masters/pxc/init.groovy.d/ is uploaded by Terraform and

@@ -92,17 +92,6 @@ module "psmdb" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-psmdb-init-config). Content moved byte-identically off the live
   # master's EBS copy; cloud.groovy's netMap subnet IDs are patched to the
@@ -114,7 +103,6 @@ module "psmdb" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned Fleet-only while psmdb was CFN-managed; now

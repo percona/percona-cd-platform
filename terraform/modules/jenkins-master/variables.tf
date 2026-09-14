@@ -34,11 +34,6 @@ variable "spot_instance_types" {
   default     = []
 }
 
-variable "ssh_key_engineers" {
-  description = "Engineer slugs whose public keys are fetched from percona.com/get/engineer/KEY/<slug>.pub at boot."
-  type        = list(string)
-}
-
 variable "master_profile" {
   description = "User-data profile selector. Only \"eks_observability\" is supported; the slot exists so future variants (in-cluster master, alternate observability path) can be gated cleanly."
   type        = string

@@ -173,13 +173,13 @@ degrades web access and observability, not running builds.
   EKS VPC CIDR over the peering, plus pxc's :50000 JNLP exception), and
   `SSH` (:22 from `ssh_allowed_cidrs`, a six-CIDR operator baseline, plus
   one extra on pmm).
-- SSH identity is also code: each master's `ssh_key_engineers` list names
-  the engineers whose public keys boot user-data fetches from
-  percona.com into `ec2-user`'s authorized_keys. The list is per master in
-  `terraform/master-<host>.tf` and changes take effect at instance
-  replacement, so key removal is not immediate. Tool-driven access ([EC2
+- SSH identity is a fleet roster, not code: one SSM parameter names the
+  engineers whose percona.com public keys every master's engineer-keys
+  association syncs into `/etc/ssh/authorized_keys.d` on a 30-minute cadence
+  (ADR 0046). A change lands on the running fleet without a rebuild, and
+  `just engineers-set` triggers the sync at once. Tool-driven access ([EC2
   Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-overview.html) style: a temporary :22 rule plus an ephemeral pushed
-  key) is gated by AWS IAM rather than the static list.
+  key) is gated by AWS IAM rather than the roster.
 - The CFN-era world-open :80/:443 ingress was removed from the module once
   every consumer moved behind the ALB: nothing on a Terraform master listens on
   those ports (TLS terminates at the ALB, the user-data installs no
