@@ -7,10 +7,15 @@
 # slug's public key from percona.com, validates each key line, and atomically
 # replaces the dedicated key file that the sshd drop-in names. Any failure keeps
 # the last good file byte-identical and exits non-zero. An empty roster writes
-# an empty file without contacting percona.com. Once the dedicated file is live
-# in sshd, the legacy engineer keys are pruned from the login user's
+# an empty file without contacting percona.com. Once sshd has validated AND
+# reloaded the drop-in (recorded in a marker, so an interrupted run cannot
+# skip it), the legacy engineer keys are pruned from the login user's
 # authorized_keys one time, with a dated backup, leaving only the EC2 key pair
 # that instance metadata reports.
+#
+# Every write, rename and permission change is checked explicitly. The helpers
+# run in contexts where bash disables errexit, so set -e is a backstop here,
+# never the guarantee.
 #
 # Environment (defaults are the production paths, tests override them):
 #   ROSTER_PARAMETER   SSM parameter name (required)
@@ -35,17 +40,23 @@ readonly LOCK_FILE="${LOCK_FILE:-/run/lock/engineer-keys-sync.lock}"
 
 readonly KEYS_DIR="${SSH_CONFIG_DIR}/authorized_keys.d"
 readonly KEYS_FILE="${KEYS_DIR}/${LOGIN_USER}.engineers"
-readonly DROPIN_FILE="${SSH_CONFIG_DIR}/sshd_config.d/40-engineer-keys.conf"
+readonly DROPIN_DIR="${SSH_CONFIG_DIR}/sshd_config.d"
+readonly DROPIN_FILE="${DROPIN_DIR}/40-engineer-keys.conf"
 readonly DROPIN_CONTENT="AuthorizedKeysFile .ssh/authorized_keys ${KEYS_DIR}/%u.engineers"
+readonly DROPIN_LIVE_MARKER="${KEYS_DIR}/.dropin-live"
 readonly PRUNE_MARKER="${KEYS_DIR}/.legacy-pruned"
 readonly LEGACY_FILE="${LOGIN_HOME}/.ssh/authorized_keys"
 readonly SLUG_PATTERN='^[a-z0-9][a-z0-9._-]{0,63}$'
 readonly KEY_TYPE_PATTERN='^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/=]+( .*)?$'
 readonly LOG_TAG="engineer-keys-sync"
 
-# Log lines go to the journal and to stderr. Several helpers run inside
-# command substitutions that capture stdout for their one-word state, so a
-# message on stdout there would vanish.
+# Outcome of each stage, set by the helpers and reported in the summary.
+KEYS_STATE=""
+DROPIN_STATE=""
+PRUNE_STATE=""
+
+# Log lines go to the journal and to stderr, so a message survives even when a
+# caller captures stdout.
 log() {
   local message="$*"
   if command -v logger >/dev/null 2>&1; then
@@ -59,12 +70,26 @@ die() {
   exit 1
 }
 
-# install(1) owner flags only when running as root, so the tests can run as a
-# normal user against a scratch root.
-owner_flags() {
-  local user="$1"
+sha256_of() {
+  local path="$1"
+  if [[ -f "${path}" ]]; then
+    sha256sum "${path}" | awk '{print $1}'
+  else
+    echo "absent"
+  fi
+}
+
+sha256_of_string() {
+  printf '%s\n' "$1" | sha256sum | awk '{print $1}'
+}
+
+# chown only when root, so the tests can run as a normal user against a
+# scratch root. Returns non-zero when the chown itself fails.
+own() {
+  local owner="$1"
+  shift
   if [[ "${EUID}" -eq 0 ]]; then
-    printf -- '-o %s -g %s' "${user}" "${user}"
+    chown "${owner}:${owner}" "$@" || return 1
   fi
 }
 
@@ -93,20 +118,20 @@ PY
 }
 
 # Fetches one slug's .pub, validates every line, and appends normalised
-# "<type> <blob> <slug>" lines to the staging file. Returns 1 on any problem.
+# "<type> <blob> <slug>" lines to the staging file. Prints the number of keys
+# appended. Returns 1 on any problem, including a failed write.
 append_slug_keys() {
   local slug="$1"
   local staging="$2"
-  local url fetched line type blob
+  local url fetched line type blob key_count=0
   # shellcheck disable=SC2059  # the template is the format string by design
   url="$(printf "${KEY_URL_TEMPLATE}" "${slug}")"
-  fetched="$(mktemp)"
+  fetched="$(mktemp)" || { log "mktemp failed"; return 1; }
   if ! curl -fsS --max-time 20 --retry 2 --retry-delay 2 -o "${fetched}" "${url}"; then
     rm -f "${fetched}"
     log "fetch failed for ${slug}"
     return 1
   fi
-  local key_count=0
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
     if [[ ! "${line}" =~ ${KEY_TYPE_PATTERN} ]]; then
@@ -120,7 +145,11 @@ append_slug_keys() {
       return 1
     fi
     read -r type blob _ <<<"${line}"
-    printf '%s %s %s\n' "${type}" "${blob}" "${slug}" >>"${staging}"
+    if ! printf '%s %s %s\n' "${type}" "${blob}" "${slug}" >>"${staging}"; then
+      rm -f "${fetched}"
+      log "write to staging failed for ${slug}"
+      return 1
+    fi
     key_count=$((key_count + 1))
   done <"${fetched}"
   rm -f "${fetched}"
@@ -128,63 +157,102 @@ append_slug_keys() {
     log "no key served for ${slug}"
     return 1
   fi
+  echo "${key_count}"
 }
 
-file_sha256() {
-  local path="$1"
-  if [[ -f "${path}" ]]; then
-    sha256sum "${path}" | awk '{print $1}'
-  else
-    echo "absent"
-  fi
-}
-
-# Writes the assembled roster file atomically. Prints "changed" or "unchanged".
-install_keys_file() {
+# Publishes the staged roster file atomically after verifying its content.
+publish_keys_file() {
   local staging="$1"
-  local before after
-  before="$(file_sha256 "${KEYS_FILE}")"
-  after="$(sha256sum "${staging}" | awk '{print $1}')"
+  local expected_keys="$2"
+  local staged_keys before after
+  staged_keys="$(grep -c . "${staging}" || :)"
+  if [[ "${staged_keys}" -ne "${expected_keys}" ]]; then
+    log "staging holds ${staged_keys} keys, expected ${expected_keys}"
+    return 1
+  fi
+  before="$(sha256_of "${KEYS_FILE}")"
+  after="$(sha256_of "${staging}")"
   if [[ "${before}" == "${after}" ]]; then
     rm -f "${staging}"
-    echo unchanged
+    KEYS_STATE="unchanged"
     return 0
   fi
-  chmod 0644 "${staging}"
-  if [[ "${EUID}" -eq 0 ]]; then
-    chown root:root "${staging}"
+  chmod 0644 "${staging}" || { log "chmod on staging failed"; return 1; }
+  own root "${staging}" || { log "chown on staging failed"; return 1; }
+  mv -f "${staging}" "${KEYS_FILE}" || { log "rename into ${KEYS_FILE} failed"; return 1; }
+  if [[ "$(sha256_of "${KEYS_FILE}")" != "${after}" ]]; then
+    log "published file does not match staging"
+    return 1
   fi
-  mv -f "${staging}" "${KEYS_FILE}"
-  echo changed
+  KEYS_STATE="changed"
 }
 
-# Installs the sshd drop-in when missing or different, validates the whole
-# sshd configuration, and reloads sshd. Prints "reloaded" or "kept".
+# Puts the previous drop-in back (or removes ours when there was none), then
+# asks sshd to pick that up again. Best effort, used only on the failure path.
+restore_dropin() {
+  local previous="$1"
+  local had_previous="$2"
+  if [[ "${had_previous}" -eq 1 ]]; then
+    mv -f "${previous}" "${DROPIN_FILE}" || log "could not restore the previous drop-in"
+  else
+    rm -f "${DROPIN_FILE}" "${previous}"
+  fi
+  if sshd -t; then
+    systemctl reload sshd || log "sshd reload after restore failed"
+  fi
+}
+
+# Installs the drop-in when missing or different, validates the whole sshd
+# configuration, reloads sshd, and records the reloaded content in a marker.
+# The marker is what makes the drop-in count as live: a run that dies between
+# the rename and the reload leaves no marker, so the next run validates and
+# reloads again even though the file on disk already looks right.
 ensure_dropin() {
-  if [[ -f "${DROPIN_FILE}" ]] && [[ "$(cat "${DROPIN_FILE}")" == "${DROPIN_CONTENT}" ]]; then
-    echo kept
+  local wanted current live
+  wanted="$(sha256_of_string "${DROPIN_CONTENT}")"
+  current="$(sha256_of "${DROPIN_FILE}")"
+  live="$(cat "${DROPIN_LIVE_MARKER}" 2>/dev/null || echo absent)"
+  if [[ "${current}" == "${wanted}" && "${live}" == "${wanted}" ]]; then
+    DROPIN_STATE="kept"
     return 0
   fi
-  local staging
-  staging="$(mktemp -p "$(dirname "${DROPIN_FILE}")")"
-  printf '%s\n' "${DROPIN_CONTENT}" >"${staging}"
-  chmod 0644 "${staging}"
-  if [[ "${EUID}" -eq 0 ]]; then
-    chown root:root "${staging}"
+  local previous had_previous=0 staging
+  previous="$(mktemp)" || { log "mktemp failed"; return 1; }
+  if [[ -f "${DROPIN_FILE}" ]]; then
+    cp -p "${DROPIN_FILE}" "${previous}" || { log "backup of the drop-in failed"; return 1; }
+    had_previous=1
   fi
-  mv -f "${staging}" "${DROPIN_FILE}"
+  staging="$(mktemp -p "${DROPIN_DIR}")" || { log "mktemp in ${DROPIN_DIR} failed"; return 1; }
+  printf '%s\n' "${DROPIN_CONTENT}" >"${staging}" || { log "write of the drop-in failed"; return 1; }
+  chmod 0644 "${staging}" || { log "chmod on the drop-in failed"; return 1; }
+  own root "${staging}" || { log "chown on the drop-in failed"; return 1; }
+  mv -f "${staging}" "${DROPIN_FILE}" || { log "rename of the drop-in failed"; return 1; }
   if ! sshd -t; then
-    rm -f "${DROPIN_FILE}"
-    die "sshd rejected the configuration with the drop-in, drop-in removed"
+    restore_dropin "${previous}" "${had_previous}"
+    log "sshd rejected the configuration with the drop-in, previous state restored"
+    return 1
   fi
-  systemctl reload sshd || die "sshd reload failed"
-  echo reloaded
+  if ! systemctl reload sshd; then
+    restore_dropin "${previous}" "${had_previous}"
+    log "sshd reload failed, previous state restored"
+    return 1
+  fi
+  rm -f "${previous}"
+  printf '%s\n' "${wanted}" >"${DROPIN_LIVE_MARKER}" || { log "write of the live marker failed"; return 1; }
+  DROPIN_STATE="reloaded"
 }
 
-# True when the running sshd resolves AuthorizedKeysFile to both files.
+# True when the reloaded drop-in is recorded AND the running configuration
+# resolves AuthorizedKeysFile to exactly the two expected entries.
 dropin_is_live() {
-  sshd -T -C "user=${LOGIN_USER},host=localhost,addr=127.0.0.1" 2>/dev/null \
-    | grep -qiE "^authorizedkeysfile .*${KEYS_DIR}/"
+  local live wanted line first second
+  wanted="$(sha256_of_string "${DROPIN_CONTENT}")"
+  live="$(cat "${DROPIN_LIVE_MARKER}" 2>/dev/null || echo absent)"
+  [[ "${live}" == "${wanted}" ]] || return 1
+  line="$(sshd -T -C "user=${LOGIN_USER},host=localhost,addr=127.0.0.1" 2>/dev/null | awk 'tolower($1) == "authorizedkeysfile" {print; exit}')"
+  read -r _ first second _ <<<"${line}"
+  [[ "${first}" == ".ssh/authorized_keys" ]] || return 1
+  [[ "${second}" == "${KEYS_DIR}/%u.engineers" || "${second}" == "${KEYS_FILE}" ]] || return 1
 }
 
 # Prints the "<type> <blob>" of every key pair instance metadata reports.
@@ -197,52 +265,58 @@ imds_key_pairs() {
 }
 
 # One-time prune of the legacy authorized_keys down to the EC2 key pair lines.
-# Prints "done", "already", or fails.
 prune_legacy() {
   if [[ -f "${PRUNE_MARKER}" ]]; then
-    echo already
+    PRUNE_STATE="already"
     return 0
   fi
-  [[ -f "${KEYS_FILE}" ]] || die "prune blocked, roster file missing"
-  dropin_is_live || die "prune blocked, sshd does not resolve ${KEYS_FILE}"
-  [[ -f "${LEGACY_FILE}" ]] || die "prune blocked, ${LEGACY_FILE} missing"
+  [[ -f "${KEYS_FILE}" ]] || { log "prune blocked, roster file missing"; return 1; }
+  dropin_is_live || { log "prune blocked, sshd has not confirmed ${KEYS_FILE}"; return 1; }
+  [[ -f "${LEGACY_FILE}" ]] || { log "prune blocked, ${LEGACY_FILE} missing"; return 1; }
   local key_pairs
-  key_pairs="$(imds_key_pairs)" || die "prune blocked, instance metadata unavailable"
-  [[ -n "${key_pairs}" ]] || die "prune blocked, instance metadata reports no key pair"
+  key_pairs="$(imds_key_pairs)" || { log "prune blocked, instance metadata unavailable"; return 1; }
+  [[ -n "${key_pairs}" ]] || { log "prune blocked, instance metadata reports no key pair"; return 1; }
+
   local staging line type blob kept=0
-  staging="$(mktemp -p "$(dirname "${LEGACY_FILE}")")"
+  staging="$(mktemp -p "$(dirname "${LEGACY_FILE}")")" || { log "mktemp next to ${LEGACY_FILE} failed"; return 1; }
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
     read -r type blob _ <<<"${line}"
     if grep -qxF -- "${type} ${blob}" <<<"${key_pairs}"; then
-      printf '%s\n' "${line}" >>"${staging}"
+      printf '%s\n' "${line}" >>"${staging}" || { rm -f "${staging}"; log "write to the prune staging failed"; return 1; }
       kept=$((kept + 1))
     fi
   done <"${LEGACY_FILE}"
-  if [[ "${kept}" -eq 0 ]]; then
+  if [[ "${kept}" -eq 0 || "$(grep -c . "${staging}" || :)" -ne "${kept}" ]]; then
     rm -f "${staging}"
-    die "prune blocked, no key pair line found in ${LEGACY_FILE}"
+    log "prune blocked, no key pair line found in ${LEGACY_FILE}"
+    return 1
   fi
-  local backup
+
+  local backup original_sha
   backup="${LEGACY_FILE}.pre-engineers.$(date -u +%Y%m%dT%H%M%SZ)"
-  cp -p "${LEGACY_FILE}" "${backup}"
-  chmod 0600 "${staging}" "${backup}"
-  if [[ "${EUID}" -eq 0 ]]; then
-    chown "${LOGIN_USER}:${LOGIN_USER}" "${staging}" "${backup}"
+  original_sha="$(sha256_of "${LEGACY_FILE}")"
+  cp -p "${LEGACY_FILE}" "${backup}" || { rm -f "${staging}"; log "backup to ${backup} failed"; return 1; }
+  if [[ "$(sha256_of "${backup}")" != "${original_sha}" ]]; then
+    rm -f "${staging}" "${backup}"
+    log "backup does not match ${LEGACY_FILE}"
+    return 1
   fi
-  mv -f "${staging}" "${LEGACY_FILE}"
-  date -u +%Y-%m-%dT%H:%M:%SZ >"${PRUNE_MARKER}"
+  chmod 0600 "${staging}" "${backup}" || { rm -f "${staging}"; log "chmod on the pruned file failed"; return 1; }
+  own "${LOGIN_USER}" "${staging}" "${backup}" || { rm -f "${staging}"; log "chown on the pruned file failed"; return 1; }
+  mv -f "${staging}" "${LEGACY_FILE}" || { log "rename into ${LEGACY_FILE} failed"; return 1; }
+  date -u +%Y-%m-%dT%H:%M:%SZ >"${PRUNE_MARKER}" || { log "write of the prune marker failed"; return 1; }
   log "legacy authorized_keys pruned to ${kept} key pair line(s), backup ${backup}"
-  echo "done"
+  PRUNE_STATE="done"
 }
 
 main() {
-  mkdir -p "$(dirname "${LOCK_FILE}")"
+  mkdir -p "$(dirname "${LOCK_FILE}")" || die "cannot create the lock directory"
   exec 9>"${LOCK_FILE}"
   flock -w 30 9 || die "another sync holds ${LOCK_FILE}"
 
-  # shellcheck disable=SC2046  # owner_flags prints zero or four words on purpose
-  install -d -m 0755 $(owner_flags root) "${KEYS_DIR}" "$(dirname "${DROPIN_FILE}")"
+  install -d -m 0755 "${KEYS_DIR}" "${DROPIN_DIR}" || die "cannot create ${KEYS_DIR}"
+  own root "${KEYS_DIR}" || die "cannot chown ${KEYS_DIR}"
 
   local roster version slugs=()
   roster="$(read_roster)"
@@ -250,27 +324,21 @@ main() {
   version="${version#VERSION=}"
   mapfile -t slugs < <(tail -n +2 <<<"${roster}")
 
-  local staging slug failed=0
-  staging="$(mktemp -p "${KEYS_DIR}")"
+  local staging slug added key_count=0
+  staging="$(mktemp -p "${KEYS_DIR}")" || die "mktemp in ${KEYS_DIR} failed"
   for slug in "${slugs[@]}"; do
-    if ! append_slug_keys "${slug}" "${staging}"; then
-      failed=1
-      break
+    if ! added="$(append_slug_keys "${slug}" "${staging}")"; then
+      rm -f "${staging}"
+      die "roster version ${version} not applied, last good file kept"
     fi
+    key_count=$((key_count + added))
   done
-  if [[ "${failed}" -ne 0 ]]; then
-    rm -f "${staging}"
-    die "roster version ${version} not applied, last good file kept"
-  fi
-  local key_count
-  key_count="$(grep -c . "${staging}" || :)"
 
-  local keys_state dropin_state prune_state
-  keys_state="$(install_keys_file "${staging}")"
-  dropin_state="$(ensure_dropin)"
-  prune_state="$(prune_legacy)"
+  publish_keys_file "${staging}" "${key_count}" || { rm -f "${staging}"; die "roster version ${version} not published, last good file kept"; }
+  ensure_dropin || die "sshd drop-in not live"
+  prune_legacy || die "legacy prune pending"
 
-  log "result=ok parameter_version=${version} engineers=${#slugs[@]} keys=${key_count} sha256=$(file_sha256 "${KEYS_FILE}") file=${keys_state} sshd=${dropin_state} prune=${prune_state}"
+  log "result=ok parameter_version=${version} engineers=${#slugs[@]} keys=${key_count} sha256=$(sha256_of "${KEYS_FILE}") file=${KEYS_STATE} sshd=${DROPIN_STATE} prune=${PRUNE_STATE}"
 }
 
 main "$@"

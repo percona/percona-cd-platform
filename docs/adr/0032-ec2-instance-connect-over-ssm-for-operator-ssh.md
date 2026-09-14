@@ -3,7 +3,7 @@
 
 **Status:** Accepted (2026-06-11)
 **Related:** [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (EKS fronting; named the EC2 Instance Connect Endpoint as preferred operator access, amended by this ADR), [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (every master is SSM-managed: `AmazonSSMManagedInstanceCore` is universal).
-**Amended by:** [ADR 0046](0046-engineer-ssh-roster-in-ssm-synced-by-state-manager.md), the static-key fallback is now fed from an SSM roster synced by State Manager, the committed `ssh_key_engineers` lists are gone.
+**Amended by:** [ADR 0046](0046-engineer-ssh-roster-in-ssm-synced-by-state-manager.md), the static-key fallback is fed from an SSM roster synced by State Manager, and the committed `ssh_key_engineers` lists leave the repo once the fleet has converged.
 
 > **Update (2026-07-07):** pg migrated to Terraform (PKG-1341); its user-data codification now lives in the module.
 

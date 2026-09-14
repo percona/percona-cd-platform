@@ -35,8 +35,6 @@ module "psmdb" {
 
   ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 
-  engineer_roster = local.master_ssh_engineer_roster
-
   # Retained CFN data volume vol-090299a14ad3da940 is 300 GiB gp2 in
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in

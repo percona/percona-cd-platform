@@ -46,14 +46,19 @@ case "$url" in
 esac
 """,
     "sshd": """#!/usr/bin/env bash
+echo "sshd $*" >> "$CALLS"
 case "$1" in
   -t) [[ -f "$FIX/sshd_reject" ]] && exit 1; exit 0 ;;
   -T) dropin="$SSH_CONFIG_DIR/sshd_config.d/40-engineer-keys.conf"
-      if [[ -f "$dropin" ]]; then tr 'A-Z' 'a-z' < "$dropin"; else echo "authorizedkeysfile .ssh/authorized_keys"; fi ;;
+      if [[ -f "$FIX/sshd_wrong_path" ]]; then echo "authorizedkeysfile .ssh/authorized_keys /etc/ssh/authorized_keys.d/WRONG"
+      elif [[ -f "$dropin" ]]; then tr 'A-Z' 'a-z' < "$dropin"
+      else echo "authorizedkeysfile .ssh/authorized_keys"; fi ;;
 esac
 """,
     "systemctl": """#!/usr/bin/env bash
 echo "systemctl $*" >> "$CALLS"
+[[ -f "$FIX/reload_fail" ]] && exit 1
+exit 0
 """,
     "logger": """#!/usr/bin/env bash
 exit 0
@@ -86,6 +91,7 @@ class Harness:
     dropin: Path
     legacy: Path
     marker: Path
+    live_marker: Path
 
     def set_roster(self, engineers: list[str], version: int = 1, schema: int = 1) -> None:
         value = json.dumps({"schema": schema, "engineers": engineers})
@@ -159,6 +165,7 @@ def harness(tmp_path: Path) -> Harness:
         dropin=root / "etc/ssh/sshd_config.d/40-engineer-keys.conf",
         legacy=legacy,
         marker=root / "etc/ssh/authorized_keys.d/.legacy-pruned",
+        live_marker=root / "etc/ssh/authorized_keys.d/.dropin-live",
     )
 
 
@@ -316,3 +323,69 @@ def test_sshd_rejecting_the_dropin_removes_it_and_skips_reload(harness: Harness,
     assert not harness.dropin.exists()
     assert harness.calls("systemctl") == []
     assert harness.keys_file.exists()
+
+
+def test_interrupted_install_revalidates_and_reloads_before_pruning(harness: Harness, tmp_path: Path) -> None:
+    """A run that died between the drop-in rename and the reload leaves the file
+    on disk but no live marker. The next run must not trust the file."""
+    _two_engineers(harness, tmp_path / "gen")
+    harness.dropin.write_text(
+        f"AuthorizedKeysFile .ssh/authorized_keys {harness.root}/etc/ssh/authorized_keys.d/%u.engineers\n"
+    )
+    assert not harness.live_marker.exists()
+
+    result = harness.run()
+
+    assert result.returncode == 0, result.out
+    assert harness.calls("sshd -t") == ["sshd -t"]
+    assert harness.calls("systemctl reload sshd") == ["systemctl reload sshd"]
+    assert harness.live_marker.exists()
+    assert "sshd=reloaded prune=done" in result.out
+
+
+def test_reload_failure_restores_previous_state_and_blocks_prune(harness: Harness, tmp_path: Path) -> None:
+    _two_engineers(harness, tmp_path / "gen")
+    (harness.fix / "reload_fail").touch()
+    before = harness.legacy.read_text()
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "sshd reload failed, previous state restored" in result.out
+    assert harness.keys_file.exists(), "the roster file is published before the drop-in"
+    assert not harness.dropin.exists(), "no previous drop-in, so ours is removed"
+    assert not harness.live_marker.exists()
+    assert not harness.marker.exists()
+    assert harness.legacy.read_text() == before
+
+
+def test_prune_requires_sshd_to_resolve_the_exact_key_file(harness: Harness, tmp_path: Path) -> None:
+    _two_engineers(harness, tmp_path / "gen")
+    (harness.fix / "sshd_wrong_path").touch()
+    before = harness.legacy.read_text()
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "sshd has not confirmed" in result.out
+    assert harness.live_marker.exists(), "the reload itself succeeded"
+    assert harness.legacy.read_text() == before
+    assert not harness.marker.exists()
+
+
+def test_failed_rename_is_reported_not_swallowed(harness: Harness, tmp_path: Path) -> None:
+    """mv into a path occupied by a non-empty directory fails. The script must
+    report it and exit non-zero instead of claiming the file changed."""
+    _two_engineers(harness, tmp_path / "gen")
+    assert harness.run().returncode == 0
+    harness.keys_file.unlink()
+    harness.keys_file.mkdir()
+    (harness.keys_file / "occupied").write_text("x")
+    harness.set_roster(["alice"], version=2)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "published file does not match staging" in result.out
+    assert "not published, last good file kept" in result.out
+    assert harness.keys_file.is_dir()

@@ -24,6 +24,10 @@ helm_sha256_arm64 := "d3f8f15b3d9ec8c8678fbf3280c3e5902efabe5912e2f9fcf29107efbc
 # when var.aws_profile == "".
 cluster      := "percona-ci-platform"
 state_bucket := "terraform-state-storage-" + cluster
+# Home region of the cluster and of every SSM parameter the masters read
+# (allowlists, engineer roster). Pinned here so an operator's AWS_REGION can
+# never redirect a roster write to a regional copy nobody consumes.
+roster_region := "us-east-1"
 
 # ---------- top-level ----------
 default: help
@@ -254,14 +258,20 @@ engineers-status: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
     param="/{{cluster}}/access/master-ssh-engineers"
-    aws ssm get-parameter --name "$param" --region "${AWS_REGION:-us-east-1}" \
-      --query 'Parameter.[Version,Value]' --output text \
-      | python3 -c 'import json,sys; version,value=sys.stdin.read().split("\t",1); roster=json.loads(value); print(f"parameter version {version.strip()}, {len(roster[\"engineers\"])} engineers: {\", \".join(roster[\"engineers\"]) or \"(none)\"}")'
+    roster_json="$(aws ssm get-parameter --name "$param" --region "{{roster_region}}" --output json)"
+    ROSTER_JSON="$roster_json" python3 -c '
+    import json, os
+    parameter = json.loads(os.environ["ROSTER_JSON"])["Parameter"]
+    engineers = json.loads(parameter["Value"])["engineers"]
+    names = ", ".join(engineers) if engineers else "(none)"
+    print("parameter version " + str(parameter["Version"]) + ", " + str(len(engineers)) + " engineers: " + names)
+    '
     printf '%-40s %-13s %-8s %s\n' ASSOCIATION REGION STATUS LAST-EXECUTION
     for region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
-      aws ssm list-associations --region "$region" \
-        --query "Associations[?ends_with(AssociationName, '-engineer-keys-sync')].[AssociationName,Overview.Status,LastExecutionDate]" \
-        --output text | awk -v region="$region" 'NF {printf "%-40s %-13s %-8s %s\n", $1, region, $2, $3}'
+      rows="$(aws ssm list-associations --region "$region" \
+        --query "Associations[?AssociationName && ends_with(AssociationName, '-engineer-keys-sync')].[AssociationName,Overview.Status,LastExecutionDate]" \
+        --output text)"
+      awk -v region="$region" 'NF {printf "%-40s %-13s %-8s %s\n", $1, region, $2, $3}' <<< "$rows"
     done
 
 # Usage: just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
@@ -274,7 +284,11 @@ engineers-set slugs: _require-aws-profile
     set -euo pipefail
     raw_slugs={{quote(slugs)}}
     param="/{{cluster}}/access/master-ssh-engineers"
-    region="${AWS_REGION:-us-east-1}"
+    region="{{roster_region}}"
+    if [[ "$raw_slugs" =~ [[:space:]] ]]; then
+      echo "the roster must be one comma-separated line with no spaces or line breaks" >&2
+      exit 2
+    fi
     IFS=',' read -r -a candidates <<< "$raw_slugs"
     valid_slugs=()
     for candidate in "${candidates[@]}"; do
@@ -301,9 +315,10 @@ engineers-set slugs: _require-aws-profile
       --region "$region" --query Version --output text)"
     echo "saved as version $version. Triggering the engineer-keys associations:"
     for association_region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
-      mapfile -t association_ids < <(aws ssm list-associations --region "$association_region" \
-        --query "Associations[?ends_with(AssociationName, '-engineer-keys-sync')].AssociationId" \
-        --output text | tr '\t' '\n' | sed '/^$/d')
+      discovered="$(aws ssm list-associations --region "$association_region" \
+        --query "Associations[?AssociationName && ends_with(AssociationName, '-engineer-keys-sync')].AssociationId" \
+        --output text)" || { echo "association discovery failed in $association_region, roster saved but not triggered there" >&2; exit 1; }
+      mapfile -t association_ids < <(tr '\t' '\n' <<< "$discovered" | sed '/^$/d')
       if [[ "${#association_ids[@]}" -gt 0 ]]; then
         aws ssm start-associations-once --region "$association_region" --association-ids "${association_ids[@]}"
         printf '  %s: %d association(s) triggered\n' "$association_region" "${#association_ids[@]}"

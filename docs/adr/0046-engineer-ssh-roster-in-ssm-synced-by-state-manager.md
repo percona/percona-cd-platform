@@ -33,7 +33,7 @@ The fleet does not use these keys. Over the 16 to 96 days since each master last
 - The roster is out of the repo and out of Terraform state. Git history, older launch-template versions, and instance user-data still hold the old lists. This decision reduces future exposure, it does not erase the past.
 - The break-glass fallback depends on percona.com at sync time, as the boot script already did. During an outage stale keys persist until the next successful sync. If bounded revocation during an outage ever becomes a requirement, the alternative is a key snapshot in an Advanced-tier parameter.
 - Association status is the health signal. `just ssm-run` masks the remote exit code, so verification reads the association execution status, never a shell exit code.
-- A fresh fork or DR rebuild must seed the parameter before the associations run, otherwise the masters carry no engineer keys and report failed convergence. SSM, EC2 Instance Connect, and the EC2 key pair are unaffected.
+- A fresh fork or DR rebuild must seed the parameter before the associations run, otherwise the association reports failed convergence and, once the boot-time list is removed in the second stage, the master carries no engineer keys. SSM, EC2 Instance Connect, and the EC2 key pair are unaffected either way.
 - The evidence above supports retiring the static keys entirely. That is a separate decision, gated on agreement from the people on the roster and a written break-glass for the case where SSM and the EC2 API are both unavailable. Under this design it costs one write: an empty roster.
 
 ## Alternatives considered
@@ -48,6 +48,6 @@ The fleet does not use these keys. Over the 16 to 96 days since each master last
 ## Rollout
 
 - Seed the parameter with the eight committed slugs.
-- Land the reconciler, the association (gated by a flag, default off), and the docs in one PR. Remove `ssh_key_engineers` and `setup_ssh_keys` in a second PR once the fleet has converged.
-- Canary on `ps80-upgraded`, then `ps80`, then batches of three. Per master: association `Success`, `sshd -t` clean, `sshd -T` lists both key files and the unchanged EC2 Instance Connect command, a throwaway key added to the parameter authenticates over the SSM tunnel and stops after removal.
+- Land the reconciler, the association, and the docs in one PR. The module variable defaults to off and each `master-*.tf` opts in explicitly, so the commit history records exactly which masters are enabled at every point of the rollout. Remove `ssh_key_engineers` and `setup_ssh_keys` in a second PR once the fleet has converged.
+- Canary on `ps80-upgraded` (the only master opted in at first), then `ps80`, then batches of three, each batch its own commit and its own targeted apply. Per master: association `Success`, `sshd -t` clean, `sshd -T` lists both key files and the unchanged EC2 Instance Connect command, a throwaway key added to the parameter authenticates over the SSM tunnel and stops after removal.
 - Fingerprint inventory before the prune: on 2026-09-14 all ten EC2 instances held exactly ten keys, nine matching the keys percona.com serves for the eight slugs and one matching the shared `percona-jenkins` key pair, which is a single key in all five regions.

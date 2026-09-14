@@ -104,10 +104,12 @@ authenticates. Two ways to satisfy it:
   `send-ssh-public-key` line and point `IdentityFile` at that key; the shared
   `percona-jenkins.pem` is the fallback. Roster changes go through
   `just engineers-set`, never through Terraform. Note the key TYPE must match
-  exactly. Check yours is present:
+  exactly. Check yours is present (the blob is read locally first, so a missing
+  local key file fails instead of matching everything):
 
   ```sh
-  just ssm-run psmdb 'grep -qF "$(cut -d" " -f2 ~/.ssh/id_rsa.pub)" /etc/ssh/authorized_keys.d/ec2-user.engineers && echo provisioned || echo MISSING'
+  blob="$(awk 'NF >= 2 {print $2; exit}' ~/.ssh/id_rsa.pub)" && [ -n "$blob" ] || echo "no local public key"
+  just ssm-run psmdb "awk '{print \$2}' /etc/ssh/authorized_keys.d/ec2-user.engineers | grep -qxF '$blob' && echo provisioned || echo MISSING"
   ```
 
 > The pure-shell paths (`just ssh` / `just ssm` / `just ssm-run`) need NO key at
