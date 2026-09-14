@@ -80,6 +80,9 @@ DROPIN
 
 # 4. Alloy config. The receiver path is /api/v1/metrics/write, not /api/v1/push.
 install -d -o root -g alloy -m 0750 /etc/alloy
+# Textfile collector directory: root-owned scripts (the engineer-keys sync)
+# drop *.prom files here, Alloy's unix exporter reads them (docs/adr/0046).
+install -d -o root -g root -m 0755 /var/lib/alloy/textfile
 
 # Back up the current config outside /etc/alloy/ (so Alloy never parses it) for
 # the rollback in section 5.
@@ -96,7 +99,11 @@ prometheus.scrape "hetzner_local" {
 }
 
 prometheus.exporter.unix "node" {
-  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat", "stat", "pressure", "netstat", "ethtool", "filefd"]
+  set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat", "stat", "pressure", "netstat", "ethtool", "filefd", "textfile"]
+
+  textfile {
+    directory = "/var/lib/alloy/textfile"
+  }
 
   netdev {
     device_exclude = "^(veth.*|docker.*|br-.*|cni.*|lo)\$"

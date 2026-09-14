@@ -92,7 +92,9 @@ Version drift check for pinned tools, charts, AWS CLI. Run before bumping
 [`install-master-observability.sh`](install-master-observability.sh)
 Bootstrapped on each EC2 Jenkins master from the TF user-data (SHA-pinned).
 Installs amazon-ssm-agent + Grafana Alloy with an `ExecStartPre` that
-fetches the alloy-gateway bearer token from AWS Secrets Manager. Idempotent.
+fetches the alloy-gateway bearer token from AWS Secrets Manager. The unix
+exporter includes the textfile collector on `/var/lib/alloy/textfile`, where
+the engineer-keys sync drops its gauges (ADR 0046). Idempotent.
 Not invoked locally; lives here so platform changes to the gateway and the
 master-side installer land in one diff.
 

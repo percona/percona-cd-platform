@@ -19,6 +19,7 @@ module "pg" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euc1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  engineer_roster         = local.master_ssh_engineer_roster
   jenkins_package_version = "2.541.3" # closes CVE-2026-27100 (pg is on 2.528.3)
 
   # Live network shape. B/C are the module's own cidrsubnet() math; B2/C2
@@ -69,17 +70,6 @@ module "pg" {
   # jenkins-ingress nginx (TLS offloaded at the ALB).
   extra_http_ingress = [
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
-  ]
-
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
   ]
 
   # init.groovy.d via the module S3 bucket, byte-identical to the live

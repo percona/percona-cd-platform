@@ -268,6 +268,73 @@ resource "aws_ssm_association" "init_groovy_sync" {
   depends_on = [aws_s3_object.init_config]
 }
 
+# Engineer SSH roster delivery (docs/adr/0046). The reviewed sync script is
+# uploaded next to the init.groovy.d files and fetched with a sha256 check on
+# every run, so a script edit propagates within one schedule tick and never
+# needs a host touch. The roster VALUE is read on the host from SSM Parameter
+# Store, never by Terraform, so it enters neither the repo nor the state.
+locals {
+  engineer_keys_sync_enabled = var.engineer_roster != null
+  engineer_keys_sync_script  = file("${path.module}/engineer-keys-sync.sh")
+  engineer_keys_sync_sha256  = sha256(local.engineer_keys_sync_script)
+}
+
+resource "aws_s3_object" "engineer_keys_sync" {
+  count = local.engineer_keys_sync_enabled ? 1 : 0
+
+  # one() yields null instead of an index error when the bucket is absent, so
+  # the precondition below is what a misconfigured master sees, not a cryptic
+  # "Invalid index" on this line.
+  bucket  = one(aws_s3_bucket.init_config[*].id)
+  key     = "scripts/engineer-keys-sync.sh"
+  content = local.engineer_keys_sync_script
+  etag    = md5(local.engineer_keys_sync_script)
+
+  tags = local.base_tags
+
+  lifecycle {
+    precondition {
+      condition     = length(aws_s3_bucket.init_config) > 0
+      error_message = "engineer_roster needs the init-config bucket, which exists only for masters with init.groovy.d files."
+    }
+  }
+}
+
+# Runs once on creation and then on the schedule, against the on-demand
+# master's stable instance id. The sync script is fail-safe on the host (any
+# fetch or validation error keeps the last good key file), so the association
+# status is the health signal: a Failed execution means the roster did not
+# converge, never that access was lost.
+resource "aws_ssm_association" "engineer_keys_sync" {
+  count = local.engineer_keys_sync_enabled ? 1 : 0
+
+  name                = "AWS-RunShellScript"
+  association_name    = "${var.short_name}-engineer-keys-sync"
+  schedule_expression = var.engineer_roster.sync_schedule
+  compliance_severity = "HIGH"
+
+  targets {
+    key    = "InstanceIds"
+    values = [aws_instance.master[0].id]
+  }
+
+  parameters = {
+    commands = join("\n", [
+      "set -eu",
+      "STAGE=$(mktemp -d)",
+      "trap 'rm -rf $STAGE' EXIT",
+      "aws s3 cp s3://${aws_s3_object.engineer_keys_sync[0].bucket}/${aws_s3_object.engineer_keys_sync[0].key} $STAGE/sync.sh --region ${data.aws_region.current.region}",
+      "echo \"${local.engineer_keys_sync_sha256}  $STAGE/sync.sh\" | sha256sum -c -",
+      "ROSTER_PARAMETER=${var.engineer_roster.parameter_name} ROSTER_REGION=${var.engineer_roster.parameter_region} bash $STAGE/sync.sh",
+    ])
+  }
+
+  # The commands embed the hash of the NEW script. Without this edge the
+  # association (which re-applies immediately on update) can run against the
+  # not-yet-updated S3 object and fail its first run.
+  depends_on = [aws_s3_object.engineer_keys_sync]
+}
+
 resource "aws_security_group" "ssh" {
   name        = "SSH"
   description = "SSH traffic in"
@@ -779,7 +846,6 @@ locals {
     observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
-    ssh_key_engineers       = join(" ", var.ssh_key_engineers)
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook
     init_groovy_hooks       = var.init_groovy_hooks
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""

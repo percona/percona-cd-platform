@@ -34,11 +34,6 @@ variable "spot_instance_types" {
   default     = []
 }
 
-variable "ssh_key_engineers" {
-  description = "Engineer slugs whose public keys are fetched from percona.com/get/engineer/KEY/<slug>.pub at boot."
-  type        = list(string)
-}
-
 variable "master_profile" {
   description = "User-data profile selector. Only \"eks_observability\" is supported; the slot exists so future variants (in-cluster master, alternate observability path) can be gated cleanly."
   type        = string
@@ -243,6 +238,21 @@ variable "init_groovy_template_files" {
   description = "init.groovy.d files rendered with templatefile() before upload, as a map of filename => .tftpl path. Template variables: subnet_by_az_name (AZ name => subnet id, from this module's subnets) and vpc_id. Lets netMap subnet IDs in cloud.groovy come from state instead of hand-edited literals, so a VPC or subnet replacement re-renders the S3 object in the same apply. Rendered entries merge OVER init_groovy_files on filename collision. Escape literal Groovy GStrings as $${...} in the template. Empty skips."
   type        = map(string)
   default     = {}
+}
+
+variable "engineer_roster" {
+  description = "Fleet SSH engineer roster consumed on the master by the engineer-keys SSM association (docs/adr/0046). parameter_name and parameter_region locate the SSM String parameter holding {\"schema\":1,\"engineers\":[...]}. The association fetches the reviewed sync script from the init-config bucket, verifies its sha256, and runs it on sync_schedule, so a roster write reaches the running master without a rebuild. Terraform never reads the value. Null disables. On-demand masters with init.groovy.d S3 delivery only."
+  type = object({
+    parameter_name   = string
+    parameter_region = string
+    sync_schedule    = optional(string, "rate(30 minutes)")
+  })
+  default = null
+
+  validation {
+    condition     = var.engineer_roster == null || var.purchasing_option == "on-demand"
+    error_message = "engineer_roster needs an on-demand master. The association targets one instance id, which a SpotFleet master does not have, so a spot master would silently get no engineer keys."
+  }
 }
 
 variable "init_groovy_sync_schedule" {

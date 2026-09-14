@@ -11,8 +11,9 @@ first (builds in flight die).
 | Worker template on ps3-k8s | `resources/jenkins/clouds-catalog/` | none, JCasC hot-reload | `argocd app sync jenkins-ps3-k8s` |
 | Resize or retype a master | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook master-resize` |
 | Bump Jenkins core | `terraform/master-<inst>.tf` | **replaces the instance** | `just runbook core-bump` |
-| Engineer SSH key | `terraform/master-<inst>.tf` | at next replacement | `just runbook ssh-key` |
-| Port or SSH allow-list | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
+| Engineer SSH key | SSM roster, no code | within minutes, no rebuild | `just engineers-set "<full roster>"` |
+| Port allow-list | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
+| SSH break-glass allow-list | SSM, no code | in place after apply | `just allowlist-set master-ssh "<full list>"` then plan and apply |
 | Graviton fleet size or types | `terraform/master-<inst>.tf` | in place | `just tf-plan && just tf-apply` |
 
 `just runbook` lists the subcommands. `template-change` enforces the
@@ -87,12 +88,12 @@ operator-driven on the EC2 masters, image-driven on ps3-k8s
 
 ## Engineer SSH keys
 
-`just runbook ssh-key`. Edit `ssh_key_engineers` in
-`terraform/master-<inst>.tf`. Keys are fetched from percona.com at
-boot, so the change takes effect at the next instance replacement.
-Urgent removal: also delete the key from
-`/home/ec2-user/.ssh/authorized_keys` over SSM
-([`master-shell-access.md`](master-shell-access.md)).
+`just runbook ssh-key`. The roster is one SSM parameter, never Terraform:
+`just engineers-set "<full,comma-separated,roster>"` writes it and triggers
+every master's engineer-keys association, `just engineers-status` shows the
+version and per-master convergence. Keys land in
+`/etc/ssh/authorized_keys.d/ec2-user.engineers` within minutes, no rebuild.
+Mechanics: [`eks-api-access.md`](eks-api-access.md), decision ADR 0046.
 
 ## Ports and SSH allow-list
 

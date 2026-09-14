@@ -34,6 +34,7 @@ module "cloud" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  engineer_roster         = local.master_ssh_engineer_roster
   jenkins_package_version = "2.541.3"
   # cloud workers have no S3 build cache: the CFN-era default named
   # cloud-build-cache, a bucket this account never created and that exists
@@ -91,17 +92,6 @@ module "cloud" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-cloud-init-config). cloud.groovy renders from a template, so its
   # netMap subnet IDs come from module state instead of hand-edited literals
@@ -119,7 +109,6 @@ module "cloud" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned
