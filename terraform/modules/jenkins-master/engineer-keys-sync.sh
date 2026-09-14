@@ -5,10 +5,24 @@
 #
 # Reads {"schema":1,"engineers":[...]} from ROSTER_PARAMETER, fetches every
 # slug's public key from percona.com, validates each key line, and atomically
-# replaces the dedicated key file that the sshd drop-in names. Any failure keeps
-# the last good file byte-identical and exits non-zero. An empty roster writes
-# an empty file without contacting percona.com. Once sshd has validated AND
-# reloaded the drop-in (recorded in a marker, so an interrupted run cannot
+# replaces the dedicated key file that the sshd drop-in names. The contract:
+#   - A slug that leaves the roster loses its keys on this run, whatever the
+#     feed does for anybody else.
+#   - A slug the feed answers with 404 is one IT has revoked (or a typo): its
+#     keys are dropped, the run stays green and reports the slug as missing so
+#     the roster gets cleaned up. If every slug 404s the feed itself is broken
+#     and the run changes nothing.
+#   - A slug whose fetch fails any other way (timeout, 5xx, TLS, malformed
+#     body) keeps the keys it already had in the file (never invented, never
+#     dropped on a transient), the run is reported as degraded and exits 1 so
+#     the alert fires. The legacy prune waits for a run that applied the roster
+#     in full.
+#   - A roster that cannot be read or parsed changes nothing and exits 1.
+#   - An empty roster writes an empty file without contacting percona.com.
+# Failures before the roster file is published keep the last good file
+# byte-identical. Failures after it (sshd reload, prune, metrics) leave the
+# published roster in place and are reported by stage. Once sshd has validated
+# AND reloaded the drop-in (recorded in a marker, so an interrupted run cannot
 # skip it), the legacy engineer keys are pruned from the login user's
 # authorized_keys one time, with a dated backup, leaving only the EC2 key pair
 # that instance metadata reports.
@@ -26,6 +40,7 @@
 #   LOGIN_HOME         home directory of LOGIN_USER
 #   IMDS_BASE          instance metadata endpoint
 #   LOCK_FILE          flock path
+#   LOCK_WAIT          seconds to wait for the lock before leaving it to the holder
 #   METRICS_DIR        node_exporter textfile directory scraped by Alloy
 set -euo pipefail
 export PATH="${PATH}:/usr/sbin:/sbin"
@@ -38,6 +53,7 @@ readonly SSH_CONFIG_DIR="${SSH_CONFIG_DIR:-/etc/ssh}"
 readonly LOGIN_HOME="${LOGIN_HOME:-/home/${LOGIN_USER}}"
 readonly IMDS_BASE="${IMDS_BASE:-http://169.254.169.254}"
 readonly LOCK_FILE="${LOCK_FILE:-/run/lock/engineer-keys-sync.lock}"
+readonly LOCK_WAIT="${LOCK_WAIT:-300}"
 readonly METRICS_DIR="${METRICS_DIR:-/var/lib/alloy/textfile}"
 readonly METRICS_FILE="${METRICS_DIR}/engineer_keys_sync.prom"
 
@@ -59,6 +75,9 @@ DROPIN_STATE=""
 PRUNE_STATE=""
 ROSTER_VERSION=""
 KEY_COUNT=""
+DEGRADED_SLUGS=""
+MISSING_SLUGS=""
+LEGACY_PRUNED=""
 
 # Log lines go to the journal and to stderr, so a message survives even when a
 # caller captures stdout.
@@ -73,40 +92,78 @@ log() {
 # Publishes the run outcome for the Alloy textfile collector, so a failing or
 # silent sync raises an alert in Mimir (docs/observability.md, Engineer keys
 # sync). Best effort: a metrics problem is logged and never changes the exit
-# code. The last success timestamp survives failed runs.
+# code. The payload is built in memory and written with one checked write, so
+# a full disk can never replace the previous file with an empty one. The last
+# success timestamp and the last fully applied roster version survive failed
+# and degraded runs.
 write_metrics() {
   local success="$1"
-  local now previous_success staging
+  local now previous_success previous_version staging payload keyset
   now="$(date -u +%s)"
   previous_success="$(awk '$1 == "engineer_keys_sync_last_success_timestamp_seconds" {print $2}' "${METRICS_FILE}" 2>/dev/null || :)"
+  previous_version="$(awk '$1 == "engineer_keys_sync_roster_version" {print $2}' "${METRICS_FILE}" 2>/dev/null || :)"
   if [[ "${success}" -eq 1 ]]; then
     previous_success="${now}"
+    previous_version="${ROSTER_VERSION}"
+  fi
+  local degraded_count=0 missing_count=0
+  if [[ -n "${DEGRADED_SLUGS}" ]]; then
+    degraded_count="$(tr ',' '\n' <<<"${DEGRADED_SLUGS}" | grep -c .)"
+  fi
+  if [[ -n "${MISSING_SLUGS}" ]]; then
+    missing_count="$(tr ',' '\n' <<<"${MISSING_SLUGS}" | grep -c .)"
+  fi
+  payload="# HELP engineer_keys_sync_last_run_timestamp_seconds Unix time of the last reconciler run.
+# TYPE engineer_keys_sync_last_run_timestamp_seconds gauge
+engineer_keys_sync_last_run_timestamp_seconds ${now}
+# HELP engineer_keys_sync_last_run_success 1 when the last run applied the roster in full, 0 when it failed or was degraded.
+# TYPE engineer_keys_sync_last_run_success gauge
+engineer_keys_sync_last_run_success ${success}
+# HELP engineer_keys_sync_degraded_slugs Slugs whose feed fetch failed on the last run and kept their previous keys.
+# TYPE engineer_keys_sync_degraded_slugs gauge
+engineer_keys_sync_degraded_slugs ${degraded_count}
+# HELP engineer_keys_sync_slugs_missing Roster slugs the feed answered 404 for on the last run, their keys are not installed.
+# TYPE engineer_keys_sync_slugs_missing gauge
+engineer_keys_sync_slugs_missing ${missing_count}
+"
+  if [[ -n "${LEGACY_PRUNED}" ]]; then
+    payload+="# HELP engineer_keys_sync_legacy_pruned 1 once the legacy authorized_keys holds only the EC2 key pair.
+# TYPE engineer_keys_sync_legacy_pruned gauge
+engineer_keys_sync_legacy_pruned ${LEGACY_PRUNED}
+"
+  fi
+  if [[ -n "${previous_success}" ]]; then
+    payload+="# HELP engineer_keys_sync_last_success_timestamp_seconds Unix time of the last run that applied the roster in full.
+# TYPE engineer_keys_sync_last_success_timestamp_seconds gauge
+engineer_keys_sync_last_success_timestamp_seconds ${previous_success}
+"
+  fi
+  if [[ -n "${previous_version}" ]]; then
+    payload+="# HELP engineer_keys_sync_roster_version SSM parameter version of the roster last applied in full.
+# TYPE engineer_keys_sync_roster_version gauge
+engineer_keys_sync_roster_version ${previous_version}
+"
+  fi
+  if [[ -n "${KEY_COUNT}" ]]; then
+    payload+="# HELP engineer_keys_sync_keys Public keys in the managed roster file.
+# TYPE engineer_keys_sync_keys gauge
+engineer_keys_sync_keys ${KEY_COUNT}
+"
+  fi
+  if [[ -f "${KEYS_FILE}" ]]; then
+    keyset="$(sha256_of "${KEYS_FILE}")"
+    payload+="# HELP engineer_keys_sync_keyset_info sha256 of the managed roster file, a label change means the installed key set changed.
+# TYPE engineer_keys_sync_keyset_info gauge
+engineer_keys_sync_keyset_info{keyset_sha256=\"${keyset}\"} 1
+"
   fi
   install -d -m 0755 "${METRICS_DIR}" 2>/dev/null || { log "metrics directory unavailable"; return 0; }
   staging="$(mktemp -p "${METRICS_DIR}" 2>/dev/null)" || { log "metrics staging failed"; return 0; }
-  {
-    echo "# HELP engineer_keys_sync_last_run_timestamp_seconds Unix time of the last reconciler run."
-    echo "# TYPE engineer_keys_sync_last_run_timestamp_seconds gauge"
-    echo "engineer_keys_sync_last_run_timestamp_seconds ${now}"
-    echo "# HELP engineer_keys_sync_last_run_success 1 when the last run applied the roster, 0 when it failed."
-    echo "# TYPE engineer_keys_sync_last_run_success gauge"
-    echo "engineer_keys_sync_last_run_success ${success}"
-    if [[ -n "${previous_success}" ]]; then
-      echo "# HELP engineer_keys_sync_last_success_timestamp_seconds Unix time of the last run that applied the roster."
-      echo "# TYPE engineer_keys_sync_last_success_timestamp_seconds gauge"
-      echo "engineer_keys_sync_last_success_timestamp_seconds ${previous_success}"
-    fi
-    if [[ -n "${ROSTER_VERSION}" ]]; then
-      echo "# HELP engineer_keys_sync_roster_version SSM parameter version of the roster last read."
-      echo "# TYPE engineer_keys_sync_roster_version gauge"
-      echo "engineer_keys_sync_roster_version ${ROSTER_VERSION}"
-    fi
-    if [[ -n "${KEY_COUNT}" ]]; then
-      echo "# HELP engineer_keys_sync_keys Public keys in the managed roster file."
-      echo "# TYPE engineer_keys_sync_keys gauge"
-      echo "engineer_keys_sync_keys ${KEY_COUNT}"
-    fi
-  } >"${staging}" || { rm -f "${staging}"; log "metrics write failed"; return 0; }
+  if ! printf '%s' "${payload}" >"${staging}" || [[ ! -s "${staging}" ]]; then
+    rm -f "${staging}"
+    log "metrics write failed, previous metrics kept"
+    return 0
+  fi
   if ! chmod 0644 "${staging}"; then
     rm -f "${staging}"
     log "metrics chmod failed"
@@ -163,7 +220,7 @@ engineers = roster.get("engineers")
 if not isinstance(engineers, list):
     sys.exit(2)
 for slug in engineers:
-    if not isinstance(slug, str) or not pattern.match(slug):
+    if not isinstance(slug, str) or not pattern.fullmatch(slug):
         sys.exit(2)
 print(f"VERSION={parameter['Version']}")
 for slug in sorted(set(engineers)):
@@ -173,45 +230,83 @@ PY
 
 # Fetches one slug's .pub, validates every line, and appends normalised
 # "<type> <blob> <slug>" lines to the staging file. Prints the number of keys
-# appended. Returns 1 on any problem, including a failed write.
+# appended. Returns 4 when the feed answers 404 (the slug is gone upstream),
+# 1 on any other fetch or validation problem, including a failed write.
 append_slug_keys() {
   local slug="$1"
   local staging="$2"
-  local url fetched line type blob key_count=0
+  local url fetched validated code line type blob key_count=0
   # shellcheck disable=SC2059  # the template is the format string by design
   url="$(printf "${KEY_URL_TEMPLATE}" "${slug}")"
   fetched="$(mktemp)" || { log "mktemp failed"; return 1; }
-  if ! curl -fsS --max-time 20 --retry 2 --retry-delay 2 -o "${fetched}" "${url}"; then
-    rm -f "${fetched}"
-    log "fetch failed for ${slug}"
+  # Lines land in a per-slug file first and reach the shared staging file only
+  # once every line of the feed validated. A slug that fails on its second key
+  # therefore leaves nothing behind and takes the carry path cleanly.
+  validated="$(mktemp)" || { rm -f "${fetched}"; log "mktemp failed"; return 1; }
+  code="$(curl -sS --max-time 20 --retry 2 --retry-delay 2 -o "${fetched}" -w '%{http_code}' "${url}" 2>/dev/null)" || code="000"
+  if [[ "${code}" == "404" ]]; then
+    rm -f "${fetched}" "${validated}"
+    log "feed has no key for ${slug} (404)"
+    return 4
+  fi
+  if [[ "${code}" != "200" ]]; then
+    rm -f "${fetched}" "${validated}"
+    log "fetch failed for ${slug} (http ${code})"
     return 1
   fi
+  local reason=""
   while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
     [[ -z "${line}" ]] && continue
     if [[ ! "${line}" =~ ${KEY_TYPE_PATTERN} ]]; then
-      rm -f "${fetched}"
-      log "malformed key line for ${slug}"
-      return 1
+      reason="malformed key line for ${slug}"
+      break
     fi
     if ! ssh-keygen -lf <(printf '%s\n' "${line}") >/dev/null 2>&1; then
-      rm -f "${fetched}"
-      log "key rejected by ssh-keygen for ${slug}"
-      return 1
+      reason="key rejected by ssh-keygen for ${slug}"
+      break
     fi
     read -r type blob _ <<<"${line}"
-    if ! printf '%s %s %s\n' "${type}" "${blob}" "${slug}" >>"${staging}"; then
-      rm -f "${fetched}"
-      log "write to staging failed for ${slug}"
-      return 1
+    if ! printf '%s %s %s\n' "${type}" "${blob}" "${slug}" >>"${validated}"; then
+      reason="write of the validated keys failed for ${slug}"
+      break
     fi
     key_count=$((key_count + 1))
   done <"${fetched}"
   rm -f "${fetched}"
-  if [[ "${key_count}" -eq 0 ]]; then
-    log "no key served for ${slug}"
+  if [[ -z "${reason}" && "${key_count}" -eq 0 ]]; then
+    reason="no key served for ${slug}"
+  fi
+  if [[ -n "${reason}" ]]; then
+    rm -f "${validated}"
+    log "${reason}"
     return 1
   fi
+  if ! cat "${validated}" >>"${staging}"; then
+    rm -f "${validated}"
+    log "write to staging failed for ${slug}"
+    return 1
+  fi
+  rm -f "${validated}"
   echo "${key_count}"
+}
+
+# Copies the lines the published file already holds for one slug into the
+# staging file and prints how many. Zero is a valid answer (a slug that never
+# had keys stays absent). Returns 1 only when the copy itself fails.
+carry_previous_keys() {
+  local slug="$1"
+  local staging="$2"
+  local line type blob comment count=0
+  [[ -f "${KEYS_FILE}" ]] || { echo 0; return 0; }
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" ]] && continue
+    read -r type blob comment _ <<<"${line}"
+    [[ "${comment}" == "${slug}" ]] || continue
+    printf '%s %s %s\n' "${type}" "${blob}" "${slug}" >>"${staging}" || return 1
+    count=$((count + 1))
+  done <"${KEYS_FILE}"
+  echo "${count}"
 }
 
 # Publishes the staged roster file atomically after verifying its content.
@@ -228,6 +323,10 @@ publish_keys_file() {
   after="$(sha256_of "${staging}")"
   if [[ "${before}" == "${after}" ]]; then
     rm -f "${staging}"
+    # Same content, but StrictModes ignores a group-writable or non-root file
+    # without a word, so the mode and owner are re-asserted every run.
+    chmod 0644 "${KEYS_FILE}" || { log "chmod on ${KEYS_FILE} failed"; return 1; }
+    own root "${KEYS_FILE}" || { log "chown on ${KEYS_FILE} failed"; return 1; }
     KEYS_STATE="unchanged"
     return 0
   fi
@@ -273,14 +372,14 @@ ensure_dropin() {
   local previous had_previous=0 staging
   previous="$(mktemp)" || { log "mktemp failed"; return 1; }
   if [[ -f "${DROPIN_FILE}" ]]; then
-    cp -p "${DROPIN_FILE}" "${previous}" || { log "backup of the drop-in failed"; return 1; }
+    cp -p "${DROPIN_FILE}" "${previous}" || { rm -f "${previous}"; log "backup of the drop-in failed"; return 1; }
     had_previous=1
   fi
-  staging="$(mktemp -p "${DROPIN_DIR}")" || { log "mktemp in ${DROPIN_DIR} failed"; return 1; }
-  printf '%s\n' "${DROPIN_CONTENT}" >"${staging}" || { log "write of the drop-in failed"; return 1; }
-  chmod 0644 "${staging}" || { log "chmod on the drop-in failed"; return 1; }
-  own root "${staging}" || { log "chown on the drop-in failed"; return 1; }
-  mv -f "${staging}" "${DROPIN_FILE}" || { log "rename of the drop-in failed"; return 1; }
+  staging="$(mktemp -p "${DROPIN_DIR}")" || { rm -f "${previous}"; log "mktemp in ${DROPIN_DIR} failed"; return 1; }
+  printf '%s\n' "${DROPIN_CONTENT}" >"${staging}" || { rm -f "${previous}" "${staging}"; log "write of the drop-in failed"; return 1; }
+  chmod 0600 "${staging}" || { rm -f "${previous}" "${staging}"; log "chmod on the drop-in failed"; return 1; }
+  own root "${staging}" || { rm -f "${previous}" "${staging}"; log "chown on the drop-in failed"; return 1; }
+  mv -f "${staging}" "${DROPIN_FILE}" || { rm -f "${previous}" "${staging}"; log "rename of the drop-in failed"; return 1; }
   if ! sshd -t; then
     restore_dropin "${previous}" "${had_previous}"
     log "sshd rejected the configuration with the drop-in, previous state restored"
@@ -319,28 +418,63 @@ imds_key_pairs() {
 }
 
 # One-time prune of the legacy authorized_keys down to the EC2 key pair lines.
+# "Nothing to remove" (a fresh instance that never had engineer keys, or no
+# legacy file at all) counts as done, so a rebuilt master never sits red on a
+# prune that has no work. Blocked only when removing would take away the last
+# line or instance metadata cannot say which line is the key pair.
 prune_legacy() {
   if [[ -f "${PRUNE_MARKER}" ]]; then
     PRUNE_STATE="already"
+    LEGACY_PRUNED=1
+    return 0
+  fi
+  if [[ ! -f "${LEGACY_FILE}" ]] || ! grep -q . "${LEGACY_FILE}"; then
+    date -u +%Y-%m-%dT%H:%M:%SZ >"${PRUNE_MARKER}" || { log "write of the prune marker failed"; return 1; }
+    PRUNE_STATE="nothing"
+    LEGACY_PRUNED=1
     return 0
   fi
   [[ -f "${KEYS_FILE}" ]] || { log "prune blocked, roster file missing"; return 1; }
   dropin_is_live || { log "prune blocked, sshd has not confirmed ${KEYS_FILE}"; return 1; }
-  [[ -f "${LEGACY_FILE}" ]] || { log "prune blocked, ${LEGACY_FILE} missing"; return 1; }
   local key_pairs
   key_pairs="$(imds_key_pairs)" || { log "prune blocked, instance metadata unavailable"; return 1; }
-  [[ -n "${key_pairs}" ]] || { log "prune blocked, instance metadata reports no key pair"; return 1; }
+  [[ -n "${key_pairs}" ]] || { log "prune blocked, instance metadata reports no key pair while ${LEGACY_FILE} has lines"; return 1; }
 
-  local staging line type blob kept=0
+  # Every line that goes must be a key the roster file now serves. Anything
+  # else (a hand-added key, an engineer the seeding missed) blocks the prune
+  # and is named, so the one step that removes access never removes it from
+  # somebody the roster does not know about.
+  local staging line type blob comment fingerprint stranger="" kept=0 removed=0
   staging="$(mktemp -p "$(dirname "${LEGACY_FILE}")")" || { log "mktemp next to ${LEGACY_FILE} failed"; return 1; }
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
-    read -r type blob _ <<<"${line}"
+    read -r type blob comment <<<"${line}"
     if grep -qxF -- "${type} ${blob}" <<<"${key_pairs}"; then
       printf '%s\n' "${line}" >>"${staging}" || { rm -f "${staging}"; log "write to the prune staging failed"; return 1; }
       kept=$((kept + 1))
+      continue
     fi
+    fingerprint="$(ssh-keygen -lf <(printf '%s %s\n' "${type}" "${blob}") 2>/dev/null | awk '{print $2}')"
+    fingerprint="${fingerprint:-unparseable}"
+    if ! grep -qF -- " ${blob} " "${KEYS_FILE}"; then
+      stranger="${fingerprint} ${comment:-(no comment)}"
+      break
+    fi
+    log "prune removes ${fingerprint} ${comment:-(no comment)}, now served by ${KEYS_FILE}"
+    removed=$((removed + 1))
   done <"${LEGACY_FILE}"
+  if [[ -n "${stranger}" ]]; then
+    rm -f "${staging}"
+    log "prune blocked, ${LEGACY_FILE} holds a key the roster does not serve: ${stranger}. Add its owner to the roster or remove the line by hand"
+    return 1
+  fi
+  if [[ "${removed}" -eq 0 ]]; then
+    rm -f "${staging}"
+    date -u +%Y-%m-%dT%H:%M:%SZ >"${PRUNE_MARKER}" || { log "write of the prune marker failed"; return 1; }
+    PRUNE_STATE="nothing"
+    LEGACY_PRUNED=1
+    return 0
+  fi
   if [[ "${kept}" -eq 0 || "$(grep -c . "${staging}" || :)" -ne "${kept}" ]]; then
     rm -f "${staging}"
     log "prune blocked, no key pair line found in ${LEGACY_FILE}"
@@ -358,19 +492,29 @@ prune_legacy() {
   fi
   chmod 0600 "${staging}" "${backup}" || { rm -f "${staging}"; log "chmod on the pruned file failed"; return 1; }
   own "${LOGIN_USER}" "${staging}" "${backup}" || { rm -f "${staging}"; log "chown on the pruned file failed"; return 1; }
-  mv -f "${staging}" "${LEGACY_FILE}" || { log "rename into ${LEGACY_FILE} failed"; return 1; }
+  mv -f "${staging}" "${LEGACY_FILE}" || { rm -f "${staging}"; log "rename into ${LEGACY_FILE} failed"; return 1; }
   date -u +%Y-%m-%dT%H:%M:%SZ >"${PRUNE_MARKER}" || { log "write of the prune marker failed"; return 1; }
-  log "legacy authorized_keys pruned to ${kept} key pair line(s), backup ${backup}"
+  log "legacy authorized_keys pruned to ${kept} key pair line(s), ${removed} removed, backup ${backup}"
   PRUNE_STATE="done"
+  LEGACY_PRUNED=1
 }
 
 main() {
   mkdir -p "$(dirname "${LOCK_FILE}")" || die "cannot create the lock directory"
   exec 9>"${LOCK_FILE}"
-  flock -w 30 9 || die "another sync holds ${LOCK_FILE}"
+  # An operator trigger can land while the scheduled run is still fetching.
+  # The run holding the lock reports for both, so this one leaves quietly and
+  # touches neither the files nor the metrics.
+  if ! flock -w "${LOCK_WAIT}" 9; then
+    log "another sync holds ${LOCK_FILE}, leaving it to report"
+    exit 0
+  fi
 
-  install -d -m 0755 "${KEYS_DIR}" "${DROPIN_DIR}" || die "cannot create ${KEYS_DIR}"
-  own root "${KEYS_DIR}" || die "cannot chown ${KEYS_DIR}"
+  # sshd reads the keys directory as the login user, so it is world-readable.
+  # sshd_config.d ships as 0700 from the openssh-server package and stays so.
+  install -d -m 0755 "${KEYS_DIR}" || die "cannot create ${KEYS_DIR}"
+  install -d -m 0700 "${DROPIN_DIR}" || die "cannot create ${DROPIN_DIR}"
+  own root "${KEYS_DIR}" "${DROPIN_DIR}" || die "cannot chown ${KEYS_DIR}"
 
   local roster version slugs=()
   roster="$(read_roster)"
@@ -379,23 +523,54 @@ main() {
   ROSTER_VERSION="${version}"
   mapfile -t slugs < <(tail -n +2 <<<"${roster}")
 
-  local staging slug added key_count=0
+  local staging slug added carried rc key_count=0 missing_count=0
   staging="$(mktemp -p "${KEYS_DIR}")" || die "mktemp in ${KEYS_DIR} failed"
   for slug in "${slugs[@]}"; do
-    if ! added="$(append_slug_keys "${slug}" "${staging}")"; then
-      rm -f "${staging}"
-      die "roster version ${version} not applied, last good file kept"
+    rc=0
+    added="$(append_slug_keys "${slug}" "${staging}")" || rc=$?
+    if [[ "${rc}" -eq 0 ]]; then
+      key_count=$((key_count + added))
+      continue
     fi
-    key_count=$((key_count + added))
+    if [[ "${rc}" -eq 4 ]]; then
+      # IT no longer publishes this slug. Honour it: no keys, reported so the
+      # roster gets cleaned up, the run stays green.
+      MISSING_SLUGS="${MISSING_SLUGS:+${MISSING_SLUGS},}${slug}"
+      missing_count=$((missing_count + 1))
+      continue
+    fi
+    # The feed failed for this slug only. Keep the keys it already has in the
+    # published file (a roster removal never depends on this path), report the
+    # run as degraded, and let the other slugs converge.
+    carried="$(carry_previous_keys "${slug}" "${staging}")" || { rm -f "${staging}"; die "roster version ${version} not applied, could not carry the previous keys of ${slug}"; }
+    key_count=$((key_count + carried))
+    DEGRADED_SLUGS="${DEGRADED_SLUGS:+${DEGRADED_SLUGS},}${slug}"
+    log "degraded: ${slug} keeps its ${carried} previous key(s)"
   done
+  if [[ "${#slugs[@]}" -gt 0 && "${missing_count}" -eq "${#slugs[@]}" ]]; then
+    rm -f "${staging}"
+    die "roster version ${version} not applied, the feed answered 404 for every slug, last good file kept"
+  fi
 
   publish_keys_file "${staging}" "${key_count}" || { rm -f "${staging}"; die "roster version ${version} not published, last good file kept"; }
   KEY_COUNT="${key_count}"
-  ensure_dropin || die "sshd drop-in not live"
-  prune_legacy || die "legacy prune pending"
+  ensure_dropin || die "roster published, sshd drop-in not live"
+  # The one-time prune removes whatever static access the legacy file still
+  # grants, so it only runs after a run that applied the roster in full.
+  if [[ -n "${DEGRADED_SLUGS}" ]]; then
+    PRUNE_STATE="deferred"
+  else
+    LEGACY_PRUNED=0
+    prune_legacy || die "roster published, legacy prune pending"
+  fi
 
+  if [[ -n "${DEGRADED_SLUGS}" ]]; then
+    write_metrics 0
+    log "FAIL result=degraded parameter_version=${version} engineers=${#slugs[@]} keys=${key_count} degraded_slugs=${DEGRADED_SLUGS} missing_slugs=${MISSING_SLUGS:-none} sha256=$(sha256_of "${KEYS_FILE}") file=${KEYS_STATE} sshd=${DROPIN_STATE} prune=${PRUNE_STATE}"
+    exit 1
+  fi
   write_metrics 1
-  log "result=ok parameter_version=${version} engineers=${#slugs[@]} keys=${key_count} sha256=$(sha256_of "${KEYS_FILE}") file=${KEYS_STATE} sshd=${DROPIN_STATE} prune=${PRUNE_STATE}"
+  log "result=ok parameter_version=${version} applied_version=${version} engineers=${#slugs[@]} keys=${key_count} missing_slugs=${MISSING_SLUGS:-none} sha256=$(sha256_of "${KEYS_FILE}") file=${KEYS_STATE} sshd=${DROPIN_STATE} prune=${PRUNE_STATE}"
 }
 
 main "$@"

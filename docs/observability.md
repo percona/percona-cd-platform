@@ -260,28 +260,57 @@ usual `master` label:
 
 | Metric | Meaning |
 |---|---|
-| `engineer_keys_sync_last_run_timestamp_seconds` | When the reconciler last ran, success or not |
-| `engineer_keys_sync_last_run_success` | 1 when the roster was applied, 0 when the run failed (last good keys kept) |
-| `engineer_keys_sync_last_success_timestamp_seconds` | When the roster was last applied, survives failed runs |
-| `engineer_keys_sync_roster_version` | SSM parameter version last read |
+| `engineer_keys_sync_last_run_timestamp_seconds` | When the reconciler last ran, whatever the outcome |
+| `engineer_keys_sync_last_run_success` | 1 when the run applied the roster in full, 0 when it failed before publishing (nothing changed), ran degraded, or failed after publishing (sshd drop-in, prune) |
+| `engineer_keys_sync_last_success_timestamp_seconds` | When the roster was last applied in full, survives failed runs |
+| `engineer_keys_sync_roster_version` | SSM parameter version last applied in full, never the version last read |
 | `engineer_keys_sync_keys` | Public keys in the managed roster file |
+| `engineer_keys_sync_degraded_slugs` | Slugs whose feed failed transiently on the last run and kept their previous keys |
+| `engineer_keys_sync_slugs_missing` | Slugs the feed answers 404 for (IT no longer publishes them), installed with no key |
+| `engineer_keys_sync_legacy_pruned` | 1 once the one-time prune of `~ec2-user/.ssh/authorized_keys` is done on this master |
+| `engineer_keys_sync_keyset_info{keyset_sha256}` | Digest of the installed key file, one series per key set |
 
-Alerts in the jenkins-uptime addon: `EngineerKeysSyncFailing` (a run has
-failed for an hour), `EngineerKeysSyncStale` (no success for two hours) and
-`EngineerKeysSyncMissing` (host metrics arrive, sync metric never did). A
-failing sync never removes access, so the pressure is a possibly pending
-revocation, not an outage.
+Alerts in the jenkins-uptime addon, all `warning` unless noted:
+
+| Alert | Fires when | Means |
+|---|---|---|
+| `EngineerKeysSyncFailing` | `last_run_success == 0` for 1h | The run did not apply the roster in full, read the association output for the stage word (`result=`, `sshd=`, `prune=`) |
+| `EngineerKeysSyncStale` | no full success for 2h | Four scheduled runs failed, the association stopped, or SSM and percona.com are unreachable |
+| `EngineerKeysSyncMissing` | host metrics arrive, sync metric never did, 2h | Association missing for this master, or Alloy has no textfile collector (a master rebuilt before the user-data pin of the observability script moved past the collector) |
+| `EngineerKeysSyncDegraded` | `degraded_slugs > 0` for 1h | A slug's feed keeps failing, that slug runs on its previous keys, everybody else converged |
+| `EngineerKeysSlugMissing` | `slugs_missing > 0` for 24h | The roster names a slug percona.com no longer publishes, remove it with `just engineers-set` |
+| `EngineerKeysVersionSkew` | a master lags the fleet's applied version for 1h | A revocation may not have landed on that master, trigger the association |
+| `EngineerKeysLegacyPrunePending` | `legacy_pruned == 0` for 2h | Legacy keys may still grant access, see the prune notes below |
+| `EngineerKeysRosterChanged` (info) | roster version changed in the last hour | Expect a matching `PutParameter` in CloudTrail |
+| `EngineerKeysFeedChanged` (info) | the key set changed with no roster change in 6h | IT rotated or removed a key upstream, confirm it is expected |
+
+A failing sync never removes access, so the pressure is a possibly pending
+revocation, not an outage. The Alertmanager has no receiver yet (ADR 0031), so
+these show on the dashboards and in Alertmanager and page nobody.
 
 To act on one:
 
 ```sh
-just engineers-status                                  # roster version, per-master association status
+just engineers-status                                  # roster version, per-master status and applied version
 just ssm-run <inst> 'journalctl -t engineer-keys-sync --no-pager -o cat | tail -5'
 ```
 
-The association output holds the same lines. A fetch failure names the slug
-whose percona.com key is missing or malformed, and the fix is a roster edit
-through `just engineers-set`, never a host edit.
+The association output holds the same lines. Each run ends with one summary
+line, `result=ok` or `result=degraded`, followed by `parameter_version`,
+`applied_version`, `degraded_slugs`, `missing_slugs`, `file=`, `sshd=` and
+`prune=`.
+
+Fixes are roster edits through `just engineers-set`, never host edits: the
+roster file is rewritten from the parameter every run, so a key removed from it
+by hand is back within 30 minutes. Two cases need a decision on the host:
+
+- `prune blocked, ... holds a key the roster does not serve` names a key in
+  `~ec2-user/.ssh/authorized_keys` that is neither the EC2 key pair nor served
+  by the roster. The roster file is live regardless. Either add its owner to
+  the roster, or remove that line by hand, and the next run prunes.
+- `prune=deferred` on a degraded run is normal: the prune waits for a run that
+  applied every slug, so the degraded engineer does not lose the legacy key
+  before the roster key arrived. It resolves itself when the feed recovers.
 
 ## Related decisions
 

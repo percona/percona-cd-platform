@@ -104,17 +104,26 @@ authenticates. Two ways to satisfy it:
   `send-ssh-public-key` line and point `IdentityFile` at that key; the shared
   `percona-jenkins.pem` is the fallback. Roster changes go through
   `just engineers-set`, never through Terraform. Note the key TYPE must match
-  exactly. Check yours is present (the blob is read locally first, so a missing
-  local key file fails instead of matching everything):
+  exactly. Check yours is present (one chain, so a missing local key file
+  stops before the remote check instead of matching everything):
 
   ```sh
-  blob="$(awk 'NF >= 2 {print $2; exit}' ~/.ssh/id_rsa.pub)" && [ -n "$blob" ] || echo "no local public key"
-  just ssm-run psmdb "awk '{print \$2}' /etc/ssh/authorized_keys.d/ec2-user.engineers | grep -qxF '$blob' && echo provisioned || echo MISSING"
+  blob="$(awk 'NF >= 2 {print $2; exit}' ~/.ssh/id_rsa.pub)" && [ -n "$blob" ] \
+    && just ssm-run psmdb "awk '{print \$2}' /etc/ssh/authorized_keys.d/ec2-user.engineers | grep -qxF '$blob' && echo provisioned || echo MISSING"
   ```
 
 > The pure-shell paths (`just ssh` / `just ssm` / `just ssm-run`) need NO key at
 > all; they run as the SSM `ssm-user` (root via `sudo`). A key is only needed
 > for `ssh`/`scp`/`rsync` file transfer.
+
+**Break-glass when SSM and the EC2 API are both down.** That is the case the
+static key exists for. Reach port 22 on the master's current public IP from a
+CIDR in the `master-ssh` allowlist (both allowlists live in SSM, but the
+security group already holds the last applied list), with the key percona.com
+publishes for your slug or the shared `percona-jenkins.pem`. The roster file on
+the master is whatever the last successful sync wrote, so a roster change made
+during the outage is not on the host yet. Nothing in that path needs SSM, the
+EC2 API, or percona.com to be reachable at login time.
 
 ### 4. Commands
 

@@ -266,12 +266,32 @@ engineers-status: _require-aws-profile
     names = ", ".join(engineers) if engineers else "(none)"
     print("parameter version " + str(parameter["Version"]) + ", " + str(len(engineers)) + " engineers: " + names)
     '
-    printf '%-40s %-13s %-8s %s\n' ASSOCIATION REGION STATUS LAST-EXECUTION
+    # APPLIED reads the reconciler's own summary line out of the latest execution
+    # output, so the column proves the version a master applied, not just that
+    # a run happened.
+    printf '%-40s %-13s %-8s %-8s %s\n' ASSOCIATION REGION STATUS APPLIED LAST-EXECUTION
     for region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
       rows="$(aws ssm list-associations --region "$region" \
-        --query "Associations[?AssociationName && ends_with(AssociationName, '-engineer-keys-sync')].[AssociationName,Overview.Status,LastExecutionDate]" \
+        --query "Associations[?AssociationName && ends_with(AssociationName, '-engineer-keys-sync')].[AssociationId,AssociationName,Overview.Status,LastExecutionDate]" \
         --output text)"
-      awk -v region="$region" 'NF {printf "%-40s %-13s %-8s %s\n", $1, region, $2, $3}' <<< "$rows"
+      while IFS=$'\t' read -r association_id association_name association_status last_execution; do
+        [[ -n "$association_id" ]] || continue
+        applied="?"
+        execution_id="$(aws ssm describe-association-executions --region "$region" --association-id "$association_id" \
+          --query 'AssociationExecutions | sort_by(@, &CreatedTime) | [-1].ExecutionId' --output text 2>/dev/null || echo "")"
+        if [[ -n "$execution_id" && "$execution_id" != "None" ]]; then
+          target="$(aws ssm describe-association-execution-targets --region "$region" --association-id "$association_id" \
+            --execution-id "$execution_id" --query 'AssociationExecutionTargets[0].[ResourceId,OutputSource.OutputSourceId]' --output text 2>/dev/null || echo "")"
+          read -r instance_id command_id <<< "$target"
+          if [[ -n "${command_id:-}" && "$command_id" != "None" ]]; then
+            summary="$(aws ssm get-command-invocation --region "$region" --command-id "$command_id" --instance-id "$instance_id" \
+              --query 'StandardErrorContent' --output text 2>/dev/null || echo "")"
+            applied="$(grep -o 'applied_version=[0-9]*' <<< "$summary" | tail -1 | cut -d= -f2)"
+            applied="${applied:-none}"
+          fi
+        fi
+        printf '%-40s %-13s %-8s %-8s %s\n' "$association_name" "$region" "$association_status" "$applied" "$last_execution"
+      done <<< "$rows"
     done
 
 # Usage: just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
@@ -303,28 +323,72 @@ engineers-set slugs: _require-aws-profile
       valid_slugs+=("$slug")
     done
     if [[ "${#valid_slugs[@]}" -eq 0 ]]; then
+      if [[ -n "$raw_slugs" ]]; then
+        echo "no valid slug in the input, pass an empty string to revoke every engineer key" >&2
+        exit 2
+      fi
+      if [[ "${REVOKE_ALL:-}" != "1" ]]; then
+        echo "an empty roster revokes every engineer key on every master within minutes. Re-run with REVOKE_ALL=1 to confirm." >&2
+        exit 2
+      fi
       value='{"schema":1,"engineers":[]}'
     else
       value="$(python3 -c 'import json,sys; print(json.dumps({"schema": 1, "engineers": sorted(set(sys.argv[1:]))}, separators=(",", ":")))' "${valid_slugs[@]}")"
     fi
+    # A typo in a slug would otherwise persist as a permanently missing slug
+    # (no key, warning after a day). FEED_CHECK=0 skips this during a
+    # percona.com outage, when the write is a revocation that cannot wait.
+    if [[ "${FEED_CHECK:-1}" == "1" ]]; then
+      for slug in "${valid_slugs[@]}"; do
+        key_url="https://www.percona.com/get/engineer/KEY/${slug}.pub"
+        code="$(curl -sI --max-time 10 -o /dev/null -w '%{http_code}' "$key_url")" || code="000"
+        if [[ "$code" != "200" ]]; then
+          echo "percona.com answers HTTP $code for $key_url, roster not written. Fix the slug, or run with FEED_CHECK=0 during a feed outage." >&2
+          exit 2
+        fi
+      done
+    fi
     echo "current:"
-    aws ssm get-parameter --name "$param" --region "$region" --query Parameter.Value --output text
+    if current="$(aws ssm get-parameter --name "$param" --region "$region" --query Parameter.Value --output text 2>/dev/null)"; then
+      echo "$current"
+      put_args=(--overwrite)
+    else
+      echo "(absent, creating with the platform tags)"
+      put_args=(--tags "Key=iit-billing-tag,Value={{cluster}}" "Key=repo,Value=github.com/Percona/percona-cd-platform")
+    fi
     echo "new:"
     echo "$value"
-    version="$(aws ssm put-parameter --name "$param" --type String --value "$value" --overwrite \
+    version="$(aws ssm put-parameter --name "$param" --type String --tier Standard --value "$value" "${put_args[@]}" \
       --region "$region" --query Version --output text)"
     echo "saved as version $version. Triggering the engineer-keys associations:"
+    trigger_failures=0
+    triggered=0
+    expected="$(grep -l 'engineer_roster' {{justfile_directory()}}/terraform/master-*.tf | wc -l | tr -d ' ')"
     for association_region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
-      discovered="$(aws ssm list-associations --region "$association_region" \
+      if ! discovered="$(aws ssm list-associations --region "$association_region" \
         --query "Associations[?AssociationName && ends_with(AssociationName, '-engineer-keys-sync')].AssociationId" \
-        --output text)" || { echo "association discovery failed in $association_region, roster saved but not triggered there" >&2; exit 1; }
+        --output text)"; then
+        echo "  $association_region: association discovery failed, the scheduled run will pick the roster up" >&2
+        trigger_failures=$((trigger_failures + 1))
+        continue
+      fi
       mapfile -t association_ids < <(tr '\t' '\n' <<< "$discovered" | sed '/^$/d')
       if [[ "${#association_ids[@]}" -gt 0 ]]; then
-        aws ssm start-associations-once --region "$association_region" --association-ids "${association_ids[@]}"
-        printf '  %s: %d association(s) triggered\n' "$association_region" "${#association_ids[@]}"
+        if aws ssm start-associations-once --region "$association_region" --association-ids "${association_ids[@]}"; then
+          printf '  %s: %d association(s) triggered\n' "$association_region" "${#association_ids[@]}"
+          triggered=$((triggered + ${#association_ids[@]}))
+        else
+          echo "  $association_region: trigger failed, the scheduled run will pick the roster up" >&2
+          trigger_failures=$((trigger_failures + 1))
+        fi
       fi
     done
-    echo "check convergence: just engineers-status"
+    echo "triggered $triggered of $expected masters that opt in (terraform/master-*.tf)"
+    echo "check convergence: just engineers-status (every master should report applied version $version)"
+    if [[ "$trigger_failures" -gt 0 || "$triggered" -lt "$expected" ]]; then
+      echo "not every master was triggered, the ones left out converge on their 30 minute schedule" >&2
+      exit 1
+    fi
 
 # ---------- gitops / yaml ----------
 yaml-lint:

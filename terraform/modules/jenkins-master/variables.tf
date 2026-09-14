@@ -248,6 +248,11 @@ variable "engineer_roster" {
     sync_schedule    = optional(string, "rate(30 minutes)")
   })
   default = null
+
+  validation {
+    condition     = var.engineer_roster == null || var.purchasing_option == "on-demand"
+    error_message = "engineer_roster needs an on-demand master. The association targets one instance id, which a SpotFleet master does not have, so a spot master would silently get no engineer keys."
+  }
 }
 
 variable "init_groovy_sync_schedule" {

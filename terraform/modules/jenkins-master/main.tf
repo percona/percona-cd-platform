@@ -274,7 +274,7 @@ resource "aws_ssm_association" "init_groovy_sync" {
 # needs a host touch. The roster VALUE is read on the host from SSM Parameter
 # Store, never by Terraform, so it enters neither the repo nor the state.
 locals {
-  engineer_keys_sync_enabled = var.engineer_roster != null && var.purchasing_option == "on-demand"
+  engineer_keys_sync_enabled = var.engineer_roster != null
   engineer_keys_sync_script  = file("${path.module}/engineer-keys-sync.sh")
   engineer_keys_sync_sha256  = sha256(local.engineer_keys_sync_script)
 }
@@ -282,7 +282,10 @@ locals {
 resource "aws_s3_object" "engineer_keys_sync" {
   count = local.engineer_keys_sync_enabled ? 1 : 0
 
-  bucket  = aws_s3_bucket.init_config[0].id
+  # one() yields null instead of an index error when the bucket is absent, so
+  # the precondition below is what a misconfigured master sees, not a cryptic
+  # "Invalid index" on this line.
+  bucket  = one(aws_s3_bucket.init_config[*].id)
   key     = "scripts/engineer-keys-sync.sh"
   content = local.engineer_keys_sync_script
   etag    = md5(local.engineer_keys_sync_script)
@@ -291,7 +294,7 @@ resource "aws_s3_object" "engineer_keys_sync" {
 
   lifecycle {
     precondition {
-      condition     = length(local.init_groovy_all) > 0
+      condition     = length(aws_s3_bucket.init_config) > 0
       error_message = "engineer_roster needs the init-config bucket, which exists only for masters with init.groovy.d files."
     }
   }
@@ -320,7 +323,7 @@ resource "aws_ssm_association" "engineer_keys_sync" {
       "set -eu",
       "STAGE=$(mktemp -d)",
       "trap 'rm -rf $STAGE' EXIT",
-      "aws s3 cp s3://${aws_s3_bucket.init_config[0].id}/${aws_s3_object.engineer_keys_sync[0].key} $STAGE/sync.sh --region ${data.aws_region.current.region}",
+      "aws s3 cp s3://${aws_s3_object.engineer_keys_sync[0].bucket}/${aws_s3_object.engineer_keys_sync[0].key} $STAGE/sync.sh --region ${data.aws_region.current.region}",
       "echo \"${local.engineer_keys_sync_sha256}  $STAGE/sync.sh\" | sha256sum -c -",
       "ROSTER_PARAMETER=${var.engineer_roster.parameter_name} ROSTER_REGION=${var.engineer_roster.parameter_region} bash $STAGE/sync.sh",
     ])

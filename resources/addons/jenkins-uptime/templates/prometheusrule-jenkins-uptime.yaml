@@ -111,12 +111,15 @@ spec:
           annotations:
             summary: The engineer SSH roster sync has been failing on {{ "{{" }} $labels.master {{ "}}" }} for an hour
             description: >-
-              The roster in SSM was not applied. The last good key file is
-              still in place, so nobody lost access, but a revocation may be
-              pending. Read the association output (just engineers-status,
-              then the SSM association execution) and the engineer-keys-sync
-              journal on the master. Runbook: docs/observability.md, Engineer
-              keys sync.
+              The last run did not apply the roster in full. Before the roster
+              file is published nothing changes on the host, a degraded run
+              publishes what it could and keeps the failing slugs' previous
+              keys, and a failure after publication names its stage (sshd
+              reload, prune). Nobody loses access from a failed run, but a
+              revocation may be pending. Read the association output (just
+              engineers-status, then the SSM association execution) and the
+              engineer-keys-sync journal on the master. Runbook:
+              docs/observability.md, Engineer keys sync.
         - alert: EngineerKeysSyncStale
           expr: time() - max by (master) (engineer_keys_sync_last_success_timestamp_seconds) > 7200
           for: 15m
@@ -140,5 +143,79 @@ spec:
               The master-side Alloy runs but no engineer-keys-sync metric has
               arrived. Either the association was never created for this
               master (check terraform/master-<inst>.tf opts in) or Alloy lacks
-              the textfile collector (re-run the pinned observability script).
+              the textfile collector: a master rebuilt while the user-data pin
+              of install-master-observability.sh predates the collector needs
+              the current scripts/install-master-observability.sh run once.
               Runbook: docs/observability.md, Engineer keys sync.
+        - alert: EngineerKeysSyncDegraded
+          expr: max by (master) (engineer_keys_sync_degraded_slugs) > 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{" }} $labels.master {{ "}}" }} kept previous keys for a slug the feed failed to serve for an hour"
+            description: >-
+              A transient feed failure (timeout, 5xx, malformed body) has
+              lasted an hour for at least one roster slug. That slug keeps the
+              keys it already had, everybody else converged. Check the slug
+              named in the association output and percona.com. Runbook:
+              docs/observability.md, Engineer keys sync.
+        - alert: EngineerKeysSlugMissing
+          expr: max by (master) (engineer_keys_sync_slugs_missing) > 0
+          for: 24h
+          labels:
+            severity: warning
+          annotations:
+            summary: "The roster names a slug percona.com no longer publishes a key for"
+            description: >-
+              The feed answers 404 for a roster slug, so that engineer has no
+              key installed (IT revoked it or the slug is misspelled). Remove
+              the slug from the roster with just engineers-set. Runbook:
+              docs/observability.md, Engineer keys sync.
+        - alert: EngineerKeysVersionSkew
+          expr: max(engineer_keys_sync_roster_version) - on () group_right () engineer_keys_sync_roster_version > 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{" }} $labels.master {{ "}}" }} has not applied the roster version the rest of the fleet runs"
+            description: >-
+              Another master applied a newer roster version an hour ago and
+              this one still reports an older one, so a revocation may not
+              have landed here. Trigger the association (just engineers-set
+              with the current roster) and read its output. Runbook:
+              docs/observability.md, Engineer keys sync.
+        - alert: EngineerKeysLegacyPrunePending
+          expr: max by (master) (engineer_keys_sync_legacy_pruned) == 0
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{" }} $labels.master {{ "}}" }} still carries legacy engineer keys in authorized_keys"
+            description: >-
+              The roster is applied but the one-time prune of the legacy
+              authorized_keys is blocked (sshd has not confirmed the drop-in,
+              instance metadata is unavailable, or no key pair line was
+              found). Until it runs, keys from before this mechanism may still
+              grant access. Runbook: docs/observability.md, Engineer keys sync.
+        # Change visibility. Every legitimate roster change is a PutParameter in
+        # CloudTrail and bumps the version below. A key set that changes with
+        # no version change came from the feed, which is IT rotating or
+        # removing a key, or something worse.
+        - alert: EngineerKeysRosterChanged
+          expr: changes(engineer_keys_sync_roster_version[1h]) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: "Engineer SSH roster changed on {{ "{{" }} $labels.master {{ "}}" }}, expect a matching PutParameter in CloudTrail"
+        - alert: EngineerKeysFeedChanged
+          expr: count by (master) (last_over_time(engineer_keys_sync_keyset_info[6h])) > 1 unless on (master) changes(engineer_keys_sync_roster_version[6h]) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: "The installed engineer key set on {{ "{{" }} $labels.master {{ "}}" }} changed without a roster change"
+            description: >-
+              percona.com served a different key set for the same roster, so a
+              key was rotated or removed upstream. Confirm with the engineer or
+              IT that the change is expected. Runbook: docs/observability.md,
+              Engineer keys sync.

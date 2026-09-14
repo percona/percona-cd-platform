@@ -91,3 +91,13 @@ aws ssm put-parameter --region us-east-1 \
 ```
 
 The parameter holds names, never keys. Keys stay at `https://www.percona.com/get/engineer/KEY/<slug>.pub`.
+
+What a write does, and what the recipe refuses:
+
+- Every slug is checked against percona.com before the parameter is written, so a typo is a refusal, not a slug that sits in the roster with no key. `FEED_CHECK=0 just engineers-set ...` skips that check during a percona.com outage when the write is a revocation that cannot wait.
+- An empty roster (`just engineers-set ""`) revokes every engineer key on every master within minutes and needs `REVOKE_ALL=1`. Input that yields no valid slug is refused outright.
+- The recipe triggers the association in every master region and reports `triggered N of M`. A region whose trigger failed is named and converges on its 30 minute schedule, and the recipe exits non-zero so the shortfall is not missed.
+- On the masters: a slug percona.com answers 404 for is installed with no key and reported as missing (the run stays green, remove the slug). A slug whose feed fails in any other way keeps its previous keys while the rest converge (the run reports degraded). A removal from the roster lands in both cases.
+- `just engineers-status` prints the parameter version and, per master, the association status and the version the last run applied. Every master should show the version the write returned.
+
+Alerts and the reconciler's own contract are in [`../observability.md`](../observability.md), Engineer keys sync.
