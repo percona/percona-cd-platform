@@ -96,7 +96,7 @@ tf-ng-replacement-check:
 # pin matches terraform/locals.tf cleanup_lambda_runtime.
 lambda-test:
     uv run --python 3.14 --with-requirements terraform/lambdas/tests/requirements.txt \
-      python -m pytest terraform/lambdas/tests
+      python -m pytest terraform/lambdas/tests terraform/modules/jenkins-master/tests
 
 # Tail a reaper's dry-run/real decisions. Usage: just lambda-logs ec2-cleanup [since]
 lambda-logs name since="1h": _require-aws-profile
@@ -242,6 +242,74 @@ allowlist-set name cidrs: _require-aws-profile
     aws ssm put-parameter --name "$param" --type StringList \
       --value "$cidrs" --overwrite --region "${AWS_REGION:-us-east-1}"
     echo "saved. Apply it: just tf-plan && just tf-apply"
+
+# ---------- engineer SSH roster (SSM-backed, docs/adr/0046) ----------
+# Fleet roster of engineer slugs whose percona.com keys land on every EC2
+# master as the static break-glass fallback. The value lives only in SSM
+# Parameter Store (CloudTrail-audited), never in git and never in Terraform
+# state. Each master's engineer-keys SSM association picks a put up within 30
+# minutes, and engineers-set triggers the associations right away, so no plan
+# or apply is involved.
+engineers-status: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    param="/{{cluster}}/access/master-ssh-engineers"
+    aws ssm get-parameter --name "$param" --region "${AWS_REGION:-us-east-1}" \
+      --query 'Parameter.[Version,Value]' --output text \
+      | python3 -c 'import json,sys; version,value=sys.stdin.read().split("\t",1); roster=json.loads(value); print(f"parameter version {version.strip()}, {len(roster[\"engineers\"])} engineers: {\", \".join(roster[\"engineers\"]) or \"(none)\"}")'
+    printf '%-40s %-13s %-8s %s\n' ASSOCIATION REGION STATUS LAST-EXECUTION
+    for region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
+      aws ssm list-associations --region "$region" \
+        --query "Associations[?ends_with(AssociationName, '-engineer-keys-sync')].[AssociationName,Overview.Status,LastExecutionDate]" \
+        --output text | awk -v region="$region" 'NF {printf "%-40s %-13s %-8s %s\n", $1, region, $2, $3}'
+    done
+
+# Usage: just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
+# The value is the FULL comma-separated roster, not a delta. An empty string
+# revokes every engineer key fleet-wide on the next association run. Operator
+# input is bound ONCE via quote() into a shell variable (same rule as
+# allowlist-set), and every slug must look like a lowercase percona.com slug.
+engineers-set slugs: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    raw_slugs={{quote(slugs)}}
+    param="/{{cluster}}/access/master-ssh-engineers"
+    region="${AWS_REGION:-us-east-1}"
+    IFS=',' read -r -a candidates <<< "$raw_slugs"
+    valid_slugs=()
+    for candidate in "${candidates[@]}"; do
+      slug="${candidate// /}"
+      if [[ -z "$slug" ]]; then
+        continue
+      fi
+      if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]; then
+        printf 'invalid slug %q (expected a lowercase percona.com slug such as first.last)\n' "$slug" >&2
+        exit 2
+      fi
+      valid_slugs+=("$slug")
+    done
+    if [[ "${#valid_slugs[@]}" -eq 0 ]]; then
+      value='{"schema":1,"engineers":[]}'
+    else
+      value="$(python3 -c 'import json,sys; print(json.dumps({"schema": 1, "engineers": sorted(set(sys.argv[1:]))}, separators=(",", ":")))' "${valid_slugs[@]}")"
+    fi
+    echo "current:"
+    aws ssm get-parameter --name "$param" --region "$region" --query Parameter.Value --output text
+    echo "new:"
+    echo "$value"
+    version="$(aws ssm put-parameter --name "$param" --type String --value "$value" --overwrite \
+      --region "$region" --query Version --output text)"
+    echo "saved as version $version. Triggering the engineer-keys associations:"
+    for association_region in us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1; do
+      mapfile -t association_ids < <(aws ssm list-associations --region "$association_region" \
+        --query "Associations[?ends_with(AssociationName, '-engineer-keys-sync')].AssociationId" \
+        --output text | tr '\t' '\n' | sed '/^$/d')
+      if [[ "${#association_ids[@]}" -gt 0 ]]; then
+        aws ssm start-associations-once --region "$association_region" --association-ids "${association_ids[@]}"
+        printf '  %s: %d association(s) triggered\n' "$association_region" "${#association_ids[@]}"
+      fi
+    done
+    echo "check convergence: just engineers-status"
 
 # ---------- gitops / yaml ----------
 yaml-lint:

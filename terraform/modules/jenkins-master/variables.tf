@@ -245,6 +245,16 @@ variable "init_groovy_template_files" {
   default     = {}
 }
 
+variable "engineer_roster" {
+  description = "Fleet SSH engineer roster consumed on the master by the engineer-keys SSM association (docs/adr/0046). parameter_name and parameter_region locate the SSM String parameter holding {\"schema\":1,\"engineers\":[...]}. The association fetches the reviewed sync script from the init-config bucket, verifies its sha256, and runs it on sync_schedule, so a roster write reaches the running master without a rebuild. Terraform never reads the value. Null disables. On-demand masters with init.groovy.d S3 delivery only."
+  type = object({
+    parameter_name   = string
+    parameter_region = string
+    sync_schedule    = optional(string, "rate(30 minutes)")
+  })
+  default = null
+}
+
 variable "init_groovy_sync_schedule" {
   description = "SSM schedule expression (e.g. rate(30 minutes)). When set and init.groovy.d S3 delivery is active, an SSM State Manager association periodically syncs the init-config bucket into /mnt/<hostname>/init.groovy.d on the master, so post-boot S3 changes (e.g. a re-rendered netMap) reach the EBS copy without an instance replacement and a JVM restart always loads current canonical. Additive sync, no deletes. Null disables."
   type        = string

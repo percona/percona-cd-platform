@@ -186,7 +186,7 @@ jobs:
       - name: install test deps
         run: pip install -r terraform/lambdas/tests/requirements.txt
       - name: pytest
-        run: python -m pytest terraform/lambdas/tests images/jenkins-endpoint-reconciler
+        run: python -m pytest terraform/lambdas/tests images/jenkins-endpoint-reconciler terraform/modules/jenkins-master/tests
 
   ci-gate:
     name: ci-gate

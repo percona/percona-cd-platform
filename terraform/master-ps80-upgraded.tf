@@ -35,6 +35,7 @@ module "ps80_upgraded" {
   ami_id               = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile       = "eks_observability"
   ssh_allowed_cidrs    = local.master_ssh_allowed_cidrs
+  engineer_roster      = local.master_ssh_engineer_roster
   cache_bucket_name    = "ps-build-cache"
   launch_template_name = "PS80UpgradedMasterTemplate"
 

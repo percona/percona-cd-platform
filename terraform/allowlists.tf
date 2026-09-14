@@ -13,7 +13,9 @@
 # Parameters are StringList in the cluster region. Two tenants: the EKS API
 # allowlist and the master break-glass :22 allowlist
 # (/<cluster>/allowlist/master-ssh, consumed by every master-*.tf; docs/adr/0032
-# keeps that path break-glass only).
+# keeps that path break-glass only). A third SSM tenant, the engineer SSH
+# roster, is only NAMED here (local.master_ssh_engineer_roster at the bottom):
+# the masters read it themselves, Terraform never does.
 #
 # The postcondition FAILS the plan (check blocks only warn in OpenTofu 1.11),
 # keeping the hardening invariant fail-closed: the parameter must exist,
@@ -59,4 +61,17 @@ locals {
 
   # Break-glass :22 fleet allowlist, passed to every jenkins-master module.
   master_ssh_allowed_cidrs = compact([for c in split(",", nonsensitive(data.aws_ssm_parameter.master_ssh_allowlist.value)) : trimspace(c)])
+}
+
+# Engineer SSH roster (docs/adr/0046). Same write path as the allowlists
+# (`just engineers-set`, PutParameter audited by CloudTrail), different read
+# path: each master's engineer-keys SSM association reads the parameter on the
+# host and reconciles /etc/ssh/authorized_keys.d, so the names enter neither
+# the repo nor the state, and a write lands without a plan, an apply, or a
+# rebuild. One fleet-wide list by design: an offboarding is one write.
+locals {
+  master_ssh_engineer_roster = {
+    parameter_name   = "/${local.cluster_name}/access/master-ssh-engineers"
+    parameter_region = data.aws_region.current.region
+  }
 }
