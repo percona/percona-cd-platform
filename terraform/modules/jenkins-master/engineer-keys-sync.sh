@@ -26,6 +26,7 @@
 #   LOGIN_HOME         home directory of LOGIN_USER
 #   IMDS_BASE          instance metadata endpoint
 #   LOCK_FILE          flock path
+#   METRICS_DIR        node_exporter textfile directory scraped by Alloy
 set -euo pipefail
 export PATH="${PATH}:/usr/sbin:/sbin"
 
@@ -37,6 +38,8 @@ readonly SSH_CONFIG_DIR="${SSH_CONFIG_DIR:-/etc/ssh}"
 readonly LOGIN_HOME="${LOGIN_HOME:-/home/${LOGIN_USER}}"
 readonly IMDS_BASE="${IMDS_BASE:-http://169.254.169.254}"
 readonly LOCK_FILE="${LOCK_FILE:-/run/lock/engineer-keys-sync.lock}"
+readonly METRICS_DIR="${METRICS_DIR:-/var/lib/alloy/textfile}"
+readonly METRICS_FILE="${METRICS_DIR}/engineer_keys_sync.prom"
 
 readonly KEYS_DIR="${SSH_CONFIG_DIR}/authorized_keys.d"
 readonly KEYS_FILE="${KEYS_DIR}/${LOGIN_USER}.engineers"
@@ -54,6 +57,8 @@ readonly LOG_TAG="engineer-keys-sync"
 KEYS_STATE=""
 DROPIN_STATE=""
 PRUNE_STATE=""
+ROSTER_VERSION=""
+KEY_COUNT=""
 
 # Log lines go to the journal and to stderr, so a message survives even when a
 # caller captures stdout.
@@ -65,8 +70,57 @@ log() {
   echo "${LOG_TAG}: ${message}" >&2
 }
 
+# Publishes the run outcome for the Alloy textfile collector, so a failing or
+# silent sync raises an alert in Mimir (docs/observability.md, Engineer keys
+# sync). Best effort: a metrics problem is logged and never changes the exit
+# code. The last success timestamp survives failed runs.
+write_metrics() {
+  local success="$1"
+  local now previous_success staging
+  now="$(date -u +%s)"
+  previous_success="$(awk '$1 == "engineer_keys_sync_last_success_timestamp_seconds" {print $2}' "${METRICS_FILE}" 2>/dev/null || :)"
+  if [[ "${success}" -eq 1 ]]; then
+    previous_success="${now}"
+  fi
+  install -d -m 0755 "${METRICS_DIR}" 2>/dev/null || { log "metrics directory unavailable"; return 0; }
+  staging="$(mktemp -p "${METRICS_DIR}" 2>/dev/null)" || { log "metrics staging failed"; return 0; }
+  {
+    echo "# HELP engineer_keys_sync_last_run_timestamp_seconds Unix time of the last reconciler run."
+    echo "# TYPE engineer_keys_sync_last_run_timestamp_seconds gauge"
+    echo "engineer_keys_sync_last_run_timestamp_seconds ${now}"
+    echo "# HELP engineer_keys_sync_last_run_success 1 when the last run applied the roster, 0 when it failed."
+    echo "# TYPE engineer_keys_sync_last_run_success gauge"
+    echo "engineer_keys_sync_last_run_success ${success}"
+    if [[ -n "${previous_success}" ]]; then
+      echo "# HELP engineer_keys_sync_last_success_timestamp_seconds Unix time of the last run that applied the roster."
+      echo "# TYPE engineer_keys_sync_last_success_timestamp_seconds gauge"
+      echo "engineer_keys_sync_last_success_timestamp_seconds ${previous_success}"
+    fi
+    if [[ -n "${ROSTER_VERSION}" ]]; then
+      echo "# HELP engineer_keys_sync_roster_version SSM parameter version of the roster last read."
+      echo "# TYPE engineer_keys_sync_roster_version gauge"
+      echo "engineer_keys_sync_roster_version ${ROSTER_VERSION}"
+    fi
+    if [[ -n "${KEY_COUNT}" ]]; then
+      echo "# HELP engineer_keys_sync_keys Public keys in the managed roster file."
+      echo "# TYPE engineer_keys_sync_keys gauge"
+      echo "engineer_keys_sync_keys ${KEY_COUNT}"
+    fi
+  } >"${staging}" || { rm -f "${staging}"; log "metrics write failed"; return 0; }
+  if ! chmod 0644 "${staging}"; then
+    rm -f "${staging}"
+    log "metrics chmod failed"
+    return 0
+  fi
+  if ! mv -f "${staging}" "${METRICS_FILE}"; then
+    rm -f "${staging}"
+    log "metrics publish failed"
+  fi
+}
+
 die() {
   log "FAIL $*"
+  write_metrics 0
   exit 1
 }
 
@@ -322,6 +376,7 @@ main() {
   roster="$(read_roster)"
   version="${roster%%$'\n'*}"
   version="${version#VERSION=}"
+  ROSTER_VERSION="${version}"
   mapfile -t slugs < <(tail -n +2 <<<"${roster}")
 
   local staging slug added key_count=0
@@ -335,9 +390,11 @@ main() {
   done
 
   publish_keys_file "${staging}" "${key_count}" || { rm -f "${staging}"; die "roster version ${version} not published, last good file kept"; }
+  KEY_COUNT="${key_count}"
   ensure_dropin || die "sshd drop-in not live"
   prune_legacy || die "legacy prune pending"
 
+  write_metrics 1
   log "result=ok parameter_version=${version} engineers=${#slugs[@]} keys=${key_count} sha256=$(sha256_of "${KEYS_FILE}") file=${KEYS_STATE} sshd=${DROPIN_STATE} prune=${PRUNE_STATE}"
 }
 

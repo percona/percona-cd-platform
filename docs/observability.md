@@ -250,6 +250,39 @@ curl -s localhost:3100/loki/api/v1/rules
 scripts/check-uptime-queries.py
 ```
 
+## Engineer keys sync
+
+Every EC2 master runs `engineer-keys-sync.sh` through a per-master SSM
+association every 30 minutes (ADR 0046). Each run writes
+`/var/lib/alloy/textfile/engineer_keys_sync.prom`, which the master-side Alloy
+unix exporter scrapes through its textfile collector, so the metrics carry the
+usual `master` label:
+
+| Metric | Meaning |
+|---|---|
+| `engineer_keys_sync_last_run_timestamp_seconds` | When the reconciler last ran, success or not |
+| `engineer_keys_sync_last_run_success` | 1 when the roster was applied, 0 when the run failed (last good keys kept) |
+| `engineer_keys_sync_last_success_timestamp_seconds` | When the roster was last applied, survives failed runs |
+| `engineer_keys_sync_roster_version` | SSM parameter version last read |
+| `engineer_keys_sync_keys` | Public keys in the managed roster file |
+
+Alerts in the jenkins-uptime addon: `EngineerKeysSyncFailing` (a run has
+failed for an hour), `EngineerKeysSyncStale` (no success for two hours) and
+`EngineerKeysSyncMissing` (host metrics arrive, sync metric never did). A
+failing sync never removes access, so the pressure is a possibly pending
+revocation, not an outage.
+
+To act on one:
+
+```sh
+just engineers-status                                  # roster version, per-master association status
+just ssm-run <inst> 'journalctl -t engineer-keys-sync --no-pager -o cat | tail -5'
+```
+
+The association output holds the same lines. A fetch failure names the slug
+whose percona.com key is missing or malformed, and the fix is a roster edit
+through `just engineers-set`, never a host edit.
+
 ## Related decisions
 
 - [ADR 0010 — distributed LGTM](adr/0010-distributed-lgtm.md) (this stack)

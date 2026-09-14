@@ -96,3 +96,49 @@ spec:
               /var/log/jenkins/jenkins.log grows, that the master-side Alloy
               tails it, and the loki-push path. Runbook: docs/observability.md,
               Log liveness.
+        # Engineer SSH roster sync (ADR 0046). The per-master SSM association
+        # runs engineer-keys-sync.sh every 30 minutes, which drops a textfile
+        # metric that the master-side Alloy unix exporter scrapes. Three
+        # failure modes, three alerts: the run fails (roster not applied,
+        # last good keys kept), no run has succeeded for two hours (the
+        # association stopped or keeps failing), or a master pushes host
+        # metrics but has never reported a run (association missing).
+        - alert: EngineerKeysSyncFailing
+          expr: max by (master) (engineer_keys_sync_last_run_success) == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: The engineer SSH roster sync has been failing on {{ "{{" }} $labels.master {{ "}}" }} for an hour
+            description: >-
+              The roster in SSM was not applied. The last good key file is
+              still in place, so nobody lost access, but a revocation may be
+              pending. Read the association output (just engineers-status,
+              then the SSM association execution) and the engineer-keys-sync
+              journal on the master. Runbook: docs/observability.md, Engineer
+              keys sync.
+        - alert: EngineerKeysSyncStale
+          expr: time() - max by (master) (engineer_keys_sync_last_success_timestamp_seconds) > 7200
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: No successful engineer SSH roster sync on {{ "{{" }} $labels.master {{ "}}" }} for two hours
+            description: >-
+              Four scheduled runs have not applied the roster. Check that the
+              engineer-keys SSM association exists and targets the current
+              instance id, and that the master can reach SSM and percona.com.
+              Runbook: docs/observability.md, Engineer keys sync.
+        - alert: EngineerKeysSyncMissing
+          expr: count by (master) (node_uname_info{role="master"}) unless count by (master) (engineer_keys_sync_last_run_timestamp_seconds)
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{" }} $labels.master {{ "}}" }} pushes host metrics but has never reported an engineer SSH roster sync"
+            description: >-
+              The master-side Alloy runs but no engineer-keys-sync metric has
+              arrived. Either the association was never created for this
+              master (check terraform/master-<inst>.tf opts in) or Alloy lacks
+              the textfile collector (re-run the pinned observability script).
+              Runbook: docs/observability.md, Engineer keys sync.

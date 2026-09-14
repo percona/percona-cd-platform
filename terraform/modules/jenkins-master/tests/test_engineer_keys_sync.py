@@ -148,6 +148,7 @@ def harness(tmp_path: Path) -> Harness:
         "LOGIN_HOME": str(root / "home/ec2-user"),
         "IMDS_BASE": "http://imds.test",
         "LOCK_FILE": str(tmp_path / "lock/sync.lock"),
+        "METRICS_DIR": str(tmp_path / "textfile"),
     }
     # The stubs must win over any real binary, and no AWS credential may leak
     # into the run even if the aws stub were bypassed.
@@ -389,3 +390,27 @@ def test_failed_rename_is_reported_not_swallowed(harness: Harness, tmp_path: Pat
     assert "published file does not match staging" in result.out
     assert "not published, last good file kept" in result.out
     assert harness.keys_file.is_dir()
+
+
+def _metrics(harness: Harness) -> dict[str, str]:
+    text = (Path(harness.env["METRICS_DIR"]) / "engineer_keys_sync.prom").read_text()
+    return dict(line.split(" ", 1) for line in text.splitlines() if line and not line.startswith("#"))
+
+
+def test_metrics_report_success_then_failure_and_keep_last_success(harness: Harness, tmp_path: Path) -> None:
+    _two_engineers(harness, tmp_path / "gen")
+    assert harness.run().returncode == 0
+    after_success = _metrics(harness)
+    assert after_success["engineer_keys_sync_last_run_success"] == "1"
+    assert after_success["engineer_keys_sync_roster_version"] == "1"
+    assert after_success["engineer_keys_sync_keys"] == "3"
+    last_success = after_success["engineer_keys_sync_last_success_timestamp_seconds"]
+    assert last_success == after_success["engineer_keys_sync_last_run_timestamp_seconds"]
+
+    (harness.fix / "aws_fail").touch()
+    assert harness.run().returncode == 1
+    after_failure = _metrics(harness)
+    assert after_failure["engineer_keys_sync_last_run_success"] == "0"
+    assert after_failure["engineer_keys_sync_last_success_timestamp_seconds"] == last_success
+    assert int(after_failure["engineer_keys_sync_last_run_timestamp_seconds"]) >= int(last_success)
+    assert "engineer_keys_sync_roster_version" not in after_failure, "the failed read left no version to report"
