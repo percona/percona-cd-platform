@@ -35,6 +35,8 @@ module "psmdb" {
 
   ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
 
+  engineer_roster = local.master_ssh_engineer_roster
+
   # Retained CFN data volume vol-090299a14ad3da940 is 300 GiB gp2 in
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in
@@ -90,17 +92,6 @@ module "psmdb" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-psmdb-init-config). Content moved byte-identically off the live
   # master's EBS copy; cloud.groovy's netMap subnet IDs are patched to the
@@ -112,7 +103,6 @@ module "psmdb" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned Fleet-only while psmdb was CFN-managed; now

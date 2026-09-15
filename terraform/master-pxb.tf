@@ -34,7 +34,8 @@ module "pxb" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
-  jenkins_package_version = "2.568.2"
+  engineer_roster         = local.master_ssh_engineer_roster
+  jenkins_package_version = "2.568.3"
   java_package            = "java-21-amazon-corretto-headless"
   # pxb workers do not use an S3 build cache (null disables the worker S3 IAM
   # policy), matching the legacy pxb worker role.
@@ -83,17 +84,6 @@ module "pxb" {
   # diff is zero.
   extra_http_ingress = [
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
-  ]
-
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
   ]
 
   # Declarative init.groovy.d delivered via the module-created

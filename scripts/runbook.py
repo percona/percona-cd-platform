@@ -148,10 +148,10 @@ GUIDED = {
         ("Confirm telemetry", ["just", "check-master-alloy"]),
     ],
     "ssh-key": [
-        ("Edit ssh_key_engineers in terraform/master-<inst>.tf, merge the PR", None),
-        ("Plan and apply (takes effect at the NEXT instance replacement, not immediately)", ["just", "tf-plan"]),
-        ("For urgent removal, also strip the key from the running master over SSM: "
-         "just ssm-run <inst> 'sed -i /<pattern>/d /home/ec2-user/.ssh/authorized_keys'", None),
+        ("Read the current roster and per-master convergence", ["just", "engineers-status"]),
+        ("Write the FULL roster (a delta is not accepted, an empty string revokes everyone): "
+         "just engineers-set \"<slug,slug,...>\"", None),
+        ("Confirm every master converged on the new parameter version", ["just", "engineers-status"]),
     ],
 }
 

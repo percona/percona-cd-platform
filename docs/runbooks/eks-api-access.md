@@ -64,3 +64,40 @@ aws ssm put-parameter --region us-east-1 \
 ```
 
 The cutover seed is the union of the previously committed module default and the psmdb/pmm per-master extras (8 CIDRs). Total reachability is preserved, and the two per-master extras gain :22 on every master where they previously reached one master each; the six baseline CIDRs are unchanged.
+
+## Third tenant: master-ssh-engineers
+
+`/percona-ci-platform/access/master-ssh-engineers` is the [ADR 0046](../adr/0046-engineer-ssh-roster-in-ssm-synced-by-state-manager.md) roster of engineer slugs whose percona.com public keys land on the EC2 Jenkins masters as the static break-glass fallback. Different mechanics from the two allowlists: a JSON `String`, not a StringList, and Terraform never reads it. A per-master SSM association pulls it onto the running masters every 30 minutes, so a write needs no plan and no apply.
+
+Read:
+
+```bash
+just engineers-status
+```
+
+Amend (the value is the full roster, an empty list revokes every engineer key, the recipe triggers the associations right away):
+
+```bash
+just engineers-set "alex.miroshnychenko,anderson.nogueira,<slug>"
+```
+
+Bootstrap (must exist before the associations first run, otherwise the association reports failure and the master carries no engineer keys):
+
+```bash
+aws ssm put-parameter --region us-east-1 \
+  --name /<cluster>/access/master-ssh-engineers --type String \
+  --value '{"schema":1,"engineers":["<slug>"]}' \
+  --tags Key=iit-billing-tag,Value=<cluster> Key=repo,Value=github.com/Percona/percona-cd-platform
+```
+
+The parameter holds names, never keys. Keys stay at `https://www.percona.com/get/engineer/KEY/<slug>.pub`.
+
+What a write does, and what the recipe refuses:
+
+- Every slug is checked against percona.com before the parameter is written, so a typo is a refusal, not a slug that sits in the roster with no key. `FEED_CHECK=0 just engineers-set ...` skips that check during a percona.com outage when the write is a revocation that cannot wait.
+- An empty roster (`just engineers-set ""`) revokes every engineer key on every master within minutes and needs `REVOKE_ALL=1`. Input that yields no valid slug is refused outright.
+- The recipe triggers the association in every master region and reports `triggered N of M`. A region whose trigger failed is named and converges on its 30 minute schedule, and the recipe exits non-zero so the shortfall is not missed.
+- On the masters: a slug percona.com answers 404 for is installed with no key and reported as missing (the run stays green, remove the slug). A slug whose feed fails in any other way keeps its previous keys while the rest converge (the run reports degraded). A removal from the roster lands in both cases.
+- `just engineers-status` prints the parameter version and, per master, the association status and the version the last run applied. Every master should show the version the write returned.
+
+Alerts and the reconciler's own contract are in [`../observability.md`](../observability.md), Engineer keys sync.

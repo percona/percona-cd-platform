@@ -104,10 +104,12 @@ install_software() {
 
     # ec2-instance-connect is also absent on the minimal AMI. Installing it adds
     # the sshd AuthorizedKeysCommand so engineers can push a short-lived key via
-    # EC2 Instance Connect instead of relying only on the static
-    # ssh_key_engineers entries. It works over the SSM tunnel (AWS-StartSSHSession
-    # to localhost:22), so it needs no inbound :22, and coexists with the static
-    # AuthorizedKeysFile (sshd tries the file, then the command).
+    # EC2 Instance Connect instead of relying only on the static engineer keys,
+    # which the engineer-keys SSM association syncs from the fleet roster in
+    # SSM Parameter Store after boot. It works over the SSM tunnel
+    # (AWS-StartSSHSession to localhost:22), so it needs no inbound :22, and
+    # coexists with the static AuthorizedKeysFile entries (sshd tries the files,
+    # then the command).
     retry yum -y install ec2-instance-connect
 }
 
@@ -290,26 +292,6 @@ GRACEFUL
     systemctl enable --now crond
 }
 
-setup_ssh_keys() {
-    KEYS_LIST="${ssh_key_engineers}"
-    for KEY in $KEYS_LIST; do
-        RETRY="3"
-        while [ $RETRY != "0" ]; do
-            STATUS=$(curl -Is https://www.percona.com/get/engineer/KEY/$KEY.pub | head -n1 | awk '{print $2}')
-            if [[ $STATUS -eq 200 ]]; then
-                curl -s https://www.percona.com/get/engineer/KEY/$KEY.pub | tee -a /home/ec2-user/.ssh/authorized_keys
-                RETRY="0"
-            elif [[ $STATUS -eq 404 ]]; then
-                echo "Skipping key $KEY"
-                RETRY=0
-            else
-                echo "Got $STATUS, retrying"
-                RETRY=$(($RETRY-1))
-            fi
-        done
-    done
-}
-
 %{ if plugin_install_hook != "" ~}
 install_plugins_hook() {
     # First-boot plugins.groovy pinning (pxc-style).
@@ -360,7 +342,6 @@ install_init_groovy_files() {
 
 main() {
     setup_aws
-    setup_ssh_keys
     mount_data_partition
     install_software
 %{ if plugin_install_hook != "" ~}
@@ -381,7 +362,7 @@ main() {
     # fetch the same content from a thin pass-through at
     # Percona-Lab/jenkins-pipelines/scripts/install-master-observability.sh
     # until they migrate to TF.
-    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/10a67299f1c2ba98fa01cea547b5b049f46d5e1b/scripts/install-master-observability.sh | JENKINS_HOST="%{ if observability_label != "" }${observability_label}%{ else }$JENKINS_HOST%{ endif }" bash
+    curl -fsSL --retry 5 https://raw.githubusercontent.com/percona/percona-cd-platform/1cdc5d21fcc91dcffe6f87d6b44c115e11217ab5/scripts/install-master-observability.sh | JENKINS_HOST="%{ if observability_label != "" }${observability_label}%{ else }$JENKINS_HOST%{ endif }" bash
 %{ endif ~}
 }
 

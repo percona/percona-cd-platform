@@ -26,6 +26,7 @@ module "rel" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
+  engineer_roster         = local.master_ssh_engineer_roster
   jenkins_package_version = "2.541.3"
   # rel workers have no S3 build cache: the CFN-era default named a
   # rel-build-cache bucket that was never created. null drops the dead
@@ -74,17 +75,6 @@ module "rel" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-rel-init-config). Content moved byte-identically off the live
   # master's EBS copy; cloud.groovy's netMap subnet IDs are patched to the
@@ -96,7 +86,6 @@ module "rel" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback (rel also serves release builds on that label). Pre-provisioned

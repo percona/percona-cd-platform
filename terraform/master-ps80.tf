@@ -28,7 +28,9 @@ module "ps80" {
   ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
-  jenkins_package_version = "2.541.3"
+  engineer_roster         = local.master_ssh_engineer_roster
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "ps-build-cache"
   ebs_size                = 300 # grown live from 200; EBS cannot shrink, keep >= live size
 
@@ -67,17 +69,6 @@ module "ps80" {
   # Window 1 so the import diff is zero.
   extra_http_ingress = [
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
-  ]
-
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
   ]
 
   # Declarative init.groovy.d wiring delivered via the

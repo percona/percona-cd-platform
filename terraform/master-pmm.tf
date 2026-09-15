@@ -84,18 +84,9 @@ module "pmm" {
     { port = 8080, cidr = module.vpc.vpc_cidr_block },
   ]
 
-  ssh_key_engineers = [
-    "anderson.nogueira",
-    "alex.miroshnychenko",
-    "eduardo.casarero",
-    "evgeniy.patlan",
-    "santiago.ruiz",
-    "surabhi.bhat",
-    "talha.rizwan",
-    "vadim.yalovets",
-  ]
-
   ssh_allowed_cidrs = local.master_ssh_allowed_cidrs
+
+  engineer_roster = local.master_ssh_engineer_roster
 
   # Declarative init.groovy.d delivered via the module-created S3 bucket
   # (jenkins-pmm-amzn2-init-config). Content moved byte-identically off the
@@ -109,7 +100,6 @@ module "pmm" {
   }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
-
 
 # ARM Graviton spot fleet for the ec2-fleet plugin -- the docker-aarch64
 # fallback. Pre-provisioned Fleet-only while pmm was CFN-managed; now
