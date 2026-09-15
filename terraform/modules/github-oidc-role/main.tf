@@ -94,10 +94,11 @@ resource "aws_iam_policy" "this" {
 }
 
 resource "aws_iam_role" "this" {
-  name               = local.resource_name
-  description        = var.description
-  assume_role_policy = data.aws_iam_policy_document.trust.json
-  tags               = var.tags
+  name                 = local.resource_name
+  description          = var.description
+  assume_role_policy   = data.aws_iam_policy_document.trust.json
+  max_session_duration = var.max_session_duration
+  tags                 = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

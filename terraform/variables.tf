@@ -246,6 +246,21 @@ variable "ppg_ami_factory_subject_claims" {
   default     = ["repo:Percona-Lab/jenkins-pipelines:ref:refs/heads/master"]
 }
 
+variable "pmm_agent_ami_bake_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the pmm agent AMI-factory BAKE role. Main-only on percona/pmm. A temporary fork subject may be supplied at apply time for end-to-end testing, then removed."
+  type        = list(string)
+  default     = ["repo:percona/pmm:ref:refs/heads/main"]
+}
+
+variable "pmm_agent_ami_promote_subject_claims" {
+  description = "GitHub Actions sub claims allowed to assume the pmm agent AMI-factory PROMOTE role. Only jobs bound to the two GitHub environments present these subjects, so the branch subject is deliberately absent."
+  type        = list(string)
+  default = [
+    "repo:percona/pmm:environment:pmm-agent-ami-factory-prod",
+    "repo:percona/pmm:environment:pmm-agent-ami-factory-test",
+  ]
+}
+
 variable "ppg_hcloud_factory_subject_claims" {
   description = "GitHub Actions sub claims allowed to assume the PPG Hetzner-factory role. Master-only on Percona-Lab/jenkins-pipelines; this role reads the factory token, so the allowlist stays exactly this subject."
   type        = list(string)
