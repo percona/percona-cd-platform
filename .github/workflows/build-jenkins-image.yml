@@ -22,7 +22,7 @@ concurrency:
 env:
   IMAGE_REPO: percona-cd/jenkins-percona
   AWS_REGION: us-east-1
-  JENKINS_LTS: "2.568.2"
+  JENKINS_LTS: "2.568.3"
 
 jobs:
   # ---- actionlint/zizmor gate (shared composite, mirrors ci.yml) ----
