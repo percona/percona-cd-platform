@@ -15,6 +15,7 @@ module "ps3_arm_fleet" {
   vpc_cidr          = "10.181.0.0/22"
   cache_bucket_name = "ps-build-cache"
   key_name          = "percona-jenkins"
+  ami_id            = data.aws_ami.al2023_arm64_euw1.id
   instance_types    = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size          = 16
 

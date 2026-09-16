@@ -32,7 +32,7 @@ module "ps80_upgraded" {
   short_name           = "jenkins-ps80-upgraded"
   team                 = "mysql"
   vpc_cidr             = "10.159.0.0/22"
-  ami_id               = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
+  ami_id               = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile       = "eks_observability"
   ssh_allowed_cidrs    = local.master_ssh_allowed_cidrs
   engineer_roster      = local.master_ssh_engineer_roster

@@ -23,7 +23,7 @@ module "rel" {
   short_name              = "jenkins-rel"
   team                    = "release"
   vpc_cidr                = "10.199.0.0/22"
-  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_euw1.value) # latest AL2023 minimal (amis.tf)
+  ami_id                  = data.aws_ami.al2023_minimal_euw1.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
@@ -102,6 +102,7 @@ module "rel_arm_fleet" {
   worker_instance_profile_name = module.rel.worker_instance_profile_name
   master_role_name             = module.rel.master_iam_role_name
   key_name                     = "percona-jenkins"
+  ami_id                       = data.aws_ami.al2023_arm64_euw1.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"
