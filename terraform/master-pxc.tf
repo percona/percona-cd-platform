@@ -38,7 +38,7 @@ module "pxc" {
   # import is a zero-diff adopt and the on-demand instance lands in the volume's
   # AZ (EBS is AZ-bound). NOTE: aws_availability_zones.available.names[1] must
   # resolve to us-west-1b in this account; hard-gate that before apply.
-  ebs_size = 340
+  ebs_size = 400
   ebs_type = "gp2"
   az_index = 1
 
