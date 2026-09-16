@@ -41,8 +41,8 @@ module "psmdb" {
   # us-west-2b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in
   # the module.
-  ebs_size = 300
-  ebs_type = "gp2"
+  ebs_size = 320
+  ebs_type = "gp3"
 
   worker_role_legacy_naming = true
   extra_subnet_a            = true
