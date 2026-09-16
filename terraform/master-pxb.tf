@@ -31,7 +31,7 @@ module "pxb" {
   short_name              = "jenkins-pxb"
   team                    = "xtrabackup"
   vpc_cidr                = "10.179.0.0/22"
-  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value)
+  ami_id                  = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
@@ -119,6 +119,7 @@ module "pxb_arm_fleet" {
   worker_instance_profile_name = module.pxb.worker_instance_profile_name
   master_role_name             = module.pxb.master_iam_role_name
   key_name                     = "percona-jenkins"
+  ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"

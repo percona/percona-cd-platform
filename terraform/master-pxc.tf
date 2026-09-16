@@ -24,7 +24,7 @@ module "pxc" {
   short_name              = "jenkins-pxc"
   team                    = "pxc"
   vpc_cidr                = "10.156.0.0/22"
-  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw1.value) # latest AL2023 minimal (amis.tf)
+  ami_id                  = data.aws_ami.al2023_minimal_usw1.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
@@ -116,6 +116,7 @@ module "pxc_arm_fleet" {
   worker_instance_profile_name = module.pxc.worker_instance_profile_name
   master_role_name             = module.pxc.master_iam_role_name
   key_name                     = "percona-jenkins"
+  ami_id                       = data.aws_ami.al2023_arm64_usw1.id
   instance_types               = ["m8g.4xlarge", "m7g.4xlarge", "m6g.4xlarge", "m7gd.4xlarge", "m6gd.4xlarge", "r8g.4xlarge", "r7g.4xlarge", "r6g.4xlarge"]
   max_size                     = 16
   tickets                      = "PS-11228"

@@ -26,7 +26,7 @@ module "psmdb" {
   short_name              = "jenkins-psmdb"
   team                    = "mongodb"
   vpc_cidr                = "10.188.0.0/22"
-  ami_id                  = nonsensitive(data.aws_ssm_parameter.al2023_minimal_usw2.value) # latest AL2023 minimal (amis.tf)
+  ami_id                  = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
   jenkins_package_version = "2.541.3"
   # psmdb workers have no S3 build cache: no psmdb build cache bucket is
@@ -119,6 +119,7 @@ module "psmdb_arm_fleet" {
   worker_instance_profile_name = module.psmdb.worker_instance_profile_name
   master_role_name             = module.psmdb.master_iam_role_name
   key_name                     = "percona-jenkins"
+  ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
   tickets                      = "PS-11179"
