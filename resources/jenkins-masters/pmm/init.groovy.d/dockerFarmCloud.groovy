@@ -1,0 +1,171 @@
+// dockerFarmCloud.groovy
+//
+// Declares the `ec2-Docker Farm AWS-Dev b` EC2 cloud on pmm: the classic ec2-plugin
+// templates behind the agent-arm64, agent-amd64, cli and docker labels (spot) and
+// their -ondemand twins. Until this file existed the cloud lived only in config.xml.
+//
+// Faithful to the live cloud with two deliberate changes:
+//   1. Every template lists both VPC subnets, so launches rotate between
+//      us-east-2b and us-east-2c (SlaveTemplate.chooseSubnetId round-robins a
+//      whitespace-delimited list). Proven live on the arm64 templates first, the
+//      other labels get the same list here.
+//   2. Spot maximum prices are the static on-demand ceilings instead of the values
+//      the spot-price-auto-updater job used to rewrite every 15 minutes.
+//
+// Known debt kept as is: agent-amd64 and agent-arm64 each have two templates. The two
+// `x86_64` rows share one description and therefore one 35-instance cap pool, the
+// `ARM64` + `arm64` rows have distinct descriptions and two 3-instance pools. In both
+// cases the provision loop only reaches the second row once the first is at cap.
+//
+// AMI: resolved at launch by filter (tag iit-billing-tag=pmm-worker-3 plus
+// architecture), no pinned image id. Workers run under the jenkins-pmm-amzn2-worker
+// instance profile, the master authenticates with its own. Idempotent: removes the
+// same-named cloud before adding the rebuilt one.
+
+import hudson.model.Node
+import hudson.plugins.ec2.AssociateIPStrategy
+import hudson.plugins.ec2.ConnectionStrategy
+import hudson.plugins.ec2.EC2Cloud
+import hudson.plugins.ec2.EC2Filter
+import hudson.plugins.ec2.EC2Tag
+import hudson.plugins.ec2.EbsEncryptRootVolume
+import hudson.plugins.ec2.HostKeyVerificationStrategyEnum
+import hudson.plugins.ec2.SlaveTemplate
+import hudson.plugins.ec2.SpotConfiguration
+import hudson.plugins.ec2.Tenancy
+import hudson.plugins.ec2.UnixData
+import hudson.plugins.ec2.util.MinimumNumberOfInstancesTimeRangeConfig
+import jenkins.model.Jenkins
+import java.util.logging.Logger
+
+final Logger LOG = Logger.getLogger('dockerFarmCloud')
+
+final String CLOUD_NAME       = 'ec2-Docker Farm AWS-Dev b'
+final String REGION           = 'us-east-2'
+final String SSH_CRED_ID      = '9498028f-01d9-4066-b45c-6c813d51d11b'
+final String WORKER_PROFILE   = 'arn:aws:iam::119175775298:instance-profile/jenkins-pmm-amzn2-worker'
+final String AMI_BILLING_TAG  = 'pmm-worker-3'
+final String SUBNET_2B        = 'subnet-05be3728311d11363'
+final String SUBNET_2C        = 'subnet-01267cd0c01aed343'
+final String SUBNETS          = "${SUBNET_2B} ${SUBNET_2C}"
+final String JAVA_X86         = '/etc/alternatives/java'
+final String JAVA_ARM         = 'java'
+
+// Spot maximum price = the us-east-2 on-demand price of the type. Since 2017 AWS bills the
+// current spot price regardless of the maximum, and interruptions are capacity driven, so
+// the maximum only needs to rule out price-triggered interruptions. This is also the AWS
+// default when no maximum is given.
+final String OD_T3_2XLARGE    = '0.3328'
+final String OD_T3_XLARGE     = '0.1664'
+final String OD_T4G_XLARGE    = '0.1344'
+final String OD_T4G_SMALL     = '0.0168'
+
+// One row per template, in the live declaration order (the ec2-plugin provision loop
+// walks templates in this order and stops at the first one that can serve a label).
+// bid == null means on-demand. spare = warm idle instances kept ready, warmWeekdays limits
+// that floor to Monday to Friday (the plugin keeps min instances only inside the window).
+final List<Map> TEMPLATES = [
+    [description: 'x86_64',          labels: 'agent-amd64',          type: 't3.2xlarge', arch: 'x86_64', bid: OD_T3_2XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '120', cap: '35', uses: 1,  min: 1, spare: 1, warmWeekdays: true, subnets: SUBNETS, java: JAVA_X86, name: null],
+    [description: 'ARM64',           labels: 'agent-arm64',          type: 't4g.xlarge', arch: 'arm64',  bid: OD_T4G_XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
+    [description: 'CLI',             labels: 'cli',                  type: 't4g.small',  arch: 'arm64',  bid: OD_T4G_SMALL,  fallback: true,  mode: Node.Mode.NORMAL,    executors: '5', idle: '180', cap: '8',  uses: -1, min: 1, spare: 1, subnets: SUBNETS, java: JAVA_X86, name: 'jenkins-agent-cli', sshProcess: false],
+    [description: 'docker',          labels: 'docker',               type: 't3.xlarge',  arch: 'x86_64', bid: OD_T3_XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '5', idle: '10',  cap: '2',  uses: -1, min: 0, subnets: SUBNETS, java: JAVA_X86, name: null],
+    [description: 'x86_64',          labels: 'agent-amd64',          type: 't3.2xlarge', arch: 'x86_64', bid: OD_T3_2XLARGE, fallback: false, mode: Node.Mode.NORMAL,    executors: '1', idle: '120', cap: '35', uses: 1,  min: 1, spare: 1, warmWeekdays: true, subnets: SUBNETS, java: JAVA_X86, name: null],
+    [description: 'arm64',           labels: 'agent-arm64',          type: 't4g.xlarge', arch: 'arm64',  bid: OD_T4G_XLARGE, fallback: false, mode: Node.Mode.NORMAL,    executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
+    [description: 'x86_64 ondemand', labels: 'agent-amd64-ondemand', type: 't3.2xlarge', arch: 'x86_64', bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '30',  cap: '52', uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_X86, name: null],
+    [description: 'arm64 ondemand',  labels: 'agent-arm64-ondemand', type: 't4g.xlarge', arch: 'arm64',  bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '30',  cap: '5',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
+    [description: 'cli ondemand',    labels: 'cli-ondemand',         type: 't4g.small',  arch: 'arm64',  bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '3', idle: '30',  cap: '6',  uses: -1, min: 0, subnets: SUBNETS, java: JAVA_X86, name: 'jenkins-agent-cli'],
+    [description: 'docker-ondemand', labels: 'docker-ondemand',      type: 't3.xlarge',  arch: 'x86_64', bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '5', idle: '10',  cap: '6',  uses: -1, min: 0, subnets: SUBNETS, java: JAVA_X86, name: null],
+]
+
+// A closure (not a method) so it can read the script-level constants above.
+Closure<SlaveTemplate> buildTemplate = { Map row ->
+    List<EC2Tag> tags = []
+    if (row.name) {
+        tags << new EC2Tag('Name', row.name)
+    }
+    tags << new EC2Tag('iit-billing-tag', AMI_BILLING_TAG)
+    tags << new EC2Tag('owner', 'jenkins')
+
+    SlaveTemplate template = new SlaveTemplate(
+        '',                                                  // ami (resolved by amiFilters below)
+        '',                                                  // zone
+        row.bid ? new SpotConfiguration(true, row.bid, row.fallback, '0') : null, // spotConfig, null => on-demand
+        '',                                                  // securityGroups (VPC default)
+        '',                                                  // remoteFS (plugin default)
+        row.type,                                            // type (instance type name)
+        true,                                                // ebsOptimized
+        row.labels,                                          // labelString
+        row.mode,                                            // mode
+        row.description,                                     // description (one description = one instance-cap pool)
+        '',                                                  // initScript
+        '',                                                  // tmpDir
+        '',                                                  // userData
+        row.executors,                                       // numExecutors
+        'ec2-user',                                          // remoteAdmin
+        new UnixData('', '', '', '22', ''),                  // amiType
+        row.java,                                            // javaPath
+        '',                                                  // jvmopts
+        false,                                               // stopOnTerminate
+        row.subnets,                                         // subnetId (whitespace-delimited list rotates per launch)
+        tags,                                                // tags
+        row.idle,                                            // idleTerminationMinutes
+        row.min,                                             // minimumNumberOfInstances
+        row.spare ?: 0,                                      // minimumNumberOfSpareInstances
+        row.cap,                                             // instanceCapStr
+        WORKER_PROFILE,                                      // iamInstanceProfile
+        true,                                                // deleteRootOnTermination
+        false,                                               // useEphemeralDevices
+        '',                                                  // launchTimeoutStr (empty = no limit)
+        AssociateIPStrategy.PUBLIC_IP,                       // associateIPStrategy
+        '',                                                  // customDeviceMapping
+        row.sshProcess != false,                             // connectBySSHProcess
+        false,                                               // monitoring
+        false,                                               // t2Unlimited
+        ConnectionStrategy.PRIVATE_IP,                       // connectionStrategy
+        row.uses,                                            // maxTotalUses (-1 = unlimited)
+        null,                                                // nodeProperties
+        HostKeyVerificationStrategyEnum.OFF,                 // hostKeyVerificationStrategy
+        Tenancy.Default,                                     // tenancy
+        EbsEncryptRootVolume.DEFAULT,                        // ebsEncryptRootVolume
+        true,                                                // metadataEndpointEnabled
+        false,                                               // metadataTokensRequired
+        1,                                                   // metadataHopsLimit
+        true,                                                // metadataSupported
+        false,                                               // enclaveEnabled
+    )
+    template.setAmiFilters([
+        new EC2Filter('tag:iit-billing-tag', AMI_BILLING_TAG),
+        new EC2Filter('architecture', row.arch),
+    ])
+    if (row.warmWeekdays) {
+        MinimumNumberOfInstancesTimeRangeConfig window = new MinimumNumberOfInstancesTimeRangeConfig()
+        window.setMinimumNoInstancesActiveTimeRangeFrom('00:00')
+        window.setMinimumNoInstancesActiveTimeRangeTo('23:59')
+        ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].each { window."set${it}"(true) }
+        ['Saturday', 'Sunday'].each { window."set${it}"(false) }
+        template.setMinimumNumberOfInstancesTimeRangeConfig(window)
+    }
+    return template
+}
+
+List<SlaveTemplate> templates = TEMPLATES.collect { buildTemplate(it) }
+
+EC2Cloud cloud = new EC2Cloud(
+    CLOUD_NAME,          // name
+    true,                // useInstanceProfileForCredentials
+    '',                  // credentialsId
+    REGION,              // region
+    '',                  // privateKey (SSH key comes from the credential below)
+    SSH_CRED_ID,         // sshKeysCredentialsId
+    '',                  // instanceCapStr (empty = unlimited, caps live per template)
+    templates,           // templates
+    '',                  // roleArn
+    '',                  // roleSessionName
+)
+
+// ---- registration (everything above builds objects only) ----
+Jenkins.instance.clouds.findAll { it.name == CLOUD_NAME }.each {
+    Jenkins.instance.clouds.remove(it)
+}
+Jenkins.instance.clouds.add(cloud)
+LOG.info("dockerFarmCloud: registered cloud='${CLOUD_NAME}' templates=${templates.size()} region='${REGION}'")
