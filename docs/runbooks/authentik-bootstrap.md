@@ -11,8 +11,8 @@ secrets. The original UI walk-through has been retired — see git history
 | Resource | Manifest | Purpose |
 |---|---|---|
 | `authentik-config` Secret | `templates/external-secret-config.yaml` | ESO splits the AWS Secrets Manager JSON bundle (`percona-ci-platform/authentik/config`) into 7 keys: `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, `AUTHENTIK_BOOTSTRAP_TOKEN`, `AUTHENTIK_POSTGRESQL__PASSWORD`, and the `AUTHENTIK_OIDC_{GRAFANA,ARGOCD,HEADLAMP}_CLIENT_SECRET` trio |
-| `authentik-saml` Secret + `authentik-saml-idp` ConfigMap | `templates/external-secret-saml.yaml` | SP signing keypair (cert + private_key) and Duo IdP metadata XML |
-| `authentik-blueprint-{grafana,argocd,headlamp}` ConfigMaps | `templates/blueprint-*.yaml` | Declarative blueprints mounted into the worker, one per consumer. The grafana one also carries the shared pieces: the Duo SAML Source `duo-saml`, the group Property Mapping `duo-group-strip-dn`, and the identification-stage patch. Each declares its consumer's OAuth2 Provider + Application |
+| `authentik-saml` Secret + `authentik-saml-idp` ConfigMap | `templates/external-secret-saml.yaml` | SP signing keypair (cert + private_key). The IdP metadata ConfigMap is not consumed by Authentik (the SAML Source pins `sso_url` and `verification_kp` explicitly) |
+| `authentik-blueprint-{grafana,argocd,headlamp}` ConfigMaps | `templates/blueprint-*.yaml` | Declarative blueprints mounted into the worker, one per consumer. The grafana one also carries the shared pieces: the JumpCloud SAML Source `duo-saml` (slug kept from the Duo era), the pinned IdP certificate `jumpcloud-idp`, the group Property Mapping `duo-group-strip-dn`, and the identification-stage patch. Each declares its consumer's OAuth2 Provider + Application |
 | `authentik-bootstrap-keypair` Job | `templates/bootstrap-keypair-job.yaml` | ArgoCD PostSync hook that uploads the SP keypair from `authentik-saml` into Authentik's `CertificateKeyPair` API as `duo-saml-sp`. Idempotent (GET by name first). The blueprint references it via `!Find` |
 
 Adding a further OIDC client = a new `templates/blueprint-<consumer>.yaml`
@@ -57,9 +57,9 @@ curl -sI https://grafana.cd.percona.com/login/generic_oauth | grep -i ^location
 1. Log out of any Authentik admin sessions (`https://auth.cd.percona.com/`).
 2. Open `https://grafana.cd.percona.com/login` in a clean browser session.
 3. Click **Sign in with Percona SSO** → 302 to Authentik authorize endpoint
-   → 302 to Duo SSO → MFA prompt → Duo POSTs SAML response back to Authentik
+   → 302 to JumpCloud → MFA prompt → JumpCloud POSTs SAML response back to Authentik
    → Authentik mints OIDC code → 302 back to Grafana with `?code=...`
-   → Grafana exchanges code, lands the user on the role mapped from Duo groups.
+   → Grafana exchanges code, lands the user on the role mapped from JumpCloud groups.
 
 Group → role mapping in `resources/addons/grafana/values.yaml`:
 ```
@@ -69,7 +69,7 @@ contains(groups[*], 'grafana_cd_admins') && 'GrafanaAdmin'
 ```
 `GF_AUTH_GENERIC_OAUTH_ALLOWED_GROUPS` gates entry to `grafana_cd_admins
 percona`. The `percona` Viewer leg is an accepted bootstrap risk (every
-Duo-authenticated employee can read all dashboards and Loki datasources).
+SSO-authenticated employee can read all dashboards and Loki datasources).
 [authentication.md](../authentication.md) is canonical for the mapping and
 the risk status. The proper close is a dedicated `grafana_cd_users` group.
 
@@ -79,7 +79,7 @@ Both consumers now run SSO-only:
 - Authentik itself — `default-authentication-identification` stage has
   `user_fields: []`, so the username/email form is not rendered. With a
   single SAML source registered, the frontend auto-redirects directly to
-  Duo. The akadmin local-login path is no longer reachable from the
+  JumpCloud. The akadmin local-login path is no longer reachable from the
   browser; recovery is documented below.
 
 ## Promote operator to internal
@@ -88,7 +88,7 @@ Authentik 2024.10+ enrolls source-federated users as `user_type=external`
 by default, and externals are blocked from `/if/admin/` and `/if/user/`
 with "Interface can only be accessed by internal users." For operators
 who need to visit Authentik directly (debug a flow, inspect events,
-rotate a token), promote them to `internal` after their first Duo
+rotate a token), promote them to `internal` after their first SSO
 login enrolls the user record.
 
 ```bash
@@ -116,7 +116,7 @@ matches least-privilege.
 
 ## Lockout recovery — akadmin
 
-If SSO is broken (Duo down, SAML SP cert expired, blueprint mis-applied)
+If SSO is broken (JumpCloud down, SAML SP cert expired, blueprint mis-applied)
 the only path back into Authentik admin is via the worker pod's `ak`
 CLI. Two procedures, in order of preference.
 
@@ -144,7 +144,7 @@ kubectl -n authentik exec -it deploy/authentik-server -c server -- \
 
 Then visit the recovery flow directly: `https://auth.cd.percona.com/if/flow/default-recovery-flow/`.
 Note: the *authentication* flow at `/if/flow/default-authentication-flow/`
-will still auto-redirect to Duo because of `user_fields: []`.
+will still auto-redirect to JumpCloud because of `user_fields: []`.
 
 **Pre-requisites for either path:**
 
@@ -165,8 +165,8 @@ order:
    Inspect — confirm the issued ID token's `groups` claim contains the
    expected group.
 2. Authentik logs (`kubectl -n authentik logs deploy/authentik-server`)
-   for the SAML response — confirm Duo sent the `groups` attribute.
-3. The SAML Source Property Mapping `duo-groups-to-authentik` is attached
+   for the SAML response — confirm JumpCloud sent the `groups` attribute.
+3. The SAML Source Property Mapping `duo-group-strip-dn` is attached
    to source `duo-saml`. Verify in the blueprint
    (`templates/blueprint-grafana.yaml`) — the entry is under the SAML
    Source's `user_property_mappings`.
@@ -195,5 +195,5 @@ authentik-config force-sync=$(date +%s) --overwrite`.
 | `AUTHENTIK_BOOTSTRAP_TOKEN` | Taint + apply, then `kubectl rollout restart deploy/authentik-worker` (the migration that updates the akadmin Token row runs there). Old token stays valid in DB until manually deleted via Directory → Tokens |
 | `AUTHENTIK_POSTGRESQL__PASSWORD` | Coordinated: taint, apply, restart Postgres + Authentik server pods |
 | `AUTHENTIK_OIDC_GRAFANA_CLIENT_SECRET` | Taint, apply; ESO refreshes within 1h; force ArgoCD refresh on the `grafana` app to roll the Grafana pod with the new secret. The blueprint resolves the new value via `!Env` on next worker boot |
-| Duo IdP metadata | `aws ssm put-parameter --overwrite` then `tofu apply` — cluster-Secret annotation `authentik_saml_idp_metadata_b64` refreshes; ArgoCD redeploys the `authentik-saml-idp` ConfigMap; the SAML Source on Authentik's side keeps reading the file path so no UI step needed |
-| SP signing cert + key | `openssl req -newkey rsa:2048 -nodes -keyout /tmp/k -x509 -days 1825 -subj '/CN=...' -out /tmp/c`; `aws secretsmanager put-secret-value --secret-id percona-ci-platform/authentik/saml/{certificate,private_key}`; force-sync the `authentik-saml` ExternalSecret; the bootstrap Job is *not* idempotent w.r.t. content, so delete the existing CertificateKeyPair `duo-saml-sp` from Authentik (Directory → Certificates) before re-running the Job, OR PATCH the keypair via API. Coordinate with Santiago — Duo's SP record carries the public cert; rotation needs a Duo-side update too |
+| JumpCloud IdP signing cert | Replace `certificate_data` of the `jumpcloud-idp` entry in `templates/blueprint-grafana.yaml` with the PEM from the metadata IT sends, sync, then `kubectl -n authentik rollout restart deploy/authentik-worker`. The `authentik-saml-idp` ConfigMap and its SSM parameter are not read by Authentik, updating them changes nothing |
+| SP signing cert + key | `openssl req -newkey rsa:2048 -nodes -keyout /tmp/k -x509 -days 1825 -subj '/CN=...' -out /tmp/c`; `aws secretsmanager put-secret-value --secret-id percona-ci-platform/authentik/saml/{certificate,private_key}`; force-sync the `authentik-saml` ExternalSecret; the bootstrap Job is *not* idempotent w.r.t. content, so delete the existing CertificateKeyPair `duo-saml-sp` from Authentik (Directory → Certificates) before re-running the Job, OR PATCH the keypair via API. Coordinate with Santiago — the JumpCloud SP record carries the public cert; rotation needs a JumpCloud-side update too |

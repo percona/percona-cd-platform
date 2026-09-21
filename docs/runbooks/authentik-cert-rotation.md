@@ -5,9 +5,10 @@ Authentik holds two certificate key-pairs in scope for this cluster, both curren
 | Cert | Role | If it expires |
 |---|---|---|
 | `authentik Self-signed Certificate` | Signs every OIDC id_token (Headlamp, Grafana, ArgoCD) plus Authentik metadata | All SSO via OIDC stops; the apiserver and OIDC clients fail signature validation |
-| `duo-saml-sp` (CN `grafana.cd.percona.com`, legacy naming) | Signs Authentik's SAML AuthnRequests to Duo | Duo step breaks; no logins through Authentik at all |
+| `duo-saml-sp` (CN `grafana.cd.percona.com`, legacy naming) | Signs Authentik's SAML AuthnRequests to JumpCloud | IdP step breaks; no logins through Authentik at all |
+| `jumpcloud-idp` (JumpCloud's public signing cert, no private key, expires 2031-09-17) | Verifies the SAML Response signature (`verification_kp` on the SAML Source) | Every login fails with an invalid-signature error until the blueprint carries the new cert |
 
-Duo's own IdP signing cert is not pinned in Authentik (`verification_kp=None` on the SAML Source); Authentik trusts Duo via the live metadata URL. Duo-side cert rotation is therefore handled by Duo and does not require action on our side unless they also change endpoints.
+JumpCloud's IdP signing cert is pinned as `jumpcloud-idp`, declared inline as `certificate_data` in `templates/blueprint-grafana.yaml`. When JumpCloud rotates it, replace that block with the new PEM from the IdP metadata IT sends, sync, and restart `authentik-worker`. Nothing else moves. (Under Duo nothing was pinned and no signature was verified.)
 
 ## When to run
 
@@ -90,17 +91,17 @@ Used to sign every id_token. OIDC clients (Headlamp via the EKS external OIDC as
 
 6. **Decommission the old cert** after several hours of stable login traffic (refresh tokens in flight need to drain). UI: *System -> Certificates -> old cert -> Delete*. Authentik blocks deletion of a cert still referenced by anything, so any straggler provider keeps you safe.
 
-## Cert 2: Duo SP signing key (`duo-saml-sp`)
+## Cert 2: SP signing key (`duo-saml-sp`)
 
-Used to sign AuthnRequests sent to Duo. The new public cert must also be installed in Duo (Duo verifies our signature against the SP cert it stores).
+Used to sign AuthnRequests sent to JumpCloud. The new public cert must also be installed in the JumpCloud SP record (IT owns that side and verifies our signature against the SP cert it stores).
 
 ### Steps
 
-1. **Generate a new SP signing key** in Authentik. UI: *System -> Certificates -> Create*. Name: `duo-saml-sp-2027`. 2048-bit RSA, 2-year validity (matches the current cert; bumping to 4096 is fine if Duo accepts it).
+1. **Generate a new SP signing key** in Authentik. UI: *System -> Certificates -> Create*. Name: `duo-saml-sp-2027`. 2048-bit RSA, 2-year validity (matches the current cert; bumping to 4096 is fine if JumpCloud accepts it).
 
-2. **Register the new public cert in Duo.** Duo Admin Panel: find the SAML application backing the Authentik bridge, replace the SP public certificate (download it from Authentik *System -> Certificates -> new cert -> Download Certificate*), save.
+2. **Register the new public cert in JumpCloud.** Ask IT-Ops (`@zan`): in the JumpCloud Admin Portal SSO application for grafana.cd, replace the SP certificate (download it from Authentik *System -> Certificates -> new cert -> Download Certificate*), save.
 
-3. **Swap the signing key on the Authentik SAML Source.** UI: *Sources -> Duo SSO -> signing_kp = new cert -> save*. Or via API:
+3. **Swap the signing key on the Authentik SAML Source.** UI: *Sources -> JumpCloud SSO -> signing_kp = new cert -> save*. Or via API:
 
    ```bash
    pk=$(curl -s -H "Authorization: Bearer $TOK" \
@@ -112,7 +113,7 @@ Used to sign AuthnRequests sent to Duo. The new public cert must also be install
      -d "{\"signing_kp\": \"<new-cert-pk>\"}"
    ```
 
-4. **Verify.** From a fresh incognito window, log into Authentik through the Duo bridge (any of Headlamp/Grafana/ArgoCD will trigger it). The Duo redirect should still succeed and bounce you back signed in. Test with at least two browsers / accounts.
+4. **Verify.** From a fresh incognito window, log into Authentik through the JumpCloud bridge (any of Headlamp/Grafana/ArgoCD will trigger it). The JumpCloud redirect should still succeed and bounce you back signed in. Test with at least two browsers / accounts.
 
 5. **Decommission the old cert** after a stable login window.
 
@@ -121,7 +122,7 @@ Used to sign AuthnRequests sent to Duo. The new public cert must also be install
 Old certs remain in Authentik until explicitly deleted; rollback is always available between steps 1-5 of either rotation:
 
 - **Cert 1 rollback.** Swap providers back to the old cert's pk (UI or PATCH). Clients refetch JWKS on next signature mismatch and pick the old key back up.
-- **Cert 2 rollback.** Swap the SAML Source back to the old `signing_kp` and revert the Duo SP metadata to the old cert.
+- **Cert 2 rollback.** Swap the SAML Source back to the old `signing_kp` and have IT revert the JumpCloud SP record to the old cert.
 
 ## Related
 
