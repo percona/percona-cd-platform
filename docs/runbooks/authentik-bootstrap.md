@@ -186,6 +186,43 @@ Secret is missing one of the env-var keys it references. Force-sync the
 ExternalSecret: `kubectl -n authentik annotate externalsecret
 authentik-config force-sync=$(date +%s) --overwrite`.
 
+**Bind a renamed JumpCloud group to an existing Authentik group** — the
+`duo-group-strip-dn` mapping only renames what the assertion carries. The
+source keys its group links on the raw JumpCloud identifier, and a raw
+identifier without a link enrols a *new* group under the renamed name, so
+every rename needs a `GroupSAMLSourceConnection` bound to the existing
+group. The link's `group` field is read-only in the API, so this is a
+Django shell job. Order matters: a login through a link rewrites the linked
+group's name to the mapping output, so ship the rename before the link.
+
+Do not run `ak shell` inside `authentik-worker`: the worker has a 512 MiB
+limit and the shell pushes it over, which OOM-kills the worker. Use a
+one-off pod from the same image and Secrets instead:
+
+```bash
+kubectl -n authentik run ak-shell-oneoff --image=ghcr.io/goauthentik/server:2026.2.4 \
+  --restart=Never --overrides='{"spec":{"serviceAccountName":"authentik","containers":[{"name":"shell",
+  "image":"ghcr.io/goauthentik/server:2026.2.4","command":["sleep","900"],
+  "envFrom":[{"secretRef":{"name":"authentik"}},{"secretRef":{"name":"authentik-config"}}],
+  "resources":{"requests":{"memory":"512Mi"},"limits":{"memory":"1Gi"}}}]}}'
+kubectl -n authentik wait --for=condition=Ready pod/ak-shell-oneoff --timeout=120s
+kubectl -n authentik exec -i pod/ak-shell-oneoff -- ak shell <<'EOF'
+from authentik.core.models import Group
+from authentik.sources.saml.models import SAMLSource, GroupSAMLSourceConnection
+src = SAMLSource.objects.get(slug="duo-saml")
+grp = Group.objects.get(name="grafana_cd_admins")
+GroupSAMLSourceConnection.objects.get_or_create(
+    source=src, identifier="grafana_cd_admins - SSO", defaults={"group": grp})
+EOF
+kubectl -n authentik delete pod ak-shell-oneoff
+```
+
+Verify with `GET /api/v3/sources/group_connections/saml/?search=<name>` (the
+`group` field must be the existing group's pk) and with the mapping test
+endpoint, `POST /api/v3/propertymappings/all/<pk>/test/` with
+`{"user": <pk>, "context": {"group_id": "<raw identifier>"}}`, which must
+return the Duo-era name.
+
 ## Rotation
 
 | Secret | Rotation |
