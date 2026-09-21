@@ -8,8 +8,8 @@ ruler, which evaluates the LogQL and remote-writes the samples to Mimir
 prometheusrule-jenkins-uptime.yaml join the result on (master). The Mimir
 sync excludes this label, so Mimir's ruler never sees LogQL.
 
-The stream selector is the masters inventory, so fenced clones such as
-ps80-upgraded.cd stay out. EC2 masters carry `master` from the master-side
+The stream selector is the masters inventory, so fenced clones
+stay out. EC2 masters carry `master` from the master-side
 Alloy external labels; the in-cluster controller gets it from the Alloy DS
 `loki.relabel "jenkins_master"` rule (namespace jenkins-<inst>-k8s).
 
