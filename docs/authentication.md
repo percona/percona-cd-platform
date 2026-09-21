@@ -43,12 +43,14 @@ groups all the way to the application's role mapping.
        JumpCloud (sso.jumpcloud.com/saml2/grafanacdperconacom)
               │  user MFA
               ▼  signed SAML Response with `groups` attribute
-              │  (plain group names: grafana_cd_admins, percona)
+              │  (plain group names: `Security Training Completed`,
+              │   `grafana_cd_admins - SSO`)
        Authentik /acs/
               │  Response signature verified against the pinned
               │  `jumpcloud-idp` certificate (verification_kp)
-              │  group_property_mappings passes plain names through
-              │  (and strips a DN to its CN if one ever arrives)
+              │  group_property_mappings renames them to `percona` and
+              │  `grafana_cd_admins` (and strips a DN to its CN if one
+              │  ever arrives)
               │  Authentik creates/updates Group rows
               │  user_property_mappings populates email/name/etc
               ▼
@@ -74,7 +76,11 @@ groups all the way to the application's role mapping.
 
 ## Group propagation
 
-JumpCloud sends groups as plain names (`grafana_cd_admins`, `percona`).
+JumpCloud sends groups as plain names. The two the platform consumes are
+`Security Training Completed` (every employee, renamed to `percona`) and
+`grafana_cd_admins - SSO` (hand-picked admins, renamed to `grafana_cd_admins`).
+Each is bound to its existing Authentik group by a source link, so membership
+follows JumpCloud on every login.
 Duo, the previous IdP, sent them as full FreeIPA LDAP DNs:
 
 ```

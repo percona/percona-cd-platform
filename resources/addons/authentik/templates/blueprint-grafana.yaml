@@ -59,18 +59,23 @@ data:
       # (`grafana_cd_admins`, `percona`). Strip the DN to its first CN value
       # and return it as the Authentik Group's `name`. JumpCloud sends plain
       # group names, which miss the `^cn=` match and pass through unchanged.
-      # The one JumpCloud group every employee carries is renamed to
-      # `percona` here so Grafana, ArgoCD and Headlamp keep their rules.
+      # The two JumpCloud groups the consumers care about carry different
+      # names there (one role-derived group every employee lands in, one
+      # hand-picked admin group), so they are renamed here to the Duo-era
+      # names and Grafana, ArgoCD and Headlamp keep their rules.
       #
       # Runtime state this depends on, which blueprints cannot declare
       # (the group link's `group` field is read-only in the API and the
-      # blueprint schema): a GroupSAMLSourceConnection on this source with
-      # identifier "Security Training Completed" bound to the existing
-      # `percona` group. Without it the next login enrols a second group
-      # named percona. On every login the source removes the user from all
-      # groups linked to it and re-adds the ones in the assertion, so a
-      # group that must persist without the IdP sending it (grafana_cd_admins
-      # until IT binds a JumpCloud group of that name) carries NO link.
+      # blueprint schema): one GroupSAMLSourceConnection per renamed
+      # identifier on this source, "Security Training Completed" bound to
+      # the existing `percona` group and "grafana_cd_admins - SSO" bound to
+      # the existing `grafana_cd_admins` group. Without a link the next
+      # login enrols a second group under the renamed name. With a link the
+      # login also rewrites the linked group's name to this mapping's
+      # output, so the rename must be live before the link exists. On every
+      # login the source removes the user from all groups linked to it and
+      # re-adds the ones in the assertion, so membership of both groups is
+      # directory-driven from JumpCloud.
       #
       # References:
       #   - authentik/core/sources/flow_manager.py (per-group iteration over
@@ -87,11 +92,14 @@ data:
           expression: |
             import re
             raw = request.context.get("group_id", "")
-            # JumpCloud binds every employee to the app through this group.
-            # Consumers key on the name "percona" that the Duo-era directory
-            # group carried, so translate rather than touch four consumers.
-            if raw == "Security Training Completed":
-                return {"name": "percona"}
+            # JumpCloud names differ from the Duo-era names the consumers
+            # key on, so translate rather than touch four consumers.
+            renames = {
+                "Security Training Completed": "percona",
+                "grafana_cd_admins - SSO": "grafana_cd_admins",
+            }
+            if raw in renames:
+                return {"name": renames[raw]}
             m = re.match(r"^cn=([^,]+)", raw, re.IGNORECASE)
             return {"name": m.group(1) if m else raw}
 
