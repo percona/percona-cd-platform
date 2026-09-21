@@ -98,6 +98,11 @@ module "pmm" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pmm/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pmm/init.groovy.d/${f}")
   }
+  # Rendered with module state so the worker instance profile ARN comes from
+  # the resource, keeping the account id out of the committed file.
+  init_groovy_template_files = {
+    "dockerFarmCloud.groovy" = "${path.module}/../resources/jenkins-masters/pmm/init.groovy.d/dockerFarmCloud.groovy.tftpl"
+  }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
 

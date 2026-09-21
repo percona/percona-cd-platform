@@ -43,11 +43,11 @@ final Logger LOG = Logger.getLogger('dockerFarmCloud')
 final String CLOUD_NAME       = 'ec2-Docker Farm AWS-Dev b'
 final String REGION           = 'us-east-2'
 final String SSH_CRED_ID      = '9498028f-01d9-4066-b45c-6c813d51d11b'
-final String WORKER_PROFILE   = 'arn:aws:iam::119175775298:instance-profile/jenkins-pmm-amzn2-worker'
+final String WORKER_PROFILE   = '${worker_instance_profile_arn}'
 final String AMI_BILLING_TAG  = 'pmm-worker-3'
 final String SUBNET_2B        = 'subnet-05be3728311d11363'
 final String SUBNET_2C        = 'subnet-01267cd0c01aed343'
-final String SUBNETS          = "${SUBNET_2B} ${SUBNET_2C}"
+final String SUBNETS          = "$${SUBNET_2B} $${SUBNET_2C}"
 final String JAVA_X86         = '/etc/alternatives/java'
 final String JAVA_ARM         = 'java'
 
@@ -141,8 +141,8 @@ Closure<SlaveTemplate> buildTemplate = { Map row ->
         MinimumNumberOfInstancesTimeRangeConfig window = new MinimumNumberOfInstancesTimeRangeConfig()
         window.setMinimumNoInstancesActiveTimeRangeFrom('00:00')
         window.setMinimumNoInstancesActiveTimeRangeTo('23:59')
-        ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].each { window."set${it}"(true) }
-        ['Saturday', 'Sunday'].each { window."set${it}"(false) }
+        ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].each { window."set$${it}"(true) }
+        ['Saturday', 'Sunday'].each { window."set$${it}"(false) }
         template.setMinimumNumberOfInstancesTimeRangeConfig(window)
     }
     return template
@@ -168,4 +168,4 @@ Jenkins.instance.clouds.findAll { it.name == CLOUD_NAME }.each {
     Jenkins.instance.clouds.remove(it)
 }
 Jenkins.instance.clouds.add(cloud)
-LOG.info("dockerFarmCloud: registered cloud='${CLOUD_NAME}' templates=${templates.size()} region='${REGION}'")
+LOG.info("dockerFarmCloud: registered cloud='$${CLOUD_NAME}' templates=$${templates.size()} region='$${REGION}'")
