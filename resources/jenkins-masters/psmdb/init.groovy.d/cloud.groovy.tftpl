@@ -117,15 +117,15 @@ initMap['docker'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
+        if [ -n "$${DEVICE}" ]; then
             sudo yum -y install xfsprogs
-            sudo mkfs.xfs ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+            sudo mkfs.xfs $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
 
@@ -193,15 +193,15 @@ initMap['docker-32gb'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
+        if [ -n "$${DEVICE}" ]; then
             sudo yum -y install xfsprogs
-            sudo mkfs.xfs ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+            sudo mkfs.xfs $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
 
@@ -266,15 +266,15 @@ initMap['rpmMap'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="/dev/${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="/dev/$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
+        if [ -n "$${DEVICE}" ]; then
             sudo yum -y install xfsprogs
-            sudo mkfs.xfs ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+            sudo mkfs.xfs $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -285,7 +285,7 @@ initMap['rpmMap'] = '''
     echo "*  soft  nproc  65000"  | sudo tee -a /etc/security/limits.conf
     echo "*  hard  nproc  65000"  | sudo tee -a /etc/security/limits.conf
 
-    if [[ ${RHVER} -eq 8 ]] || [[ ${RHVER} -eq 7 ]]; then
+    if [[ $${RHVER} -eq 8 ]] || [[ $${RHVER} -eq 7 ]]; then
         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
     fi
@@ -296,7 +296,7 @@ initMap['rpmMap'] = '''
     done
 
     # Java version detection: RHEL 10 -> Java 21, all others -> Java 17
-    if [[ ${RHVER} -eq 10 ]]; then
+    if [[ $${RHVER} -eq 10 ]]; then
         sudo yum -y install java-21-openjdk-headless || :
     else
         sudo yum -y install java-17-amazon-corretto-headless || :
@@ -324,15 +324,15 @@ initMap['debMap'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
+        if [ -n "$${DEVICE}" ]; then
             sudo DEBIAN_FRONTEND=noninteractive apt-get -y install xfsprogs
-            sudo mkfs.xfs ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+            sudo mkfs.xfs $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -352,21 +352,21 @@ initMap['debMap'] = '''
     done
     DEB_VER=$(lsb_release -sc)
 
-    if [[ ${DEB_VER} == "trixie" ]]; then
+    if [[ $${DEB_VER} == "trixie" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
+    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "focal" ]] || [[ $${DEB_VER} == "bionic" ]] || [[ $${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
     fi
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "buster" ]]; then
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "buster" ]]; then
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
         sudo mv /etc/ssl /etc/ssl_old
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
         sudo cp -r /etc/ssl_old /etc/ssl
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
     else
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
     fi
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 
@@ -610,7 +610,7 @@ SlaveTemplate getTemplate(String OSType) {
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
         capMap[typeMap[OSType]],                    // String instanceCapStr
-        'arn:aws:iam::119175775298:instance-profile/jenkins-psmdb-slave', // String iamInstanceProfile
+        '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
@@ -640,7 +640,7 @@ String region = 'us-west-2'
 ('b'..'b').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.39/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
     EC2Cloud ec2Cloud = new EC2Cloud(
-        "AWS-Dev ${it}",                        // String cloudName
+        "AWS-Dev $${it}",                        // String cloudName
         true,                                   // boolean useInstanceProfileForCredentials
         '',                                     // String credentialsId
         region,                                 // String region

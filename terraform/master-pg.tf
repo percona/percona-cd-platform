@@ -79,6 +79,11 @@ module "pg" {
     for f in fileset("${path.module}/../resources/jenkins-masters/pg/init.groovy.d", "*.groovy") :
     f => file("${path.module}/../resources/jenkins-masters/pg/init.groovy.d/${f}")
   }
+  # Rendered with module state so the worker instance profile ARN comes from
+  # the resource, keeping the account id out of the committed file.
+  init_groovy_template_files = {
+    "cloud.groovy" = "${path.module}/../resources/jenkins-masters/pg/init.groovy.d/cloud.groovy.tftpl"
+  }
   init_groovy_sync_schedule = "rate(30 minutes)"
 }
 

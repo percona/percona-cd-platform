@@ -68,18 +68,18 @@ initMap['micro-amazon'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
-    if [[ ${RHVER} -eq 8 ]] || [[ ${RHVER} -eq 7 ]]; then
+    if [[ $${RHVER} -eq 8 ]] || [[ $${RHVER} -eq 7 ]]; then
         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* || :
         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* || :
     fi
@@ -93,12 +93,12 @@ initMap['micro-amazon'] = '''
     sudo yum -y remove java-1.8.0-openjdk-headless || :
 
     SYSREL=$(cat /etc/system-release | tr -dc '0-9.' | awk -F'.' '{print $1}')
-    if [ "${SYSREL}" = "2023" ]; then
+    if [ "$${SYSREL}" = "2023" ]; then
         JAVA_PKG="java-17-amazon-corretto"
     else
         JAVA_PKG="java-17-openjdk-headless"
     fi
-    sudo yum -y install ${JAVA_PKG} tzdata-java || :
+    sudo yum -y install $${JAVA_PKG} tzdata-java || :
     sudo yum -y install git || :
 
 
@@ -178,7 +178,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
         capMap[typeMap[OSType]],                    // String instanceCapStr
-        'arn:aws:iam::119175775298:instance-profile/jenkins-pg-worker', // String iamInstanceProfile
+        '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
@@ -208,7 +208,7 @@ String region = 'eu-central-1'
 ('b'..'c').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
     EC2Cloud ec2Cloud = new EC2Cloud(
-        "AWS-Dev ${it}",                        // String cloudName
+        "AWS-Dev $${it}",                        // String cloudName
         true,                                   // boolean useInstanceProfileForCredentials
         '',                                     // String credentialsId
         region,                                 // String region
@@ -216,12 +216,12 @@ String region = 'eu-central-1'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('micro-amazon',        "${region}${it}"),
-            getTemplate('min-centos-7-x64',    "${region}${it}"),
-            getTemplate('min-ol-8-x64',        "${region}${it}"),
-            getTemplate('min-ol-9-x64',        "${region}${it}"),
-            getTemplate('min-al2023-x64',      "${region}${it}"),
-            getTemplate('min-al2023-aarch64',  "${region}${it}"),
+            getTemplate('micro-amazon',        "$${region}$${it}"),
+            getTemplate('min-centos-7-x64',    "$${region}$${it}"),
+            getTemplate('min-ol-8-x64',        "$${region}$${it}"),
+            getTemplate('min-ol-9-x64',        "$${region}$${it}"),
+            getTemplate('min-al2023-x64',      "$${region}$${it}"),
+            getTemplate('min-al2023-aarch64',  "$${region}$${it}"),
         ],                                       // List<? extends SlaveTemplate> templates
         '',
         ''
