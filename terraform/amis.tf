@@ -47,7 +47,7 @@ locals {
 
 # ---------- x86_64 minimal: the Jenkins masters ----------
 
-data "aws_ami" "al2023_minimal_usw2" { # us-west-2: ps80, ps80-upgraded, pxb, psmdb
+data "aws_ami" "al2023_minimal_usw2" { # us-west-2: ps80, pxb, psmdb
   provider = aws.us-west-2
   owners   = ["amazon"]
 
