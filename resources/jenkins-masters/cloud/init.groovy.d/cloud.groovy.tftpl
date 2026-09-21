@@ -407,7 +407,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
         capMap[typeMap[OSType]],                    // String instanceCapStr
-        'arn:aws:iam::119175775298:instance-profile/jenkins-cloud-worker', // String iamInstanceProfile
+        '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy

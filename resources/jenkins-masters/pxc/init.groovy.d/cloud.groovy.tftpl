@@ -134,14 +134,14 @@ initMap['docker'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -205,18 +205,18 @@ initMap['rpmMap'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="/dev/${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="/dev/$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
-    if [[ ${RHVER} -eq 6 ]]; then
-        if [[ ${ARCH} == "x86_64" ]]; then
+    if [[ $${RHVER} -eq 6 ]]; then
+        if [[ $${ARCH} == "x86_64" ]]; then
             sudo curl https://jenkins.percona.com/downloads/cent6/centos6-eol.repo --output /etc/yum.repos.d/CentOS-Base.repo
         else
             sudo curl -k https://jenkins.percona.com/downloads/cent6/centos6-eol-s3.repo --output /etc/yum.repos.d/CentOS-Base.repo
@@ -225,7 +225,7 @@ initMap['rpmMap'] = '''
             sleep 1
             echo try again
         done
-        if [[ ${ARCH} == "x86_64" ]]; then
+        if [[ $${ARCH} == "x86_64" ]]; then
             PKGLIST="epel-release centos-release-scl"
         else
             PKGLIST="epel-release"
@@ -234,18 +234,18 @@ initMap['rpmMap'] = '''
                 echo try again
             done
         fi
-        until sudo yum -y install ${PKGLIST}; do
+        until sudo yum -y install $${PKGLIST}; do
             sleep 1
             echo try again
         done
         sudo rm /etc/yum.repos.d/epel-testing.repo
         sudo curl https://jenkins.percona.com/downloads/cent6/centos6-epel-eol.repo --output /etc/yum.repos.d/epel.repo
-        if [[ ${ARCH} == "x86_64" ]]; then
+        if [[ $${ARCH} == "x86_64" ]]; then
             sudo curl https://jenkins.percona.com/downloads/cent6/centos6-scl-eol.repo --output /etc/yum.repos.d/CentOS-SCLo-scl.repo
             sudo curl https://jenkins.percona.com/downloads/cent6/centos6-scl-rh-eol.repo --output /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo
         fi
     fi
-    if [[ ${RHVER} -eq 8 ]] || [[ ${RHVER} -eq 7 ]]; then
+    if [[ $${RHVER} -eq 8 ]] || [[ $${RHVER} -eq 7 ]]; then
         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
     fi
@@ -254,22 +254,22 @@ initMap['rpmMap'] = '''
         echo try again
     done
 
-    if [[ ${RHVER} -le 7 ]]; then
+    if [[ $${RHVER} -le 7 ]]; then
         # CentOS 6/7 - Java 11 from the distro; CentOS 7 remoting moves to a
         # pinned Temurin 21 below
-        sudo yum -y install java-11-openjdk tzdata-java git ${PKGLIST} || :
+        sudo yum -y install java-11-openjdk tzdata-java git $${PKGLIST} || :
     else
         # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8/OL9,
         # RHEL 10 and AL2023 carry a Java 21 package in live repos.
         if [ -f /etc/os-release ]; then
             . /etc/os-release
         fi
-        if [ "${ID}" = "amzn" ]; then
+        if [ "$${ID}" = "amzn" ]; then
             JAVA_PKG="java-21-amazon-corretto-headless"
         else
             JAVA_PKG="java-21-openjdk-headless"
         fi
-        sudo yum -y install ${JAVA_PKG} || sudo yum -y install java-17-openjdk-headless || :
+        sudo yum -y install $${JAVA_PKG} || sudo yum -y install java-17-openjdk-headless || :
         sudo yum -y install git tzdata-java || :
     fi
 
@@ -277,7 +277,7 @@ initMap['rpmMap'] = '''
     # so their agent JVM is a pinned Temurin 21 JRE symlinked into
     # /usr/local/bin (first on the SSH launcher PATH). Needs glibc 2.17+, so
     # CentOS 6 keeps its distro java and cannot join a 2.555.1+ controller.
-    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+    if { [[ $${RHVER} -eq 7 ]] || [[ $${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
         T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
         T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
         until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
@@ -292,7 +292,7 @@ initMap['rpmMap'] = '''
     fi
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
     # CentOS 6 x32 workarounds
-    if [[ ${ARCH} != "x86_64" ]]; then
+    if [[ $${ARCH} != "x86_64" ]]; then
         echo 'Defaults !requiretty' | sudo tee /etc/sudoers.d/requiretty
         if [ ! -f /mnt/swapfile ]; then
             sudo dd if=/dev/zero of=/mnt/swapfile bs=1024 count=524288
@@ -325,7 +325,7 @@ initMap['rpmMapRamdisk'] = '''
     if ! mountpoint -q /mnt; then
         sudo mount -t tmpfs -o size=20G tmpfs /mnt
     fi
-    if [[ ${RHVER} -eq 6 ]]; then
+    if [[ $${RHVER} -eq 6 ]]; then
         sudo curl https://jenkins.percona.com/downloads/cent6/centos6-eol.repo --output /etc/yum.repos.d/CentOS-Base.repo
         until sudo yum makecache; do
             sleep 1
@@ -340,7 +340,7 @@ initMap['rpmMapRamdisk'] = '''
         sudo curl https://jenkins.percona.com/downloads/cent6/centos6-scl-eol.repo --output /etc/yum.repos.d/CentOS-SCLo-scl.repo
         sudo curl https://jenkins.percona.com/downloads/cent6/centos6-scl-rh-eol.repo --output /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo
     fi
-    if [[ ${RHVER} -eq 8 ]]; then
+    if [[ $${RHVER} -eq 8 ]]; then
         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
     fi
@@ -353,7 +353,7 @@ initMap['rpmMapRamdisk'] = '''
     # Temurin 21 below.
     RHVER=$(rpm --eval %rhel)
     sudo yum -y install java-21-openjdk-headless tzdata-java git || sudo yum -y install java-17-openjdk-headless tzdata-java git || :
-    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+    if { [[ $${RHVER} -eq 7 ]] || [[ $${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
         T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
         T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
         until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
@@ -374,14 +374,14 @@ initMap['debMap'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     sudo sed -i 's|http://cdn-aws.deb.debian.org/debian stretch|http://archive.debian.org/debian stretch|g' /etc/apt/sources.list
@@ -402,28 +402,28 @@ initMap['debMap'] = '''
     # jammy, noble and resolute carry openjdk-21 in their own archives. The
     # rest keep their distro package for tooling and get a pinned Temurin 21
     # JRE below for remoting.
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "resolute" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
+    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "focal" ]] || [[ $${DEB_VER} == "bionic" ]] || [[ $${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
     fi
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "buster" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "buster" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "resolute" ]]; then
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
         sudo mv /etc/ssl /etc/ssl_old
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
         sudo cp -r /etc/ssl_old /etc/ssl
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
     else
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
     fi
 
     # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
     # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
     # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
     # 21; the distro package above stays the system java.
-    case "${DEB_VER}" in
+    case "$${DEB_VER}" in
         bookworm|bullseye|buster|focal|bionic)
             sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
             if [ "$(uname -m)" = "aarch64" ]; then
@@ -467,28 +467,28 @@ initMap['debMapRamdisk'] = '''
     # jammy, noble and resolute carry openjdk-21 in their own archives. The
     # rest keep their distro package for tooling and get a pinned Temurin 21
     # JRE below for remoting.
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "jammy" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "resolute" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "focal" ]] || [[ ${DEB_VER} == "bionic" ]] || [[ ${DEB_VER} == "xenial" ]]; then
+    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "focal" ]] || [[ $${DEB_VER} == "bionic" ]] || [[ $${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
     fi
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "buster" ]] || [[ ${DEB_VER} == "noble" ]] || [[ ${DEB_VER} == "resolute" ]]; then
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "buster" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "resolute" ]]; then
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
         sudo mv /etc/ssl /etc/ssl_old
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
         sudo cp -r /etc/ssl_old /etc/ssl
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
     else
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
     fi
 
     # bookworm, bullseye, buster, focal and bionic ship no openjdk-21 package,
     # so the agent JVM is a pinned Temurin 21 JRE tarball symlinked into
     # /usr/local/bin (first on the SSH launcher PATH). Only remoting moves to
     # 21; the distro package above stays the system java.
-    case "${DEB_VER}" in
+    case "$${DEB_VER}" in
         bookworm|bullseye|buster|focal|bionic)
             sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install curl ca-certificates
             if [ "$(uname -m)" = "aarch64" ]; then
@@ -517,14 +517,14 @@ initMap['metalDebMap'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     until sudo DEBIAN_FRONTEND=noninteractive apt-get update; do
@@ -583,14 +583,14 @@ initMap['performance-centos-6-x64']  = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     until sudo yum makecache; do
@@ -613,14 +613,14 @@ initMap['min-al2023-x64'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -674,14 +674,14 @@ initMap['min-rhel-10-x64'] = '''
     RHVER=$(rpm --eval %rhel)
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -1028,7 +1028,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
         capMap[typeMap[OSType]],                    // String instanceCapStr
-        'arn:aws:iam::119175775298:instance-profile/jenkins-pxc-worker', // String iamInstanceProfile
+        '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
@@ -1058,7 +1058,7 @@ String region = 'us-west-1'
 ('b'..'c').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.39/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
     EC2Cloud ec2Cloud = new EC2Cloud(
-        "AWS-Dev ${it}",                        // String cloudName
+        "AWS-Dev $${it}",                        // String cloudName
         true,                                   // boolean useInstanceProfileForCredentials
         '',                                     // String credentialsId
         region,                                 // String region
@@ -1066,49 +1066,49 @@ String region = 'us-west-1'
         sshKeysCredentialsId,                   // String sshKeysCredentialsId
         '240',                                   // String instanceCapStr
         [
-            getTemplate('micro-amazon',     "${region}${it}"),
-            getTemplate('docker',           "${region}${it}"),
-            getTemplate('docker-32gb',      "${region}${it}"),
-            // getTemplate('min-centos-6-x32', "${region}${it}"),
-            // getTemplate('min-centos-6-x64', "${region}${it}"),
-            getTemplate('min-centos-7-x64', "${region}${it}"),
-            getTemplate('min-centos-8-x64', "${region}${it}"),
-            getTemplate('min-ol-8-x64',     "${region}${it}"),
-            getTemplate('min-ol-9-x64',     "${region}${it}"),
-            getTemplate('min-rhel-10-x64',  "${region}${it}"),
-            // getTemplate('min-stretch-x64',  "${region}${it}"),
-            getTemplate('min-buster-x64',   "${region}${it}"),
-            getTemplate('min-bullseye-x64', "${region}${it}"),
-            getTemplate('min-bookworm-x64', "${region}${it}"),
-            getTemplate('min-trixie-x64',   "${region}${it}"),
-            // getTemplate('min-xenial-x64',   "${region}${it}"),
-            getTemplate('min-bionic-x64',   "${region}${it}"),
-            getTemplate('min-focal-x64',    "${region}${it}"),
-            getTemplate('min-jammy-x64',    "${region}${it}"),
-            getTemplate('min-noble-x64',    "${region}${it}"),
-            getTemplate('min-resolute-x64',    "${region}${it}"),
-            getTemplate('min-al2023-x64',       "${region}${it}"),
+            getTemplate('micro-amazon',     "$${region}$${it}"),
+            getTemplate('docker',           "$${region}$${it}"),
+            getTemplate('docker-32gb',      "$${region}$${it}"),
+            // getTemplate('min-centos-6-x32', "$${region}$${it}"),
+            // getTemplate('min-centos-6-x64', "$${region}$${it}"),
+            getTemplate('min-centos-7-x64', "$${region}$${it}"),
+            getTemplate('min-centos-8-x64', "$${region}$${it}"),
+            getTemplate('min-ol-8-x64',     "$${region}$${it}"),
+            getTemplate('min-ol-9-x64',     "$${region}$${it}"),
+            getTemplate('min-rhel-10-x64',  "$${region}$${it}"),
+            // getTemplate('min-stretch-x64',  "$${region}$${it}"),
+            getTemplate('min-buster-x64',   "$${region}$${it}"),
+            getTemplate('min-bullseye-x64', "$${region}$${it}"),
+            getTemplate('min-bookworm-x64', "$${region}$${it}"),
+            getTemplate('min-trixie-x64',   "$${region}$${it}"),
+            // getTemplate('min-xenial-x64',   "$${region}$${it}"),
+            getTemplate('min-bionic-x64',   "$${region}$${it}"),
+            getTemplate('min-focal-x64',    "$${region}$${it}"),
+            getTemplate('min-jammy-x64',    "$${region}$${it}"),
+            getTemplate('min-noble-x64',    "$${region}$${it}"),
+            getTemplate('min-resolute-x64',    "$${region}$${it}"),
+            getTemplate('min-al2023-x64',       "$${region}$${it}"),
             // min-al2023-aarch64 must NOT carry docker-32gb-aarch64: that label is
             // served solely by the Graviton Fleet (ec2FleetCloud -> jenkins-pxc-arm-graviton).
             // Co-serving routes the label to no cloud and starves fleet provisioning,
             // so jobs hang on "all nodes of label docker-32gb-aarch64 are offline".
-            getTemplate('min-al2023-aarch64',   "${region}${it}"),
-            getTemplate('metal-x64',            "${region}${it}"),
-            getTemplate('metal-aarch64',        "${region}${it}"),
-            // getTemplate('ramdisk-centos-6-x64', "${region}${it}"),
-            getTemplate('ramdisk-centos-7-x64', "${region}${it}"),
-            getTemplate('ramdisk-centos-8-x64', "${region}${it}"),
-            getTemplate('ramdisk-ol-8-x64',     "${region}${it}"),
-            getTemplate('ramdisk-ol-9-x64',     "${region}${it}"),
-            // getTemplate('ramdisk-stretch-x64',  "${region}${it}"),
-            // getTemplate('ramdisk-xenial-x64',   "${region}${it}"),
-            getTemplate('ramdisk-bionic-x64',   "${region}${it}"),
-            getTemplate('ramdisk-focal-x64',    "${region}${it}"),
-            getTemplate('ramdisk-jammy-x64',    "${region}${it}"),
-            getTemplate('ramdisk-noble-x64',    "${region}${it}"),
-            getTemplate('ramdisk-resolute-x64',    "${region}${it}"),
-            getTemplate('ramdisk-buster-x64',   "${region}${it}"),
-            getTemplate('performance-centos-6-x64', "${region}${it}"),
+            getTemplate('min-al2023-aarch64',   "$${region}$${it}"),
+            getTemplate('metal-x64',            "$${region}$${it}"),
+            getTemplate('metal-aarch64',        "$${region}$${it}"),
+            // getTemplate('ramdisk-centos-6-x64', "$${region}$${it}"),
+            getTemplate('ramdisk-centos-7-x64', "$${region}$${it}"),
+            getTemplate('ramdisk-centos-8-x64', "$${region}$${it}"),
+            getTemplate('ramdisk-ol-8-x64',     "$${region}$${it}"),
+            getTemplate('ramdisk-ol-9-x64',     "$${region}$${it}"),
+            // getTemplate('ramdisk-stretch-x64',  "$${region}$${it}"),
+            // getTemplate('ramdisk-xenial-x64',   "$${region}$${it}"),
+            getTemplate('ramdisk-bionic-x64',   "$${region}$${it}"),
+            getTemplate('ramdisk-focal-x64',    "$${region}$${it}"),
+            getTemplate('ramdisk-jammy-x64',    "$${region}$${it}"),
+            getTemplate('ramdisk-noble-x64',    "$${region}$${it}"),
+            getTemplate('ramdisk-resolute-x64',    "$${region}$${it}"),
+            getTemplate('ramdisk-buster-x64',   "$${region}$${it}"),
+            getTemplate('performance-centos-6-x64', "$${region}$${it}"),
         ],                                       // List<? extends SlaveTemplate> templates
         '',
         ''

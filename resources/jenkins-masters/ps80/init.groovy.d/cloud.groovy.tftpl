@@ -279,14 +279,14 @@ initMap['docker'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -345,14 +345,14 @@ initMap['docker-32gb-hirsute'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     until sudo DEBIAN_FRONTEND=noninteractive apt-get update; do
@@ -449,14 +449,14 @@ initMap['docker-32gb-bullseye'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -554,18 +554,18 @@ initMap['micro-amazon'] = '''
     RHVER=$(rpm --eval %rhel)
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
-    if [[ ${RHVER} -eq 8 ]] || [[ ${RHVER} -eq 7 ]]; then
+    if [[ $${RHVER} -eq 8 ]] || [[ $${RHVER} -eq 7 ]]; then
         sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
         sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
     fi
@@ -584,18 +584,18 @@ initMap['micro-amazon'] = '''
     fi
     # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8, OL9
     # and Amazon Linux carry a Java 21 package in live repos.
-    if [ "${ID}" = "amzn" ]; then
+    if [ "$${ID}" = "amzn" ]; then
         JAVA_PKG="java-21-amazon-corretto-headless"
     else
         JAVA_PKG="java-21-openjdk-headless"
     fi
-    sudo yum -y install ${JAVA_PKG} tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
+    sudo yum -y install $${JAVA_PKG} tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
 
     # CentOS 7 and CentOS 8 track frozen vault repos with no Java 21 package,
     # so their agent JVM is a pinned Temurin 21 JRE symlinked into
     # /usr/local/bin (first on the SSH launcher PATH). Needs glibc 2.17+, so
     # CentOS 6 keeps its distro java and cannot join a 2.555.1+ controller.
-    if { [[ ${RHVER} -eq 7 ]] || [[ ${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
+    if { [[ $${RHVER} -eq 7 ]] || [[ $${RHVER} -eq 8 ]]; } && ! java -version 2>&1 | grep -q 'version "21'; then
         T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
         T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
         until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
@@ -618,14 +618,14 @@ initMap['min-al2023-x64'] = '''
 
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext4 ${DEVICE}
-            sudo mount -o noatime ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext4 $${DEVICE}
+            sudo mount -o noatime $${DEVICE} /mnt
         fi
     fi
     sudo ethtool -K eth0 sg off
@@ -681,14 +681,14 @@ initMap['min-centos-6-x64'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="/dev/${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="/dev/$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     sudo curl https://jenkins.percona.com/downloads/cent6/centos6-eol.repo --output /etc/yum.repos.d/CentOS-Base.repo
@@ -720,14 +720,14 @@ initMap['min-bionic-x64'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
     until sudo DEBIAN_FRONTEND=noninteractive apt-get update; do
@@ -776,14 +776,14 @@ initMap['min-buster-x64'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -802,21 +802,21 @@ initMap['min-buster-x64'] = '''
         echo try again
     done
     DEB_VER=$(lsb_release -sc)
-    if [[ ${DEB_VER} == "trixie" ]]; then
+    if [[ $${DEB_VER} == "trixie" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]]; then
+    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
     fi
-    if [[ ${DEB_VER} == "trixie" ]] || [[ ${DEB_VER} == "bookworm" ]] || [[ ${DEB_VER} == "bullseye" ]] || [[ ${DEB_VER} == "buster" ]]; then
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "buster" ]]; then
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
         sudo mv /etc/ssl /etc/ssl_old
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
         sudo cp -r /etc/ssl_old /etc/ssl
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER}
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER}
     else
-        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install ${JAVA_VER} git
+        sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
     fi
 
     # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
@@ -869,14 +869,14 @@ initMap['min-rhel-10-x64'] = '''
     RHVER=$(rpm --eval %rhel)
     if ! mountpoint -q /mnt; then
         for DEVICE_NAME in $(lsblk -ndpbo NAME,SIZE | sort -n -r | awk '{print $1}'); do
-            if ! grep -qs "${DEVICE_NAME}" /proc/mounts; then
-                DEVICE="${DEVICE_NAME}"
+            if ! grep -qs "$${DEVICE_NAME}" /proc/mounts; then
+                DEVICE="$${DEVICE_NAME}"
                 break
             fi
         done
-        if [ -n "${DEVICE}" ]; then
-            sudo mkfs.ext2 ${DEVICE}
-            sudo mount ${DEVICE} /mnt
+        if [ -n "$${DEVICE}" ]; then
+            sudo mkfs.ext2 $${DEVICE}
+            sudo mount $${DEVICE} /mnt
         fi
     fi
 
@@ -1141,7 +1141,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
         capMap[typeMap[OSType]],                    // String instanceCapStr
-        'arn:aws:iam::119175775298:instance-profile/jenkins-ps80-worker', // String iamInstanceProfile
+        '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
         false,                                      // boolean useDedicatedTenancy
@@ -1171,7 +1171,7 @@ String region = 'us-west-2'
 ('b'..'c').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
     EC2Cloud ec2Cloud = new EC2Cloud(
-        "AWS-Dev ${it}",                        // String cloudName
+        "AWS-Dev $${it}",                        // String cloudName
         true,                                   // boolean useInstanceProfileForCredentials
         '',                                     // String credentialsId
         region,                                 // String region
@@ -1182,44 +1182,44 @@ String region = 'us-west-2'
             // docker is served by the x86-docker-fleet EC2FleetCloud
             // (ec2FleetCloud.groovy), not a classic template: two clouds
             // serving one label starve provisioning.
-            getTemplate('docker-32gb',          "${region}${it}"),
-            getTemplate('docker-32gb-hirsute',  "${region}${it}"),
-            getTemplate('docker-32gb-jammy',    "${region}${it}"),
-            getTemplate('docker-32gb-noble',    "${region}${it}"),
-            getTemplate('docker-32gb-resolute',    "${region}${it}"),
-            getTemplate('docker-32gb-focal',    "${region}${it}"),
-            getTemplate('docker-32gb-bullseye', "${region}${it}"),
-            getTemplate('micro-amazon',         "${region}${it}"),
-            getTemplate('min-amazon-2-x64',     "${region}${it}"),
-            getTemplate('min-al2023-x64',       "${region}${it}"),
-            getTemplate('min-centos-8-x64',     "${region}${it}"),
-            getTemplate('min-ol-8-x64',         "${region}${it}"),
-            getTemplate('min-ol-9-x64',         "${region}${it}"),
-            getTemplate('min-centos-7-x64',     "${region}${it}"),
-            getTemplate('fips-centos-7-x64',    "${region}${it}"),
-            getTemplate('min-centos-6-x64',     "${region}${it}"),
-            getTemplate('min-bionic-x64',       "${region}${it}"),
-            getTemplate('min-focal-x64',        "${region}${it}"),
-            getTemplate('min-jammy-x64',        "${region}${it}"),
-            getTemplate('min-noble-x64',        "${region}${it}"),
-            getTemplate('min-resolute-x64',        "${region}${it}"),
-            getTemplate('min-buster-x64',       "${region}${it}"),
-            getTemplate('min-stretch-x64',      "${region}${it}"),
-            getTemplate('min-xenial-x64',       "${region}${it}"),
-            getTemplate('min-bullseye-x64',     "${region}${it}"),
+            getTemplate('docker-32gb',          "$${region}$${it}"),
+            getTemplate('docker-32gb-hirsute',  "$${region}$${it}"),
+            getTemplate('docker-32gb-jammy',    "$${region}$${it}"),
+            getTemplate('docker-32gb-noble',    "$${region}$${it}"),
+            getTemplate('docker-32gb-resolute',    "$${region}$${it}"),
+            getTemplate('docker-32gb-focal',    "$${region}$${it}"),
+            getTemplate('docker-32gb-bullseye', "$${region}$${it}"),
+            getTemplate('micro-amazon',         "$${region}$${it}"),
+            getTemplate('min-amazon-2-x64',     "$${region}$${it}"),
+            getTemplate('min-al2023-x64',       "$${region}$${it}"),
+            getTemplate('min-centos-8-x64',     "$${region}$${it}"),
+            getTemplate('min-ol-8-x64',         "$${region}$${it}"),
+            getTemplate('min-ol-9-x64',         "$${region}$${it}"),
+            getTemplate('min-centos-7-x64',     "$${region}$${it}"),
+            getTemplate('fips-centos-7-x64',    "$${region}$${it}"),
+            getTemplate('min-centos-6-x64',     "$${region}$${it}"),
+            getTemplate('min-bionic-x64',       "$${region}$${it}"),
+            getTemplate('min-focal-x64',        "$${region}$${it}"),
+            getTemplate('min-jammy-x64',        "$${region}$${it}"),
+            getTemplate('min-noble-x64',        "$${region}$${it}"),
+            getTemplate('min-resolute-x64',        "$${region}$${it}"),
+            getTemplate('min-buster-x64',       "$${region}$${it}"),
+            getTemplate('min-stretch-x64',      "$${region}$${it}"),
+            getTemplate('min-xenial-x64',       "$${region}$${it}"),
+            getTemplate('min-bullseye-x64',     "$${region}$${it}"),
             // min-bookworm-x64 is served by the x86-bookworm-fleet EC2FleetCloud
             // (ec2FleetCloud.groovy), not a classic template: two clouds serving
             // one label starve provisioning.
-            getTemplate('min-trixie-x64',       "${region}${it}"),
-            getTemplate('min-rhel-10-x64',      "${region}${it}"),
-            getTemplate('docker-64gb-aarch64',  "${region}${it}"),
-            getTemplate('min-al2023-aarch64',   "${region}${it}"),
-            getTemplate('min-jammy-aarch64',    "${region}${it}"),
-            getTemplate('min-noble-aarch64',    "${region}${it}"),
-            getTemplate('min-resolute-aarch64',    "${region}${it}"),
-            getTemplate('min-bullseye-aarch64', "${region}${it}"),
-            getTemplate('min-bookworm-aarch64', "${region}${it}"),
-            getTemplate('min-trixie-aarch64',   "${region}${it}"),
+            getTemplate('min-trixie-x64',       "$${region}$${it}"),
+            getTemplate('min-rhel-10-x64',      "$${region}$${it}"),
+            getTemplate('docker-64gb-aarch64',  "$${region}$${it}"),
+            getTemplate('min-al2023-aarch64',   "$${region}$${it}"),
+            getTemplate('min-jammy-aarch64',    "$${region}$${it}"),
+            getTemplate('min-noble-aarch64',    "$${region}$${it}"),
+            getTemplate('min-resolute-aarch64',    "$${region}$${it}"),
+            getTemplate('min-bullseye-aarch64', "$${region}$${it}"),
+            getTemplate('min-bookworm-aarch64', "$${region}$${it}"),
+            getTemplate('min-trixie-aarch64',   "$${region}$${it}"),
         ],                                       // List<? extends SlaveTemplate> templates
         '',
         ''
