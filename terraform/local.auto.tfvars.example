@@ -44,8 +44,8 @@
 #  }
 #}
 
-# Authentik SAML bridge (Duo SSO). Default false, the cluster boots without
-# the bridge. Flip to true once the IdP metadata is populated in SSM at
-# /<cluster>/authentik/saml/idp_metadata.
-# Cutover runbook: docs/runbooks/grafana-saml-cutover.md
-#authentik_saml_enabled = true
+# Authentik SAML bridge (JumpCloud via Authentik). The committed default is
+# true and matches the live cluster, so leave this unset. Set false only to
+# boot a fresh cluster before the SP cert/key and IdP metadata exist, or to
+# roll the bridge back. Runbook: docs/runbooks/authentik-bootstrap.md
+#authentik_saml_enabled = false
