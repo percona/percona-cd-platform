@@ -151,9 +151,12 @@ variable "authentik_hostname" {
 
 variable "authentik_saml_enabled" {
   description = <<-EOT
-    Toggles Authentik's SAML SP source for Duo (HD-30780). Default
-    false so the cluster can boot before the SP cert/key + IdP metadata
-    are populated. When true:
+    Wires Authentik's SAML SP source to the company IdP (JumpCloud). The
+    committed default is true because the live cluster runs with the
+    bridge on, and a plan from any checkout must render that truth
+    without a local tfvars override. Set false only to boot a fresh
+    cluster before the SP cert/key and IdP metadata exist, or to roll
+    the bridge back. When true:
 
       - SP cert + private_key are fetched from AWS Secrets Manager
         (paths `$${cluster_name}/authentik/saml/{certificate,private_key}`)
@@ -164,14 +167,13 @@ variable "authentik_saml_enabled" {
         and rendered into a ConfigMap mounted at
         /etc/authentik/saml-idp/idp-metadata.xml.
 
-    Replaces the prior var.grafana_saml_enabled — Grafana OSS lacks
-    SAML support, so the SAML SP role moved to Authentik (which
-    front-doors Grafana via OIDC). See
+    Grafana OSS lacks SAML support, so the SAML SP role lives in Authentik
+    (which front-doors Grafana via OIDC). See
     docs/adr/0012-authentik-saml-oidc-bridge.md for the architecture
     rationale.
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "authentik_secret_breakglass_arns" {
