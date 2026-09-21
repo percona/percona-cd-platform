@@ -113,14 +113,26 @@ lambda-logs name since="1h": _require-aws-profile
 _require-aws-profile:
     @: "${AWS_PROFILE:?AWS_PROFILE must be exported (e.g. export AWS_PROFILE=percona-dev-admin); do NOT set aws_profile in local.auto.tfvars}"
 
+# Refuse to plan or apply with an uncommitted .terraform.lock.hcl. State written
+# through unpinned providers cannot be decoded by the committed ones.
+_require-clean-lockfile:
+    @git diff --quiet HEAD -- terraform/.terraform.lock.hcl || (echo "terraform/.terraform.lock.hcl differs from HEAD. Commit the provider bump (just tf-providers-upgrade) in its own PR before plan or apply." >&2 && exit 1)
+
 # ---------- terraform / opentofu ----------
 # Offline init — no backend, no credentials, no -upgrade (matches CI's
 # `tofu init -backend=false`, so `just ci` does not rewrite .terraform.lock.hcl).
 tf-init:
     tofu -chdir=terraform init -backend=false
 
-# Real backend init (reads the inherited AWS_PROFILE); -upgrade is intentional here.
+# Real backend init (reads the inherited AWS_PROFILE). Honors the committed
+# lockfile, so plan and apply run the providers main pins.
 tf-init-backend: _require-aws-profile
+    tofu -chdir=terraform init
+
+# Deliberate provider bump. Rewrites .terraform.lock.hcl to the newest versions
+# inside the versions.tf constraints. Commit the lockfile in its own PR after a
+# clean plan, plan and apply refuse an uncommitted lockfile.
+tf-providers-upgrade: _require-aws-profile
     tofu -chdir=terraform init -upgrade
 
 # fmt stays at repo root (recurses into terraform/ and every module).
@@ -154,15 +166,15 @@ tf-trivy:
       --skip-files terraform/tfplan \
       --ignorefile .trivyignore terraform/
 
-tf-plan: _require-aws-profile
+tf-plan: _require-aws-profile _require-clean-lockfile
     tofu -chdir=terraform plan -out=tfplan
 
 # Applies the SAVED plan from `just tf-plan`. NEVER auto-approve. Re-run tf-plan
 # first if terraform/tfplan is stale; tofu rejects an out-of-date saved plan.
-tf-apply: _require-aws-profile
+tf-apply: _require-aws-profile _require-clean-lockfile
     tofu -chdir=terraform apply tfplan
 
-tf-destroy: _require-aws-profile
+tf-destroy: _require-aws-profile _require-clean-lockfile
     tofu -chdir=terraform destroy
 
 # Back up live state to a local, gitignored snapshot before any risky apply.
@@ -196,7 +208,7 @@ tf-state-versioning-check: _require-aws-profile
 # hand-maintained list missed all four masters of one migration wave).
 # There is intentionally NO tf-apply-masters: apply the full saved plan via
 # `just tf-plan` + `just tf-apply` after review.
-tf-plan-masters: _require-aws-profile
+tf-plan-masters: _require-aws-profile _require-clean-lockfile
     #!/usr/bin/env bash
     set -euo pipefail
     targets=()
