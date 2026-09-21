@@ -235,7 +235,7 @@ variable "init_groovy_files" {
 }
 
 variable "init_groovy_template_files" {
-  description = "init.groovy.d files rendered with templatefile() before upload, as a map of filename => .tftpl path. Template variables: subnet_by_az_name (AZ name => subnet id, from this module's subnets) and vpc_id. Lets netMap subnet IDs in cloud.groovy come from state instead of hand-edited literals, so a VPC or subnet replacement re-renders the S3 object in the same apply. Rendered entries merge OVER init_groovy_files on filename collision. Escape literal Groovy GStrings as $${...} in the template. Empty skips."
+  description = "init.groovy.d files rendered with templatefile() before upload, as a map of filename => .tftpl path. Template variables: subnet_by_az_name (AZ name => subnet id, from this module's subnets), vpc_id, and worker_instance_profile_arn (this module's worker instance profile, so no template carries an account-id literal). Lets netMap subnet IDs in cloud.groovy come from state instead of hand-edited literals, so a VPC or subnet replacement re-renders the S3 object in the same apply. Rendered entries merge OVER init_groovy_files on filename collision. Escape literal Groovy GStrings as $${...} in the template. Empty skips."
   type        = map(string)
   default     = {}
 }

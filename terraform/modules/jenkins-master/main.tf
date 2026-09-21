@@ -167,8 +167,9 @@ locals {
   init_groovy_rendered = {
     for name, path in var.init_groovy_template_files :
     name => templatefile(path, {
-      subnet_by_az_name = { for k, s in aws_subnet.this : s.availability_zone => s.id }
-      vpc_id            = aws_vpc.this.id
+      subnet_by_az_name           = { for k, s in aws_subnet.this : s.availability_zone => s.id }
+      vpc_id                      = aws_vpc.this.id
+      worker_instance_profile_arn = aws_iam_instance_profile.worker.arn
     })
   }
   init_groovy_all = merge(var.init_groovy_files, local.init_groovy_rendered)
