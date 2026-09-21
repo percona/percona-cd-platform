@@ -58,8 +58,19 @@ data:
       # Grafana's ALLOWED_GROUPS / role-mapping JMESPath expects the bare CN
       # (`grafana_cd_admins`, `percona`). Strip the DN to its first CN value
       # and return it as the Authentik Group's `name`. JumpCloud sends plain
-      # group names, which miss the `^cn=` match and pass through unchanged,
-      # so the mapping stays correct for both IdPs.
+      # group names, which miss the `^cn=` match and pass through unchanged.
+      # The one JumpCloud group every employee carries is renamed to
+      # `percona` here so Grafana, ArgoCD and Headlamp keep their rules.
+      #
+      # Runtime state this depends on, which blueprints cannot declare
+      # (the group link's `group` field is read-only in the API and the
+      # blueprint schema): a GroupSAMLSourceConnection on this source with
+      # identifier "Security Training Completed" bound to the existing
+      # `percona` group. Without it the next login enrols a second group
+      # named percona. On every login the source removes the user from all
+      # groups linked to it and re-adds the ones in the assertion, so a
+      # group that must persist without the IdP sending it (grafana_cd_admins
+      # until IT binds a JumpCloud group of that name) carries NO link.
       #
       # References:
       #   - authentik/core/sources/flow_manager.py (per-group iteration over
@@ -76,6 +87,11 @@ data:
           expression: |
             import re
             raw = request.context.get("group_id", "")
+            # JumpCloud binds every employee to the app through this group.
+            # Consumers key on the name "percona" that the Duo-era directory
+            # group carried, so translate rather than touch four consumers.
+            if raw == "Security Training Completed":
+                return {"name": "percona"}
             m = re.match(r"^cn=([^,]+)", raw, re.IGNORECASE)
             return {"name": m.group(1) if m else raw}
 
