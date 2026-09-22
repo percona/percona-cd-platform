@@ -3,10 +3,10 @@
   "plugins": [
     {
       "id": "hetzner-cloud",
-      "version": "103.percona.30",
-      "filename": "hetzner-cloud-103.percona.30.hpi",
-      "url": "https://github.com/Percona-Lab/jenkins-hetzner-cloud-plugin/releases/download/v103.percona.30/hetzner-cloud-103.percona.30.hpi",
-      "sha256": "15b35f6ae5f0bf0a8725180a40590e3ce71a95eada3afa2067163b101baba5e9"
+      "version": "103.percona.31",
+      "filename": "hetzner-cloud-103.percona.31.hpi",
+      "url": "https://github.com/Percona-Lab/jenkins-hetzner-cloud-plugin/releases/download/v103.percona.31/hetzner-cloud-103.percona.31.hpi",
+      "sha256": "93f6e0803df61615c5131a8151c2218fa128108e6c01a2233af963bd8f26a392"
     },
     {
       "id": "ec2",
