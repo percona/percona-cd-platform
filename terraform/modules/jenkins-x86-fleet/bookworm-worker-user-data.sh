@@ -102,25 +102,34 @@ for _ in $(seq 1 60); do
   echo "try again"
 done
 
-# The JRE install can fail in the ca-certificates-java postinst; the
-# /etc/ssl move-and-restore retry is carried over from the proven classic
-# initScript for this AMI family. Each step tolerates failure, the
-# postcondition assert below is the real gate.
-DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-17-jre-headless git || true
+DEBIAN_FRONTEND=noninteractive apt-get -y install git curl ca-certificates || true
 
-if ! command -v java >/dev/null; then
-  mv /etc/ssl /etc/ssl_old || true
-  DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-17-jre-headless || true
-  cp -r /etc/ssl_old /etc/ssl || true
-  DEBIAN_FRONTEND=noninteractive apt-get -y install openjdk-17-jre-headless || true
-fi
+# Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM, and a Java 17
+# agent fails to connect to a Java 21 controller (UnsupportedClassVersionError
+# on SlaveComputer$SlaveVersion). Debian 12 ships no openjdk-21 package, so the
+# agent JVM is a pinned Temurin 21 JRE symlinked into /usr/local/bin, first on
+# the SSH launcher PATH. Same pinned build as the CentOS 7 and 8 classic
+# templates. The version assert below is the real gate.
+temurin_url="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+temurin_sha="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+for _ in $(seq 1 60); do
+  if curl -fsSL -o /tmp/temurin-21.tar.gz "${temurin_url}"; then
+    break
+  fi
+  sleep 5
+  echo "try again"
+done
+echo "${temurin_sha}  /tmp/temurin-21.tar.gz" | sha256sum -c
+install -d /opt/temurin-21
+tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
 
 # Internal package repo.
 echo '10.30.6.9 repo.ci.percona.com' >> /etc/hosts
 
 # Postconditions: every capability the agent contract needs, asserted under
 # set -e so a violation aborts the boot loudly.
-command -v java >/dev/null
+java -version 2>&1 | grep -q 'version "21'
 command -v git >/dev/null
 mountpoint -q /mnt
 echo "BOOTSTRAP-OK"

@@ -78,10 +78,12 @@ for _ in $(seq 1 60); do
   echo "try again"
 done
 
-# Corretto first, OpenJDK as the fallback; the postcondition assert below is
-# the real gate.
-yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip ||
-  yum -y install java-17-openjdk-headless tzdata-java cronie unzip || true
+# Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM, and a Java 17
+# agent fails to connect to a Java 21 controller (UnsupportedClassVersionError
+# on SlaveComputer$SlaveVersion). Corretto first, OpenJDK as the fallback, no
+# Java 17 fallback; the version assert below is the real gate.
+yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip ||
+  yum -y install java-21-openjdk-headless tzdata-java cronie unzip || true
 yum -y install git docker
 yum -y remove awscli || true
 
@@ -132,7 +134,7 @@ systemctl enable --now docker
 
 # Postconditions: every capability the agent contract needs, asserted under
 # set -e so a violation aborts the boot loudly.
-command -v java >/dev/null
+java -version 2>&1 | grep -q 'version "21'
 command -v git >/dev/null
 aws --version | grep -q 'aws-cli/2'
 mountpoint -q /mnt
