@@ -13,9 +13,9 @@
 # the live CFN VPC (10.177.0.0/22) collides with cloud and cannot peer to the
 # EKS hub (re-CIDR variant, like ps57). Moving pxc off 10.177 lets cloud keep
 # it as the sole occupant later. The retained 300 GiB gp2 data volume is
-# imported in us-west-1b. On-demand m7i-flex.large (2 vCPU / 8 GB): the live
-# master averages 0.63% CPU (p99 3.37%) and the 8 GB box runs ~4.8 GB used, so
-# 8 GB holds the -Xmx heap and 2 flex-burst vCPU cover the rare spikes.
+# imported in us-west-1b. On-demand m7i-flex.xlarge (4 vCPU / 16 GB): the
+# 8 GB m7i-flex.large was OOM-killed on 2026-09-14 with the 4 GB heap plus the
+# parallel-MTR log streaming, so the host now carries headroom for both.
 module "pxc" {
   source    = "./modules/jenkins-master"
   providers = { aws = aws.us-west-1 }
@@ -42,11 +42,10 @@ module "pxc" {
   ebs_type = "gp2"
   az_index = 1
 
-  # On-demand to end the spot reclamations. m7i-flex.large is 2 vCPU / 8 GB:
-  # matches the prior c5a.xlarge memory footprint (CPU is idle), and clears the
-  # master JVM heap.
+  # On-demand to end the spot reclamations. m7i-flex.xlarge is 4 vCPU / 16 GB:
+  # the 8 GB predecessor was OOM-killed under the parallel-MTR console load.
   purchasing_option       = "on-demand"
-  on_demand_instance_type = "m7i-flex.large"
+  on_demand_instance_type = "m7i-flex.xlarge"
 
   # Distinct LT name so the module's launch template can coexist with the
   # CFN-created PXCMasterTemplate during the cutover (no name collision,
