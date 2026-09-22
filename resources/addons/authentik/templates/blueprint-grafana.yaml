@@ -1,7 +1,9 @@
 {{/*
 Authentik blueprint — declarative bootstrap of:
-  1. Duo SAML Source (`duo-saml`)        — Authentik as SP to Duo IdP
-  2. SAML groups Property Mapping        — propagate Duo `groups` attr inward
+  1. SAML Source (`duo-saml`)            — Authentik as SP to the JumpCloud IdP
+     (slug kept from the Duo era so the ACS and metadata URLs never moved)
+  2. SAML groups Property Mapping        — propagate the `groups` attr inward
+  2b. JumpCloud IdP signing certificate  — pinned for signature verification
   3. OAuth2 Provider `grafana`           — Authentik as IdP to Grafana
   4. Application `grafana`               — binds the provider; gives the launcher tile
 
@@ -51,11 +53,29 @@ data:
       # `group_property_mappings` field. This one runs ONCE PER raw SAML
       # group attribute value, with that raw value at request.context["group_id"].
       #
-      # Duo (FreeIPA-backed) sends groups as full LDAP DNs:
+      # Duo (FreeIPA-backed) sent groups as full LDAP DNs:
       #   cn=grafana_cd_admins,cn=groups,cn=accounts,dc=int,dc=percona,dc=com
       # Grafana's ALLOWED_GROUPS / role-mapping JMESPath expects the bare CN
       # (`grafana_cd_admins`, `percona`). Strip the DN to its first CN value
-      # and return it as the Authentik Group's `name`.
+      # and return it as the Authentik Group's `name`. JumpCloud sends plain
+      # group names, which miss the `^cn=` match and pass through unchanged.
+      # The two JumpCloud groups the consumers care about carry different
+      # names there (one role-derived group every employee lands in, one
+      # hand-picked admin group), so they are renamed here to the Duo-era
+      # names and Grafana, ArgoCD and Headlamp keep their rules.
+      #
+      # Runtime state this depends on, which blueprints cannot declare
+      # (the group link's `group` field is read-only in the API and the
+      # blueprint schema): one GroupSAMLSourceConnection per renamed
+      # identifier on this source, "Security Training Completed" bound to
+      # the existing `percona` group and "grafana_cd_admins - SSO" bound to
+      # the existing `grafana_cd_admins` group. Without a link the next
+      # login enrols a second group under the renamed name. With a link the
+      # login also rewrites the linked group's name to this mapping's
+      # output, so the rename must be live before the link exists. On every
+      # login the source removes the user from all groups linked to it and
+      # re-adds the ones in the assertion, so membership of both groups is
+      # directory-driven from JumpCloud.
       #
       # References:
       #   - authentik/core/sources/flow_manager.py (per-group iteration over
@@ -72,19 +92,83 @@ data:
           expression: |
             import re
             raw = request.context.get("group_id", "")
+            # JumpCloud names differ from the Duo-era names the consumers
+            # key on, so translate rather than touch four consumers.
+            renames = {
+                "Security Training Completed": "percona",
+                "grafana_cd_admins - SSO": "grafana_cd_admins",
+            }
+            if raw in renames:
+                return {"name": renames[raw]}
             m = re.match(r"^cn=([^,]+)", raw, re.IGNORECASE)
             return {"name": m.group(1) if m else raw}
 
-      # ---- 2. Duo SAML Source ----
+      # ---- 1b. JumpCloud IdP signing certificate ----
+      # Public half of JumpCloud's SAML signing key, so it is config and not
+      # a secret: it belongs in git, not Secrets Manager. key_data is omitted
+      # because a verification-only keypair holds no private key (the API
+      # accepts an empty key_data; CertificateKeyPair.key_data is blank=True).
+      #
+      # Referenced by the source below through verification_kp. Rotation:
+      # replace certificate_data here when JumpCloud rotates its key (the
+      # current one expires 2031-09-17), nothing else moves.
+      - model: authentik_crypto.certificatekeypair
+        id: jumpcloud-idp-cert
+        identifiers:
+          name: jumpcloud-idp
+        attrs:
+          name: jumpcloud-idp
+          certificate_data: |
+            -----BEGIN CERTIFICATE-----
+            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
+            6PQLrYugsedQhSI=
+            -----END CERTIFICATE-----
+
+      # ---- 2. JumpCloud SAML Source (slug kept as duo-saml) ----
+      # IdP swapped from Duo to JumpCloud in place. The slug, and with it
+      # the ACS and metadata URLs, and the SP entity ID in `issuer` stay
+      # exactly as they were: IT registered the JumpCloud app against the
+      # existing SP record values, so changing any of them means a new
+      # round trip with IT and a broken login in the meantime.
+      #
       # signing_kp is referenced by name; templates/bootstrap-keypair-job.yaml
       # uploads the SP cert+key into a CertificateKeyPair named `duo-saml-sp`
-      # before this blueprint applies.
+      # before this blueprint applies. It identifies us to whichever IdP we
+      # federate to, so it does not change with the IdP.
       - model: authentik_sources_saml.samlsource
         id: duo-saml-source
         identifiers:
           slug: duo-saml
         attrs:
-          name: Duo SSO
+          name: JumpCloud SSO
           slug: duo-saml
           enabled: true
           user_matching_mode: email_link
@@ -92,12 +176,27 @@ data:
           pre_authentication_flow: !Find [authentik_flows.flow, [slug, default-source-pre-authentication]]
           authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
           enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
-          sso_url: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/sso
+          sso_url: https://sso.jumpcloud.com/saml2/grafanacdperconacom
+          # `issuer` is OUR SP entity ID, not the IdP's: authentik puts it in
+          # the outbound AuthnRequest Issuer and advertises it as the
+          # metadata entityID. The value is the string Duo minted for the SP
+          # record in May 2026 and IT reused it verbatim for the JumpCloud
+          # app, so it must stay even though it no longer resolves to Duo.
           issuer: https://sso-b0cbd65b.sso.duosecurity.com/saml2/sp/DIS1DM3HXJYUVONGBVDH/metadata
           binding_type: POST
           allow_idp_initiated: false
           name_id_policy: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
           signing_kp: !Find [authentik_crypto.certificatekeypair, [name, duo-saml-sp]]
+          # Pins JumpCloud's signing certificate. Before this the field was
+          # null, and the response processor only validates a signature
+          # when verification_kp is set, so no signature was checked at
+          # all. JumpCloud always signs the Response and signs the Assertion
+          # only when asked, so only the Response flag is set: the processor
+          # requires exactly one Signature per target it is told to verify,
+          # and a flag without a matching signature fails every login.
+          verification_kp: !KeyOf jumpcloud-idp-cert
+          signed_response: true
+          signed_assertion: false
           digest_algorithm: "http://www.w3.org/2001/04/xmlenc#sha256"
           signature_algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
           temporary_user_delete_after: "days=1"
@@ -153,7 +252,7 @@ data:
           policy_engine_mode: any
           group: ""
 
-      # ---- 5. Wire the Duo source into the default identification stage ----
+      # ---- 5. Wire the SAML source into the default identification stage ----
       # Authentik's default-authentication-identification stage ships with
       # `sources: []` and `user_fields: ["username", "email"]` — meaning the
       # login page renders a username/email form and never offers the SAML

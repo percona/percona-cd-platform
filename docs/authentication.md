@@ -1,4 +1,4 @@
-# Authentication — Duo → Authentik → OIDC bridge
+# Authentication — JumpCloud → Authentik → OIDC bridge
 
 Architecture decision and rejected alternatives in
 [ADR 0012](adr/0012-authentik-saml-oidc-bridge.md). This doc covers
@@ -6,19 +6,22 @@ operational detail and recovery paths.
 
 ## Why a bridge
 
-Percona's internal IdP is **Duo SSO** (FreeIPA-backed, owned by IT-Ops).
-Internal apps that need SSO must federate to Duo via SAML 2.0.
+Percona's internal IdP is **JumpCloud** (owned by IT-Ops, it replaced Duo
+SSO in September 2026). Internal apps that need SSO federate to it via
+SAML 2.0. The Authentik source keeps its Duo-era slug `duo-saml` and the
+Duo-minted SP entity ID because IT registered the JumpCloud app against
+the existing SP record, so the ACS and metadata URLs never moved.
 
 Grafana OSS does not ship SAML — it's an Enterprise-only feature. Same
 shape for ArgoCD UI and Jenkins masters: each speaks OIDC natively but
-not SAML, or speaks SAML in a way Duo's SP-record convention doesn't
+not SAML, or speaks SAML in a way the IdP's SP-record convention doesn't
 match.
 
 So we run a single **Authentik** instance as a bridge. Authentik is a
-SAML SP to Duo (federates outwards) and an OIDC IdP inwards. Each app
+SAML SP to JumpCloud (federates outwards) and an OIDC IdP inwards. Each app
 talks plain OIDC to Authentik, Authentik handles the SAML round-trip
-once on the user's behalf, and group memberships propagate from Duo's
-LDAP groups all the way to the application's role mapping.
+once on the user's behalf, and group memberships propagate from the IdP's
+groups all the way to the application's role mapping.
 
 ## Architecture
 
@@ -34,16 +37,20 @@ LDAP groups all the way to the application's role mapping.
               ▼  302 to /source/saml/duo-saml (no Authentik session)
        Authentik SAML source 'duo-saml'
               │  (uses SP cert from authentik-saml Secret,
-              │   sends AuthnRequest with SP entityID matching Duo's
-              │   pre-registered SP record)
+              │   sends AuthnRequest with SP entityID matching the
+              │   SP record IT registered)
               ▼
-       Duo SSO (sso-b0cbd65b.sso.duosecurity.com)
+       JumpCloud (sso.jumpcloud.com/saml2/grafanacdperconacom)
               │  user MFA
               ▼  signed SAML Response with `groups` attribute
-              │  (FreeIPA group DNs:
-              │   cn=grafana_cd_admins,cn=groups,...,dc=int,dc=percona,dc=com)
+              │  (plain group names: `Security Training Completed`,
+              │   `grafana_cd_admins - SSO`)
        Authentik /acs/
-              │  group_property_mappings strips DN → bare CN
+              │  Response signature verified against the pinned
+              │  `jumpcloud-idp` certificate (verification_kp)
+              │  group_property_mappings renames them to `percona` and
+              │  `grafana_cd_admins` (and strips a DN to its CN if one
+              │  ever arrives)
               │  Authentik creates/updates Group rows
               │  user_property_mappings populates email/name/etc
               ▼
@@ -69,7 +76,12 @@ LDAP groups all the way to the application's role mapping.
 
 ## Group propagation
 
-Duo sends groups as full FreeIPA LDAP DNs:
+JumpCloud sends groups as plain names. The two the platform consumes are
+`Security Training Completed` (every employee, renamed to `percona`) and
+`grafana_cd_admins - SSO` (hand-picked admins, renamed to `grafana_cd_admins`).
+Each is bound to its existing Authentik group by a source link, so membership
+follows JumpCloud on every login.
+Duo, the previous IdP, sent them as full FreeIPA LDAP DNs:
 
 ```
 cn=grafana_cd_admins,cn=groups,cn=accounts,dc=int,dc=percona,dc=com
@@ -88,7 +100,8 @@ group mappings via two distinct fields on the `SAMLSource` model:
   result becomes the Authentik `Group.name`. The user is then assigned
   to that Group via `GroupSAMLSourceConnection`.
 
-Our blueprint binds a single group property mapping, `duo-group-strip-dn`,
+Our blueprint binds a single group property mapping, `duo-group-strip-dn`
+(kept for both IdP styles),
 that strips the leading `cn=<value>,...` to `<value>`. Result: the user
 ends up in Authentik Groups named `grafana_cd_admins`, `percona`, etc.
 The OIDC `profile` scope mapping (built-in default) emits these via
@@ -121,7 +134,7 @@ IT-Ops coordination round-trip for a dedicated `grafana_cd_users` group.
 The proper close is: ask Santiago for `grafana_cd_users`, swap `percona`
 for it, and tighten the Loki datasource to Editor+ via Grafana 11 RBAC.
 
-To add Editor capability later, register a Duo group (e.g.
+To add Editor capability later, ask IT for a JumpCloud group (e.g.
 `grafana_cd_editors`) and append a `contains()` clause before the
 Viewer leg.
 
@@ -156,8 +169,8 @@ Roughly four steps:
 | App can't reach Authentik (Authentik down) | Apps with a local-admin emergency path: `kubectl exec` into the app pod, reset local password, `kubectl port-forward` to log in. Grafana: the login form stays disabled but basic auth is enabled with the ESO-pinned credential (`percona-ci-platform/grafana/admin` in Secrets Manager, Secret `grafana-admin`): call the API with `-u admin:<password>` through a port-forward (the public ALB works too, `enforce_domain` requires the right Host). If the pinned credential is ever lost, `grafana-cli admin reset-admin-password <pw>` in the pod, then update the SM secret to match. ArgoCD: re-enable the local admin per [argocd-admin-recovery](runbooks/argocd-admin-recovery.md). |
 | Authentik admin locked out (akadmin password lost) | TF: `tofu taint random_password.authentik_bootstrap_password && tofu apply`, force ESO sync, restart authentik-server. Bootstrap migration sets the new password on next boot. |
 | Authentik admin API token lost | Same shape with `random_password.authentik_bootstrap_token`. |
-| Duo SP record drift (cert rotation, ACS URL change) | Coordinate with IT-Ops (`@zan` on Slack). SP entityID + ACS URL stay as defined in `templates/blueprint-grafana.yaml` and `docs/runbooks/authentik-bootstrap.md`. |
-| Group memberships not refreshing for an existing Authentik user | The `default-source-authentication` flow has no User Write stage, so re-login doesn't re-sync groups. Workaround: delete the Authentik user via API; their next login goes through the `default-source-enrollment` flow which does run user_write + GroupUpdateStage. Long-term: define a custom auth flow with user_write, or rely on Duo group churn being slow enough to handle manually. |
+| IdP-side SP record drift (cert rotation, ACS URL change) | Coordinate with IT-Ops (`@zan` on Slack). SP entityID + ACS URL stay as defined in `templates/blueprint-grafana.yaml` and `docs/runbooks/authentik-bootstrap.md`. |
+| Group memberships not refreshing for an existing Authentik user | The `default-source-authentication` flow has no User Write stage, so re-login doesn't re-sync groups. Workaround: delete the Authentik user via API; their next login goes through the `default-source-enrollment` flow which does run user_write + GroupUpdateStage. Long-term: define a custom auth flow with user_write, or rely on IdP group churn being slow enough to handle manually. |
 
 ## Constraints
 
@@ -166,14 +179,14 @@ Roughly four steps:
   `priorityClassName: platform-system-critical` keeps Karpenter from
   preempting it, and short auth outages don't block already-issued
   sessions.
-- **No automation for Duo SP record changes.** Cert rotation, ACS URL
+- **No automation for IdP-side SP record changes.** Cert rotation, ACS URL
   changes, group attribute mappings all require an HD JSM ticket or
   IT-Ops Slack. Track cert expiry separately (hardening item #21).
 - **akadmin local-login is closed at the browser surface.** The
   blueprint patches `default-authentication-identification` to
   `user_fields: []` + `sources: [duo-saml-source]`. With one source and
   an empty user-fields list, the Authentik frontend auto-redirects
-  straight to Duo — the username/email form is no longer rendered, so
+  straight to JumpCloud — the username/email form is no longer rendered, so
   the form-based MFA bypass for akadmin is gone. Recovery for akadmin
   is exclusively via `ak create_recovery_key` in the worker pod (see
   [runbook](runbooks/authentik-bootstrap.md#lockout-recovery--akadmin));

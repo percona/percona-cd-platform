@@ -26,7 +26,18 @@ Secret hygiene:
     container; never echoed to logs.
   - `set +x` (no shell tracing) is the default; we never enable -x.
   - Job uses `ttlSecondsAfterFinished` to auto-clean the completed pod.
+
+Gated on saml.enabled, matching templates/external-secret-saml.yaml:
+  The Secret `authentik-saml` this Job mounts is created by that template,
+  which renders only when saml.enabled is "true". Without the same gate the
+  Job renders against a Secret that does not exist, the kubelet blocks the
+  pod on MountVolume.SetUp forever, and because a pod that never starts
+  never counts as a failure, `backoffLimit` never trips. As an ArgoCD
+  PostSync hook that hangs, it holds the Application's sync operation open
+  and every later change to this chart stops deploying. Observed
+  2026-09-16: 28h wedged after authentik_saml_enabled reverted to false.
 */}}
+{{- if eq (.Values.saml.enabled | toString) "true" }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -39,6 +50,12 @@ metadata:
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 5
+  # Second line of defence behind the saml.enabled gate above. backoffLimit
+  # only counts container failures, so any pod that never starts (unbound
+  # PVC, missing Secret, no schedulable node) hangs this hook and the whole
+  # ArgoCD sync with it. A wall-clock deadline turns that into a Job failure
+  # ArgoCD reports, instead of a sync that stays Running for days.
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels:
@@ -163,3 +180,4 @@ spec:
             # mount is a tmpfs scoped to this pod — cluster RBAC and pod
             # isolation are the security boundary, not file mode.
             defaultMode: 0444
+{{- end }}
