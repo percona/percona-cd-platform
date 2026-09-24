@@ -402,17 +402,21 @@ class _FakeSpotEc2:
     a spot request but does not link the instance back to the request, so the
     request side is stubbed and records what was cancelled."""
 
-    def __init__(self, request_type, state="active", fail=None):
+    def __init__(self, request_type, state="active", fail=None, tags=None):
         self.request_type = request_type
         self.state = state
         self.fail = fail
+        self.tags = tags or {}
         self.cancelled = []
 
     def describe_spot_instance_requests(self, SpotInstanceRequestIds):
         if self.fail == "describe":
             raise _client_error("UnauthorizedOperation", "denied")
         return {"SpotInstanceRequests": [
-            {"SpotInstanceRequestId": SpotInstanceRequestIds[0], "Type": self.request_type, "State": self.state},
+            {
+                "SpotInstanceRequestId": SpotInstanceRequestIds[0], "Type": self.request_type, "State": self.state,
+                "Tags": [{"Key": k, "Value": v} for k, v in self.tags.items()],
+            },
         ]}
 
     def cancel_spot_instance_requests(self, SpotInstanceRequestIds):
@@ -603,3 +607,112 @@ def test_failed_cancel_is_counted_even_when_terminate_fails(ec2_cleanup, monkeyp
     assert spot_errors == 1
     assert len(skipped) == 1 and "terminate denied" in skipped[0]["reason"] and "spot request error" in skipped[0]["reason"]
 
+
+
+# ---- billing tag carried on the spot request (Jenkins EC2 plugin spot workers) ----
+
+def _run_spot_handler(ec2_cleanup, monkeypatch, fake, *, instance_tags=None):
+    """One live-mode handler run over a single moto instance that the patched
+    lookup presents as launched by spot request ``sir-jenkins``."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("REGIONS", REGION)
+    iid = _mk_instance(REGION, tags=instance_tags)
+    _patch_spot_client(ec2_cleanup, monkeypatch, fake)
+    monkeypatch.setattr(ec2_cleanup, "spot_request_id", lambda instance: "sir-jenkins")
+    with freeze_time(FUTURE):
+        result = ec2_cleanup.lambda_handler({}, None)
+    return iid, result
+
+
+def test_spot_worker_kept_by_billing_tag_on_its_request(ec2_cleanup, monkeypatch):
+    """The 2026-09-23 incident: an autotagger wrote PerconaCreatedBy seconds
+    after launch, the plugin then never pushed its template tags, and the only
+    iit-billing-tag lived on the spot request. The worker must stay up and its
+    request must not be cancelled."""
+    with mock_aws():
+        fake = _FakeSpotEc2("one-time", tags={"iit-billing-tag": "jenkins-pg-worker", "Name": "jenkins-pg-min-ol-9-x64"})
+        iid, result = _run_spot_handler(
+            ec2_cleanup, monkeypatch, fake, instance_tags={"PerconaCreatedBy": "InstanceLaunch"},
+        )
+        assert iid not in [t["InstanceId"] for t in result["terminated"]]
+        assert {"id": iid, "reason": "spot request billing tag"} in result["skipped"]
+        assert fake.cancelled == []
+        assert _state(REGION, iid) == "running"
+        assert result["spot_request_errors"] == 0
+
+
+def test_spot_request_without_billing_tag_still_terminates(ec2_cleanup, monkeypatch):
+    with mock_aws():
+        fake = _FakeSpotEc2("persistent", tags={"Name": "stray"})
+        iid, result = _run_spot_handler(ec2_cleanup, monkeypatch, fake)
+        assert iid in [t["InstanceId"] for t in result["terminated"]]
+        assert fake.cancelled == ["sir-jenkins"]
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_expired_billing_tag_on_request_still_terminates(ec2_cleanup, monkeypatch):
+    """The request's tag goes through the same epoch expiry as an instance tag."""
+    with mock_aws():
+        fake = _FakeSpotEc2("one-time", tags={"iit-billing-tag": PAST_EPOCH})
+        iid, result = _run_spot_handler(ec2_cleanup, monkeypatch, fake)
+        assert iid in [t["InstanceId"] for t in result["terminated"]]
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_instance_billing_tag_wins_over_request(ec2_cleanup, monkeypatch):
+    """An instance's own expired tag is authoritative: the request is never
+    consulted for its tags, so a valid request tag cannot keep it alive."""
+    with mock_aws():
+        fake = _FakeSpotEc2("one-time", tags={"iit-billing-tag": "jenkins-pg-worker"})
+        iid, result = _run_spot_handler(
+            ec2_cleanup, monkeypatch, fake, instance_tags={"iit-billing-tag": PAST_EPOCH},
+        )
+        assert iid in [t["InstanceId"] for t in result["terminated"]]
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_failed_request_tag_lookup_protects_and_is_counted(ec2_cleanup, monkeypatch):
+    """A denied lookup cannot tell a Jenkins worker from a stray, so the
+    instance is kept, and the error is counted so a lasting IAM regression shows
+    in every summary instead of silently disabling the reaper."""
+    with mock_aws():
+        fake = _FakeSpotEc2("persistent", fail="describe")
+        iid, result = _run_spot_handler(ec2_cleanup, monkeypatch, fake)
+        assert iid not in [t["InstanceId"] for t in result["terminated"]]
+        assert {"id": iid, "reason": "spot request tags undeterminable"} in result["skipped"]
+        assert result["spot_request_errors"] == 1
+        assert _state(REGION, iid) == "running"
+
+
+def test_purged_request_gives_no_protection(ec2_cleanup, monkeypatch):
+    """A request record purged behind a long-lived untagged instance holds no
+    billing tag, so the instance is reaped like any other untagged one."""
+    class Purged(_FakeSpotEc2):
+        def describe_spot_instance_requests(self, SpotInstanceRequestIds):
+            raise _client_error("InvalidSpotInstanceRequestID.NotFound", "does not exist")
+
+    with mock_aws():
+        iid, result = _run_spot_handler(ec2_cleanup, monkeypatch, Purged("persistent"))
+        assert iid in [t["InstanceId"] for t in result["terminated"]]
+        assert result["spot_request_errors"] == 0
+        assert _state(REGION, iid) == "terminated"
+
+
+def test_molecule_tag_on_request_keeps_its_age_bound(ec2_cleanup):
+    """A molecule billing tag read from the request is age-bounded exactly like
+    one on the instance."""
+    molecule_re = ec2_cleanup._molecule_re()
+    request_tags = {"iit-billing-tag": "ps_80_package_testing"}
+    now = dt.datetime.now(dt.timezone.utc)
+    young = SimpleNamespace(id="i-young", tags=[], launch_time=now - dt.timedelta(hours=1))
+    old = SimpleNamespace(id="i-old", tags=[], launch_time=now - dt.timedelta(hours=8))
+    assert ec2_cleanup.should_terminate(young, molecule_re, 7 * 3600, request_tags) is False
+    assert ec2_cleanup.should_terminate(old, molecule_re, 7 * 3600, request_tags) is True
+
+
+def test_on_demand_instance_request_tags_make_no_call(ec2_cleanup):
+    class NoCalls:
+        def __getattr__(self, name):
+            pytest.fail(f"no EC2 call expected, got {name}")
+
+    assert ec2_cleanup.spot_request_tags(_spot_instance(None), REGION, NoCalls()) == {}
