@@ -91,6 +91,41 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pmm.cd.percona.com
+  - name: pmm-staging
+    # TEMPORARY staging copy of pmm for the 2.568.3 upgrade
+    # (terraform/master-pmm-staging.tf). Remove with it.
+    upstream: jenkins-pmm-staging.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: pmm-staging.cd.percona.com
+  - name: psmdb-staging
+    # TEMPORARY staging copy of psmdb for the 2.568.3 upgrade
+    # (terraform/master-psmdb-staging.tf). Remove with it.
+    upstream: jenkins-psmdb-staging.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: psmdb-staging.cd.percona.com
+  - name: pg-staging
+    # TEMPORARY staging copy of pg for the 2.568.3 upgrade
+    # (terraform/master-pg-staging.tf). Remove with it.
+    upstream: jenkins-pg-staging.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: pg-staging.cd.percona.com
+  - name: rel-staging
+    # TEMPORARY staging copy of rel for the 2.568.3 upgrade
+    # (terraform/master-rel-staging.tf). Remove with it.
+    upstream: jenkins-rel-staging.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: rel-staging.cd.percona.com
+  - name: cloud-staging
+    # TEMPORARY staging copy of cloud for the 2.568.3 upgrade
+    # (terraform/master-cloud-staging.tf). Remove with it.
+    upstream: jenkins-cloud-staging.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: cloud-staging.cd.percona.com
   - name: pg
     # EndpointSlice kept in sync with the live pg master private IP by the
     # jenkins-endpoint-reconciler over the eu-central-1 <-> us-east-1 peering.
