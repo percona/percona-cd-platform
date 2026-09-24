@@ -19,6 +19,12 @@ For every region it:
   terminating it. Otherwise AWS launches a replacement the moment the instance
   dies and the reaper terminates that one on its next cycle, forever. An
   aborted Jenkins build left exactly that loop running for a week in 2026-09.
+* reads the billing tag of a spot instance that has none of its own from the
+  spot request that launched it. The Jenkins EC2 plugin tags the request, AWS
+  does not copy request tags to the instance, and a tag another tool writes
+  first stops the plugin from pushing its template tags later, so the request
+  can be the only place a Jenkins spot worker's billing tag lives. A failed
+  lookup protects the instance and counts as a spot request error.
 
 The original Lambda also auto-tagged Cirrus CI instances to protect them;
 Cirrus CI shut down on 2026-06-01, so that path was dropped: a leftover
@@ -197,8 +203,13 @@ def should_terminate(
     instance: Any,
     molecule_re: re.Pattern[str] | None = None,
     molecule_max_age_s: int = 0,
+    request_tags: dict[str, str] | None = None,
 ) -> bool:
     tags_dict = convert_tags_to_dict(instance.tags)
+    # The instance's own billing tag wins. Without one, the spot request's tag
+    # stands in and goes through the same molecule and expiry rules.
+    if "iit-billing-tag" not in tags_dict and request_tags and "iit-billing-tag" in request_tags:
+        tags_dict = {**tags_dict, "iit-billing-tag": request_tags["iit-billing-tag"]}
     running = datetime.datetime.now(datetime.timezone.utc) - instance.launch_time
     # Ephemeral package-testing molecule instances carry a non-numeric
     # iit-billing-tag (e.g. ps_80_package_testing) that has_valid_billing_tag
@@ -225,6 +236,31 @@ def get_name_tag(instance: Any) -> str | None:
 def spot_request_id(instance: Any) -> str | None:
     """The spot request that launched ``instance``, None for on-demand."""
     return getattr(instance, "spot_instance_request_id", None)
+
+
+def spot_request_tags(instance: Any, region: str, ec2_client: Any = None) -> dict[str, str] | None:
+    """Tags of the spot request that launched ``instance``.
+
+    Returns ``{}`` when there is nothing to read (on-demand, or a request record
+    already purged behind a long-lived instance) and ``None`` when the lookup
+    failed. The caller protects the instance on ``None``: an undeterminable
+    request must never get a tagged Jenkins worker terminated."""
+    request_id = None
+    try:
+        request_id = spot_request_id(instance)
+        if not request_id:
+            return {}
+        ec2 = ec2_client or boto3.client("ec2", region_name=region)
+        requests = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])["SpotInstanceRequests"]
+        return convert_tags_to_dict(requests[0].get("Tags")) if requests else {}
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") == "InvalidSpotInstanceRequestID.NotFound":
+            return {}
+        logger.error(f"Spot request {request_id or 'lookup'} tags behind {instance.id} in {region}: {e}; protecting")
+        return None
+    except Exception as e:  # noqa: BLE001 - any uncertainty must protect, never reap
+        logger.error(f"Spot request {request_id or 'lookup'} tags behind {instance.id} in {region}: {e}; protecting")
+        return None
 
 
 def cancel_persistent_spot_request(
@@ -391,6 +427,16 @@ def process_region(
                 continue
 
             if should_terminate(instance, molecule_re, molecule_max_age_s):
+                if "iit-billing-tag" not in convert_tags_to_dict(instance.tags):
+                    request_tags = spot_request_tags(instance, region, ec2_client)
+                    if request_tags is None:
+                        spot_request_errors += 1
+                        skipped.append({"id": instance.id, "reason": "spot request tags undeterminable"})
+                        continue
+                    if not should_terminate(instance, molecule_re, molecule_max_age_s, request_tags):
+                        logger.info(f"{instance.id} carries its billing tag on its spot request, skip")
+                        skipped.append({"id": instance.id, "reason": "spot request billing tag"})
+                        continue
                 # A persistent spot request relaunches the moment its instance dies, so cancel it first.
                 cancelled_request, spot_error = cancel_persistent_spot_request(instance, region, dry_run, ec2_client)
                 if spot_error:
