@@ -90,9 +90,13 @@ locals {
   }
 
   ec2_cleanup = {
-    schedule         = "rate(5 minutes)"
-    timeout          = 120
-    dry_run          = "false" # armed 2026-06-09 after clean dry-run cycles
+    schedule = "rate(5 minutes)"
+    timeout  = 120
+    # Disarmed 2026-09-23: Jenkins spot workers carry iit-billing-tag only on
+    # their spot request, and the IT Custodian autotag written seconds after
+    # launch makes the EC2 plugin push that autotag instead of the template
+    # tags, so every spot worker looked untagged and was reaped at 10 min.
+    dry_run          = "true"
     eks_skip_pattern = "pe-.*"
     # Ephemeral package-testing molecule instances: their non-numeric billing
     # tag would exempt them forever, but an aborted build skips `molecule
