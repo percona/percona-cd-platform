@@ -6,6 +6,11 @@
 # carried via variables.tf toggles.
 
 locals {
+  # JENKINS_HOME directory under /mnt. A snapshot-restored copy keeps the
+  # source master's directory name, so the boot fetch and the 30-minute init
+  # sync must both write here, not to /mnt/<hostname>.
+  jenkins_home_dirname = coalesce(var.jenkins_home_dirname, var.hostname)
+
   # iit-billing-tag = short_name overrides provider default_tags so cleanup
   # Lambdas don't terminate the master (see docs/runbooks/cleanup-reapers.md).
   # Module-set keys are merged LAST so a caller-supplied map can never clobber
@@ -258,7 +263,7 @@ resource "aws_ssm_association" "init_groovy_sync" {
       ]),
       [
         for name, sha in local.init_groovy_sha256 :
-        "install -o jenkins -g jenkins -m 0644 $STAGE/${name} /mnt/${var.hostname}/init.groovy.d/${name}"
+        "install -o jenkins -g jenkins -m 0644 $STAGE/${name} /mnt/${local.jenkins_home_dirname}/init.groovy.d/${name}"
       ],
     ))
   }
@@ -838,7 +843,7 @@ resource "aws_cloudwatch_event_target" "termination" {
 
 locals {
   user_data_rendered = templatefile("${path.module}/user-data.sh.tftpl", {
-    jenkins_host            = coalesce(var.jenkins_home_dirname, var.hostname)
+    jenkins_host            = local.jenkins_home_dirname
     jenkins_short           = var.short_name
     eip_allocation_id       = var.create_eip ? aws_eip.master[0].id : ""
     data_volume_id          = aws_ebs_volume.data.id

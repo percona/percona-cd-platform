@@ -623,6 +623,19 @@ ssm inst: _require-aws-profile
 # masters; kubectl exec runs it as the container user (jenkins, not root) on
 # in-cluster ones. Prints status, stdout and stderr.
 # Usage: just ssm-run pmm 'systemctl status jenkins | head -5'
+# Print a staging copy's staging-admin password (SSM SecureString, terraform/staging-admin.tf)
+staging-password inst: _require-aws-profile
+    #!/usr/bin/env bash
+    set -euo pipefail
+    inst="{{inst}}"
+    inst="${inst%-staging}"
+    case "$inst" in
+      pmm|psmdb|pg|rel|cloud) ;;
+      *) echo "unknown staging copy '{{inst}}' (pmm, psmdb, pg, rel, cloud)" >&2; exit 2 ;;
+    esac
+    aws ssm get-parameter --region us-east-1 --name "/percona-ci-platform/jenkins-staging/${inst}/admin-password" \
+      --with-decryption --query Parameter.Value --output text
+
 ssm-run inst cmd: _require-aws-profile
     #!/usr/bin/env bash
     set -euo pipefail
