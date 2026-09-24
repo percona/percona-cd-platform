@@ -91,13 +91,13 @@ def test_runtime_pin_matches_locals() -> None:
 def test_dry_run_locked_to_committed_state() -> None:
     """Both reapers were ARMED on 2026-06-09 after the dry-run bake-in (the
     volume dry run surfaced 12 orphans incl a 16 TB volume; EC2 ran clean
-    cycles). The EC2 reaper was disarmed again on 2026-09-23 because it reaped
-    Jenkins spot workers whose billing tag lives only on the spot request.
-    The snapshot reaper ships dry-run until its own bake-in review.
+    cycles). The EC2 reaper was disarmed on 2026-09-23 while it reaped Jenkins
+    spot workers whose billing tag lives only on the spot request, and re-armed
+    on 2026-09-24 once it read that tag. The snapshot reaper ships dry-run until its own bake-in review.
     This lock works in both directions: flipping a reaper's dry_run, either
     way, must update this expectation in the same PR, so the safety knob can
     never move silently."""
-    expected = {"volume_cleanup": "false", "ec2_cleanup": "true", "snapshot_cleanup": "true"}
+    expected = {"volume_cleanup": "false", "ec2_cleanup": "false", "snapshot_cleanup": "true"}
     locals_tf = _tf("locals.tf")
     for block, want in expected.items():
         m = re.search(rf'{block}\s*=\s*{{(.*?)}}', locals_tf, re.S)
