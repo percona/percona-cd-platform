@@ -71,6 +71,11 @@ module "pg_staging" {
       name = "DenyWorkerProvisioning"
       json = data.aws_iam_policy_document.pg_staging_deny_provisioning.json
     },
+    # Read its own staging-admin password (terraform/staging-admin.tf).
+    {
+      name = "StagingAdminPasswordRead"
+      json = data.aws_iam_policy_document.pg_staging_admin_read.json
+    },
   ]
 
   # :8080 from the EKS VPC over cross-region peering for the jenkins-ingress
@@ -96,6 +101,15 @@ data "aws_iam_policy_document" "pg_staging_alloy_bearer_read" {
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue"]
     resources = ["arn:aws:secretsmanager:us-east-1:${data.aws_caller_identity.current.account_id}:secret:percona-ci-platform/alloy-gateway/bearer-*"]
+  }
+}
+
+data "aws_iam_policy_document" "pg_staging_admin_read" {
+  statement {
+    sid       = "StagingAdminPasswordRead"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [aws_ssm_parameter.staging_admin_password["pg"].arn]
   }
 }
 
