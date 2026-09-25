@@ -34,6 +34,10 @@ module "ps80" {
   cache_bucket_name       = "ps-build-cache"
   ebs_size                = 300 # grown live from 200; EBS cannot shrink, keep >= live size
 
+  # MySQL team AI steps in Jenkins jobs (EOL commit analysis) call Anthropic
+  # models on Bedrock with the worker instance role, no stored key.
+  worker_bedrock_invoke = true
+
   purchasing_option = "on-demand"
   # 4 vCPU / 8 GB: the master JVM is -Xms3072m -Xmx4096m, so a 4 GB box
   # (c7i-flex.large) would OOM. xlarge keeps parity with the prior c5d.xlarge
