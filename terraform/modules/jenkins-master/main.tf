@@ -133,6 +133,8 @@ resource "aws_vpc_endpoint" "s3" {
 
 data "aws_region" "current" {}
 
+data "aws_caller_identity" "current" {}
+
 # Gateway endpoint policy is a defense-in-depth FILTER, not the access-control
 # layer: a Gateway endpoint intercepts ALL same-region S3 traffic from the VPC,
 # so any action it omits is denied fleet-wide regardless of IAM. IAM (the master
@@ -427,7 +429,8 @@ resource "aws_iam_role" "worker" {
 
 # EC2 tag perms always; conditional extras per caller: S3 cache
 # (cache_bucket_name), Packer amazon-ebs lifecycle (worker_ami_builder),
-# ECR read + public-ECR auth (worker_ecr_read).
+# ECR read + public-ECR auth (worker_ecr_read), Bedrock invoke on Anthropic
+# models (worker_bedrock_invoke).
 data "aws_iam_policy_document" "worker" {
   statement {
     sid    = "EC2Tags"
@@ -525,6 +528,40 @@ data "aws_iam_policy_document" "worker" {
         "ecr:GetDownloadUrlForLayer",
         "ecr-public:GetAuthorizationToken",
         "sts:GetServiceBearerToken",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  # Bedrock invoke on Anthropic models (worker_bedrock_invoke). A cross-region
+  # inference profile (us.anthropic.*, global.anthropic.*) needs the profile
+  # ARN in the calling region plus the foundation model in every destination
+  # region, hence the region wildcard on foundation-model.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInvokeAnthropic"
+      effect = "Allow"
+      actions = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+      ]
+      resources = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*anthropic.*",
+      ]
+    }
+  }
+
+  # Claude Code resolves inference profiles at startup.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInferenceProfileRead"
+      effect = "Allow"
+      actions = [
+        "bedrock:GetInferenceProfile",
+        "bedrock:ListInferenceProfiles",
       ]
       resources = ["*"]
     }
