@@ -934,7 +934,7 @@ resource "aws_launch_template" "master" {
 
   metadata_options {
     # IMDSv2 required + hop_limit=1 closes the SSRF-to-instance-role
-    # path. All curls in user-data.sh.tftpl and jenkins-graceful-stop.sh
+    # path. All curls in user-data.sh.tftpl
     # negotiate an IMDSv2 token (PUT /latest/api/token) before reading
     # any metadata path. install-master-observability.sh uses the AWS
     # CLI which already speaks IMDSv2 via SDK.
@@ -974,8 +974,7 @@ resource "aws_launch_template" "master" {
   # Spot-survivability Phase 0: ignore_changes = [user_data] lifted now that the CF
   # stack jenkins-ps3 is gone (deleted 2026-05-19 via update-stack with
   # DeletionPolicy: Retain on all 24 resources, then plain delete-stack).
-  # Future userdata edits (e.g. Phase 3 graceful spot-interrupt drain)
-  # now flow through Terraform and produce a launch-template version bump
+  # Userdata edits now flow through Terraform and produce a launch-template version bump
   # without instance churn; the SpotFleet picks up the new LT version on
   # the next replacement cycle.
 }
@@ -1001,12 +1000,12 @@ resource "aws_spot_fleet_request" "master" {
   #      using `launch-before-terminate` (the field is supported on
   #      the newer aws_ec2_fleet resource but not the legacy SpotFleet
   #      one we use here).
-  #   2. Phase 3 graceful-stop.sh already handles the 2-min interrupt
-  #      window, so we only need the proactive replacement signal, not
+  #   2. We only need the proactive replacement signal, not
   #      AWS-managed termination of the old instance.
   # Old instance keeps running until the regular spot interruption
-  # notice (or manual termination); Phase 3 drains it cleanly. Brief
-  # double-spot cost during the overlap is acceptable for the canary.
+  # notice (or manual termination). Pipeline durability and Hetzner
+  # rehydrate cover the abrupt stop. Brief double-spot cost during the
+  # overlap is acceptable.
   # Revisit `launch-before-terminate` when ps3 migrates to
   # aws_ec2_fleet (AWS-recommended successor to SpotFleet).
   spot_maintenance_strategies {
