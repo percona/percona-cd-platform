@@ -181,7 +181,13 @@ resource "helm_release" "argocd" {
         resources = { requests = { cpu = "25m", memory = "64Mi" } }
       }
       sentinel = {
-        resources = { requests = { cpu = "25m", memory = "32Mi" } }
+        # CPU limit caps a sentinel stuck in the upstream busy-loop bug (fixed in
+        # redis unstable, not yet released) at a tenth of a core, so a spin
+        # cannot take a system node core for days.
+        resources = {
+          requests = { cpu = "25m", memory = "32Mi" }
+          limits   = { cpu = "100m" }
+        }
       }
       splitBrainDetection = {
         resources = { requests = { cpu = "5m", memory = "16Mi" } }
