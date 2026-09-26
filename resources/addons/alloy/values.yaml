@@ -1,8 +1,8 @@
 # Grafana Alloy — DaemonSet for the in-cluster observability data plane.
 #
 # Role split:
-#   - alloy (this chart): DaemonSet on every node. Scrapes pod logs
-#     (kubelet discovery, /var/log/pods); accepts OTLP traces from
+#   - alloy (this chart): DaemonSet on every node. Tails pod logs
+#     through the Kubernetes API; accepts OTLP traces from
 #     in-cluster apps and ships them to Tempo; discovers and scrapes
 #     ServiceMonitor / PodMonitor / Probe CRDs and ships samples to
 #     Mimir; syncs PrometheusRule CRDs into Mimir's ruler.
@@ -22,9 +22,33 @@ alloy:
           role = "pod"
         }
 
-        // Scrape pod logs from the node's filesystem (cri-containerd shape).
+        // Copy namespace, pod and container out of the discovery meta labels.
+        // loki.source.kubernetes drops every __meta_* label and only defaults
+        // job and instance ("<namespace>/<pod>:<container>"), so without this
+        // step no pod-log stream carries a namespace label and the
+        // namespace-keyed jenkins_master relabel below never matches. The
+        // three labels add no streams: instance already encodes all three.
+        discovery.relabel "pod_logs" {
+          targets = discovery.kubernetes.pods.targets
+
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "pod"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "container"
+          }
+        }
+
+        // Tail pod logs through the Kubernetes API (the kubelet log endpoint
+        // via the apiserver), not the node filesystem.
         loki.source.kubernetes "pods" {
-          targets    = discovery.kubernetes.pods.targets
+          targets    = discovery.relabel.pod_logs.output
           forward_to = [loki.relabel.jenkins_master.receiver]
         }
 

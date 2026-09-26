@@ -13,6 +13,11 @@ stay out. EC2 masters carry `master` from the master-side
 Alloy external labels; the in-cluster controller gets it from the Alloy DS
 `loki.relabel "jenkins_master"` rule (namespace jenkins-<inst>-k8s).
 
+`container=~"jenkins|"` counts only the controller container of an in-cluster
+master. Its sidecars share the namespace, so they carry `master` too, and
+config-reload logs a line every minute, which would keep a silent controller
+green. EC2 master streams have no container label and still match.
+
 A master with no line in the window yields no sample, not 0; the Mimir-side
 jenkins:master_logs_fresh rule turns that absence into 0.
 */}}
@@ -35,4 +40,4 @@ spec:
       interval: 1m
       rules:
         - record: jenkins:master_log_lines:count15m
-          expr: sum by (master) (count_over_time({master=~"{{ join "|" $masters }}"}[15m]))
+          expr: sum by (master) (count_over_time({master=~"{{ join "|" $masters }}", container=~"jenkins|"}[15m]))
