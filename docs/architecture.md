@@ -458,9 +458,7 @@ stay active and cover any abrupt instance loss:
   per-datacenter circuit-breaker state is restored from disk.
 
 Mechanics and edge cases:
-[`ec2-master-resilience.md`](ec2-master-resilience.md). Readiness audit:
-`scripts/check-master-spot-readiness.sh`, run before declaring a master
-able to absorb an interrupt.
+[`ec2-master-resilience.md`](ec2-master-resilience.md).
 
 ### Codemap
 
