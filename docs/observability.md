@@ -41,7 +41,7 @@ this page is the operator's tour.
    ────────────────────
    ServiceMonitor / PodMonitor scrape (incl. kube-state-metrics, prometheus-node-exporter,
                   cloudwatch-exporter = YACE polling AWS LB CloudWatch metrics, ADR 0034) ─► Mimir
-   pod logs    ─► Loki distributor
+   pod logs    ─► Loki distributor (loki.source.kubernetes via the API, labels namespace/pod/container/instance)
    k8s events  ─► Loki distributor (loki.source.kubernetes_events, namespace-sharded)
    OTLP traces ─► Tempo distributor
 
@@ -234,11 +234,16 @@ When it fires for `<inst>.cd`:
    scripts/verify-observability.sh <inst>
    ```
 
-4. For `ps3-k8s` the stream is the controller's stdout, tailed by the Alloy
-   DaemonSet pod on its node.
+4. For `ps3-k8s` the stream is the controller's stdout, tailed through the
+   Kubernetes API by the Alloy DaemonSet. Only the `jenkins` container counts,
+   the sidecars in the namespace are excluded. Check that the stream carries
+   `master="ps3-k8s"` and that any Alloy pod has the tailer open.
 
    ```sh
-   kubectl -n alloy logs <alloy-pod-on-the-ps3-node> | grep jenkins-ps3-k8s-0:jenkins
+   kubectl -n loki port-forward svc/loki-query-frontend 3100 &
+   curl -sG localhost:3100/loki/api/v1/query \
+     --data-urlencode 'query=sum(count_over_time({master="ps3-k8s", container="jenkins"} |= "heartbeat" [15m]))'
+   kubectl -n alloy logs <any-alloy-pod> -c alloy | grep jenkins-ps3-k8s-0:jenkins
    ```
 
 Rule-path checks: the Loki ruler lists `jenkins-logs.rules`, and Mimir
