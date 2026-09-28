@@ -430,7 +430,8 @@ resource "aws_iam_role" "worker" {
 # EC2 tag perms always; conditional extras per caller: S3 cache
 # (cache_bucket_name), Packer amazon-ebs lifecycle (worker_ami_builder),
 # ECR read + public-ECR auth (worker_ecr_read), Bedrock invoke on Anthropic
-# models (worker_bedrock_invoke).
+# models (worker_bedrock_invoke), Auto Scaling activity reads for CI reports
+# (worker_ci_insights_read).
 data "aws_iam_policy_document" "worker" {
   statement {
     sid    = "EC2Tags"
@@ -550,6 +551,23 @@ data "aws_iam_policy_document" "worker" {
         "arn:aws:bedrock:*::foundation-model/anthropic.*",
         "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*anthropic.*",
       ]
+    }
+  }
+
+  # Auto Scaling activity reads (worker_ci_insights_read): the weekly jobs
+  # digest reports agent-fleet launches, spot interruptions and capacity
+  # failures from the fleet ASGs' activity history. Describe* calls take no
+  # resource-level scope, and both are read-only metadata.
+  dynamic "statement" {
+    for_each = var.worker_ci_insights_read ? [1] : []
+    content {
+      sid    = "AutoScalingActivityRead"
+      effect = "Allow"
+      actions = [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeScalingActivities",
+      ]
+      resources = ["*"]
     }
   }
 

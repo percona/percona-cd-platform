@@ -37,6 +37,9 @@ module "ps80" {
   # MySQL team AI steps in Jenkins jobs (EOL commit analysis) call Anthropic
   # models on Bedrock with the worker instance role, no stored key.
   worker_bedrock_invoke = true
+  # The weekly jobs digest (examples/*-jobs-report) reads the fleet ASGs'
+  # scaling activity: launches, spot interruptions, capacity failures.
+  worker_ci_insights_read = true
 
   purchasing_option = "on-demand"
   # 4 vCPU / 8 GB: the master JVM is -Xms3072m -Xmx4096m, so a 4 GB box
