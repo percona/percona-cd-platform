@@ -22,7 +22,6 @@ module "ps3_arm_fleet" {
   # The in-cluster ps3-k8s controller reaches Fleet workers by private IP over the
   # EKS<->ps3 VPC peering (ec2-fleet privateIpUsed), so allow SSH from the EKS VPC.
   extra_ssh_cidrs = [module.vpc.vpc_cidr_block]
-  tickets         = "PS-11179"
 }
 
 # Cross-region VPC peering EKS (us-east-1) <-> ps3 (eu-west-1). The ps3 side VPC
