@@ -110,6 +110,12 @@ variable "worker_ecr_read" {
   default     = false
 }
 
+variable "worker_bedrock_invoke" {
+  description = "Grant the worker role Amazon Bedrock invoke on Anthropic models (foundation models and cross-region inference profiles), plus inference-profile reads for Claude Code. Every job on the master's EC2 workers inherits it, so pair it with a Bedrock spend alert."
+  type        = bool
+  default     = false
+}
+
 variable "extra_master_inline_policies" {
   description = "Extra inline policies for the master role. Each entry is { name, json }."
   type = list(object({
