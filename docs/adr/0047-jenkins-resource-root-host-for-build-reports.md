@@ -1,7 +1,7 @@
 <!-- Copyright (C) 2026 Percona LLC -->
 # 0047 - Jenkins resource root host for rendered build reports (ps80-assets)
 
-**Status:** Proposed (2026-09-28)
+**Status:** Accepted (2026-09-28)
 **Related:** [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (the shared jenkins-masters ALB and its host Ingresses), [`docs/connectivity.md`](../connectivity.md) (Mode B web path).
 
 ## Context
@@ -37,3 +37,4 @@
 - **(+)** The pattern repeats per master with one values entry and one init.groovy.d file.
 - **(−)** A resource URL is a bearer URL for up to 30 minutes: anyone holding a copied link reads the file as the user who opened it. Links worth sharing are the main-host artifact URLs.
 - **(−)** The resource host shares ps80's upstream, so it is down whenever ps80 is.
+- **(−)** Every artifact request is redirected, API-token requests included, and Jenkins answers 400 when a request to the resource host carries credentials. HTTP clients must not forward them along the redirect: curl, Python `requests` and Rust `reqwest` drop them on a cross-host redirect, Python `urllib` forwards them (send auth with `add_unredirected_header`). Seen on the ci-ai-kit collector the day the setting landed.

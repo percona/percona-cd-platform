@@ -126,6 +126,9 @@ the `jenkins-ps80` Service.
   to `ps80.cd.percona.com` would turn every resource request into a 404.
 - Tokens are per user and expire after 30 minutes. Any other path on the
   host returns 404.
+- Every artifact request redirects, API-token requests included. A client
+  that forwards its credentials to the resource host gets 400. Python
+  `urllib` does that by default, curl and `requests` do not.
 
 ### Mode A web path (ps3, in-cluster)
 
