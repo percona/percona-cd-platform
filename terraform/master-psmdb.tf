@@ -127,7 +127,6 @@ module "psmdb_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not
