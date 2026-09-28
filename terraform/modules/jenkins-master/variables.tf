@@ -116,6 +116,12 @@ variable "worker_bedrock_invoke" {
   default     = false
 }
 
+variable "worker_ci_insights_read" {
+  description = "Grant the worker role read-only Auto Scaling group and scaling-activity describes, so CI report jobs can show fleet launches, spot interruptions and capacity failures. Every job on the master's EC2 workers inherits it."
+  type        = bool
+  default     = false
+}
+
 variable "extra_master_inline_policies" {
   description = "Extra inline policies for the master role. Each entry is { name, json }."
   type = list(object({
