@@ -20,7 +20,8 @@ module "pg" {
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
-  jenkins_package_version = "2.541.3" # closes CVE-2026-27100 (pg is on 2.528.3)
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
 
   # Live network shape. B/C are the module's own cidrsubnet() math; B2/C2
   # ride the secondary block.
