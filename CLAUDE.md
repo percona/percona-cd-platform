@@ -99,11 +99,6 @@ set dynamically from repo source-of-truth (k8s / tf-managed / cf-managed)
 so the expected list cannot rot as the fleet changes; STALE/MISSING exits
 non-zero.
 
-`scripts/check-master-spot-readiness.sh [<inst>]`
-Spot-interrupt readiness audit (SpotFleet + Capacity Rebalancing, cron +
-graceful-stop.sh with flock, rehydrate flag, Secrets Manager + api-admin
-auth probe). Use before declaring a master ready to absorb a spot interrupt.
-
 ## Related repos
 
 | Repo | Purpose |
