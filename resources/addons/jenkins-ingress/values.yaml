@@ -117,13 +117,6 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: psmdb-staging.cd.percona.com
-  - name: pg-staging
-    # TEMPORARY staging copy of pg for the 2.568.3 upgrade
-    # (terraform/master-pg-staging.tf). Remove with it.
-    upstream: jenkins-pg-staging.jenkins-ingress.svc.cluster.local
-    upstreamScheme: http
-    upstreamPort: 8080
-    upstreamHostHeader: pg-staging.cd.percona.com
   - name: rel-staging
     # TEMPORARY staging copy of rel for the 2.568.3 upgrade
     # (terraform/master-rel-staging.tf). Remove with it.
