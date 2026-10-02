@@ -103,13 +103,6 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pmm.cd.percona.com
-  - name: pmm-staging
-    # TEMPORARY staging copy of pmm for the 2.568.3 upgrade
-    # (terraform/master-pmm-staging.tf). Remove with it.
-    upstream: jenkins-pmm-staging.jenkins-ingress.svc.cluster.local
-    upstreamScheme: http
-    upstreamPort: 8080
-    upstreamHostHeader: pmm-staging.cd.percona.com
   - name: psmdb-staging
     # TEMPORARY staging copy of psmdb for the 2.568.3 upgrade
     # (terraform/master-psmdb-staging.tf). Remove with it.
