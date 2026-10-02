@@ -41,6 +41,18 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: ps80.cd.percona.com
+  - name: ps80-assets
+    # ps80's Jenkins resource root host (ADR 0047), set on the controller by
+    # resources/jenkins-masters/ps80/init.groovy.d/resourceRootUrl.groovy.
+    # Jenkins serves archived build files here behind short-lived per-user
+    # tokens and without its sandbox CSP, so HTML reports with inline JS and
+    # CSS render. Same upstream as ps80. The Host and X-Forwarded-Host must be
+    # this name: Jenkins treats a request as a resource request only when the
+    # forwarded host matches the configured resource root URL.
+    upstream: jenkins-ps80.jenkins-ingress.svc.cluster.local
+    upstreamScheme: http
+    upstreamPort: 8080
+    upstreamHostHeader: ps80-assets.cd.percona.com
   - name: ps57
     # EndpointSlice kept in sync with the live ps57 master private IP by the
     # jenkins-endpoint-reconciler over the eu-central-1 <-> us-east-1 peering.
@@ -91,13 +103,6 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: pmm.cd.percona.com
-  - name: pmm-staging
-    # TEMPORARY staging copy of pmm for the 2.568.3 upgrade
-    # (terraform/master-pmm-staging.tf). Remove with it.
-    upstream: jenkins-pmm-staging.jenkins-ingress.svc.cluster.local
-    upstreamScheme: http
-    upstreamPort: 8080
-    upstreamHostHeader: pmm-staging.cd.percona.com
   - name: psmdb-staging
     # TEMPORARY staging copy of psmdb for the 2.568.3 upgrade
     # (terraform/master-psmdb-staging.tf). Remove with it.
@@ -105,13 +110,6 @@ hosts:
     upstreamScheme: http
     upstreamPort: 8080
     upstreamHostHeader: psmdb-staging.cd.percona.com
-  - name: pg-staging
-    # TEMPORARY staging copy of pg for the 2.568.3 upgrade
-    # (terraform/master-pg-staging.tf). Remove with it.
-    upstream: jenkins-pg-staging.jenkins-ingress.svc.cluster.local
-    upstreamScheme: http
-    upstreamPort: 8080
-    upstreamHostHeader: pg-staging.cd.percona.com
   - name: rel-staging
     # TEMPORARY staging copy of rel for the 2.568.3 upgrade
     # (terraform/master-rel-staging.tf). Remove with it.
