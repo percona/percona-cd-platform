@@ -28,7 +28,8 @@ module "psmdb" {
   vpc_cidr                = "10.188.0.0/22"
   ami_id                  = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   # psmdb workers have no S3 build cache: no psmdb build cache bucket is
   # wired through this module, so null drops the dead worker S3 IAM grant.
   cache_bucket_name = null
