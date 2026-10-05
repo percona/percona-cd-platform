@@ -45,6 +45,16 @@ authentik:
       - secretRef:
           name: authentik-config
 
+    # The image sets TMPDIR=/dev/shm/, so gunicorn pid files, worker
+    # heartbeats and the mmap'd prometheus multiprocess files all land on
+    # the pod's 64M /dev/shm. /dev/shm is pod-scoped and survives container
+    # restarts: once it filled, every restart died with SIGBUS and the pod
+    # never recovered on its own. /tmp/ is the container's writable layer,
+    # which is recreated on every container restart.
+    env:
+      - name: TMPDIR
+        value: /tmp/
+
     # Security pin: app 2026.2.4 carries the fixes for CVE-2026-49448 (9.8
     # auth bypass) and CVE-2026-40165 / CVE-2026-47201 (SAML bypasses, on the
     # live Duo SAML path). No 2026.2.4 chart exists (2026.2.3 is the newest
