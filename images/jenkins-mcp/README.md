@@ -2,12 +2,12 @@
 
 A token-free MCP gateway to Percona's Jenkins fleet. Developers connect from an MCP client
 (Claude Code, Cursor, the Claude / ChatGPT desktop apps), log in once through Authentik
-(Duo-backed OIDC), and read the fleet. The server holds a single read-only Jenkins credential
+(JumpCloud-backed OIDC), and read the fleet. The server holds a single read-only Jenkins credential
 and injects it per call, so no user ever handles a Jenkins token.
 
 ## Access model
 
-- Reads are open to any authenticated Percona user (Authentik / Duo SSO), with one exception:
+- Reads are open to any authenticated Percona user (Authentik / JumpCloud SSO), with one exception:
   `get_item_config` (a job's raw config.xml) is gated to `jenkins-mcp-writers`, because config.xml can
   carry plaintext secrets (e.g. the `<authToken>` remote-build-trigger token).
 - The operate tier (build, replay, stop, cancel) and the manage tier (create, update, delete job
@@ -23,14 +23,14 @@ and injects it per call, so no user ever handles a Jenkins token.
 ## Connect your MCP client
 
 The gateway speaks MCP over streamable HTTP at `https://jenkins-mcp.cd.percona.com/mcp`. It is
-token-free: you authenticate once in your browser through Authentik (Duo-backed OIDC), and the
+token-free: you authenticate once in your browser through Authentik (JumpCloud-backed OIDC), and the
 server injects its own read-only Jenkins credential per call. You never create, paste, or store a
 Jenkins token.
 
 Facts that apply to every client:
 
 - **One-time browser login.** On first connect the client opens an Authentik page, you complete the
-  Duo prompt, and the session is cached (it refreshes silently afterwards).
+  JumpCloud login, and the session is cached (it refreshes silently afterwards).
 - **Pre-registered OAuth client, no Dynamic Client Registration.** Authentik does not support DCR,
   so the gateway uses one pre-registered public (PKCE) client, `client_id: jenkins-mcp`, with no
   client secret. Every client must be told this id explicitly (nothing auto-discovers it), and the
@@ -58,7 +58,7 @@ claude mcp add --transport http --client-id jenkins-mcp \
 ```
 
 Then authenticate: inside Claude Code run `/mcp`, select `jenkins-mcp`, and complete the browser
-Duo login. From Claude Code v2.1.186 you can instead log in from the shell (add `--no-browser` over
+JumpCloud login. From Claude Code v2.1.186 you can instead log in from the shell (add `--no-browser` over
 SSH, then paste the callback URL back):
 
 ```sh
@@ -105,7 +105,7 @@ Add a remote streamable-HTTP server to `~/.cursor/mcp.json` (all projects) or `.
 The `auth.CLIENT_ID` field (capitalised, and distinct from Claude Code's `oauth.clientId`) pins the
 pre-registered public client so Cursor skips DCR. Without it Cursor falls back to Dynamic Client
 Registration and fails with "does not support dynamic client registration". After editing, fully
-restart Cursor (not just toggle the server), then click Connect for the browser Duo login. The
+restart Cursor (not just toggle the server), then click Connect for the browser JumpCloud login. The
 gateway already allowlists Cursor's redirect URIs, so no redirect setup is needed. The `headers`
 block is optional. Drop it to choose a master per call instead. If you hit `invalid_scope`, update
 Cursor to v2.6.19 or later.
@@ -116,9 +116,14 @@ On the hosted Claude surfaces, add a custom connector by URL:
 `https://jenkins-mcp.cd.percona.com/mcp`. Under the connector's Advanced settings, set the OAuth
 client ID to `jenkins-mcp` and leave the client secret blank (Authentik has no DCR, so the id is
 required; the gateway is a public client with no secret). Save, then click Connect for the browser
-Duo login. The gateway already allowlists the hosted callback
+JumpCloud login. The gateway already allowlists the hosted callback
 (`https://claude.ai/api/mcp/auth_callback`), so no redirect setup is needed. On Team or Enterprise
-plans only an org Owner can add a custom connector; members then enable it individually.
+plans only an org Owner can add a custom connector, and members then enable it individually.
+
+The Percona Claude workspace already has this connector, added by IT and listed as **Jenkins**
+under Settings, Connectors. Members cannot edit it, so connect it as is. Its client ID setting is
+owned by IT, so a connector that asks for an OAuth Client ID needs an IT request (see
+Troubleshooting). Until it is fixed, Claude Code users can add the server directly as shown above.
 
 ### pi.dev
 
@@ -145,7 +150,7 @@ then add the gateway to `~/.config/mcp/mcp.json`:
 ```
 
 The `redirectUri` port is free to choose (Authentik allowlists any
-`http://localhost:<port>/callback`). The first connection opens the Authentik / Duo login. Select a
+`http://localhost:<port>/callback`). The first connection opens the Authentik / JumpCloud login. Select a
 master with the per-call `master` argument.
 
 ### Troubleshooting a connection
@@ -172,10 +177,20 @@ then click Connect.
 DCR, so every client must be told `jenkins-mcp` explicitly, and the field name differs per client
 (`--client-id` / `oauth.clientId` in Claude Code, `auth.CLIENT_ID` in Cursor).
 
+**"Automatic client registration isn't supported by Jenkins. Edit the connector and add an OAuth
+Client ID"** is the same fault on the hosted Claude surfaces. On your own connector, edit it and set
+the client ID under Advanced settings. On the workspace **Jenkins** connector, members only get
+Reconnect, which retries with the same settings and fails again. Ask IT to set the OAuth Client ID
+to `jenkins-mcp`, and use the Claude Code setup above in the meantime.
+
+**"Your connection to Jenkins stopped working"** after the sign-in service was unavailable means the
+refresh token could not be renewed. Click Reconnect once the service answers again at
+`https://auth.cd.percona.com/-/health/live/`.
+
 **A tool returns 403 or "requires the jenkins-mcp-writers Authentik group"** means the call needs the
 operate, manage, or config-read tier. Ask in #opensource-jenkins to be added to
 `jenkins-mcp-writers`. You need an Authentik account first, which is created automatically
-on your first Duo SSO login, so connect and authenticate before asking. Once added, disconnect and
+on your first JumpCloud SSO login, so connect and authenticate before asking. Once added, disconnect and
 re-authenticate so the new token carries the group claim. Reconnecting alone does not refresh it.
 One exception: the manage tools (`create_item`, `set_item_config`, `delete_item`) return 403 even
 for writers, because the backend grant is pending (PS-11341). That 403 is not a membership problem.
