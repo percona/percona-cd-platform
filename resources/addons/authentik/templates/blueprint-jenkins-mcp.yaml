@@ -85,7 +85,7 @@ data:
 
       # Access model: reads are open to any authenticated Percona user. There is no application
       # policy binding, so the app does not restrict who may authorize. Users are JIT-provisioned
-      # via the Duo SSO SAML source on first login. The operate (build-lifecycle) tier is gated
+      # via the JumpCloud SSO SAML source on first login. The operate (build-lifecycle) tier is gated
       # per-call by the server to the jenkins-mcp-writers group below.
       - model: authentik_core.group
         id: jenkins-mcp-writers

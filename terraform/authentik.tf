@@ -1,7 +1,7 @@
 # Owner: platform
 # Authentik bootstrap — random secrets stored in AWS Secrets Manager and
 # synced into the cluster by ESO (resources/addons/authentik/templates/
-# external-secret-config.yaml). Authentik front-doors Duo SAML for
+# external-secret-config.yaml). Authentik front-doors JumpCloud SAML for
 # Grafana, ArgoCD, and Headlamp, exposing OIDC inward.
 #
 # Why a single Secrets Manager entry holding a JSON map instead of one

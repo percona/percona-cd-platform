@@ -29,7 +29,7 @@ statelessHttp: true
 readOnly: false
 enableOperate: true
 
-# OAuth2 resource-server auth against Authentik (Duo-backed). The server validates
+# OAuth2 resource-server auth against Authentik (JumpCloud-backed). The server validates
 # bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the
 # Authentik client_id (Authentik stamps aud = client_id, as the headlamp client does).
 oidc:

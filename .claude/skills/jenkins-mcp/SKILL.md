@@ -5,7 +5,7 @@ description: Operator context for the token-free Jenkins MCP gateway (vendored a
 
 # jenkins-mcp (gateway operator context)
 
-A token-free MCP gateway to the Jenkins fleet. Users authenticate through Authentik (Duo-backed
+A token-free MCP gateway to the Jenkins fleet. Users authenticate through Authentik (JumpCloud-backed
 OIDC) and the server injects a single read-only Jenkins credential per call, so no user handles a
 Jenkins token.
 

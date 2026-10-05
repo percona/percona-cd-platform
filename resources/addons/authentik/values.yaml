@@ -1,4 +1,5 @@
-# Authentik: SAML SP to Duo (HD-30780), OIDC IdP to Grafana, ArgoCD, and
+# Authentik: SAML SP to JumpCloud (Duo until 2026-09, HD-30780), OIDC IdP
+# to Grafana, ArgoCD, and
 # Headlamp. Jenkins masters stay on native GitHub OAuth and never touch this
 # path (docs/adr/0019). Bridge architecture per
 # docs/adr/0012-authentik-saml-oidc-bridge.md.

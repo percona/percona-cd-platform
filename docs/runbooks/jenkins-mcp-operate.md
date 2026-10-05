@@ -11,7 +11,7 @@ the access model are in `images/jenkins-mcp/README.md`; the S3 export path in
 ## Access model (recap)
 
 - **Reads** (jobs, builds, logs, nodes, queue, views, and the S3 log/artifact export) are open to
-  **any authenticated Percona user** (Authentik / Duo SSO). There is no read group, and first login
+  **any authenticated Percona user** (Authentik / JumpCloud SSO). There is no read group, and first login
   JIT-provisions the Authentik user. **Exception:** `get_item_config` (a job's raw config.xml) is
   gated to **`jenkins-mcp-writers`**, because config.xml can carry plaintext secrets (e.g. the
   `<authToken>` remote-build-trigger token).
@@ -65,7 +65,7 @@ Removing a master is the reverse: drop its object from the secret, save, restart
 
 Reads need no action. To grant the build tier, add the user to the `jenkins-mcp-writers` Authentik
 group **after they have logged into the gateway at least once** (first login JIT-provisions the
-Authentik user via the Duo SSO source). Authentik UI: Directory, Groups, `jenkins-mcp-writers`,
+Authentik user via the JumpCloud SSO source). Authentik UI: Directory, Groups, `jenkins-mcp-writers`,
 add the member. Their next minted token carries the `groups` claim and the operate tools unlock.
 Revoke by removing them from the group.
 

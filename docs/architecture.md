@@ -38,7 +38,7 @@ flowchart LR
 
     subgraph inputs["Consumes"]
         gh["GitHub<br/>product sources + job definitions"]
-        duo["Duo SSO"]
+        duo["JumpCloud SSO"]
         aws["AWS (6 regions)"]
         htz["Hetzner Cloud"]
     end
@@ -105,7 +105,7 @@ flowchart TB
     subgraph cell["Shared services cell (EKS, us-east-1)"]
         alb["ALB ingress, two groups:<br/>jenkins-masters (controllers)<br/>jenkins-cd (platform UIs)<br/>ACM wildcard *.cd.percona.com"]
         argo["ArgoCD<br/>App-of-Apps, selfHeal"]
-        auth["Authentik<br/>Duo SAML to OIDC"]
+        auth["Authentik<br/>JumpCloud SAML to OIDC"]
         lgtm["LGTM observability<br/>Mimir, Loki, Tempo, Grafana"]
         eso["External Secrets<br/>from AWS Secrets Manager"]
         reap["Cleanup reapers<br/>scheduled Lambdas"]
@@ -187,7 +187,7 @@ which ApplicationSets read as Helm values
 **Why one shared control plane.** Concentrating the cross-cutting services in
 a single cell buys integration once instead of ten times:
 
-- **Authentication:** Duo is integrated exactly once (SAML into Authentik).
+- **Authentication:** JumpCloud is integrated exactly once (SAML into Authentik).
   Every platform UI then gets OIDC SSO with MFA from the same identity
   provider, and offboarding revokes access in one place
   ([`authentication.md`](authentication.md)). The contrast is the current
@@ -300,7 +300,7 @@ dashboarded in Grafana. Full path and conventions:
 | Attribute | Mechanism | Boundary |
 |---|---|---|
 | Availability | Per-product controllers. On-demand instances ended master-side spot reclaims. Identity volumes survive instance loss. Worker interruptions are absorbed by pipeline retries and fleet resubmit guards | A controller failure stops one product. Loss of the us-east-1 cell degrades web UI, SSO, and webhooks fleet-wide. Running builds and worker provisioning continue, because build execution never traverses the ALB |
-| Security | ACM TLS at the ingress. Duo SAML to Authentik to OIDC for the platform UIs (Jenkins controllers use a GitHub OAuth realm today, with Authentik as the target). Secrets live in AWS Secrets Manager via External Secrets. IMDSv2 everywhere. Package signing is confined to a VPN-only internal server. The public repos carry no account secrets | Shared-fate components for web access: ALBs, Authentik, ArgoCD. Break-glass access is per-master SSM, independent of the cell ([`runbooks/master-shell-access.md`](runbooks/master-shell-access.md)) |
+| Security | ACM TLS at the ingress. JumpCloud SAML to Authentik to OIDC for the platform UIs (Jenkins controllers use a GitHub OAuth realm today, with Authentik as the target). Secrets live in AWS Secrets Manager via External Secrets. IMDSv2 everywhere. Package signing is confined to a VPN-only internal server. The public repos carry no account secrets | Shared-fate components for web access: ALBs, Authentik, ArgoCD. Break-glass access is per-master SSM, independent of the cell ([`runbooks/master-shell-access.md`](runbooks/master-shell-access.md)) |
 | Cost | Controllers are small on-demand instances sized to the JVM. Build capacity is spot or Hetzner, scaled to zero when idle. Account reapers age out orphaned instances and volumes ([ADR 0030](adr/0030-account-cleanup-reapers-in-terraform.md)) | Worker cost scales with build demand, not fleet size |
 | Evolvability | Everything-as-code with converging reconciliation. 30 ADRs record decisions. Migrations run behind preflight and validation gates with documented rollforward | Change risk concentrates at merge time, so the CI gates and review are the control surface |
 
@@ -486,7 +486,7 @@ lines:
 - [`karpenter.md`](karpenter.md): NodePool tuning, spot fallback
 - [`pod-identity.md`](pod-identity.md): IAM associations
 - [`argocd-bootstrap.md`](argocd-bootstrap.md): GitOps Bridge, cluster Secret
-- [`authentication.md`](authentication.md): Duo SAML, Authentik, OIDC
+- [`authentication.md`](authentication.md): JumpCloud SAML, Authentik, OIDC
 - [`tls-strategy.md`](tls-strategy.md): ACM wildcard, ssl-policy
 - [`connectivity.md`](connectivity.md): request paths, peering
 - [`eks-hardening.md`](eks-hardening.md): access entries, IMDSv2, KMS
