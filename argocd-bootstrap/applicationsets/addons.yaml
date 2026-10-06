@@ -99,7 +99,7 @@ spec:
             # Standalone Grafana — datasource URLs are constructed in-cluster
             # (Service DNS). Grafana SAML was removed: OSS doesn't ship the
             # SAML feature (Enterprise-only). The Authentik bridge takes over
-            # — Grafana talks OIDC to Authentik, Authentik talks SAML to Duo.
+            # — Grafana talks OIDC to Authentik, Authentik talks SAML to JumpCloud.
             # PR-A3 (#28) drops the now-dead resources/addons/grafana/templates/
             # external-secret-saml.yaml + values SAML block entirely.
             grafana:
@@ -130,7 +130,7 @@ spec:
             aws-load-balancer-controller:
               vpcId: '{{ metadata.annotations.cluster_vpc_id }}'
 
-            # Authentik — SAML SP to Duo (HD-30780), OIDC IdP to Grafana
+            # Authentik — SAML SP to JumpCloud (Duo until 2026-09, HD-30780), OIDC IdP to Grafana
             # (and later Jenkins masters, ArgoCD UI). Top-level keys
             # match the wrapper chart's local-scope values (host, saml.*).
             # Per the wrapper-vs-subchart trap from the Grafana SAML PR,

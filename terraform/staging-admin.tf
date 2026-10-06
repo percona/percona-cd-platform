@@ -9,7 +9,7 @@
 # TEMPORARY: delete with the staging copies.
 
 locals {
-  staging_copies = toset(["pmm", "psmdb", "pg", "rel", "cloud"])
+  staging_copies = toset(["pmm", "pg", "cloud"])
 }
 
 resource "random_password" "staging_admin" {

@@ -558,8 +558,6 @@ _ssm-resolve inst:
       pg)    region=eu-central-1; tag=jenkins-pg ;;
       rel)   region=eu-west-1;    tag=jenkins-rel ;;
       cloud) region=eu-west-1;    tag=jenkins-cloud ;;
-      psmdb-staging) region=us-west-2;    tag=jenkins-psmdb-staging ;;
-      rel-staging) region=eu-west-1;    tag=jenkins-rel-staging ;;
       cloud-staging) region=eu-west-1;    tag=jenkins-cloud-staging ;;
       ps3)   echo "ps3 is in-cluster: use just ssh ps3 (kubectl exec into jenkins-ps3-k8s-0)" >&2; exit 2 ;;
       *)     echo "unknown instance '{{inst}}'" >&2; exit 2 ;;

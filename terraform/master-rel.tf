@@ -27,7 +27,8 @@ module "rel" {
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   # rel workers have no S3 build cache: the CFN-era default named a
   # rel-build-cache bucket that was never created. null drops the dead
   # worker IAM grant (the existing rel-repo-cache bucket is separate and

@@ -1,6 +1,6 @@
 # ArgoCD admin recovery (break-glass)
 
-When Authentik OIDC is unavailable (Authentik down, Duo outage, a broken
+When Authentik OIDC is unavailable (Authentik down, JumpCloud outage, a broken
 upgrade) and nobody can log in to ArgoCD. The local admin account is
 disabled by design (`admin.enabled: "false"` in the chart values), so
 recovery means re-enabling it temporarily.
