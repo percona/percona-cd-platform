@@ -63,16 +63,6 @@ hosts:
     region: us-east-2
     tag: jenkins-pmm-amzn2
     port: 8080
-  - name: psmdb-staging
-    # TEMPORARY staging copy of psmdb (terraform/master-psmdb-staging.tf).
-    region: us-west-2
-    tag: jenkins-psmdb-staging
-    port: 8080
-  - name: rel-staging
-    # TEMPORARY staging copy of rel (terraform/master-rel-staging.tf).
-    region: eu-west-1
-    tag: jenkins-rel-staging
-    port: 8080
   - name: cloud-staging
     # TEMPORARY staging copy of cloud (terraform/master-cloud-staging.tf).
     region: eu-west-1
