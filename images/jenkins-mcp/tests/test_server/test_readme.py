@@ -196,6 +196,6 @@ def test_readme_md_onboarding_guidance_pinned():
     readme_md = Path(__file__).resolve().parents[2] / 'README.md'
     text = readme_md.read_text()
     assert 'Ask in #opensource-jenkins' in text  # the venue
-    assert 'first Duo SSO login' in text  # account is JIT-provisioned; connect before asking
+    assert 'first JumpCloud SSO login' in text  # account is JIT-provisioned; connect before asking
     assert 'Reconnecting alone does not refresh it' in text  # re-auth-after-add gotcha
     assert 'PS-11341' in text  # manage tools 403 even for writers (pending backend grant)

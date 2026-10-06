@@ -18,7 +18,7 @@ Token contract (verified against Headlamp source, kubernetes-sigs/headlamp):
     false, so the apiserver rejects every token ("oidc: email not verified")
     and the user bounces to login. This provider binds a CUSTOM email mapping
     (below) that emits true. Safe because emails come from trusted corporate
-    Duo/SAML SSO, not self-signup.
+    JumpCloud SAML SSO, not self-signup.
   - groups: no separate `groups` scope mapping is needed (or available);
     Authentik 2026.2.2 does not ship one. The default `profile` scope
     mapping already emits `groups` (group.name per request.user.groups),
@@ -60,7 +60,7 @@ data:
       # email_verified=false, which the k8s OIDC authenticator rejects when
       # username_claim=email ("oidc: email not verified"), so every token 401s
       # at the apiserver and the user bounces to login. Emails come from trusted
-      # corporate Duo/SAML SSO (not self-signup), so asserting verified is safe.
+      # corporate JumpCloud SAML SSO (not self-signup), so asserting verified is safe.
       - model: authentik_providers_oauth2.scopemapping
         identifiers:
           name: headlamp-email-verified

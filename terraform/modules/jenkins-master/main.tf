@@ -133,6 +133,8 @@ resource "aws_vpc_endpoint" "s3" {
 
 data "aws_region" "current" {}
 
+data "aws_caller_identity" "current" {}
+
 # Gateway endpoint policy is a defense-in-depth FILTER, not the access-control
 # layer: a Gateway endpoint intercepts ALL same-region S3 traffic from the VPC,
 # so any action it omits is denied fleet-wide regardless of IAM. IAM (the master
@@ -427,7 +429,9 @@ resource "aws_iam_role" "worker" {
 
 # EC2 tag perms always; conditional extras per caller: S3 cache
 # (cache_bucket_name), Packer amazon-ebs lifecycle (worker_ami_builder),
-# ECR read + public-ECR auth (worker_ecr_read).
+# ECR read + public-ECR auth (worker_ecr_read), Bedrock invoke on Anthropic
+# models (worker_bedrock_invoke), Auto Scaling activity reads for CI reports
+# (worker_ci_insights_read).
 data "aws_iam_policy_document" "worker" {
   statement {
     sid    = "EC2Tags"
@@ -525,6 +529,57 @@ data "aws_iam_policy_document" "worker" {
         "ecr:GetDownloadUrlForLayer",
         "ecr-public:GetAuthorizationToken",
         "sts:GetServiceBearerToken",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  # Bedrock invoke on Anthropic models (worker_bedrock_invoke). A cross-region
+  # inference profile (us.anthropic.*, global.anthropic.*) needs the profile
+  # ARN in the calling region plus the foundation model in every destination
+  # region, hence the region wildcard on foundation-model.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInvokeAnthropic"
+      effect = "Allow"
+      actions = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+      ]
+      resources = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*anthropic.*",
+      ]
+    }
+  }
+
+  # Auto Scaling activity reads (worker_ci_insights_read): the weekly jobs
+  # digest reports agent-fleet launches, spot interruptions and capacity
+  # failures from the fleet ASGs' activity history. Describe* calls take no
+  # resource-level scope, and both are read-only metadata.
+  dynamic "statement" {
+    for_each = var.worker_ci_insights_read ? [1] : []
+    content {
+      sid    = "AutoScalingActivityRead"
+      effect = "Allow"
+      actions = [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeScalingActivities",
+      ]
+      resources = ["*"]
+    }
+  }
+
+  # Claude Code resolves inference profiles at startup.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInferenceProfileRead"
+      effect = "Allow"
+      actions = [
+        "bedrock:GetInferenceProfile",
+        "bedrock:ListInferenceProfiles",
       ]
       resources = ["*"]
     }
@@ -1054,6 +1109,7 @@ resource "aws_instance" "master" {
   lifecycle {
     # AMI is owned by the launch template ($Latest); ignore drift here so
     # an LT version bump (userdata edit) doesn't force instance replacement.
-    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version]
+    # PerconaCreatedBy is added by the org tagger after launch, not by Terraform.
+    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version, tags["PerconaCreatedBy"]]
   }
 }

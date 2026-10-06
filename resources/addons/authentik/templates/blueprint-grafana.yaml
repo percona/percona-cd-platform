@@ -263,15 +263,15 @@ data:
       #      entirely. With one source + empty user_fields, the frontend
       #      renderer at web/src/flow/stages/identification/IdentificationStage.ts
       #      L136-151 auto-redirects the browser straight to the SAML IdP —
-      #      users never see an Authentik form, just go to Duo.
+      #      users never see an Authentik form, just go to JumpCloud.
       #   3. show_source_labels=true so when the auto-redirect doesn't fire
       #      (e.g. browser back-button to Authentik with multiple sources
       #      registered later), the source button shows its label, not just
       #      its icon.
       #
-      # Why drop user_fields: the username form was a Duo-MFA bypass for the
+      # Why drop user_fields: the username form was an SSO bypass for the
       # local akadmin user (akadmin is a local Authentik user, not
-      # Duo-federated, so passing it through the username form skipped Duo).
+      # IdP-federated, so passing it through the username form skipped the IdP).
       # Closing the form closes the bypass. Recovery for akadmin is now via
       # Authentik's official troubleshooting path: `ak create_recovery_key
       # <minutes> akadmin` in the worker pod generates a one-shot URL that
@@ -294,7 +294,7 @@ data:
       # default-source-enrollment-write's user_type. Authentik defaults
       # source-enrolled users to user_type=external in 2024.10+, which is
       # what we want — non-admin users only ever see Authentik via the
-      # OIDC redirect flow (Grafana → Authentik → Duo → back), so the
+      # OIDC redirect flow (Grafana → Authentik → JumpCloud → back), so the
       # external type blocks nothing. It only matters for operators who
       # visit /if/admin/ directly to debug; promote them one-shot via the
       # API. See docs/runbooks/authentik-bootstrap.md "Promote operator

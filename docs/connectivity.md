@@ -111,6 +111,25 @@ Mechanics worth knowing:
   jenkins-endpoint-reconciler, which writes each `jenkins-<host>` Service
   EndpointSlice from the live EC2 private IP.
 
+### Resource root host (ps80-assets)
+
+`ps80-assets.cd.percona.com` is ps80's Jenkins resource root URL
+([ADR 0047](adr/0047-jenkins-resource-root-host-for-build-reports.md)). It
+rides the same path as ps80, with its own jenkins-ingress entry pointing at
+the `jenkins-ps80` Service.
+
+- A request for an archived file on `ps80.cd.percona.com` is redirected to
+  a tokenized URL on the resource host. Jenkins serves the file there without
+  its sandbox CSP, so HTML reports with inline JS and CSS render.
+- nginx sends `Host` and `X-Forwarded-Host` as the resource name. Jenkins
+  matches that forwarded host against the configured URL, so a host rewrite
+  to `ps80.cd.percona.com` would turn every resource request into a 404.
+- Tokens are per user and expire after 30 minutes. Any other path on the
+  host returns 404.
+- Every artifact request redirects, API-token requests included. A client
+  that forwards its credentials to the resource host gets 400. Python
+  `urllib` does that by default, curl and `requests` do not.
+
 ### Mode A web path (ps3, in-cluster)
 
 ```
@@ -131,7 +150,7 @@ path.
 | `headlamp.cd` | headlamp | `/` |
 | `mimir-push.cd`, `loki-push.cd`, `tempo-push.cd` | alloy-gateway | `/-/ready` |
 
-UI logins go through Authentik (OIDC), which bridges to Duo via SAML
+UI logins go through Authentik (OIDC), which bridges to JumpCloud via SAML
 ([`authentication.md`](authentication.md)). The Jenkins controllers
 themselves still use per-instance GitHub OAuth realms.
 

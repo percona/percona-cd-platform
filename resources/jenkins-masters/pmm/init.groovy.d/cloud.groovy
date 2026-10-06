@@ -139,10 +139,10 @@ initMap['rpmMap'] = '''
     10.30.6.9 repo.ci.percona.com
     "     | sudo tee -a /etc/hosts
 
-    if [[ $SYSREL -ge 10 ]]; then
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. OL8, OL9 and
+    # Alma 10 all carry OpenJDK 21 in AppStream.
+    if [[ $SYSREL -ge 8 ]]; then
         PKGLIST="tar coreutils java-21-openjdk-headless tzdata-java"
-    elif [[ $SYSREL -ge 8 ]]; then
-        PKGLIST="tar coreutils java-17-openjdk-headless tzdata-java"
     fi
 
     if [[ ${RHVER} -eq 8 ]]; then
@@ -189,10 +189,15 @@ initMap['debMap'] = '''
         echo try again
     done
 
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. Debian 12 ships
+    # no openjdk-21 package, so bookworm keeps openjdk-17 as the system java and
+    # gets a pinned Temurin 21 JRE for remoting further down.
     if [ "${DEB_VERSION}" == "trixie" ] || [ "${DEB_VERSION}" == "resolute" ]; then
         JDK_PACKAGE="openjdk-21-jdk-headless"
-    else
+    elif [ "${DEB_VERSION}" == "bookworm" ]; then
         JDK_PACKAGE="openjdk-17-jre-headless"
+    else
+        JDK_PACKAGE="openjdk-21-jre-headless"
     fi
 
     if [ "${DEB_VERSION}" = "bookworm" ] || [ "${DEB_VERSION}" = "trixie" ] || [ "${DEB_VERSION}" = "noble" ] || [ "${DEB_VERSION}" = "resolute" ]; then
@@ -203,6 +208,27 @@ initMap['debMap'] = '''
         sudo DEBIAN_FRONTEND=noninteractive apt-get -y install ${JDK_PACKAGE}
     else
         sudo DEBIAN_FRONTEND=noninteractive apt-get -y install ${JDK_PACKAGE} git
+    fi
+
+    # The symlink wins PATH resolution (/usr/local/bin precedes /usr/bin for the
+    # SSH launcher), so remoting runs on Temurin 21.
+    if [ "${DEB_VERSION}" = "bookworm" ]; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
     fi
 
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins

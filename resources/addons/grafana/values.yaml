@@ -1,7 +1,7 @@
 # Standalone Grafana — replaces the bundled chart that L-3 disabled.
 #
 # Three things this chart does that the bundled one couldn't:
-#   1. OIDC SSO via Authentik (which talks SAML to Duo on our behalf).
+#   1. OIDC SSO via Authentik (which talks SAML to JumpCloud on our behalf).
 #      Group → role mapping: grafana_cd_admins → GrafanaAdmin (server-
 #      admin + org-Admin), percona (all Perconians) → Viewer.
 #   2. Datasources for the full LGTM stack: Mimir (metrics), Loki (logs),
@@ -142,7 +142,7 @@ grafana:
       cookie_samesite: lax
     auth:
       # Local username/password form removed from /login. Every browser
-      # sign-in goes through Duo MFA + Authentik. The local `admin` user
+      # sign-in goes through JumpCloud SSO + Authentik. The local `admin` user
       # still exists in Grafana's DB; emergency recovery is `kubectl exec
       # deploy/grafana -n grafana -c grafana -- grafana-cli admin
       # reset-admin-password <new>`, then `kubectl port-forward` to
@@ -161,7 +161,7 @@ grafana:
     # folder-permissions automation (ADR 0041). Brute force on the
     # internet-facing ALB is mitigated by Grafana's login lockout and
     # the 32-char random credential; browser sign-in remains
-    # Duo + Authentik only.
+    # JumpCloud + Authentik only.
     auth.basic:
       enabled: true
     users:
@@ -188,8 +188,8 @@ grafana:
     #
     # Bootstrap-phase trade-off: re-opening `percona` (re-introduced
     # 2026-05-07 after a brief tightening to admins-only) gives every
-    # Duo-authenticated Percona employee read access without waiting on
-    # IT-Ops to provision a dedicated `grafana_cd_users` Duo group. This
+    # JumpCloud-authenticated Percona employee read access without waiting
+    # on IT-Ops to provision a dedicated `grafana_cd_users` JumpCloud group. This
     # accepts security-review chain C (Viewer → Loki query → all-namespace
     # auth/build telemetry) as known exposure during bootstrap. To close
     # later: ask Santiago for `grafana_cd_users`, swap `percona` for it,

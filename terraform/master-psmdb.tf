@@ -28,7 +28,8 @@ module "psmdb" {
   vpc_cidr                = "10.188.0.0/22"
   ami_id                  = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   # psmdb workers have no S3 build cache: no psmdb build cache bucket is
   # wired through this module, so null drops the dead worker S3 IAM grant.
   cache_bucket_name = null
@@ -127,7 +128,6 @@ module "psmdb_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not

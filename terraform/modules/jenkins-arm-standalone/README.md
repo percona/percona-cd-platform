@@ -46,7 +46,6 @@ preserved byte for byte.
 | `extra_ssh_cidrs` | Extra CIDRs allowed to SSH to workers, e.g. the controller's EKS VPC CIDR for the peering connection. |
 | `data_volume_gb` | Size (GiB) of the `/mnt` build and docker data volume on workers. |
 | `ami_id` | Override the worker AMI. `null` resolves the latest Amazon Linux 2023 (kernel 6.1) arm64 AMI in the region. |
-| `tickets` | Tracking tickets (comma-separated), recorded in the `tickets` tag. |
 | `team` | Owning product team, recorded in the `team` tag on every resource and runtime-spawned instance/volume. Default `platform`; allowed values are the Owner set enforced by `scripts/check_conventions.py`. |
 | `tags` | Extra tags merged onto all resources. |
 
@@ -73,6 +72,5 @@ module "ps3_arm_fleet" {
   instance_types    = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size          = 16
   extra_ssh_cidrs   = [module.vpc.vpc_cidr_block]
-  tickets           = "PS-11179"
 }
 ```

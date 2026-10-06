@@ -37,7 +37,6 @@ imageMap = [:]
 imageMap['micro-amazon']     = 'ami-06a974f9b8a97ecf2'
 imageMap['min-al2023-x64']   = 'ami-06a974f9b8a97ecf2'
 imageMap['min-centos-7-x64'] = 'ami-04f798ca92cc13f74'
-imageMap['min-centos-8-x64'] = 'ami-0155c31ea13d4abd2'
 imageMap['min-ol-8-x64']     = 'ami-0f47366880b6cce9f'
 imageMap['min-ol-9-x64']     = 'ami-02cae4fd317586d2f'
 imageMap['min-rhel-10-x64']  = 'ami-0598edb0ace40eb9a'
@@ -80,7 +79,6 @@ userMap['docker-64gb']      = userMap['docker']
 userMap['micro-amazon']     = userMap['docker']
 userMap['min-al2023-x64']   = 'ec2-user'
 userMap['min-centos-7-x64'] = 'centos'
-userMap['min-centos-8-x64'] = 'centos'
 userMap['min-ol-8-x64']     = 'ec2-user'
 userMap['min-ol-9-x64']     = 'ec2-user'
 userMap['min-rhel-10-x64']  = 'ec2-user'
@@ -131,7 +129,9 @@ initMap['docker'] = '''
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
 
-    sudo yum -y install java-17-amazon-corretto git cronie unzip dnf-plugins-core
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless git cronie unzip dnf-plugins-core
     sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     sudo sed -i 's/$releasever/9/g' /etc/yum.repos.d/docker-ce.repo
     until sudo dnf -y install docker-ce docker-ce-cli docker-compose-plugin containerd.io docker-buildx-plugin; do
@@ -207,7 +207,9 @@ initMap['docker-32gb'] = '''
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
 
-    sudo yum -y install java-17-amazon-corretto git cronie unzip dnf-plugins-core
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless git cronie unzip dnf-plugins-core
     sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     sudo sed -i 's/$releasever/9/g' /etc/yum.repos.d/docker-ce.repo
     until sudo dnf -y install docker-ce docker-ce-cli docker-compose-plugin containerd.io docker-buildx-plugin; do
@@ -295,12 +297,33 @@ initMap['rpmMap'] = '''
         echo try again
     done
 
-    # Java version detection: RHEL 10 -> Java 21, all others -> Java 17
-    if [[ $${RHVER} -eq 10 ]]; then
-        sudo yum -y install java-21-openjdk-headless || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. AL2023
+    # carries Corretto 21, and OL8, OL9 and RHEL 10 carry OpenJDK 21. CentOS 7
+    # and CentOS 8 track frozen vault repos with no Java 21 package, so they
+    # get a pinned Temurin 21 JRE symlinked into /usr/local/bin (first on the
+    # SSH launcher PATH).
+    if [[ -f /etc/os-release ]] && . /etc/os-release && [[ "$${ID}" == "amzn" ]]; then
+        sudo yum -y install java-21-amazon-corretto-headless || :
     else
-        sudo yum -y install java-17-amazon-corretto-headless || :
-        sudo yum -y install java-17-openjdk-headless || :
+        sudo yum -y install java-21-openjdk-headless || sudo yum -y install java-17-openjdk-headless || :
+    fi
+    if ! java -version 2>&1 | grep -q 'version "21'; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
     fi
 
     sudo yum -y install git tzdata-java unzip || :
@@ -339,7 +362,9 @@ initMap['debMap'] = '''
     sudo sed -i 's|http://cdn-aws.deb.debian.org/debian stretch|http://archive.debian.org/debian stretch|g' /etc/apt/sources.list
     sudo sed -i 's|http://security.debian.org/debian-security stretch|http://archive.debian.org/debian-security stretch|g' /etc/apt/sources.list
     sudo sed -i '/stretch-updates/d' /etc/apt/sources.list
-    sudo sed -i '/buster-backports/ s/cdn-aws.deb.debian.org/archive.debian.org/' /etc/apt/sources.list
+    # Debian moved buster and its updates, security and backports suites to
+    # archive.debian.org, so every buster source points there.
+    sudo sed -i -E '/ buster[-/a-z]* / s#https?://(cdn-aws.deb.debian.org|deb.debian.org|security.debian.org)#http://archive.debian.org#' /etc/apt/sources.list
     sudo sed -i '/bullseye-backports/ s/cdn-aws.deb.debian.org/archive.debian.org/' /etc/apt/sources.list
 
     until sudo DEBIAN_FRONTEND=noninteractive apt-get update; do
@@ -352,9 +377,12 @@ initMap['debMap'] = '''
     done
     DEB_VER=$(lsb_release -sc)
 
-    if [[ $${DEB_VER} == "trixie" ]]; then
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. trixie,
+    # jammy and noble carry openjdk-21 in their own archives. The rest keep
+    # their distro package for tooling and get a pinned Temurin 21 JRE below.
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
-    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "focal" ]] || [[ $${DEB_VER} == "bionic" ]] || [[ $${DEB_VER} == "xenial" ]]; then
+    elif [[ $${DEB_VER} == "bookworm" ]] || [[ $${DEB_VER} == "bullseye" ]] || [[ $${DEB_VER} == "focal" ]] || [[ $${DEB_VER} == "bionic" ]] || [[ $${DEB_VER} == "xenial" ]]; then
         JAVA_VER="openjdk-17-jre-headless"
     else
         JAVA_VER="openjdk-11-jre-headless"
@@ -368,6 +396,30 @@ initMap['debMap'] = '''
     else
         sudo DEBIAN_FRONTEND=noninteractive sudo apt-get -y install $${JAVA_VER} git
     fi
+
+    # stretch, buster, bullseye, bookworm, xenial, bionic and focal ship no
+    # openjdk-21 package, so the agent JVM is a pinned Temurin 21 JRE symlinked
+    # into /usr/local/bin (first on the SSH launcher PATH). Only remoting moves
+    # to 21.
+    if ! java -version 2>&1 | grep -q 'version "21'; then
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
+    fi
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
@@ -378,7 +430,6 @@ initMap['docker-64gb']       = initMap['docker-32gb']
 initMap['micro-amazon']      = initMap['rpmMap']
 initMap['min-al2023-x64']    = initMap['rpmMap']
 initMap['min-centos-7-x64']  = initMap['rpmMap']
-initMap['min-centos-8-x64']  = initMap['rpmMap']
 initMap['min-ol-8-x64']      = initMap['rpmMap']
 initMap['min-ol-9-x64']      = initMap['rpmMap']
 initMap['min-rhel-10-x64']   = initMap['rpmMap']
@@ -418,7 +469,6 @@ typeMap['docker-32gb']       = 'm6a.2xlarge' // g4ad.2xlarge spot pool in us-wes
 typeMap['docker-64gb']       = 'i3en.3xlarge'
 typeMap['min-al2023-x64']    = typeMap['docker-32gb']
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
-typeMap['min-centos-8-x64']  = typeMap['docker-32gb']
 typeMap['min-ol-8-x64']      = typeMap['docker-32gb']
 typeMap['min-ol-9-x64']      = typeMap['docker-32gb']
 typeMap['min-rhel-10-x64']   = typeMap['docker-32gb']
@@ -456,7 +506,6 @@ execMap['docker-64gb']       = execMap['docker']
 execMap['micro-amazon']      = '30'
 execMap['min-al2023-x64']    = '1'
 execMap['min-centos-7-x64']  = '1'
-execMap['min-centos-8-x64']  = '1'
 execMap['min-ol-8-x64']      = '1'
 execMap['min-ol-9-x64']      = '1'
 execMap['min-rhel-10-x64']   = '1'
@@ -488,7 +537,6 @@ devMap['docker-64gb']       = devMap['docker']
 devMap['micro-amazon']      = '/dev/xvda=:20:true:gp2,/dev/xvdd=:160:true:gp2'
 devMap['min-al2023-x64']    = '/dev/xvda=:20:true:gp2,/dev/xvdd=:500:true:gp2'
 devMap['min-centos-7-x64']  = '/dev/xvda=:20:true:gp2,/dev/xvdd=:500:true:gp2'
-devMap['min-centos-8-x64']  = '/dev/xvda=:20:true:gp2,/dev/xvdd=:500:true:gp2'
 devMap['min-ol-8-x64']      = '/dev/sda1=:20:true:gp2,/dev/xvdd=:500:true:gp2'
 devMap['min-ol-9-x64']      = '/dev/sda1=:20:true:gp2,/dev/xvdd=:500:true:gp2'
 devMap['min-rhel-10-x64']   = '/dev/xvda=:20:true:gp2,/dev/xvdd=:500:true:gp2'
@@ -520,7 +568,6 @@ labelMap['docker-64gb']       = ''
 labelMap['micro-amazon']      = 'master'
 labelMap['min-al2023-x64']    = ''
 labelMap['min-centos-7-x64']  = ''
-labelMap['min-centos-8-x64']  = ''
 labelMap['min-ol-8-x64']      = ''
 labelMap['min-ol-9-x64']      = ''
 labelMap['min-rhel-10-x64']   = ''
@@ -555,7 +602,6 @@ jvmoptsMap['docker-64gb']       = jvmoptsMap['docker']
 jvmoptsMap['micro-amazon']      = jvmoptsMap['docker']
 jvmoptsMap['min-al2023-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-centos-7-x64']  = jvmoptsMap['docker']
-jvmoptsMap['min-centos-8-x64']  = jvmoptsMap['docker']
 jvmoptsMap['min-ol-8-x64']      = jvmoptsMap['docker']
 jvmoptsMap['min-ol-9-x64']      = jvmoptsMap['docker']
 jvmoptsMap['min-rhel-10-x64']   = jvmoptsMap['docker']
@@ -654,7 +700,6 @@ String region = 'us-west-2'
             getTemplate('micro-amazon'),
             getTemplate('min-al2023-x64'),
             getTemplate('min-centos-7-x64'),
-            getTemplate('min-centos-8-x64'),
             getTemplate('min-ol-8-x64'),
             getTemplate('min-ol-9-x64'),
             getTemplate('min-rhel-10-x64'),

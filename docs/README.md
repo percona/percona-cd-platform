@@ -24,7 +24,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 
 | Topic | Doc |
 |---|---|
-| Authentication (Duo SAML → Authentik → OIDC) | [`authentication.md`](authentication.md) |
+| Authentication (JumpCloud SAML → Authentik → OIDC) | [`authentication.md`](authentication.md) |
 | Pod Identity (vs IRSA) | [`pod-identity.md`](pod-identity.md) |
 | EKS hardening | [`eks-hardening.md`](eks-hardening.md) |
 | Red-team reviews | [`security-review-2026-06-11.md`](security-review-2026-06-11.md) (Authentik posture), [`security-review-2026-05-07.md`](security-review-2026-05-07.md) |
