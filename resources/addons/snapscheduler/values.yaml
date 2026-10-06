@@ -14,7 +14,7 @@ snapscheduler:
   # other addons rather than relying on the implicit priority 0.
   priorityClassName: platform-default
   image:
-    tagOverride: "3.5.0-r1"
+    tagOverride: "3.5.0-e9d1a8f3dc9a"
   nodeSelector:
     kubernetes.io/arch: arm64
   resources:
