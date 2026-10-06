@@ -141,7 +141,7 @@ variable "monitoring_az" {
 
 variable "authentik_hostname" {
   description = <<-EOT
-    Public hostname for the Authentik bridge (SAML SP to Duo, OIDC IdP
+    Public hostname for the Authentik bridge (SAML SP to JumpCloud, OIDC IdP
     to Grafana / future Jenkins masters / ArgoCD UI). external-dns
     publishes the ALB alias when the chart Ingress is admitted.
   EOT

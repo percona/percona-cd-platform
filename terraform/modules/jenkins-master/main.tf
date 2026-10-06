@@ -1109,6 +1109,7 @@ resource "aws_instance" "master" {
   lifecycle {
     # AMI is owned by the launch template ($Latest); ignore drift here so
     # an LT version bump (userdata edit) doesn't force instance replacement.
-    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version]
+    # PerconaCreatedBy is added by the org tagger after launch, not by Terraform.
+    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version, tags["PerconaCreatedBy"]]
   }
 }
