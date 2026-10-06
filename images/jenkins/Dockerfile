@@ -7,7 +7,7 @@
 # (CVE-2026-53435..53442, CVE-2026-70426..70430, CVE-2026-84645..84657), never backported
 # to 2.541.x. Since 2.555.1 the controller AND the agent remoting JVMs require
 # Java 21 or 25; this image line has run Java 21 since the 2.541.3-jdk21 pin.
-FROM jenkins/jenkins:2.568.3-lts-jdk21@sha256:c1e4c349365f6d16d88595b2c5f7e8ff39b8ae1d061f62420bac193b4b9616d0
+FROM jenkins/jenkins:2.580.1-lts-jdk21@sha256:a660310e39ade10631f774bacd5219de767dfd08947ea5c32a739b5e5bb382c1
 
 # Skip the setup wizard (configuration comes from the persistent volume)
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
