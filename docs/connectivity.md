@@ -150,7 +150,7 @@ path.
 | `headlamp.cd` | headlamp | `/` |
 | `mimir-push.cd`, `loki-push.cd`, `tempo-push.cd` | alloy-gateway | `/-/ready` |
 
-UI logins go through Authentik (OIDC), which bridges to Duo via SAML
+UI logins go through Authentik (OIDC), which bridges to JumpCloud via SAML
 ([`authentication.md`](authentication.md)). The Jenkins controllers
 themselves still use per-instance GitHub OAuth realms.
 

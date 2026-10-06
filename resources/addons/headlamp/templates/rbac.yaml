@@ -3,7 +3,7 @@ Per-user RBAC for Headlamp's OIDC passthrough.
 
 Headlamp forwards each user's Authentik id_token to the kube-apiserver, so
 access is governed by the user's own RBAC, keyed on the OIDC groups claim.
-These bindings map Authentik/Duo groups to cluster roles. The subject
+These bindings map Authentik/JumpCloud groups to cluster roles. The subject
 names carry the `oidc:` prefix set by the EKS external OIDC association
 (groupsPrefix: "oidc:" in terraform/aws_eks_identity_provider_config); keep
 the two in sync.
@@ -14,7 +14,7 @@ visibility (Nodes, PVs, CRDs, metrics, storageclasses) needs cluster-scoped
 access, which the built-in `view`/`edit` roles intentionally exclude, so
 the admin group is bound to `cluster-admin` (read + write + delete + RBAC).
 This is a deliberate privilege grant via SSO group; anyone added to
-`grafana_cd_admins` in Duo/Authentik gains full cluster control via
+`grafana_cd_admins` in JumpCloud/Authentik gains full cluster control via
 Headlamp. Split into a dedicated `k8s_cd_admins` group later if that
 linkage stops being acceptable.
 
@@ -37,7 +37,7 @@ roleRef:
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    # All Percona staff (Duo `percona` group) get namespaced read-only.
+    # All Percona staff (JumpCloud group, renamed to `percona` by Authentik) get namespaced read-only.
     name: oidc:percona
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -58,6 +58,6 @@ subjects:
     kind: Group
     # Platform admins: full cluster control via Headlamp (Nodes, PVs, CRDs,
     # RBAC, delete). Reuses the existing Grafana admin group; split into a
-    # dedicated `k8s_cd_admins` group in Duo/Authentik if cluster-admin should
+    # dedicated `k8s_cd_admins` group in JumpCloud/Authentik if cluster-admin should
     # not track Grafana admin.
     name: oidc:grafana_cd_admins

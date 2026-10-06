@@ -258,7 +258,7 @@ async def get_readme() -> str:
     lines = [
         '# Jenkins MCP -- token-free fleet access (start here)',
         '',
-        "Token-free gateway to Percona's Jenkins masters. You log in once via Authentik (Duo) in the",
+        "Token-free gateway to Percona's Jenkins masters. You log in once via Authentik (JumpCloud) in the",
         'browser; the server holds the Jenkins credentials, so you never handle a token. Every call is',
         'attributed to your Authentik identity and audited, even though the gateway uses one shared',
         'Jenkins credential downstream.',
@@ -311,7 +311,7 @@ async def get_readme() -> str:
         '  - get_all_items / query_items return a flat compact list capped by limit (total + truncated reported).',
         '  - On a big master, narrow with query_items(fullname_pattern=...) rather than raising limit.',
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
-        '  - Reads are open to any authenticated Percona user (Duo SSO login); the one exception is',
+        '  - Reads are open to any authenticated Percona user (JumpCloud SSO login); the one exception is',
         '    get_item_config (raw config.xml), which needs the jenkins-mcp-writers group.',
         '  - Operate and manage tools additionally need the jenkins-mcp-writers group (refused otherwise).',
         '  - A manage writer can define a job that runs code on a master, so the group is code-execution-capable.',
