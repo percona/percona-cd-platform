@@ -57,7 +57,7 @@ final String JAVA_ARM         = 'java'
 // default when no maximum is given.
 final String OD_T3_2XLARGE    = '0.3328'
 final String OD_T3_XLARGE     = '0.1664'
-final String OD_T4G_XLARGE    = '0.1344'
+final String OD_C7GD_2XLARGE  = '0.3629'
 final String OD_T4G_SMALL     = '0.0168'
 
 // One row per template, in the live declaration order (the ec2-plugin provision loop
@@ -66,11 +66,11 @@ final String OD_T4G_SMALL     = '0.0168'
 // that floor to Monday to Friday (the plugin keeps min instances only inside the window).
 final List<Map> TEMPLATES = [
     [description: 'x86_64',          labels: 'agent-amd64',          type: 't3.2xlarge', arch: 'x86_64', bid: OD_T3_2XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '120', cap: '35', uses: 1,  min: 1, spare: 1, warmWeekdays: true, subnets: SUBNETS, java: JAVA_X86, name: null],
-    [description: 'ARM64',           labels: 'agent-arm64',          type: 't4g.xlarge', arch: 'arm64',  bid: OD_T4G_XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
+    [description: 'ARM64',           labels: 'agent-arm64',          type: 'c7gd.2xlarge', arch: 'arm64', bid: OD_C7GD_2XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
     [description: 'CLI',             labels: 'cli',                  type: 't4g.small',  arch: 'arm64',  bid: OD_T4G_SMALL,  fallback: true,  mode: Node.Mode.NORMAL,    executors: '5', idle: '180', cap: '8',  uses: -1, min: 1, spare: 1, subnets: SUBNETS, java: JAVA_X86, name: 'jenkins-agent-cli', sshProcess: false],
     [description: 'docker',          labels: 'docker',               type: 't3.xlarge',  arch: 'x86_64', bid: OD_T3_XLARGE, fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '5', idle: '10',  cap: '2',  uses: -1, min: 0, subnets: SUBNETS, java: JAVA_X86, name: null],
     [description: 'x86_64',          labels: 'agent-amd64',          type: 't3.2xlarge', arch: 'x86_64', bid: OD_T3_2XLARGE, fallback: false, mode: Node.Mode.NORMAL,    executors: '1', idle: '120', cap: '35', uses: 1,  min: 1, spare: 1, warmWeekdays: true, subnets: SUBNETS, java: JAVA_X86, name: null],
-    [description: 'arm64',           labels: 'agent-arm64',          type: 't4g.xlarge', arch: 'arm64',  bid: OD_T4G_XLARGE, fallback: false, mode: Node.Mode.NORMAL,    executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
+    [description: 'arm64',           labels: 'agent-arm64',          type: 'c7gd.2xlarge', arch: 'arm64', bid: OD_C7GD_2XLARGE, fallback: false, mode: Node.Mode.NORMAL,    executors: '1', idle: '120', cap: '3',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
     [description: 'x86_64 ondemand', labels: 'agent-amd64-ondemand', type: 't3.2xlarge', arch: 'x86_64', bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '30',  cap: '52', uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_X86, name: null],
     [description: 'arm64 ondemand',  labels: 'agent-arm64-ondemand', type: 't4g.xlarge', arch: 'arm64',  bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '1', idle: '30',  cap: '5',  uses: 1,  min: 0, subnets: SUBNETS, java: JAVA_ARM, name: null],
     [description: 'cli ondemand',    labels: 'cli-ondemand',         type: 't4g.small',  arch: 'arm64',  bid: null,       fallback: false, mode: Node.Mode.EXCLUSIVE, executors: '3', idle: '30',  cap: '6',  uses: -1, min: 0, subnets: SUBNETS, java: JAVA_X86, name: 'jenkins-agent-cli'],
