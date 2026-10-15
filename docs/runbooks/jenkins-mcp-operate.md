@@ -73,6 +73,63 @@ Tell them to re-**authenticate**, not just reconnect. A reconnect reuses the cac
 carries the old claims, so the operate tools keep returning "requires the jenkins-mcp-writers Authentik
 group" until they log in again.
 
+## Onboard a service account (automation reader)
+
+For an automation that runs on a group-owned account with no JumpCloud identity (a scheduled
+Claude routine, a CI job). The default login page is JumpCloud-only, so these accounts sign in
+through a separate flow, `https://auth.cd.percona.com/if/flow/jenkins-mcp-service-login/`, that
+accepts a username and an app password. The flow is gated by an expression policy to users of type
+`service_account` in the `jenkins-mcp-service-accounts` group, so a human account or `akadmin` is
+denied there, and a reputation policy denies repeated bad passwords from one IP or against one
+username (score -5, expires 24h after the first failure). A locked-out account is restored early by
+deleting its score: `GET $AK/policies/reputation/scores/?search=<name>`, then
+`DELETE $AK/policies/reputation/scores/<pk>/`. Service accounts stay on the read tier: never add
+one to `jenkins-mcp-writers`.
+
+1. Declare the user in `resources/addons/authentik/templates/blueprint-jenkins-mcp.yaml`
+   (`authentik_core.user`, `type: service_account`, group `jenkins-mcp-service-accounts`, an `owner`
+   attribute naming the person accountable for the key, and the two `token-*` attributes copied from
+   `pmm-automation`), merge, and restart the Authentik worker so the blueprint applies
+   ([authentik-blueprint-ops.md](authentik-blueprint-ops.md), gotcha 2).
+2. Mint the app password once through the API (the blueprint never carries it). Put the owner and a
+   rotation date in the token description:
+
+   ```bash
+   TOK=$(aws --profile percona-dev-admin --region us-east-1 secretsmanager get-secret-value \
+         --secret-id percona-ci-platform/authentik/config --query SecretString --output text \
+         | python3 -c 'import json,sys; print(json.load(sys.stdin)["AUTHENTIK_BOOTSTRAP_TOKEN"])')
+   AK=https://auth.cd.percona.com/api/v3
+   USER_PK=$(curl -s -H "Authorization: Bearer $TOK" "$AK/core/users/?username=<name>" | python3 -c 'import json,sys; print(json.load(sys.stdin)["results"][0]["pk"])')
+   curl -s -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" -X POST "$AK/core/tokens/" \
+     -d "{\"identifier\":\"<name>-app-password\",\"intent\":\"app_password\",\"user\":$USER_PK,\"expiring\":false,\"description\":\"jenkins-mcp login, owner <person>, rotate by <YYYY-MM>\"}"
+   curl -s -H "Authorization: Bearer $TOK" "$AK/core/tokens/<name>-app-password/view_key/"
+   ```
+
+   Hand the key to the named owner through the usual secret channel, never in Slack or Jira. The
+   mint is attributed to `akadmin` in Authentik events, so note who ran it in the ticket.
+3. The Jenkins connector must already exist in the Claude organization. On Team and Enterprise
+   plans only an org Owner can add a custom connector (URL `https://jenkins-mcp.cd.percona.com/mcp`,
+   client ID `jenkins-mcp`, blank secret). A member account, the shared one included, can only
+   enable and connect it.
+4. Tell the owner the connect order: open the flow URL in the browser that holds the shared Claude
+   session, log in with the username and app password, then open the Jenkins connector and click
+   Connect. The authorize step reuses that Authentik session. Opening the connector first lands on
+   the JumpCloud-only page and fails.
+5. Verify in Loki that the calls carry the service account's username, and that an operate tool
+   returns the `jenkins-mcp-writers` denial for it.
+6. Point the automation at `get_build_console_tail` or `export_build_log` for logs. An unlimited
+   `get_build_console_output` returns the whole log in one response.
+
+Revoke by setting `is_active: false` on the user in the blueprint (the login stage refuses inactive
+users), then delete every token the account holds, not only the one minted above: a logged-in
+account can create its own tokens, capped at 30 minutes by the `token-*` attributes.
+
+```bash
+curl -s -H "Authorization: Bearer $TOK" "$AK/core/tokens/?user__username=<name>" \
+  | python3 -c 'import json,sys; [print(t["identifier"]) for t in json.load(sys.stdin)["results"]]' \
+  | xargs -I{} curl -s -o /dev/null -w '{} %{http_code}\n' -H "Authorization: Bearer $TOK" -X DELETE "$AK/core/tokens/{}/"
+```
+
 ## Do not grant Job/Create to activate the manage tier
 
 The manage tools (`create_item`, `set_item_config`, `delete_item`) are served and writers-gated, but
