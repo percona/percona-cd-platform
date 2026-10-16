@@ -129,6 +129,12 @@ jenkins:
       # disk-usage among them).
       - name: TRY_UPGRADE_IF_NO_MARKER
         value: "true"
+      # A plugin a human upgraded past its marker is skipped on every boot, so a
+      # plugins.txt bump never patches it. This lets a newer image version replace
+      # it. jenkins-support applies it only when the image version is newer, so
+      # plugins kept ahead of the image stay as they are.
+      - name: PLUGINS_FORCE_UPGRADE
+        value: "true"
     JCasC:
       # Suppress the chart's default local-admin securityRealm + authorizationStrategy
       # (they default truthy and are NOT gated by defaultConfig); ps3-security owns both.

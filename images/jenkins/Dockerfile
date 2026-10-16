@@ -52,14 +52,16 @@ COPY --chown=jenkins:jenkins percona-plugins/*.jpi /usr/share/jenkins/ref/percon
 #     instance) to converge. Plugins that exist only on the PVC are never removed.
 #   * PINNED community plugins (PINNED_PLUGINS below) are FORCED like the forks:
 #     plugins we manage exclusively through plugins.txt, where the image must win
-#     over whatever the PVC carries.
+#     over whatever the PVC carries. apache-httpcomponents-client-5-api is pinned
+#     because the entrypoint turns '-' into '.' before comparing, so it ranks the
+#     installed 5.6-183 above 5.6.4-204 and would never upgrade it.
 RUN set -euo pipefail; \
     for fork in /usr/share/jenkins/ref/percona-plugins/*.jpi; do \
       id="$(basename "$fork" .jpi)"; \
       cp "$fork" "/usr/share/jenkins/ref/plugins/${id}.jpi.override"; \
       rm -f "/usr/share/jenkins/ref/plugins/${id}.jpi"; \
     done; \
-    PINNED_PLUGINS="ec2-fleet"; \
+    PINNED_PLUGINS="ec2-fleet apache-httpcomponents-client-5-api"; \
     for id in $PINNED_PLUGINS; do \
       test -f "/usr/share/jenkins/ref/plugins/${id}.jpi"; \
       mv "/usr/share/jenkins/ref/plugins/${id}.jpi" "/usr/share/jenkins/ref/plugins/${id}.jpi.override"; \
