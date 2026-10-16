@@ -125,10 +125,10 @@ We exploit those two behaviors deliberately:
   - **Marker older than what is installed**, so a human upgraded via the UI:
     SKIPPED, unless `PLUGINS_FORCE_UPGRADE` is set.
 
-  So the image is the floor for community plugins only once they carry a marker.
-  ps3 sets `TRY_UPGRADE_IF_NO_MARKER=true` to close that gap, which upgrades
-  unmarked plugins where the image is newer, never downgrades, and writes a marker
-  so later UI upgrades are protected.
+  ps3 sets both `TRY_UPGRADE_IF_NO_MARKER=true` and `PLUGINS_FORCE_UPGRADE=true`,
+  so every community plugin pinned newer than the installed copy is upgraded,
+  marked or not. Neither ever downgrades: a plugin kept ahead of the image stays.
+  A `plugins.txt` bump is therefore the update path for ps3's community plugins.
 
 We do NOT set `overwritePluginsFromImage: true` (inert here, and it would force
 the WHOLE baked set, defeating the soft-community half of this policy), and we do
@@ -140,8 +140,7 @@ the byte-identical-to-EC2 restore property).
 > version rebuild the image (bump `percona-plugins.lock.json`). A hand-edit on
 > the PVC is reset on the next restart. Community plugins differ: a UI upgrade
 > persists, and a `plugins.txt` bump reaches an existing home only through the
-> marker rules above, which on a restored home means only when
-> `TRY_UPGRADE_IF_NO_MARKER` is set.
+> marker rules above, which on ps3 means whenever the pinned version is newer.
 >
 > Adding a community plugin to `PINNED_PLUGINS` is NOT the way to deliver a
 > version bump. Those become `<id>.jpi.override`, which is copied with no version
