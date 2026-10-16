@@ -64,6 +64,7 @@ Step-by-step procedures for operational tasks.
 - [`master-shell-access.md`](runbooks/master-shell-access.md): shell on a master (`just ssh`, SSM, EIP allow-list, ps3 kubectl)
 - [`migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md): moving a Jenkins master in-cluster (ps3 done, the EC2 master retired, see `decommission-ps3-ec2-master.md`)
 - [`mng-label-taint-changes.md`](runbooks/mng-label-taint-changes.md): apply MNG label/taint edits without a drain
+- [`ps3-aws-stash.md`](runbooks/ps3-aws-stash.md): rotate or reload the ps3 `AWS_STASH` access key
 - [`restore-mimir.md`](runbooks/restore-mimir.md): restore Mimir state from S3
 - [`rotate-acm.md`](runbooks/rotate-acm.md): rotate the ACM wildcard cert (stub)
 
