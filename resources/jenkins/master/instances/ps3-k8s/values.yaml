@@ -8088,9 +8088,11 @@ jenkins:
     # Boot-only Groovy for what JCasC cannot express (timers). The chart renders
     # each key into init.groovy.d as init<key>.groovy, and a change to any script
     # changes the checksum/config-init-scripts pod annotation, so the controller
-    # restarts to pick it up.
+    # restarts to pick it up. Keys must be plain identifiers: the file name
+    # becomes a Groovy class name, and a "-" in it makes a later method call on
+    # that script's objects fail with ClassFormatError.
     initScripts:
-      "-hetznerArmHealth": |
+      HetznerArmHealth: |
         // hetznerArmHealth.groovy  (PS-11179)
         //
         // Master-side health probe that publishes whether Hetzner arm64 (CAX) capacity is
@@ -8236,7 +8238,7 @@ jenkins:
 
         Timer.get().scheduleAtFixedRate(probe, INITIAL_DELAY_SEC, PERIOD_SEC, TimeUnit.SECONDS)
         LOG.info("hetznerArmHealth: scheduled (gen=${GEN}, every ${PERIOD_SEC}s, loopback ${METRICS_URL})")
-      "-logHeartbeat": |
+      LogHeartbeat: |
         /**
          * Write one INFO line per minute to jenkins.log so log liveness can be
          * measured per master.
@@ -8293,7 +8295,7 @@ jenkins:
         println(stale
                 ? "logHeartbeat: replaced ${stale.size()} stale timer(s), heartbeat re-registered (1m)"
                 : 'logHeartbeat: heartbeat registered (1m)')
-      "-gracefulStop": |
+      GracefulStop: |
         /**
          * Puts the controller into quiet-down when the pod is terminating, so no
          * new build starts while running ones finish.
