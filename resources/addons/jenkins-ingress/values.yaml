@@ -127,6 +127,13 @@ ingress:
   # ACM wildcard *.cd.percona.com is discovered automatically via SNI.
   groupName: jenkins-masters
   sslPolicy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
+  # Seconds the ALB keeps a connection open while no bytes flow. The AWS
+  # default of 60 cuts Jenkins pages that compute for longer before they
+  # send (testReport of builds with hundreds of thousands of cases). The
+  # NGINX client keepalive_timeout is rendered 10s above this, since a
+  # target must outlive the ALB's idle connections or the ALB reuses a
+  # closed one and returns 502.
+  idleTimeoutSeconds: 300
   # ALB-wide access logs. Bucket and delivery policy:
   # terraform/alb-access-logs.tf. Rendered identically on every Ingress
   # in this chart (ALBC requires unique-or-identical across the group).

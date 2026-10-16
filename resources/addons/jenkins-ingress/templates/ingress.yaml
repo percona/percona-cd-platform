@@ -22,7 +22,9 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-path: /-/healthy
     alb.ingress.kubernetes.io/healthcheck-port: '8081'
     {{- if $.Values.ingress.accessLogs.enabled }}
-    alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket={{ $.Values.ingress.accessLogs.bucket }},access_logs.s3.prefix={{ $.Values.ingress.accessLogs.prefix }}
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }},access_logs.s3.enabled=true,access_logs.s3.bucket={{ $.Values.ingress.accessLogs.bucket }},access_logs.s3.prefix={{ $.Values.ingress.accessLogs.prefix }}
+    {{- else }}
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }}
     {{- end }}
 spec:
   ingressClassName: alb
