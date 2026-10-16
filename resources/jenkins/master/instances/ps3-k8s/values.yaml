@@ -1617,7 +1617,7 @@ jenkins:
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: launcher-x64
+                  labelStr: launcher-x64 ps3-reload-probe
                   location: fsn1
                   name: launcher-x64-fsn1
                   network: '10442325'
@@ -1627,7 +1627,7 @@ jenkins:
                   serverType: cpx22
                   shutdownPolicy:
                     idle:
-                      idleMinutes: 10
+                      idleMinutes: 5
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace
