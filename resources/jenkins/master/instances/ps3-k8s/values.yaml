@@ -8109,6 +8109,46 @@ jenkins:
   # pulls the OAuth client secret from AWS Secrets Manager into the k8s Secret that
   # controller.existingSecret (Phase 1, above) projects for JCasC ${...}.
   extraObjects:
+    # Deny the JCasC token-reload endpoint at the ALB. The chart enables it for the
+    # config-reload sidecar, which calls it on localhost, so nothing legitimate
+    # reaches it through the load balancer. A
+    # separate Ingress in the same ALB group, ordered ahead of the ps3 host rule
+    # (group.order -10), answers a fixed 403. The wildcard also covers
+    # double-slash and prefixed variants of the path. external-dns ignores this
+    # Ingress (annotation-only hostname source, no hostname annotation), so the
+    # ps3.cd record stays owned by the chart's primary Ingress.
+    - apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: jenkins-ps3-k8s-deny-casc-reload
+        labels:
+          app.kubernetes.io/part-of: jenkins-ps3-k8s
+        annotations:
+          alb.ingress.kubernetes.io/group.name: jenkins-masters
+          alb.ingress.kubernetes.io/group.order: "-20"
+          alb.ingress.kubernetes.io/scheme: internet-facing
+          alb.ingress.kubernetes.io/target-type: ip
+          alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+          alb.ingress.kubernetes.io/ssl-redirect: "443"
+          alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
+          alb.ingress.kubernetes.io/tags: "iit-billing-tag=percona-ci-platform"
+          alb.ingress.kubernetes.io/actions.deny-casc-reload: >-
+            {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"403","messageBody":"Forbidden"}}
+          external-dns.alpha.kubernetes.io/ingress-hostname-source: annotation-only
+      spec:
+        ingressClassName: alb
+        rules:
+          - host: ps3.cd.percona.com
+            http:
+              paths:
+                - path: /*reload-configuration-as-code*
+                  pathType: ImplementationSpecific
+                  backend:
+                    service:
+                      name: deny-casc-reload
+                      port:
+                        name: use-annotation
+
     - apiVersion: external-secrets.io/v1
       kind: ExternalSecret
       metadata:
