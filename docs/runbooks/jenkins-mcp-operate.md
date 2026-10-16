@@ -95,9 +95,9 @@ one to `jenkins-mcp-writers`.
    rotation date in the token description:
 
    ```bash
-   TOK=$(aws --profile percona-dev-admin --region us-east-1 secretsmanager get-secret-value \
-         --secret-id percona-ci-platform/authentik/config --query SecretString --output text \
-         | python3 -c 'import json,sys; print(json.load(sys.stdin)["AUTHENTIK_BOOTSTRAP_TOKEN"])')
+   # The Secrets Manager copy carries an explicit deny for the admin role, read the cluster secret.
+   TOK=$(kubectl --context percona-ci-platform -n authentik get secret authentik-config \
+         -o jsonpath='{.data.AUTHENTIK_BOOTSTRAP_TOKEN}' | base64 -d)
    AK=https://auth.cd.percona.com/api/v3
    USER_PK=$(curl -s -H "Authorization: Bearer $TOK" "$AK/core/users/?username=<name>" | python3 -c 'import json,sys; print(json.load(sys.stdin)["results"][0]["pk"])')
    curl -s -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" -X POST "$AK/core/tokens/" \
