@@ -35,11 +35,11 @@ module "rel" {
   # not wired through this module).
   cache_bucket_name = null
 
-  # Retained CFN data volume vol-01b7479079f91c010 is 100 GiB gp2 in
+  # Retained CFN data volume vol-01b7479079f91c010 is 130 GiB gp2 in
   # eu-west-1b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in
   # the module.
-  ebs_size = 100
+  ebs_size = 130
   ebs_type = "gp2"
 
   # Third worker AZ (eu-west-1a, 10.199.0.0/24) so spot workers can move off
