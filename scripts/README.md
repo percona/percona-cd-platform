@@ -56,6 +56,13 @@ panel expr and its template-variable query. Auto-detects pre-deploy
 (everything must return series). Parse errors or unexpectedly empty
 results exit non-zero.
 
+[`ps3-aws-stash-reload.groovy`](ps3-aws-stash-reload.groovy)
+Script Console step for the in-cluster ps3 controller: reads the
+`percona-ci-platform/jenkins/ps3/aws-stash` key pair from Secrets Manager
+through Pod Identity and updates the `AWS_STASH` credential in place. Prints
+only the access key id. Run via `jenkins admin -i ps3 groovy -f` after a key
+rotation, see `docs/runbooks/ps3-aws-stash.md`.
+
 ## Cluster-facing
 
 [`verify-karpenter.sh`](verify-karpenter.sh)
