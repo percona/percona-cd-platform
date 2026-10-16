@@ -19,6 +19,10 @@ and injects it per call, so no user ever handles a Jenkins token.
 - Node-config and script-console mutation are never exposed, in any mode. The manage tier still lets a
   writer define a job that runs code on a master, so `jenkins-mcp-writers` is a code-execution-capable
   group and should be curated accordingly.
+- Team automations without a JumpCloud identity (a scheduled Claude routine on a group-owned account)
+  use a local Authentik service account instead, which signs in through a dedicated app-password flow
+  and stays on the read tier. Each call keeps the account's own name in the audit log. Onboarding is in
+  `docs/runbooks/jenkins-mcp-operate.md`, "Onboard a service account".
 
 ## Connect your MCP client
 
