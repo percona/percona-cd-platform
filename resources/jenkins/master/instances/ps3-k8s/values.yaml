@@ -8062,11 +8062,11 @@ jenkins:
                 restrictUsage: false
                 scaleExecutorsByWeight: false
     # === end Phase 1 controller config (ExternalSecret -> jenkins.extraObjects below) =
-    # Pod termination: the preStop hook asks the gracefulStop init script for
-    # quiet-down, then waits up to 240 s for running builds to finish (20 s if
-    # Jenkins never answers). SIGTERM follows, and the 300 s grace period leaves
-    # Jenkins at least 60 s to shut down. Evictions (drains) stay blocked by the
-    # PDB. Pipelines still running at SIGTERM resume after the restart.
+    # Pod termination: the preStop hook asks the GracefulStop init script for
+    # quiet-down, then waits up to 240 s for non-pipeline builds to finish (20 s
+    # if Jenkins never answers). Pipelines pause and resume after the restart.
+    # SIGTERM follows, and the 300 s grace period leaves Jenkins at least 60 s
+    # to shut down. Evictions (drains) stay blocked by the PDB.
     terminationGracePeriodSeconds: 300
     lifecycle:
       preStop:
@@ -8298,14 +8298,16 @@ jenkins:
       GracefulStop: |
         /**
          * Puts the controller into quiet-down when the pod is terminating, so no
-         * new build starts while running ones finish.
+         * new build starts, and lets builds that cannot survive a restart finish.
          *
          * The preStop hook cannot call the quiet-down API (the realm is GitHub
          * OAuth, there is no local admin token), so it touches /tmp/jenkins-prestop
-         * and this timer reacts: it enters quiet-down and writes the busy executor
-         * count to /tmp/jenkins-busy every 2 seconds. The hook waits for 0 or its
-         * own time limit. /tmp is the container filesystem, so a new container
-         * starts without the marker.
+         * and this timer reacts: it enters quiet-down and writes to /tmp/jenkins-busy
+         * every 2 seconds the number of busy executors running non-pipeline work.
+         * Pipelines are not counted: quiet-down pauses them at their next step and
+         * they resume after the restart. The hook waits for 0 or its own time
+         * limit. /tmp is the container filesystem, so a new container starts
+         * without the marker.
          */
         import hudson.model.PeriodicWork
         import jenkins.model.Jenkins
@@ -8338,7 +8340,16 @@ jenkins:
                     jenkins.doQuietDown()
                     log.info('gracefulStop: pod terminating, quiet-down entered')
                 }
-                int busy = jenkins.computers.sum { it.countBusy() } ?: 0
+                int busy = 0
+                jenkins.computers.each { computer ->
+                    (computer.executors + computer.oneOffExecutors).each { executor ->
+                        def work = executor.currentExecutable
+                        def kind = work?.getClass()?.name ?: ''
+                        if (executor.isBusy() && !kind.startsWith('org.jenkinsci.plugins.workflow.')) {
+                            busy++
+                        }
+                    }
+                }
                 busyFile.text = busy.toString()
             }
 
