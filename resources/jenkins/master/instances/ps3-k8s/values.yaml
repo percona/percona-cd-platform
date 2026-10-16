@@ -8062,6 +8062,29 @@ jenkins:
                 restrictUsage: false
                 scaleExecutorsByWeight: false
     # === end Phase 1 controller config (ExternalSecret -> jenkins.extraObjects below) =
+    # Pod termination: the preStop hook asks the gracefulStop init script for
+    # quiet-down, then waits up to 240 s for running builds to finish (20 s if
+    # Jenkins never answers). SIGTERM follows, and the 300 s grace period leaves
+    # Jenkins at least 60 s to shut down. Evictions (drains) stay blocked by the
+    # PDB. Pipelines still running at SIGTERM resume after the restart.
+    terminationGracePeriodSeconds: 300
+    lifecycle:
+      preStop:
+        exec:
+          command:
+            - sh
+            - -c
+            - >-
+              touch /tmp/jenkins-prestop;
+              start=$(date +%s);
+              while :; do
+              now=$(date +%s);
+              busy=$(cat /tmp/jenkins-busy 2>/dev/null);
+              [ "${busy}" = 0 ] && break;
+              [ -z "${busy}" ] && [ $((now - start)) -ge 20 ] && break;
+              [ $((now - start)) -ge 240 ] && break;
+              sleep 2;
+              done
     # Boot-only Groovy for what JCasC cannot express (timers). The chart renders
     # each key into init.groovy.d as init<key>.groovy, and a change to any script
     # changes the checksum/config-init-scripts pod annotation, so the controller
@@ -8270,6 +8293,60 @@ jenkins:
         println(stale
                 ? "logHeartbeat: replaced ${stale.size()} stale timer(s), heartbeat re-registered (1m)"
                 : 'logHeartbeat: heartbeat registered (1m)')
+      "-gracefulStop": |
+        /**
+         * Puts the controller into quiet-down when the pod is terminating, so no
+         * new build starts while running ones finish.
+         *
+         * The preStop hook cannot call the quiet-down API (the realm is GitHub
+         * OAuth, there is no local admin token), so it touches /tmp/jenkins-prestop
+         * and this timer reacts: it enters quiet-down and writes the busy executor
+         * count to /tmp/jenkins-busy every 2 seconds. The hook waits for 0 or its
+         * own time limit. /tmp is the container filesystem, so a new container
+         * starts without the marker.
+         */
+        import hudson.model.PeriodicWork
+        import jenkins.model.Jenkins
+
+        import java.util.logging.Logger
+
+        def MARKER = 'percona-gracefulStop'
+        def registry = PeriodicWork.all()
+        def stale = registry.findAll { it.toString() == MARKER }
+        stale.each { registry.remove(it) }
+        registry.add(new PeriodicWork() {
+            private final Logger log = Logger.getLogger('percona.jenkins.gracefulStop')
+            private final File request = new File('/tmp/jenkins-prestop')
+            private final File busyFile = new File('/tmp/jenkins-busy')
+
+            long getRecurrencePeriod() {
+                return 2000L
+            }
+
+            long getInitialDelay() {
+                return 0L
+            }
+
+            protected void doRun() {
+                if (!request.exists()) {
+                    return
+                }
+                def jenkins = Jenkins.get()
+                if (!jenkins.isQuietingDown()) {
+                    jenkins.doQuietDown()
+                    log.info('gracefulStop: pod terminating, quiet-down entered')
+                }
+                int busy = jenkins.computers.sum { it.countBusy() } ?: 0
+                busyFile.text = busy.toString()
+            }
+
+            String toString() {
+                return MARKER
+            }
+        })
+        println(stale
+                ? "gracefulStop: replaced ${stale.size()} stale timer(s), armed (2s)"
+                : 'gracefulStop: armed (2s)')
     # Restored-home boot-guard (non-root). The controller pod is runAsNonRoot, so
     # it CANNOT host a root chown initContainer; the one-time ownership fix (EC2
     # jenkins UID 994 -> in-cluster 1000) is done by a separate root Job against
