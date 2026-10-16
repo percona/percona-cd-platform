@@ -30,6 +30,11 @@ resource "aws_iam_user" "jenkins_artifactory_ps3" {
   tags = {
     "iit-billing-tag" = "jenkins-artifactory-ps3"
   }
+
+  # The org tagger adds both creator tags after the create, not Terraform.
+  lifecycle {
+    ignore_changes = [tags["PerconaCreatedBy"], tags["PerconaKeyCreatedBy"]]
+  }
 }
 
 resource "aws_iam_user_policy_attachment" "jenkins_artifactory_ps3_artifactory" {
