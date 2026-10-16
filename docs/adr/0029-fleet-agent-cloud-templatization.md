@@ -1,7 +1,7 @@
 <!-- Copyright (C) 2026 Percona LLC -->
 # 0029 — Fleet agent-cloud templatization: shared catalog, per-master overlays, dual renderer
 
-**Status:** Proposed (2026-06-02)
+**Status:** Accepted, partially implemented (the catalog and the JCasC renderer are live for ps3-k8s. The Groovy renderer for the EC2 masters is not built.)
 **Related:** [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (clouds, agent templates and init.groovy.d *content* are the JCasC+Git layer — this ADR structures that layer), [ADR 0025](0025-singleton-controller-rollout-gating.md) (a catalog change reloads live and is ungated unless it pulls a new plugin; cutover is windowed), [ADR 0027](0027-baked-jenkins-controller-image.md) (the EC2 + Hetzner fork plugins the clouds depend on are forced by the image), [ADR 0028](0028-jenkins-dynamic-config-data-lifecycle.md) (JCasC owns the Hetzner cloud, the init.groovy.d ConfigMap owns EC2 cloud generation; this ADR feeds both from one catalog)
 
 ## Context

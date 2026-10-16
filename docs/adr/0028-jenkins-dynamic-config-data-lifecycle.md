@@ -2,6 +2,7 @@
 
 **Status:** Proposed (2026-06-01)
 **Related:** [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (the governing principle: shrink the irreplaceable EBS residue — "plugins shift to a baked image, config to JCasC/Git, secrets to Secrets Manager"), [ADR 0027](0027-baked-jenkins-controller-image.md) (baked image / HYBRID plugins — realizes the plugin half), [ADR 0025](0025-singleton-controller-rollout-gating.md) (manual-sync gating), [ADR 0026](0026-canary-dr-operating-model.md) (single-writer cutover, DR, the snapshot/restore hard-gate), [ADR 0019](0019-shared-alb-ssl-termination-for-jenkins-masters.md) (shared ALB / host ownership).
+**Amended by:** [ADR 0048](0048-in-cluster-controller-change-paths.md) (the ps3 home snapshot schedule exists)
 
 ## Context
 
