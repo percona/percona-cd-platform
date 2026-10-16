@@ -219,6 +219,12 @@ jenkins:
                         - "hudson.model.Item.Read"
                         - "hudson.model.Item.Workspace"
                         - "hudson.model.View.Read"
+        # Global settings outside security and clouds. Pipeline durability is
+        # MAX_SURVIVABILITY so a running build survives a controller restart.
+        ps3-unclassified: |
+          unclassified:
+            globalDefaultFlowDurabilityLevel:
+              durabilityHint: MAX_SURVIVABILITY
         # EC2 worker iamInstanceProfile ARNs derive the AWS account id from the
         # injected controller.image.registry (jenkins-masters ApplicationSet
         # helm-param, from the aws_account_id cluster-secret annotation) via the
@@ -1617,7 +1623,7 @@ jenkins:
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
                   jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                  labelStr: launcher-x64 ps3-reload-probe
+                  labelStr: launcher-x64
                   location: fsn1
                   name: launcher-x64-fsn1
                   network: '10442325'
@@ -1627,7 +1633,7 @@ jenkins:
                   serverType: cpx22
                   shutdownPolicy:
                     idle:
-                      idleMinutes: 5
+                      idleMinutes: 10
                   userData: |
                     #!/bin/bash -x
                         set -o xtrace

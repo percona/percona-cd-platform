@@ -506,11 +506,8 @@ hetzner:
     numExecutors: 30
     serverType: cpx22
   - image: '161547269'
-    labelStr: launcher-x64 ps3-reload-probe
+    labelStr: launcher-x64
     location: fsn1
     name: launcher-x64-fsn1
     numExecutors: 30
     serverType: cpx22
-    shutdownPolicy:
-      idle:
-        idleMinutes: 5
