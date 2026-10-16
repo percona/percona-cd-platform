@@ -9,8 +9,8 @@
 //      us-east-2b and us-east-2c (SlaveTemplate.chooseSubnetId round-robins a
 //      whitespace-delimited list). Proven live on the arm64 templates first, the
 //      other labels get the same list here. The agent-arm64 spot templates are the
-//      exception and launch in us-east-2c only, where c8gn.4xlarge spot capacity
-//      holds. In us-east-2b it was reclaimed within minutes of launch.
+//      exception and launch in us-east-2a and us-east-2c, where c8gn.4xlarge spot
+//      capacity holds. In us-east-2b it was reclaimed within minutes of launch.
 //   2. Spot maximum prices are the static on-demand ceilings instead of the values
 //      the spot-price-auto-updater job used to rewrite every 15 minutes.
 //
@@ -50,7 +50,8 @@ final String AMI_BILLING_TAG  = 'pmm-worker-3'
 final String SUBNET_2B        = 'subnet-05be3728311d11363'
 final String SUBNET_2C        = 'subnet-01267cd0c01aed343'
 final String SUBNETS          = "$${SUBNET_2B} $${SUBNET_2C}"
-final String SUBNETS_ARM_SPOT = SUBNET_2C
+final String SUBNET_2A        = '${subnet_by_az_name["us-east-2a"]}'
+final String SUBNETS_ARM_SPOT = "$${SUBNET_2A} $${SUBNET_2C}"
 final String JAVA_X86         = '/etc/alternatives/java'
 final String JAVA_ARM         = 'java'
 
