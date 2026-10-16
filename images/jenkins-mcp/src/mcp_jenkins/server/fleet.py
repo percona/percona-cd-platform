@@ -8,6 +8,7 @@ discover the fleet and compare it without the user supplying any credentials.
 from loguru import logger
 
 from mcp_jenkins.core.fleet import client_for, get_fleet
+from mcp_jenkins.core.scope import allowed_masters
 from mcp_jenkins.server import mcp
 
 
@@ -16,11 +17,14 @@ async def list_masters() -> list[dict]:
     """List the active Jenkins masters this server can reach, with a liveness check.
 
     Returns:
-        One entry per configured master: name, url, reachable (bool), version (Jenkins core
+        One entry per configured master the caller may reach: name, url, reachable (bool), version (Jenkins core
         version when reachable), and error (a short message when the liveness check failed).
     """
     results = []
+    allowed = allowed_masters()
     for master in get_fleet().masters:
+        if allowed is not None and master.name not in allowed:
+            continue
         entry: dict = {'name': master.name, 'url': master.url, 'reachable': False, 'version': None}
         try:
             entry['version'] = client_for(master.name).get_version()

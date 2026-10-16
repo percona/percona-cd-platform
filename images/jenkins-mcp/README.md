@@ -21,7 +21,8 @@ and injects it per call, so no user ever handles a Jenkins token.
   group and should be curated accordingly.
 - Team automations without a JumpCloud identity (a scheduled Claude routine on a group-owned account)
   use a local Authentik service account instead, which signs in through a dedicated app-password flow
-  and stays on the read tier. Each call keeps the account's own name in the audit log. Onboarding is in
+  and stays on the read tier. It reaches only the masters its `jenkins-mcp-master-<name>` groups name,
+  and none without one. Each call keeps the account's own name in the audit log. Onboarding is in
   `docs/runbooks/jenkins-mcp-operate.md`, "Onboard a service account".
 
 ## Connect your MCP client

@@ -8,6 +8,7 @@ guide can never advertise a tool you cannot call).
 """
 
 from mcp_jenkins.core.fleet import get_fleet
+from mcp_jenkins.core.scope import visible_masters
 from mcp_jenkins.server import mcp
 
 _OPERATE_TOOLS = ('build_item', 'replay_build', 'stop_build', 'cancel_queue_item')
@@ -237,7 +238,7 @@ async def get_readme() -> str:
     node-config or script-console mutation), the tool catalog filtered to what this instance serves,
     sample queries, and tips. Call this first whenever you are unsure which tool to use.
     """
-    fleet = ', '.join(get_fleet().names()) or '(none configured)'
+    fleet = ', '.join(visible_masters(get_fleet().names())) or '(none configured)'
     served = await _served_tool_names()
     operate_served = served is None or any(t in served for t in _OPERATE_TOOLS)
     manage_served = served is None or any(t in served for t in _MANAGE_TOOLS)

@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from mcp_jenkins.core.fleet import client_for, get_fleet
+from mcp_jenkins.core.scope import allowed_masters, check_master
 from mcp_jenkins.jenkins import Jenkins
 
 # Shared optional per-call master selector for every per-master tool. The client passes a NAME
@@ -43,8 +44,9 @@ def _selected_master(ctx: Context, override: str | None = None) -> str:
     """Resolve which master a per-master tool targets, by NAME (never client credentials).
 
     Priority: an explicit tool `master` argument, then the x-jenkins-master request header, then
-    the configured default, then the sole configured master. The name is validated against the
-    fleet allowlist inside client_for.
+    the caller's only reachable master when its token scopes it to one, then the configured
+    default, then the sole configured master. The name is validated against the fleet allowlist
+    inside client_for.
     """
     if override:
         return override
@@ -56,6 +58,11 @@ def _selected_master(ctx: Context, override: str | None = None) -> str:
         pass  # no HTTP request context (e.g. stdio transport)
     except Exception as e:  # noqa: BLE001
         logger.error(f'Unexpected error reading request state: {e}')
+
+    if not name:
+        allowed = allowed_masters()
+        if allowed is not None and len(allowed) == 1:
+            return next(iter(allowed))
 
     name = name or ctx.request_context.lifespan_context.default_master
     if not name:
@@ -73,9 +80,11 @@ def _selected_master(ctx: Context, override: str | None = None) -> str:
 def jenkins(ctx: Context, master: str | None = None) -> Jenkins:
     """Return a Jenkins client for the selected master, with server-held read-only credentials.
 
-    The optional master overrides the header/default selection for this call.
+    The optional master overrides the header/default selection for this call. The caller's master
+    scope is checked before the session cache, so a cached client never bypasses it.
     """
     name = _selected_master(ctx, master)
+    check_master(name)
     singleton = ctx.request_context.lifespan_context.jenkins_session_singleton
 
     if singleton:
