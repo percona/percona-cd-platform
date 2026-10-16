@@ -107,13 +107,23 @@ jenkins:
     # subchart does not inject its own local-admin realm. Per-instance files MAY still
     # layer their own JCasC via controller.JCasC.configScripts; ps3-k8s does (GitHub OAuth
     # realm, matrix authz, clouds, AWS Secrets Manager credentials provider).
-    # overwriteConfiguration: false so a hot reload merges rather than clobbers.
+    # overwriteConfiguration only controls the chart init script deleting config.xml
+    # and *configuration*.xml on a first initialization. It has no effect on a JCasC
+    # reload, which applies each configScript in full.
     JCasC:
       defaultConfig: false
       overwriteConfiguration: false
 
     podLabels:
       iit-billing-tag: percona-ci-platform
+
+    # Singleton controller: block voluntary evictions (node drains, consolidation).
+    # A node-group label or taint change goes through the CLI path in
+    # docs/runbooks/mng-label-taint-changes.md, not a rolling drain. The chart picks
+    # policy/v1 from the cluster version.
+    podDisruptionBudget:
+      enabled: true
+      maxUnavailable: 0
 
   persistence:
     enabled: true

@@ -67,7 +67,7 @@ jobs:
           load: true
           push: false
           tags: jenkins-percona:pr-${{ github.sha }}
-      - name: smoke-boot amd64 (empty-home AND restored-home)
+      - name: smoke-boot amd64 (empty home)
         run: images/jenkins/smoke-boot.sh jenkins-percona:pr-${{ github.sha }}
       - name: build arm64 (load, no push)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
@@ -82,12 +82,14 @@ jobs:
       # agent spawn) is validated in the Phase 5 pre-cutover on a real Graviton node.
       - name: smoke arm64 (JVM + war present, via QEMU)
         run: docker run --rm --platform linux/arm64 --entrypoint sh jenkins-percona:pr-arm64-${{ github.sha }} -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-image-ok"
+      - name: effective plugin inventory (id:version, read from the image)
+        run: images/jenkins/plugin-inventory.sh jenkins-percona:pr-${{ github.sha }} images/jenkins/plugins.effective.txt
       - name: upload effective plugin list
         uses: actions/upload-artifact@v7
         with:
           name: plugins-effective-${{ github.sha }}
           path: images/jenkins/plugins.effective.txt
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ---- main: build + smoke + push to ECR via OIDC ----
   publish:
@@ -184,12 +186,17 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           TAG: ${{ steps.meta.outputs.tag }}
         run: docker run --rm --platform linux/arm64 --entrypoint sh "${REGISTRY}/${IMAGE_REPO}:${TAG}" -c "java -version && test -f /usr/share/jenkins/jenkins.war && echo arm64-pushed-ok"
+      - name: effective plugin inventory (id:version, read from the pushed image)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: images/jenkins/plugin-inventory.sh "${REGISTRY}/${IMAGE_REPO}@${DIGEST}" images/jenkins/plugins.effective.txt
       - name: upload effective plugin list
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: plugins-effective-${{ github.sha }}
           path: images/jenkins/plugins.effective.txt
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ---- open a deploy bump PR for the just-pushed tag (verified commit) ----
   # createCommitOnBranch signs the commit with GitHub's key, so the bump PR meets
