@@ -6,7 +6,7 @@ ansicolor:536.v13fa_b_860c267
 ant:520.vd082ecfb_16a_9
 antisamy-markup-formatter:173.v680e3a_b_69ff3
 apache-httpcomponents-client-4-api:4.5.14-269.vfa_2321039a_83
-apache-httpcomponents-client-5-api:5.6-183.ve5a_8a_b_e71e59
+apache-httpcomponents-client-5-api:5.6.4-204.vfa_29df89ffcf
 asm-api:9.11-224.v369c884f7a_a_b_
 atlassian-jira-software-cloud:2.0.15
 authentication-tokens:1.144.v5ff4a_5ec5c33

@@ -149,7 +149,10 @@ the byte-identical-to-EC2 restore property).
 > `okhttp-api` and `disk-usage` among them), and pinning them would downgrade all
 > 32. Reserve `PINNED_PLUGINS` for plugins the image must own outright, and use
 > `TRY_UPGRADE_IF_NO_MARKER` to deliver ordinary upgrades. `ec2-fleet` is pinned
-> today because ps3 and the EC2 masters must agree on it exactly.
+> because ps3 and the EC2 masters must agree on it exactly.
+> `apache-httpcomponents-client-5-api` is pinned because the entrypoint compares
+> versions with `-` turned into `.`, so it ranks the installed `5.6-183` above
+> `5.6.4-204` and never upgrades it, which leaves `analysis-model-api` 14 unloadable.
 
 ## Image reference: TAG, not digest (today)
 
