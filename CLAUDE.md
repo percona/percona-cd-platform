@@ -11,7 +11,7 @@ Full architecture: see [`README.md`](README.md). Authoritative plan: private at 
 ## Conventions (carried forward from PoC, hard-won)
 
 - **All changes via code.** No manual `kubectl annotate`, `kubectl patch`, or Script Console mutations. Drift between git and cluster breaks GitOps.
-- **Boot Groovy on the in-cluster controller** lives in the `jenkins-ps3-k8s-clouds-init` ConfigMap (values `initConfigMap`), mounted at `init.groovy.d`. Keep it to what JCasC cannot express (timers). Clouds, security and global settings are JCasC. The image ships no init scripts.
+- **Boot Groovy on the in-cluster controller** lives in `controller.initScripts` in the ps3-k8s values. The chart renders it into `init.groovy.d`, and a script change restarts the pod through the `checksum/config-init-scripts` annotation. Keep it to what JCasC cannot express (timers). Clouds, security and global settings, pipeline durability included, are JCasC. The image ships no init scripts.
 - **`persistence.volumes`, not `extraVolumes`** for ConfigMap mounts. Init containers can't see `extraVolumes`.
 - **Docker image:** build multi-arch with `docker buildx build --platform linux/amd64,linux/arm64 --push` (needs a docker-container builder, not the default driver). Build host (m3) is arm64; EKS nodes are arm64 (Graviton), and the internal images are multi-arch (CI builds them via `--platform=$BUILDPLATFORM` cross-compile).
 - **Public repo:** no AWS account IDs / ARNs / secrets in `.tfvars` or values files. All sensitive bits flow via `var.account_id`, cluster-secret annotations, or AWS Secrets Manager → External Secrets Operator.

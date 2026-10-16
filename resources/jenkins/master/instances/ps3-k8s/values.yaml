@@ -8056,12 +8056,214 @@ jenkins:
                 restrictUsage: false
                 scaleExecutorsByWeight: false
     # === end Phase 1 controller config (ExternalSecret -> jenkins.extraObjects below) =
-    # Boot-only Groovy. The chart mounts this ConfigMap at
-    # /var/jenkins_home/init.groovy.d and Jenkins runs it once at startup. It holds
-    # only scripts JCasC cannot express (timers). Every cloud, including the EC2
-    # Fleet, comes from JCasC (ps3-clouds). A change to this ConfigMap neither
-    # reloads nor restarts the pod, it waits for the next restart.
-    initConfigMap: jenkins-ps3-k8s-clouds-init
+    # Boot-only Groovy for what JCasC cannot express (timers). The chart renders
+    # each key into init.groovy.d as init<key>.groovy, and a change to any script
+    # changes the checksum/config-init-scripts pod annotation, so the controller
+    # restarts to pick it up.
+    initScripts:
+      "-hetznerArmHealth": |
+        // hetznerArmHealth.groovy  (PS-11179)
+        //
+        // Master-side health probe that publishes whether Hetzner arm64 (CAX) capacity is
+        // currently usable, as Jenkins GLOBAL env vars consumed by vars/resolveArmWorker:
+        //
+        //     HETZNER_ARM64_HEALTHY    "true" | "false"
+        //     HETZNER_ARM64_HEALTH_AT  epoch seconds of the last SUCCESSFUL observation
+        //     HETZNER_ARM64_REASON     short human-readable verdict
+        //
+        // Runs ON THIS CONTROLLER (not a worker). Every 60s on the Jenkins Timer pool it
+        // reads this master's OWN loopback metrics endpoint
+        // (http://127.0.0.1:8080/hetzner-prometheus) and inspects
+        // hetzner_dc_circuit_breaker_state{arch="arm64"} for every arm64 DC.
+        //
+        // Verdict:
+        //   - UNHEALTHY when every arm64 DC breaker is non-CLOSED (state >= 1, i.e. OPEN or
+        //     HALF_OPEN): no German DC can currently fulfil an arm64 server.
+        //   - HEALTHY otherwise (at least one arm64 DC breaker CLOSED, or no arm64 series yet).
+        // It reads the metrics TEXT only; it never calls DcCircuitBreaker.getState() from
+        // Groovy (that would mutate breaker state / arm a HALF_OPEN probe lease).
+        //
+        // Hysteresis: flip to UNHEALTHY immediately (divert away from dead capacity fast),
+        // but require CLEAR_POLLS consecutive healthy observations before flipping back to
+        // HEALTHY (avoid flapping a half-recovered DC back and forth).
+        //
+        // Fail-safe by OMISSION: on any fetch/parse error we DO NOT touch the flag, so it
+        // goes stale and resolveArmWorker treats stale/absent as healthy (-> Hetzner, the
+        // current behaviour). UNHEALTHY is published only on POSITIVE fresh evidence, so a
+        // metrics glitch can never force the costly AWS fallback on.
+        //
+        // In-memory by design: the env vars live in globalNodeProperties and are NOT saved
+        // to disk (no per-minute config churn). After a restart this script republishes
+        // within ~1 min; until then resolveArmWorker's stale/absent fail-safe holds.
+        //
+        // Idempotent re-deploy: re-evaluating this file (jenkins iac deploy / boot) bumps a
+        // generation token; the previously scheduled task sees the mismatch on its next tick
+        // and self-terminates, so exactly one probe converges within 60s.
+
+        import jenkins.model.Jenkins
+        import jenkins.util.Timer
+        import java.util.concurrent.TimeUnit
+        import java.util.concurrent.CancellationException
+        import java.util.logging.Logger
+
+        final Logger LOG = Logger.getLogger('hetznerArmHealth')
+        final String METRICS_URL = 'http://127.0.0.1:8080/hetzner-prometheus/'   // trailing slash avoids a 302
+        final int CLEAR_POLLS = 2          // consecutive healthy polls before re-enabling Hetzner
+        final long PERIOD_SEC = 60L
+        final long INITIAL_DELAY_SEC = 15L
+
+        // Generation token: supersede any schedule left by an earlier eval of this file.
+        final String GEN = UUID.randomUUID().toString()
+        System.setProperty('hetznerArmHealth.gen', GEN)
+
+        def parseArmBreakerStates = { String body ->
+            def states = []
+            body.eachLine { String line ->
+                if (line.startsWith('hetzner_dc_circuit_breaker_state') && line.contains('arch="arm64"')) {
+                    def m = (line =~ /\}\s+([0-9.eE+-]+)\s*$/)
+                    if (m.find()) { states << (m.group(1) as double) }
+                }
+            }
+            return states
+        }
+
+        def publishEnv = { boolean healthy, long atSec, String reason ->
+            def props = Jenkins.instance.globalNodeProperties
+            def envProp = props.get(hudson.slaves.EnvironmentVariablesNodeProperty)
+            if (envProp == null) {
+                envProp = new hudson.slaves.EnvironmentVariablesNodeProperty()
+                props.add(envProp)
+            }
+            def vars = envProp.envVars
+            vars.put('HETZNER_ARM64_HEALTHY', healthy ? 'true' : 'false')
+            vars.put('HETZNER_ARM64_HEALTH_AT', atSec.toString())
+            vars.put('HETZNER_ARM64_REASON', reason)
+        }
+
+        Runnable probe = {
+            try {
+                if (System.getProperty('hetznerArmHealth.gen') != GEN) {
+                    throw new CancellationException('superseded by newer hetznerArmHealth eval')
+                }
+
+                String body
+                try {
+                    def conn = (java.net.HttpURLConnection) new URL(METRICS_URL).openConnection()
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    int code = conn.responseCode
+                    if (code != 200) {
+                        LOG.warning("hetznerArmHealth: metrics HTTP ${code}; leaving flag untouched (stale->healthy fail-safe)")
+                        return
+                    }
+                    body = conn.inputStream.getText('UTF-8')
+                } catch (CancellationException ce) {
+                    throw ce
+                } catch (Exception fe) {
+                    LOG.warning("hetznerArmHealth: metrics fetch failed (${fe.message}); leaving flag untouched (stale->healthy fail-safe)")
+                    return
+                }
+
+                def states = parseArmBreakerStates(body)
+                boolean observedHealthy
+                String reason
+                if (states.isEmpty()) {
+                    observedHealthy = true
+                    reason = 'no arm64 DC breaker series (assuming healthy)'
+                } else {
+                    int closed = states.count { it < 1.0d }
+                    observedHealthy = (closed > 0)
+                    reason = observedHealthy ?
+                        "${closed}/${states.size()} arm64 DC breakers CLOSED".toString() :
+                        "all ${states.size()} arm64 DC breakers non-CLOSED (OPEN/HALF_OPEN)".toString()
+                }
+
+                boolean priorHealthy = (System.getProperty('hetznerArmHealth.published', 'true') != 'false')
+                int priorStreak = (System.getProperty('hetznerArmHealth.streak', '0')) as int
+                boolean publishHealthy
+                int streak
+                if (!observedHealthy) {
+                    publishHealthy = false
+                    streak = 0
+                } else {
+                    streak = priorStreak + 1
+                    publishHealthy = priorHealthy || (streak >= CLEAR_POLLS)
+                    if (!publishHealthy) {
+                        reason = "recovering (${streak}/${CLEAR_POLLS} healthy polls); holding AWS fallback".toString()
+                    }
+                }
+                System.setProperty('hetznerArmHealth.published', publishHealthy ? 'true' : 'false')
+                System.setProperty('hetznerArmHealth.streak', streak.toString())
+
+                long nowSec = (long) (System.currentTimeMillis() / 1000L)
+                publishEnv(publishHealthy, nowSec, reason)
+                LOG.fine("hetznerArmHealth: healthy=${publishHealthy} (${reason})")
+            } catch (CancellationException supersede) {
+                throw supersede   // let scheduleAtFixedRate suppress this stale generation
+            } catch (Throwable t) {
+                LOG.warning("hetznerArmHealth: unexpected ${t}")   // swallow so the probe keeps running
+            }
+        }
+
+        Timer.get().scheduleAtFixedRate(probe, INITIAL_DELAY_SEC, PERIOD_SEC, TimeUnit.SECONDS)
+        LOG.info("hetznerArmHealth: scheduled (gen=${GEN}, every ${PERIOD_SEC}s, loopback ${METRICS_URL})")
+      "-logHeartbeat": |
+        /**
+         * Write one INFO line per minute to jenkins.log so log liveness can be
+         * measured per master.
+         *
+         * An idle master is legitimately silent for hours (ps80, ps57 and pxb
+         * wrote nothing in 70 to 127 of one week's 168 hours), so "no log line
+         * for N minutes" alone cannot tell an idle controller from one whose
+         * java.util.logging root level was lowered at runtime, whose file handler
+         * detached, or whose Alloy tail or Loki push died. This heartbeat gives
+         * every master a floor of one line per minute. The jenkins-uptime chart
+         * counts the lines that reach Loki per master (jenkins:master_logs_fresh)
+         * and alerts when a master still pushes metrics but no line lands for 15
+         * minutes.
+         *
+         * The line goes through the root JUL logger like Jenkins' own INFO output,
+         * so whatever silences INFO silences the heartbeat too. logp pins the
+         * source to a stable name; the default caller lookup would print the
+         * anonymous Groovy class of this timer.
+         *
+         * Registering a PeriodicWork after boot is safe on this core (verified
+         * live 2026-08-07 on pg.cd, see hetznerRetentionSelfheal.groovy). On live
+         * re-evaluation (iac deploy) the previous timer is replaced through the
+         * marker toString, never duplicated.
+         */
+        import hudson.model.PeriodicWork
+
+        import java.util.concurrent.TimeUnit
+        import java.util.logging.Level
+        import java.util.logging.Logger
+
+        def MARKER = 'percona-logHeartbeat'
+        def registry = PeriodicWork.all()
+        def stale = registry.findAll { it.toString() == MARKER }
+        stale.each { registry.remove(it) }
+        registry.add(new PeriodicWork() {
+            private final Logger heartbeat = Logger.getLogger('percona.jenkins.logHeartbeat')
+
+            long getRecurrencePeriod() {
+                return TimeUnit.MINUTES.toMillis(1)
+            }
+
+            long getInitialDelay() {
+                return 0L
+            }
+
+            protected void doRun() {
+                heartbeat.logp(Level.INFO, 'percona.jenkins.logHeartbeat', 'beat', 'heartbeat')
+            }
+
+            String toString() {
+                return MARKER
+            }
+        })
+        println(stale
+                ? "logHeartbeat: replaced ${stale.size()} stale timer(s), heartbeat re-registered (1m)"
+                : 'logHeartbeat: heartbeat registered (1m)')
     # Restored-home boot-guard (non-root). The controller pod is runAsNonRoot, so
     # it CANNOT host a root chown initContainer; the one-time ownership fix (EC2
     # jenkins UID 994 -> in-cluster 1000) is done by a separate root Job against
@@ -8177,276 +8379,6 @@ jenkins:
               # is readable with no IAM change and off-convention names are denied.
               key: percona-ci-platform/jenkins/ps3/github-oauth
               property: client_secret
-
-    # Boot-time clouds init (Phase 2): controller.initConfigMap mounts this CM's
-    # keys at /var/jenkins_home/init.groovy.d, so the boot scripts below run on the
-    # restored home at boot. A ConfigMap (not a Secret): nothing here is sensitive --
-    # AWS API auth is the pod's Pod Identity role and the worker SSH key is the
-    # restored 'ec2-fleet-arm-graviton' credential.
-    - apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: jenkins-ps3-k8s-clouds-init
-        labels:
-          app.kubernetes.io/part-of: jenkins-ps3-k8s
-      data:
-        hetznerArmHealth.groovy: |
-          // hetznerArmHealth.groovy  (PS-11179)
-          //
-          // Master-side health probe that publishes whether Hetzner arm64 (CAX) capacity is
-          // currently usable, as Jenkins GLOBAL env vars consumed by vars/resolveArmWorker:
-          //
-          //     HETZNER_ARM64_HEALTHY    "true" | "false"
-          //     HETZNER_ARM64_HEALTH_AT  epoch seconds of the last SUCCESSFUL observation
-          //     HETZNER_ARM64_REASON     short human-readable verdict
-          //
-          // Runs ON THIS CONTROLLER (not a worker). Every 60s on the Jenkins Timer pool it
-          // reads this master's OWN loopback metrics endpoint
-          // (http://127.0.0.1:8080/hetzner-prometheus) and inspects
-          // hetzner_dc_circuit_breaker_state{arch="arm64"} for every arm64 DC.
-          //
-          // Verdict:
-          //   - UNHEALTHY when every arm64 DC breaker is non-CLOSED (state >= 1, i.e. OPEN or
-          //     HALF_OPEN): no German DC can currently fulfil an arm64 server.
-          //   - HEALTHY otherwise (at least one arm64 DC breaker CLOSED, or no arm64 series yet).
-          // It reads the metrics TEXT only; it never calls DcCircuitBreaker.getState() from
-          // Groovy (that would mutate breaker state / arm a HALF_OPEN probe lease).
-          //
-          // Hysteresis: flip to UNHEALTHY immediately (divert away from dead capacity fast),
-          // but require CLEAR_POLLS consecutive healthy observations before flipping back to
-          // HEALTHY (avoid flapping a half-recovered DC back and forth).
-          //
-          // Fail-safe by OMISSION: on any fetch/parse error we DO NOT touch the flag, so it
-          // goes stale and resolveArmWorker treats stale/absent as healthy (-> Hetzner, the
-          // current behaviour). UNHEALTHY is published only on POSITIVE fresh evidence, so a
-          // metrics glitch can never force the costly AWS fallback on.
-          //
-          // In-memory by design: the env vars live in globalNodeProperties and are NOT saved
-          // to disk (no per-minute config churn). After a restart this script republishes
-          // within ~1 min; until then resolveArmWorker's stale/absent fail-safe holds.
-          //
-          // Idempotent re-deploy: re-evaluating this file (jenkins iac deploy / boot) bumps a
-          // generation token; the previously scheduled task sees the mismatch on its next tick
-          // and self-terminates, so exactly one probe converges within 60s.
-
-          import jenkins.model.Jenkins
-          import jenkins.util.Timer
-          import java.util.concurrent.TimeUnit
-          import java.util.concurrent.CancellationException
-          import java.util.logging.Logger
-
-          final Logger LOG = Logger.getLogger('hetznerArmHealth')
-          final String METRICS_URL = 'http://127.0.0.1:8080/hetzner-prometheus/'   // trailing slash avoids a 302
-          final int CLEAR_POLLS = 2          // consecutive healthy polls before re-enabling Hetzner
-          final long PERIOD_SEC = 60L
-          final long INITIAL_DELAY_SEC = 15L
-
-          // Generation token: supersede any schedule left by an earlier eval of this file.
-          final String GEN = UUID.randomUUID().toString()
-          System.setProperty('hetznerArmHealth.gen', GEN)
-
-          def parseArmBreakerStates = { String body ->
-              def states = []
-              body.eachLine { String line ->
-                  if (line.startsWith('hetzner_dc_circuit_breaker_state') && line.contains('arch="arm64"')) {
-                      def m = (line =~ /\}\s+([0-9.eE+-]+)\s*$/)
-                      if (m.find()) { states << (m.group(1) as double) }
-                  }
-              }
-              return states
-          }
-
-          def publishEnv = { boolean healthy, long atSec, String reason ->
-              def props = Jenkins.instance.globalNodeProperties
-              def envProp = props.get(hudson.slaves.EnvironmentVariablesNodeProperty)
-              if (envProp == null) {
-                  envProp = new hudson.slaves.EnvironmentVariablesNodeProperty()
-                  props.add(envProp)
-              }
-              def vars = envProp.envVars
-              vars.put('HETZNER_ARM64_HEALTHY', healthy ? 'true' : 'false')
-              vars.put('HETZNER_ARM64_HEALTH_AT', atSec.toString())
-              vars.put('HETZNER_ARM64_REASON', reason)
-          }
-
-          Runnable probe = {
-              try {
-                  if (System.getProperty('hetznerArmHealth.gen') != GEN) {
-                      throw new CancellationException('superseded by newer hetznerArmHealth eval')
-                  }
-
-                  String body
-                  try {
-                      def conn = (java.net.HttpURLConnection) new URL(METRICS_URL).openConnection()
-                      conn.connectTimeout = 4000
-                      conn.readTimeout = 4000
-                      int code = conn.responseCode
-                      if (code != 200) {
-                          LOG.warning("hetznerArmHealth: metrics HTTP ${code}; leaving flag untouched (stale->healthy fail-safe)")
-                          return
-                      }
-                      body = conn.inputStream.getText('UTF-8')
-                  } catch (CancellationException ce) {
-                      throw ce
-                  } catch (Exception fe) {
-                      LOG.warning("hetznerArmHealth: metrics fetch failed (${fe.message}); leaving flag untouched (stale->healthy fail-safe)")
-                      return
-                  }
-
-                  def states = parseArmBreakerStates(body)
-                  boolean observedHealthy
-                  String reason
-                  if (states.isEmpty()) {
-                      observedHealthy = true
-                      reason = 'no arm64 DC breaker series (assuming healthy)'
-                  } else {
-                      int closed = states.count { it < 1.0d }
-                      observedHealthy = (closed > 0)
-                      reason = observedHealthy ?
-                          "${closed}/${states.size()} arm64 DC breakers CLOSED".toString() :
-                          "all ${states.size()} arm64 DC breakers non-CLOSED (OPEN/HALF_OPEN)".toString()
-                  }
-
-                  boolean priorHealthy = (System.getProperty('hetznerArmHealth.published', 'true') != 'false')
-                  int priorStreak = (System.getProperty('hetznerArmHealth.streak', '0')) as int
-                  boolean publishHealthy
-                  int streak
-                  if (!observedHealthy) {
-                      publishHealthy = false
-                      streak = 0
-                  } else {
-                      streak = priorStreak + 1
-                      publishHealthy = priorHealthy || (streak >= CLEAR_POLLS)
-                      if (!publishHealthy) {
-                          reason = "recovering (${streak}/${CLEAR_POLLS} healthy polls); holding AWS fallback".toString()
-                      }
-                  }
-                  System.setProperty('hetznerArmHealth.published', publishHealthy ? 'true' : 'false')
-                  System.setProperty('hetznerArmHealth.streak', streak.toString())
-
-                  long nowSec = (long) (System.currentTimeMillis() / 1000L)
-                  publishEnv(publishHealthy, nowSec, reason)
-                  LOG.fine("hetznerArmHealth: healthy=${publishHealthy} (${reason})")
-              } catch (CancellationException supersede) {
-                  throw supersede   // let scheduleAtFixedRate suppress this stale generation
-              } catch (Throwable t) {
-                  LOG.warning("hetznerArmHealth: unexpected ${t}")   // swallow so the probe keeps running
-              }
-          }
-
-          Timer.get().scheduleAtFixedRate(probe, INITIAL_DELAY_SEC, PERIOD_SEC, TimeUnit.SECONDS)
-          LOG.info("hetznerArmHealth: scheduled (gen=${GEN}, every ${PERIOD_SEC}s, loopback ${METRICS_URL})")
-        durability.groovy: |
-          /**
-           * Persist the global pipeline durability hint as MAX_SURVIVABILITY at
-           * every JVM boot, by calling the GlobalDefaultFlowDurabilityLevel
-           * descriptor's setDurabilityHint() + save() so the value lands in
-           * $JENKINS_HOME/org.jenkinsci.plugins.workflow.flow.GlobalDefaultFlowDurabilityLevel.xml
-           * (the descriptor's standard config file). Idempotent on the happy
-           * path: when the hint already matches the target, the script is a no-op.
-           *
-           * Background. Pipeline builds use one of three durability hints:
-           *   PERFORMANCE_OPTIMIZED  - FlowNode state kept in memory until the
-           *                            build finishes; an abrupt JVM stop
-           *                            (kill -9, AWS spot interrupt) loses the
-           *                            whole in-flight build.
-           *   SURVIVABLE_NONATOMIC   - persists eventually, weaker ordering.
-           *   MAX_SURVIVABILITY      - persists each FlowNode as it executes, so
-           *                            a build resumes at the same step on JVM
-           *                            return.
-           *
-           * Why explicit when workflow-api already advertises MAX_SURVIVABILITY
-           * as the default? The default is fragile: any operator change in
-           * Manage Jenkins -> System silently writes the descriptor's XML and
-           * can replace the hint with no IaC trace. Writing the value ourselves
-           * at every boot anchors the canary's resilience guarantee.
-           *
-           * Note on the descriptor: when no XML exists, the descriptor's in-memory
-           * field is null (the MAX_SURVIVABILITY default lives at a higher
-           * layer in workflow-api). So `current != target` correctly fires the
-           * write path on a fresh master, and the resulting save() materialises
-           * the on-disk XML.
-           *
-           * Scope: ps3 canary only. PS-11173 Phase 2.
-           */
-          import org.jenkinsci.plugins.workflow.flow.FlowDurabilityHint
-          import jenkins.model.Jenkins
-
-          def descCls = Class.forName('org.jenkinsci.plugins.workflow.flow.GlobalDefaultFlowDurabilityLevel$DescriptorImpl')
-          def descriptors = Jenkins.instance.getExtensionList(descCls)
-          if (descriptors.isEmpty()) {
-              println "durability.groovy: GlobalDefaultFlowDurabilityLevel descriptor missing (workflow-api plugin not installed?)"
-              return
-          }
-
-          def d = descriptors[0]
-          def current = d.durabilityHint
-          def target = FlowDurabilityHint.MAX_SURVIVABILITY
-
-          if (current != target) {
-              d.setDurabilityHint(target)
-              d.save()
-              println "durability.groovy: ${current} -> ${target}"
-          } else {
-              println "durability.groovy: GlobalDefaultFlowDurabilityLevel already ${target}"
-          }
-        logHeartbeat.groovy: |
-          /**
-           * Write one INFO line per minute to jenkins.log so log liveness can be
-           * measured per master.
-           *
-           * An idle master is legitimately silent for hours (ps80, ps57 and pxb
-           * wrote nothing in 70 to 127 of one week's 168 hours), so "no log line
-           * for N minutes" alone cannot tell an idle controller from one whose
-           * java.util.logging root level was lowered at runtime, whose file handler
-           * detached, or whose Alloy tail or Loki push died. This heartbeat gives
-           * every master a floor of one line per minute. The jenkins-uptime chart
-           * counts the lines that reach Loki per master (jenkins:master_logs_fresh)
-           * and alerts when a master still pushes metrics but no line lands for 15
-           * minutes.
-           *
-           * The line goes through the root JUL logger like Jenkins' own INFO output,
-           * so whatever silences INFO silences the heartbeat too. logp pins the
-           * source to a stable name; the default caller lookup would print the
-           * anonymous Groovy class of this timer.
-           *
-           * Registering a PeriodicWork after boot is safe on this core (verified
-           * live 2026-08-07 on pg.cd, see hetznerRetentionSelfheal.groovy). On live
-           * re-evaluation (iac deploy) the previous timer is replaced through the
-           * marker toString, never duplicated.
-           */
-          import hudson.model.PeriodicWork
-
-          import java.util.concurrent.TimeUnit
-          import java.util.logging.Level
-          import java.util.logging.Logger
-
-          def MARKER = 'percona-logHeartbeat'
-          def registry = PeriodicWork.all()
-          def stale = registry.findAll { it.toString() == MARKER }
-          stale.each { registry.remove(it) }
-          registry.add(new PeriodicWork() {
-              private final Logger heartbeat = Logger.getLogger('percona.jenkins.logHeartbeat')
-
-              long getRecurrencePeriod() {
-                  return TimeUnit.MINUTES.toMillis(1)
-              }
-
-              long getInitialDelay() {
-                  return 0L
-              }
-
-              protected void doRun() {
-                  heartbeat.logp(Level.INFO, 'percona.jenkins.logHeartbeat', 'beat', 'heartbeat')
-              }
-
-              String toString() {
-                  return MARKER
-              }
-          })
-          println(stale
-                  ? "logHeartbeat: replaced ${stale.size()} stale timer(s), heartbeat re-registered (1m)"
-                  : 'logHeartbeat: heartbeat registered (1m)')
 
     # Alloy sidecar config (mounted by controller.sidecars.additionalSidecarContainers
     # above via the alloy-metrics-config volume). River pipeline: loopback-scrape the Hetzner plugin
