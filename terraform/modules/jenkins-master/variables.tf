@@ -202,7 +202,7 @@ variable "worker_role_legacy_naming" {
 }
 
 variable "extra_subnet_a" {
-  description = "Create an extra subnet in AZ index 0. Only psmdb and pg."
+  description = "Create an extra subnet in AZ index 0 for masters that need a third worker AZ."
   type        = bool
   default     = false
 }

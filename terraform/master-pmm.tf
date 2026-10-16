@@ -50,6 +50,10 @@ module "pmm" {
   # zero-diff adopt).
   ebs_size = 200
 
+  # Third worker AZ (us-east-2a, 10.166.0.0/24) for the agent-arm64 spot
+  # templates and the arm fleet. The master stays in us-east-2b.
+  extra_subnet_a = true
+
   # On-demand to end the spot reclamations. c7i-flex.xlarge (4 vCPU / 8 GB)
   # clears the 4 GB JVM heap; the prior g4ad.xlarge was a spot-pool artifact,
   # not a GPU requirement.
