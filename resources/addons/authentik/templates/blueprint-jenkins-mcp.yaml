@@ -113,6 +113,14 @@ data:
         identifiers:
           name: jenkins-mcp-service-accounts
 
+      # Master scope. The gateway lets a member of a jenkins-mcp-master-<name> group reach only
+      # the masters those groups name, and a service account with no such group reaches none
+      # (fail closed). Add one group per master an account needs.
+      - model: authentik_core.group
+        id: jenkins-mcp-master-pmm
+        identifiers:
+          name: jenkins-mcp-master-pmm
+
       - model: authentik_policies_expression.expressionpolicy
         id: jenkins-mcp-service-account-only
         identifiers:
@@ -280,6 +288,7 @@ data:
           is_active: true
           groups:
             - !KeyOf jenkins-mcp-service-accounts
+            - !KeyOf jenkins-mcp-master-pmm
           attributes:
             owner: davi.travaglia
             owner_team: pmm-qa

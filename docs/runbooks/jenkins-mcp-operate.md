@@ -84,10 +84,12 @@ denied there, and a reputation policy denies repeated bad passwords from one IP 
 username (score -5, expires 24h after the first failure). A locked-out account is restored early by
 deleting its score: `GET $AK/policies/reputation/scores/?search=<name>`, then
 `DELETE $AK/policies/reputation/scores/<pk>/`. Service accounts stay on the read tier: never add
-one to `jenkins-mcp-writers`.
+one to `jenkins-mcp-writers`. They also reach only the masters named by their
+`jenkins-mcp-master-<name>` groups. A service account with no such group reaches no master.
 
 1. Declare the user in `resources/addons/authentik/templates/blueprint-jenkins-mcp.yaml`
-   (`authentik_core.user`, `type: service_account`, group `jenkins-mcp-service-accounts`, an `owner`
+   (`authentik_core.user`, `type: service_account`, group `jenkins-mcp-service-accounts`, one
+   `jenkins-mcp-master-<name>` group per master it reads (declare the group if it is new), an `owner`
    attribute naming the person accountable for the key, and the two `token-*` attributes copied from
    `pmm-automation`), merge, and restart the Authentik worker so the blueprint applies
    ([authentik-blueprint-ops.md](authentik-blueprint-ops.md), gotcha 2).
@@ -115,8 +117,9 @@ one to `jenkins-mcp-writers`.
    session, log in with the username and app password, then open the Jenkins connector and click
    Connect. The authorize step reuses that Authentik session. Opening the connector first lands on
    the JumpCloud-only page and fails.
-5. Verify in Loki that the calls carry the service account's username, and that an operate tool
-   returns the `jenkins-mcp-writers` denial for it.
+5. Verify in Loki that the calls carry the service account's username, that an operate tool
+   returns the `jenkins-mcp-writers` denial for it, and that a read on a master outside its scope
+   returns `cannot reach master` (audit `status` `denied`).
 6. Point the automation at `get_build_console_tail` or `export_build_log` for logs. An unlimited
    `get_build_console_output` returns the whole log in one response.
 

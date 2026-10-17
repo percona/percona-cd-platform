@@ -22,6 +22,7 @@ from loguru import logger
 from prometheus_client import Counter, Histogram
 
 from mcp_jenkins.core.fleet import get_fleet
+from mcp_jenkins.core.scope import MasterScopeError
 
 # Raw config/script mutators (node config, script console): NEVER served. They stay tagged 'write'
 # in the server modules, so read-only/operate/manage all exclude them. run_groovy_script is RCE.
@@ -197,6 +198,12 @@ class AuditMiddleware(Middleware):
             result = await call_next(context)
             record['status'] = 'ok'
             return result
+        except MasterScopeError:
+            # The master scope is enforced where the tool resolves its master (core.lifespan),
+            # which also covers the header and default paths. Recorded here as a denial.
+            record['status'] = 'denied'
+            _DENIED.labels(tool=tool, reason='master_scope').inc()
+            raise
         except Exception as e:  # noqa: BLE001
             if record.get('status') != 'denied':
                 record['status'] = 'error'
