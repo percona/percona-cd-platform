@@ -88,6 +88,16 @@ port-forward unless `--prom-url` is given. Run after any dashboard edit;
 the gnetId-17781 kill-list evidence and the `Loki / Golden Signals` gate
 both came from this script. Run via `uv run scripts/check-dashboard-queries.py`.
 
+[`jenkins-mcp-audit-patterns.py`](jenkins-mcp-audit-patterns.py)
+Tool-calling patterns from the jenkins-mcp audit log in Loki (default 30
+days). Dedupes on `request_id` (raw line counts overcount), groups calls
+into sessions, and counts the patterns that cost avoidable calls: hand
+fan-out across masters, repeats, build walks, status polling, build-number
+discovery after `build_item`, per-file grep chains, plus errors by class.
+Read-only, spawns its own port-forward unless `--loki-url` is given, and
+`--jsonl` writes the deduped export. Re-run after a gateway release to
+measure what a new tool removed.
+
 ## Inventory
 
 [`check_versions.py`](check_versions.py)
