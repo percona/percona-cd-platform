@@ -12,7 +12,7 @@ s3:
 # First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
 image:
   repository: percona-cd/jenkins-mcp
-  tag: "0.9.6-590b07a28172"
+  tag: "0.10.0-a42f193806d8"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
