@@ -46,10 +46,24 @@ alloy:
         }
 
         // Tail pod logs through the Kubernetes API (the kubelet log endpoint
-        // via the apiserver), not the node filesystem.
+        // via the apiserver), not the node filesystem. Clustering gives each
+        // target one owner among the DS pods (sharded by namespace, pod,
+        // container and pod UID). Without it every DS pod tails every
+        // container in the cluster (18x duplicate streams on an 18-node fleet,
+        // and each new DS pod replays the full current log of every target),
+        // which is how the jenkins-mcp audit stream held 2 to 3 copies of 8.5%
+        // of its lines. A reshard still replays the whole kubelet-retained log
+        // of a reassigned target (the source has no start position). Loki
+        // drops what is older than reject_old_samples_max_age and dedupes
+        // identical entries inside a chunk.
+        //
+        // Doc: grafana.com/docs/alloy/latest/reference/components/loki/loki.source.kubernetes/
         loki.source.kubernetes "pods" {
           targets    = discovery.relabel.pod_logs.output
           forward_to = [loki.relabel.jenkins_master.receiver]
+          clustering {
+            enabled = true
+          }
         }
 
         // PS-10997 Phase 2.5b: align in-cluster Jenkins log labels with
