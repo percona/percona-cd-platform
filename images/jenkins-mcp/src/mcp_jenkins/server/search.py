@@ -223,6 +223,9 @@ def search_build_logs(
 ) -> dict:
     """Search build console logs across jobs on a master (grep over recent builds).
 
+    To grep ONE known build, use get_build_console_output(fullname, number, pattern) instead: this
+    tool takes no fullname or number, it selects jobs by job_pattern.
+
     Selects jobs whose fullname matches job_pattern, then greps the most recent finished build(s) of
     each for pattern. Builds still running are skipped: their console has no end, so reading one
     would hang. Read-only and cost-bounded: job_pattern is required and a catch-all is rejected;

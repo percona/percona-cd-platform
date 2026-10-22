@@ -76,8 +76,8 @@ Everything else (wiring, eks-*, cleanup, iam-jenkins-*, substrate) is
   `docs/runbooks/...`) instead.
 - **No Jira ticket IDs in comments** (`PS-`, `PKG-`, `PXB-`, `PG-`). Git
   history and the PR link the ticket; comments state the rationale directly.
-  Functional values (`tickets = "PS-..."` module arguments, IAM `description`
-  strings surfaced in the AWS console) are exempt from the gate — changing
+  Functional values (IAM `description` strings surfaced in the AWS console)
+  are exempt from the gate — changing
   live-attribute descriptions is a plan diff, handle deliberately.
 - **Third person**, no colleague names, no first-person we/our/us.
 - **Dates only when load-bearing** ("since 2026-05", an incident that explains

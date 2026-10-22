@@ -46,12 +46,6 @@ variable "ami_id" {
   default     = null
 }
 
-variable "tickets" {
-  description = "Tracking tickets (comma-separated), recorded in the tickets tag."
-  type        = string
-  default     = ""
-}
-
 variable "tags" {
   description = "Extra tags merged onto all resources. Module-set keys (Name, iit-billing-tag, team, PerconaKeep) win over this map."
   type        = map(string)

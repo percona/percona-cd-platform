@@ -1,0 +1,41 @@
+{{/*
+Authentik availability alerts. Every SSO-backed app (Grafana, ArgoCD,
+Headlamp, the Jenkins MCP gateway) signs in through the single
+authentik-server pod, so a pod that stays unready is a platform-wide login
+outage. Synced to the Mimir ruler by the Alloy DS
+`mimir.rules.kubernetes` component, same path as jenkins-uptime.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: authentik
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: authentik
+    app.kubernetes.io/component: rules
+spec:
+  groups:
+    - name: authentik.rules
+      rules:
+        - alert: AuthentikServerUnavailable
+          expr: max(kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="authentik-server"}) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Authentik has had no ready server pod for 5 minutes
+            description: >-
+              SSO sign-in is down for Grafana, ArgoCD, Headlamp and the Jenkins
+              MCP gateway. Read the server pod logs and events in the
+              authentik namespace. A container that restarts without
+              recovering points at pod-scoped state, so delete the pod to get
+              a fresh one.
+        - alert: AuthentikServerRestarting
+          expr: sum(increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}", container="server"}[1h])) > 3
+          labels:
+            severity: warning
+          annotations:
+            summary: The Authentik server container restarted more than 3 times in an hour
+            description: >-
+              The server is crash looping. Read the last container logs in the
+              authentik namespace before the next restart overwrites them.

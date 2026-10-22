@@ -123,7 +123,6 @@ module "pxc_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw1.id
   instance_types               = ["m8g.4xlarge", "m7g.4xlarge", "m6g.4xlarge", "m7gd.4xlarge", "m6gd.4xlarge", "r8g.4xlarge", "r7g.4xlarge", "r6g.4xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11228"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not the

@@ -53,7 +53,11 @@ class MultiBranchProject(_ItemBase):
 
 
 class UnknownItem(_ItemBase):
+    """Any job class the suffix map does not name (MatrixProject, MavenModuleSet, ...)."""
+
     model_config = ConfigDict(extra='allow')
+
+    lastBuild: Optional['Build'] = None
 
 
 def serialize_item(item: dict) -> ItemType:

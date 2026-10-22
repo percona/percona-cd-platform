@@ -80,7 +80,7 @@ property_mappings:
   - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
 ```
 
-**Safety.** Asserting `email_verified: true` for everyone is acceptable here because emails come from trusted corporate Duo/SAML SSO, not self-signup. Do not blanket-override on a provider that accepts self-signup or external identity sources you do not control.
+**Safety.** Asserting `email_verified: true` for everyone is acceptable here because emails come from trusted corporate JumpCloud SAML SSO, not self-signup. Do not blanket-override on a provider that accepts self-signup or external identity sources you do not control.
 
 ## Gotcha 4: refresh-token rotation is hardcoded
 

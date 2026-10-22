@@ -12,7 +12,7 @@ data "aws_route53_zone" "main" {
   private_zone = false
 }
 
-# Authentik SAML IdP metadata (Duo). Lives in SSM ParameterStore because
+# Authentik SAML IdP metadata (JumpCloud). Lives in SSM ParameterStore because
 # it's public IdP config (the signing cert is the public half of the
 # IdP signature). Populated one-time via `aws ssm put-parameter`; TF
 # reads at apply time, base64-encodes into the cluster Secret annotation

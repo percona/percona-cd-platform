@@ -11,7 +11,7 @@ actually uses:
     from node IPs in the same range).
   - DNS to kube-dns for every pod (the Job resolves the in-cluster
     service name).
-  - HTTPS out for server + worker only (Duo metadata fetch). The
+  - HTTPS out for server + worker only (JumpCloud metadata fetch). The
     bootstrap Job and Postgres get no internet egress.
 
 The bundled Postgres chart's own NetworkPolicy is disabled in values

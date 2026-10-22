@@ -22,6 +22,7 @@ from loguru import logger
 from prometheus_client import Counter, Histogram
 
 from mcp_jenkins.core.fleet import get_fleet
+from mcp_jenkins.core.scope import MasterScopeError
 
 # Raw config/script mutators (node config, script console): NEVER served. They stay tagged 'write'
 # in the server modules, so read-only/operate/manage all exclude them. run_groovy_script is RCE.
@@ -31,11 +32,12 @@ _CONFIG_TOOLS = frozenset({'set_node_config', 'run_groovy_script'})
 _MANAGE_TOOLS = frozenset({'create_item', 'set_item_config', 'delete_item'})
 # Build-lifecycle tools: served in operate mode AND gated to the writers group.
 # They trigger/replay/stop/cancel builds; they never update or delete job config.
-_OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'})
-# Config-XML read: get_item_config returns a job's raw config.xml, which routinely carries plaintext
-# secrets (e.g. the <authToken> "trigger builds remotely" token). It is served as a 'read' tool but
-# gated to the writers group so it is NOT exposed to every authenticated SSO user. See PS-11341.
-_CONFIG_READ_TOOLS = frozenset({'get_item_config'})
+_OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item'})
+# Config-XML reads: get_item_config returns a job's raw config.xml, which routinely carries plaintext
+# secrets (e.g. the <authToken> "trigger builds remotely" token), and search_item_configs greps many.
+# Both are served as 'read' tools but gated to the writers group so they are NOT exposed to every
+# authenticated SSO user. See PS-11341.
+_CONFIG_READ_TOOLS = frozenset({'get_item_config', 'search_item_configs'})
 # Every tool whose call requires the writers group: build lifecycle, job-config CRUD, config-write,
 # config read. _CONFIG_TOOLS (run_groovy_script, set_node_config) are normally never registered (they
 # are write-tagged and no mode serves them), but they are gated here too so a mode-filter regression
@@ -73,8 +75,17 @@ _SAFE_ARG_KEYS = frozenset(
         'builds_per_job',
         'matches_per_build',
         'max_total_matches',
+        'include',
+        'queue_id',
+        'timeout_seconds',
+        'masters',
     }
 )
+
+# Bounds on what an audit line may carry about a failed or malformed call (names only, never values).
+_MAX_KEY_LEN = 40
+_MAX_DROPPED_KEYS = 10
+_MAX_ERROR_DETAILS = 5
 
 # Dedicated stdout sink: emit ONLY audit records, as one raw JSON line (parsed by Loki `| json`).
 logger.add(sys.stdout, level='INFO', format='{message}', filter=lambda r: r['extra'].get('audit', False))
@@ -109,17 +120,61 @@ def _master_label(name: str | None) -> str:
     return name if name in get_fleet().names() else 'invalid'
 
 
-def _summarize_args(arguments: dict | None) -> dict:
-    """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped."""
+def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
+    """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped.
+
+    The NAMES of dropped keys are kept (never their values), so a call that failed on an argument the
+    tool does not take (job_name instead of fullname) still shows what the client sent.
+    """
     if not arguments:
         return {}
     summary: dict = {}
+    dropped: list[str] = []
     for key, value in arguments.items():
-        if key in _SAFE_ARG_KEYS:
+        if key == 'pattern' and tool in _CONFIG_READ_TOOLS:
+            # A config search can be for a secret value itself: log its fingerprint, never the text.
+            summary['pattern_sha'] = _hash(str(value))
+            summary['pattern_len'] = len(str(value))
+        elif key in _SAFE_ARG_KEYS:
             summary[key] = value
         elif key == 'data' and isinstance(value, dict):
             summary['data_keys'] = sorted(value.keys())  # build-parameter NAMES, never values
+        elif key == 'items' and isinstance(value, list):
+            # stop_builds targets: job names and build numbers only, both already logged for stop_build.
+            summary['items'] = [
+                {'fullname': i.get('fullname'), 'number': i.get('number')} for i in value[:50] if isinstance(i, dict)
+            ]
+            summary['items_count'] = len(value)
+        else:
+            # Includes a data or items argument of the wrong type, which the tool will reject.
+            dropped.append(str(key)[:_MAX_KEY_LEN])
+    if dropped:
+        summary['dropped_keys'] = sorted(dropped)[:_MAX_DROPPED_KEYS]
     return summary
+
+
+def _error_detail(error: Exception) -> list[dict] | None:
+    """Pydantic `loc` + `type` per failed argument (never the input value), or None.
+
+    FastMCP raises its own ValidationError for bad arguments with the pydantic error as the cause; a
+    pydantic error raised inside a tool body (an unexpected Jenkins payload) carries errors() itself.
+    """
+    for source in (error, error.__cause__):
+        errors = getattr(source, 'errors', None)
+        if not callable(errors):
+            continue
+        # Runs inside the middleware's except block: any surprise here must not mask the real error.
+        try:
+            return [
+                {
+                    'loc': '.'.join(str(part)[:_MAX_KEY_LEN] for part in item.get('loc', ())),
+                    'type': str(item.get('type')),
+                }
+                for item in list(errors())[:_MAX_ERROR_DETAILS]
+            ]
+        except Exception:  # noqa: BLE001
+            return None
+    return None
 
 
 def _identity() -> dict:
@@ -167,7 +222,7 @@ class AuditMiddleware(Middleware):
             'tool': tool,
             'is_write': tool in _WRITE_TOOLS,
             'master': _selected_master(arguments),
-            'args': _summarize_args(arguments),
+            'args': _summarize_args(arguments, tool),
             **_identity(),
         }
         start = time.perf_counter()
@@ -197,10 +252,20 @@ class AuditMiddleware(Middleware):
             result = await call_next(context)
             record['status'] = 'ok'
             return result
+        except MasterScopeError:
+            # The master scope is enforced where the tool resolves its master (core.lifespan),
+            # which also covers the header and default paths. Recorded here as a denial.
+            record['status'] = 'denied'
+            _DENIED.labels(tool=tool, reason='master_scope').inc()
+            raise
         except Exception as e:  # noqa: BLE001
             if record.get('status') != 'denied':
                 record['status'] = 'error'
                 record['error'] = type(e).__name__
+                record['error_module'] = type(e).__module__
+                detail = _error_detail(e)
+                if detail:
+                    record['error_detail'] = detail
             raise
         finally:
             duration_s = time.perf_counter() - start

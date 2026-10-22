@@ -74,12 +74,6 @@ variable "data_volume_gb" {
   default     = 30
 }
 
-variable "tickets" {
-  description = "Tracking tickets (comma-separated), recorded in the `tickets` tag rather than in resource names."
-  type        = string
-  default     = ""
-}
-
 variable "tags" {
   description = "Extra tags merged onto all fleet resources (and propagated to instances). Module-set keys (iit-billing-tag, team, PerconaKeep) win over this map."
   type        = map(string)

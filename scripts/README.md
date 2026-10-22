@@ -56,6 +56,13 @@ panel expr and its template-variable query. Auto-detects pre-deploy
 (everything must return series). Parse errors or unexpectedly empty
 results exit non-zero.
 
+[`ps3-aws-stash-reload.groovy`](ps3-aws-stash-reload.groovy)
+Script Console step for the in-cluster ps3 controller: reads the
+`percona-ci-platform/jenkins/ps3/aws-stash` key pair from Secrets Manager
+through Pod Identity and updates the `AWS_STASH` credential in place. Prints
+only the access key id. Run via `jenkins admin -i ps3 groovy -f` after a key
+rotation, see `docs/runbooks/ps3-aws-stash.md`.
+
 ## Cluster-facing
 
 [`verify-karpenter.sh`](verify-karpenter.sh)
@@ -80,6 +87,16 @@ jenkins-uptime recording rules and pre/post-deploy modes). Spawns its own
 port-forward unless `--prom-url` is given. Run after any dashboard edit;
 the gnetId-17781 kill-list evidence and the `Loki / Golden Signals` gate
 both came from this script. Run via `uv run scripts/check-dashboard-queries.py`.
+
+[`jenkins-mcp-audit-patterns.py`](jenkins-mcp-audit-patterns.py)
+Tool-calling patterns from the jenkins-mcp audit log in Loki (default 30
+days). Dedupes on `request_id` (raw line counts overcount), groups calls
+into sessions, and counts the patterns that cost avoidable calls: hand
+fan-out across masters, repeats, build walks, status polling, build-number
+discovery after `build_item`, per-file grep chains, plus errors by class.
+Read-only, spawns its own port-forward unless `--loki-url` is given, and
+`--jsonl` writes the deduped export. Re-run after a gateway release to
+measure what a new tool removed.
 
 ## Inventory
 

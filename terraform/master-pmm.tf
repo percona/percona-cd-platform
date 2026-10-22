@@ -29,7 +29,8 @@ module "pmm" {
   vpc_cidr                = "10.166.0.0/22"
   ami_id                  = data.aws_ami.al2023_minimal_use2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "pmm-build-cache"
 
   # The CFN-era live worker role had grown beyond its template out-of-band:
@@ -48,6 +49,10 @@ module "pmm" {
   # us-east-2b (already the module default type, so the tofu import is a
   # zero-diff adopt).
   ebs_size = 200
+
+  # Third worker AZ (us-east-2a, 10.166.0.0/24) for the agent-arm64 spot
+  # templates and the arm fleet. The master stays in us-east-2b.
+  extra_subnet_a = true
 
   # On-demand to end the spot reclamations. c7i-flex.xlarge (4 vCPU / 8 GB)
   # clears the 4 GB JVM heap; the prior g4ad.xlarge was a spot-pool artifact,
@@ -125,7 +130,6 @@ module "pmm_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_use2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not

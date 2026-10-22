@@ -28,7 +28,8 @@ module "psmdb" {
   vpc_cidr                = "10.188.0.0/22"
   ami_id                  = data.aws_ami.al2023_minimal_usw2.id # pinned AL2023 minimal (amis.tf)
   master_profile          = "eks_observability"
-  jenkins_package_version = "2.541.3"
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
   # psmdb workers have no S3 build cache: no psmdb build cache bucket is
   # wired through this module, so null drops the dead worker S3 IAM grant.
   cache_bucket_name = null
@@ -62,6 +63,11 @@ module "psmdb" {
   # 8 GB heap with G1GC tuning for the 16 GiB instance. Masters on 8 GiB
   # boxes use the module default.
   jvm_memory_opts = "-Xms6g -Xmx8g -Xss2m -XX:+UseG1GC -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200"
+
+  # No history lookup in the JUnit step. With one shared history of 550k+
+  # test cases per build, the default lookup of 25 earlier builds per
+  # failing test re-reads their result files for hours.
+  jvm_extra_opts = "-Dhudson.tasks.junit.History$HistoryTableResult.PREVIOUS_TEST_RESULT_BACKTRACK_BUILDS_MAX=0"
 
   # Distinct LT name so the module's launch template can coexist with the
   # CFN-created master template during the cutover (no name collision,
@@ -127,7 +133,6 @@ module "psmdb_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not

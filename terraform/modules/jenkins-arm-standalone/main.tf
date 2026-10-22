@@ -34,7 +34,6 @@ locals {
   # instances/volumes (no provider default_tags there).
   fleet_tags = merge(
     var.tags,
-    var.tickets == "" ? {} : { tickets = var.tickets },
     {
       "iit-billing-tag" = "${var.short_name}-worker"
       "PerconaKeep"     = "True"

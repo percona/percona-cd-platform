@@ -26,8 +26,6 @@ plugin** (`EC2FleetCloud`). It is the automatic AWS Graviton fallback for the
   otherwise show `protect_from_scale_in true->false` churn. Hence
   `lifecycle { ignore_changes = [desired_capacity, protect_from_scale_in] }`;
   `min_size`/`max_size` stay Terraform-managed guardrails (deliberately NOT ignored).
-- **Tickets are a tag, not a name.** Resource names are `${short_name}-arm-*`;
-  provenance lives in the `tickets` tag (comma-separated for multiple).
 - **Cleanup-safe.** Workers carry `iit-billing-tag = short_name` so cleanup
   Lambdas do not reap them.
 - **Agent parity.** The launch-template user-data is arch-aware (no hardcoded
@@ -51,7 +49,6 @@ module "ps80_arm_fleet" {
   key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 ```
 
@@ -79,7 +76,6 @@ module "<inst>_arm_fleet" {
   key_name                     = "percona-jenkins"
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 ```
 

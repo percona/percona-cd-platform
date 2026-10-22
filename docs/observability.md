@@ -49,8 +49,8 @@ this page is the operator's tour.
    ┌───────────────────────────────────  Grafana (standalone, HA x2)  ──┐
    │                                                                    │
    │   datasources: Mimir (default), Loki, Tempo, Prometheus (in-cluster)
-   │   auth: SAML/Duo (HD-30780, gated on var.grafana_saml_enabled)
-   │   ALB Ingress: grafana.cd.percona.com (sticky session for SAML)
+   │   auth: OIDC via Authentik (SAML SP to JumpCloud, docs/authentication.md)
+   │   ALB Ingress: grafana.cd.percona.com (sticky session for the OIDC round-trip)
    │
    └────────────────────────────────────────────────────────────────────┘
 ```
@@ -156,17 +156,17 @@ gossip from a future neighbour stack is rejected at handshake time.
 
 ## Grafana auth
 
-Two modes, switched via `var.grafana_saml_enabled`:
+Browser sign-in is OIDC against Authentik, which is the SAML SP to
+JumpCloud (see [authentication.md](authentication.md)). The local login
+form is disabled. Role mapping via the `groups` claim:
+`grafana_cd_admins → GrafanaAdmin`, `percona → Viewer` (the planned
+`grafana_cd_users` group was never provisioned). The local `admin`
+password is ESO-pinned and serves API and break-glass use only, see the
+`auth` comments in `resources/addons/grafana/values.yaml`.
 
-- **`false` (default day-one)**: chart-generated admin password. Surface
-  via `kubectl -n grafana get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d`.
-- **`true`**: SAML/Duo. Role mapping via group attribute `groups`:
-  `grafana_cd_admins → GrafanaAdmin`, `percona → Viewer` (the planned
-  `grafana_cd_users` group was never provisioned; see docs/authentication.md).
-  Cert/key pulled from Secrets Manager via External Secrets Operator
-  (path `${cluster_name}/grafana/saml/{certificate,private_key}`).
-
-Cutover sequence: see [runbooks/grafana-saml-cutover.md](runbooks/grafana-saml-cutover.md).
+The direct Grafana SAML path (`var.grafana_saml_enabled`) is retired, its
+runbook [runbooks/grafana-saml-cutover.md](runbooks/grafana-saml-cutover.md)
+is kept for history only.
 
 ## Capacity sizing (initial)
 
@@ -182,7 +182,7 @@ deferred until usage signal arrives. Right-sizing checkpoints:
 ## Restore + cutover runbooks
 
 - [Mimir restore](runbooks/restore-mimir.md) — recovering blocks from S3 versioning.
-- [Grafana SAML cutover](runbooks/grafana-saml-cutover.md) — flipping on Duo SSO.
+- [Grafana SAML cutover](runbooks/grafana-saml-cutover.md) — superseded, Duo-era direct SAML path.
 
 ## Verifying ingest
 

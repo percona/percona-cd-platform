@@ -3,7 +3,7 @@ import java.util.logging.Logger
 def logger = Logger.getLogger("")
 def installed = false
 def initialized = false
-def pluginParameter="analysis-core build-blocker-plugin compress-buildlog conditional-buildstep copyartifact description-setter disk-usage ec2 envinject git google-login jobConfigHistory junit matrix-auth matrix-reloaded pipeline-model-definition pipeline-stage-view run-condition script-security slack ssh-slaves template-project timestamper warnings ws-cleanup"
+def pluginParameter="analysis-core build-blocker-plugin compress-buildlog conditional-buildstep copyartifact description-setter disk-usage ec2 envinject git google-login jobConfigHistory junit matrix-auth pipeline-model-definition pipeline-stage-view run-condition script-security slack ssh-slaves template-project timestamper warnings ws-cleanup"
 def plugins = pluginParameter.split()
 logger.info("" + plugins)
 def instance = Jenkins.getInstance()

@@ -14,8 +14,8 @@ Asserts, fail-closed:
   4. No `CLAUDE.md` reference in .tf text (gotcha numbers renumber; cite an
      ADR or docs/ anchor instead).
   5. No Jira ticket IDs (PS-/PKG-/PXB-/PG-NNNN) in .tf COMMENT text, for the
-     `#` and `//` line-comment forms. Functional arguments (e.g.
-     `tickets = "PS-11179"`) and quoted strings are exempt: only text after a
+     `#` and `//` line-comment forms. Quoted strings (e.g. an IAM
+     `description`) are exempt: only text after a
      comment marker is scanned. Known accepted gaps: `/* */` block comments
      (untracked; ARN strings like ":instance/*" would false-open a block, and
      tofu fmt keeps the repo on line comments) and a `#`/`//` inside a quoted

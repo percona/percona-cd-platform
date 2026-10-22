@@ -37,6 +37,9 @@ module "ps80" {
   # MySQL team AI steps in Jenkins jobs (EOL commit analysis) call Anthropic
   # models on Bedrock with the worker instance role, no stored key.
   worker_bedrock_invoke = true
+  # The weekly jobs digest (examples/*-jobs-report) reads the fleet ASGs'
+  # scaling activity: launches, spot interruptions, capacity failures.
+  worker_ci_insights_read = true
 
   purchasing_option = "on-demand"
   # 4 vCPU / 8 GB: the master JVM is -Xms3072m -Xmx4096m, so a 4 GB box
@@ -115,7 +118,6 @@ module "ps80_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # x86_64 spot fleet for the ec2-fleet plugin -- serves the min-bookworm-x64

@@ -12,7 +12,7 @@ s3:
 # First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
 image:
   repository: percona-cd/jenkins-mcp
-  tag: "0.9.5-72c9d8bfe696"
+  tag: "0.10.0-a42f193806d8"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -24,12 +24,12 @@ replicaCount: 2
 statelessHttp: true
 # Operate mode: serve the build-lifecycle tools (build/replay/stop/cancel) after the fail-closed
 # permission preflight, gated per-call to the jenkins-mcp-writers group. Reads stay open to any
-# authenticated user, except get_item_config (config.xml) which is writers-gated; node-config and
-# script-console mutation are never served. Set readOnly: true to revert.
+# authenticated user, except get_item_config and search_item_configs (config.xml), which are
+# writers-gated; node-config and script-console mutation are never served. Set readOnly: true to revert.
 readOnly: false
 enableOperate: true
 
-# OAuth2 resource-server auth against Authentik (Duo-backed). The server validates
+# OAuth2 resource-server auth against Authentik (JumpCloud-backed). The server validates
 # bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the
 # Authentik client_id (Authentik stamps aud = client_id, as the headlamp client does).
 oidc:

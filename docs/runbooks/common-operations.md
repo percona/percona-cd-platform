@@ -44,9 +44,8 @@ How the change propagates:
   change waits for the next instance replacement (boot re-fetches S3 to
   disk).
 - A plain JVM restart re-runs the disk copy, which is stale until a
-  replacement or a resync. Only masters that set
-  `init_groovy_sync_schedule` get a periodic S3-to-disk resync
-  (currently `cloud`, every 30 minutes).
+  replacement or a resync. Every EC2 master resyncs S3 to disk every
+  30 minutes (`init_groovy_sync_schedule`).
 
 Probe build parked on "doesn't have label": the label is fine, the
 worker cannot launch. The EC2 plugin reacts to demand within seconds,
@@ -58,9 +57,10 @@ spot headroom.
 
 ## Worker template on the in-cluster master
 
-ps3-k8s has no init.groovy.d. Edit the catalog under
+Clouds on ps3-k8s come only from the catalog. Edit
 `resources/jenkins/clouds-catalog/` (overlay `masters/ps3.yaml`), run
-`just clouds-render-check`, merge, then sync inside a window:
+`scripts/render-clouds.py apply ps3` to regenerate the `ps3-clouds` block,
+check with `just clouds-render-check`, merge, then sync inside a window:
 `argocd app sync jenkins-ps3-k8s`
 ([ADR 0025](../adr/0025-singleton-controller-rollout-gating.md)). JCasC
 hot-reloads clouds, no pod restart.

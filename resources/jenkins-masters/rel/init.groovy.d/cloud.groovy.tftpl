@@ -17,8 +17,22 @@ logger.info("Cloud init started")
 Jenkins jenkins = Jenkins.getInstance()
 
 netMap = [:]
+netMap['eu-west-1a'] = 'subnet-02fd2d068c14505a2' // TF VPC vpc-0216bcc2777ad6780 (10.199.0.0/24)
 netMap['eu-west-1b'] = 'subnet-0ceb482387d4f3861' // TF VPC vpc-0216bcc2777ad6780
 netMap['eu-west-1c'] = 'subnet-0fd9ecce73cef8c48' // TF VPC vpc-0216bcc2777ad6780
+
+// Launch subnets for the classic EC2 templates. The plugin round-robins each
+// launch request over a comma-separated subnet list (one multi-instance request
+// still lands in one AZ), so spot workers spread across the three AZ pools and
+// one reclaiming pool no longer takes every worker of a label. The rotation
+// counter lives per template and restarts at the first entry on every reload,
+// so each template starts at a different AZ to keep first launches from piling
+// into one.
+subnetRing = [netMap['eu-west-1b'], netMap['eu-west-1c'], netMap['eu-west-1a']]
+String subnetsFor(String OSType) {
+    int start = Math.abs(OSType.hashCode()) % subnetRing.size()
+    return (subnetRing.drop(start) + subnetRing.take(start)).join(',')
+}
 
 imageMap = [:]
 imageMap['eu-west-1a.docker'] = 'ami-091a906f2e1e40076'
@@ -30,7 +44,6 @@ imageMap['eu-west-1a.min-amazon-2-x64'] = 'ami-091a906f2e1e40076'
 
 imageMap['eu-west-1a.min-centos-7-x64']  = 'ami-00d464afa64e1fc69'
 imageMap['eu-west-1a.fips-centos-7-x64'] = 'ami-00d464afa64e1fc69'
-imageMap['eu-west-1a.min-centos-8-x64']  = 'ami-0a75a5a43b05b4d5f'
 imageMap['eu-west-1a.min-ol-8-x64']      = 'ami-0f31520cb83bd0301'
 imageMap['eu-west-1a.min-ol-9-x64']      = 'ami-04e2c29c7de5e0f5a'
 imageMap['eu-west-1a.min-al2023-x64']    = 'ami-091a906f2e1e40076'
@@ -44,9 +57,6 @@ imageMap['eu-west-1a.min-noble-x64']     = 'ami-0776c814353b4814d'
 imageMap['eu-west-1a.min-resolute-x64']     = 'ami-0de864d6a3bd20ea8'
 imageMap['eu-west-1a.min-focal-x64']     = 'ami-051d5c7c7ec9cf96c'
 imageMap['eu-west-1a.min-bionic-x64']    = 'ami-027ceacf6a9f484c3'
-imageMap['eu-west-1a.min-hirsute-x64-zenfs'] = 'ami-02469e1cc9f95b137'
-imageMap['eu-west-1a.min-focal-x64-zenfs']   = 'ami-05a657c9227900694'
-imageMap['eu-west-1a.min-bionic-x64-zenfs']  = 'ami-02d7fe93ba8353d4e'
 
 imageMap['eu-west-1b.docker'] = imageMap['eu-west-1a.docker']
 imageMap['eu-west-1b.docker-32gb'] = imageMap['eu-west-1a.docker-32gb']
@@ -59,7 +69,6 @@ imageMap['eu-west-1b.fips-centos-7-x64'] = imageMap['eu-west-1a.fips-centos-7-x6
 
 imageMap['eu-west-1b.min-centos-7-x64'] = imageMap['eu-west-1a.min-centos-7-x64']
 imageMap['eu-west-1b.fips-centos-7-x64'] = imageMap['eu-west-1a.fips-centos-7-x64']
-imageMap['eu-west-1b.min-centos-8-x64'] = imageMap['eu-west-1a.min-centos-8-x64']
 imageMap['eu-west-1b.min-ol-8-x64']     = imageMap['eu-west-1a.min-ol-8-x64']
 imageMap['eu-west-1b.min-ol-9-x64']     = imageMap['eu-west-1a.min-ol-9-x64']
 imageMap['eu-west-1b.min-al2023-x64']   = imageMap['eu-west-1a.min-al2023-x64']
@@ -73,9 +82,6 @@ imageMap['eu-west-1b.min-noble-x64']    = imageMap['eu-west-1a.min-noble-x64']
 imageMap['eu-west-1b.min-resolute-x64']    = imageMap['eu-west-1a.min-resolute-x64']
 imageMap['eu-west-1b.min-focal-x64']    = imageMap['eu-west-1a.min-focal-x64']
 imageMap['eu-west-1b.min-bionic-x64']   = imageMap['eu-west-1a.min-bionic-x64']
-imageMap['eu-west-1b.min-hirsute-x64-zenfs'] = imageMap['eu-west-1a.min-hirsute-x64-zenfs']
-imageMap['eu-west-1b.min-focal-x64-zenfs'] = imageMap['eu-west-1a.min-focal-x64-zenfs']
-imageMap['eu-west-1b.min-bionic-x64-zenfs']  = imageMap['eu-west-1a.min-bionic-x64-zenfs']
 
 imageMap['eu-west-1c.docker'] = imageMap['eu-west-1a.docker']
 imageMap['eu-west-1c.docker-32gb'] = imageMap['eu-west-1a.docker-32gb']
@@ -87,7 +93,6 @@ imageMap['eu-west-1c.min-centos-7-x64'] = imageMap['eu-west-1a.min-centos-7-x64'
 imageMap['eu-west-1c.fips-centos-7-x64'] = imageMap['eu-west-1a.fips-centos-7-x64']
 
 imageMap['eu-west-1c.min-centos-7-x64'] = imageMap['eu-west-1a.min-centos-7-x64']
-imageMap['eu-west-1c.min-centos-8-x64'] = imageMap['eu-west-1a.min-centos-8-x64']
 imageMap['eu-west-1c.min-ol-8-x64']     = imageMap['eu-west-1a.min-ol-8-x64']
 imageMap['eu-west-1c.min-ol-9-x64']     = imageMap['eu-west-1a.min-ol-9-x64']
 imageMap['eu-west-1c.min-al2023-x64']   = imageMap['eu-west-1a.min-al2023-x64']
@@ -101,9 +106,6 @@ imageMap['eu-west-1c.min-noble-x64']    = imageMap['eu-west-1a.min-noble-x64']
 imageMap['eu-west-1c.min-resolute-x64']    = imageMap['eu-west-1a.min-resolute-x64']
 imageMap['eu-west-1c.min-focal-x64']    = imageMap['eu-west-1a.min-focal-x64']
 imageMap['eu-west-1c.min-bionic-x64']   = imageMap['eu-west-1a.min-bionic-x64']
-imageMap['eu-west-1c.min-hirsute-x64-zenfs'] = imageMap['eu-west-1a.min-hirsute-x64-zenfs']
-imageMap['eu-west-1c.min-focal-x64-zenfs'] = imageMap['eu-west-1a.min-focal-x64-zenfs']
-imageMap['eu-west-1c.min-bionic-x64-zenfs']  = imageMap['eu-west-1a.min-bionic-x64-zenfs']
 
 imageMap['eu-west-1a.docker-32gb-aarch64']  = 'ami-0b24063151d1c59e7'
 imageMap['eu-west-1a.docker-64gb-aarch64']  = 'ami-0b24063151d1c59e7'
@@ -137,7 +139,7 @@ imageMap['eu-west-1c.min-trixie-aarch64']   = imageMap['eu-west-1a.min-trixie-aa
 priceMap = [:]
 priceMap['t2.small'] = '0.02'    // type=t2.small, vCPU=1, memory=2GiB, saving=68%, interruption='<5%', price=0.008000
 priceMap['c5.xlarge'] = '0.15'   // type=c5.xlarge, vCPU=4, memory=8GiB, saving=58%, interruption='<5%', price=0.086400
-priceMap['m6a.4xlarge'] = '0.78' // type=m6a.4xlarge, vCPU=16, memory=64GiB, on-demand=0.7704, 7-day spot max 0.4732 (2026-09-02). Bid at on-demand so spot is never rejected as price-too-low
+priceMap['m6i.4xlarge'] = '0.86' // type=m6i.4xlarge, vCPU=16, memory=64GiB, on-demand=0.856, 7-day spot max 0.458 (2026-10-16). Bid at on-demand so spot is never rejected as price-too-low
 priceMap['r6a.4xlarge'] = '1.02' // bid at on-demand (1.0152) so spot is never rejected as price-too-low, 7-day spot max was 0.57 against the old bid
 priceMap['i4i.2xlarge'] = '0.32' // type=i4i.2xlarge, vCPU=8, memory=64GiB, saving=68%, interruption='<5%', price=0.248900
 priceMap['i3en.2xlarge'] = '1.00' // bid at on-demand (1.00) so spot is never rejected as price-too-low, 7-day spot max was 0.43 against the old bid
@@ -158,7 +160,6 @@ userMap['min-resolute-x64']     = 'ubuntu'
 userMap['min-focal-x64']     = 'ubuntu'
 userMap['min-bionic-x64']    = 'ubuntu'
 userMap['min-centos-7-x64']  = 'centos'
-userMap['min-centos-8-x64']  = 'centos'
 userMap['min-ol-8-x64']      = 'ec2-user'
 userMap['min-ol-9-x64']      = 'ec2-user'
 userMap['min-al2023-x64']    = 'ec2-user'
@@ -168,9 +169,6 @@ userMap['min-buster-x64']    = 'admin'
 userMap['min-bullseye-x64']  = 'admin'
 userMap['min-bookworm-x64']  = 'admin'
 userMap['min-trixie-x64']    = 'admin'
-userMap['min-hirsute-x64-zenfs']    = 'ubuntu'
-userMap['min-focal-x64-zenfs']    = 'ubuntu'
-userMap['min-bionic-x64-zenfs']   = 'ubuntu'
 
 userMap['docker-32gb-aarch64'] = userMap['docker']
 userMap['docker-64gb-aarch64'] = userMap['docker']
@@ -207,7 +205,9 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. AL2023
+    # carries Corretto 21.
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
     sudo yum -y remove awscli
 
@@ -288,13 +288,36 @@ initMap['micro-amazon'] = '''
         sleep 1
         echo try again
     done
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. AL2023
+    # carries Corretto 21 and OL8/OL9 carry OpenJDK 21 in AppStream. CentOS 7
+    # and CentOS 8 track frozen vault repos with no Java 21 package, so they
+    # get a pinned Temurin 21 JRE symlinked into /usr/local/bin (first on the
+    # SSH launcher PATH).
     if [[ -f /etc/os-release ]] && . /etc/os-release && [[ "$${ID}" == "amzn" ]]; then
         if command -v amazon-linux-extras >/dev/null 2>&1; then
             sudo amazon-linux-extras install epel -y
         fi
-        sudo yum -y install java-17-amazon-corretto-headless tzdata-java || :
+        sudo yum -y install java-21-amazon-corretto-headless tzdata-java || :
     else
-        sudo yum -y install java-17-openjdk-headless tzdata-java || :
+        sudo yum -y install java-21-openjdk-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
+    fi
+    if ! java -version 2>&1 | grep -q 'version "21'; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
     fi
     sudo yum -y install git || :
     sudo yum -y install aws-cli || :
@@ -304,7 +327,6 @@ initMap['min-amazon-2-x64']  = initMap['micro-amazon']
 initMap['min-al2023-x64']    = initMap['micro-amazon']
 initMap['min-centos-7-x64']  = initMap['micro-amazon']
 initMap['fips-centos-7-x64'] = initMap['micro-amazon']
-initMap['min-centos-8-x64']  = initMap['micro-amazon']
 initMap['min-ol-8-x64']      = initMap['micro-amazon']
 initMap['min-ol-9-x64']      = initMap['micro-amazon']
 
@@ -357,10 +379,37 @@ initMap['min-bionic-x64'] = '''
         sleep 1
         echo try again
     done
-    until sudo apt-get -y install openjdk-17-jre-headless git; do
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. jammy,
+    # noble and resolute carry openjdk-21 in their own archives. bionic and
+    # focal keep openjdk-17 for tooling and get a pinned Temurin 21 JRE
+    # symlinked into /usr/local/bin (first on the SSH launcher PATH).
+    . /etc/os-release
+    case "$${VERSION_CODENAME}" in
+        jammy|noble|resolute) JAVA_VER="openjdk-21-jre-headless" ;;
+        *) JAVA_VER="openjdk-17-jre-headless" ;;
+    esac
+    until sudo apt-get -y install $${JAVA_VER} git curl ca-certificates; do
         sleep 1
         echo try again
     done
+    if ! java -version 2>&1 | grep -q 'version "21'; then
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
+    fi
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 initMap['min-buster-x64'] = '''
@@ -380,7 +429,9 @@ initMap['min-buster-x64'] = '''
 
     echo '10.30.6.9 repo.ci.percona.com' | sudo tee -a /etc/hosts
 
-    sudo sed -i '/buster-backports/ s/cdn-aws.deb.debian.org/archive.debian.org/' /etc/apt/sources.list
+    # Debian moved buster and its updates, security and backports suites to
+    # archive.debian.org, so every buster source points there.
+    sudo sed -i -E '/ buster[-/a-z]* / s#https?://(cdn-aws.deb.debian.org|deb.debian.org|security.debian.org)#http://archive.debian.org#' /etc/apt/sources.list
     sudo sed -i '/bullseye-backports/ s/cdn-aws.deb.debian.org/archive.debian.org/' /etc/apt/sources.list
 
     until sudo apt-get update; do
@@ -389,8 +440,10 @@ initMap['min-buster-x64'] = '''
     done
 
     DEB_VER=$(lsb_release -sc)
-    # Java version based on Debian/Ubuntu version
-    if [[ $${DEB_VER} == "trixie" ]]; then
+    # Jenkins 2.555.1+ requires Java 21 on the agent remoting JVM. trixie,
+    # jammy, noble and resolute carry openjdk-21 in their own archives. The
+    # rest keep openjdk-17 for tooling and get a pinned Temurin 21 JRE below.
+    if [[ $${DEB_VER} == "trixie" ]] || [[ $${DEB_VER} == "jammy" ]] || [[ $${DEB_VER} == "noble" ]] || [[ $${DEB_VER} == "resolute" ]]; then
         JAVA_VER="openjdk-21-jre-headless"
     else
         JAVA_VER="openjdk-17-jre-headless"
@@ -405,6 +458,29 @@ initMap['min-buster-x64'] = '''
         sudo apt-get -y install $${JAVA_VER} git
     fi
 
+    # bookworm, bullseye and buster ship no openjdk-21 package, so the agent
+    # JVM is a pinned Temurin 21 JRE symlinked into /usr/local/bin (first on
+    # the SSH launcher PATH). Only remoting moves to 21.
+    if ! java -version 2>&1 | grep -q 'version "21'; then
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -y install curl ca-certificates
+        if [ "$(uname -m)" = "aarch64" ]; then
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12%2B8/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.12_8.tar.gz"
+            T21_SHA="5f9c96b656827b9d14ebeda7739e25be554fa6d25669b03847c1df6e869c0679"
+        else
+            T21_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+            T21_SHA="2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500"
+        fi
+        until curl -fsSL -o /tmp/temurin-21.tar.gz "$T21_URL"; do
+            sleep 1
+            echo try again
+        done
+        echo "$T21_SHA  /tmp/temurin-21.tar.gz" | sha256sum -c
+        sudo mkdir -p /opt/temurin-21
+        sudo tar -xzf /tmp/temurin-21.tar.gz -C /opt/temurin-21 --strip-components=1
+        sudo ln -sf /opt/temurin-21/bin/java /usr/local/bin/java
+        /opt/temurin-21/bin/java -version
+    fi
+
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
 initMap['min-jammy-x64'] = initMap['min-bionic-x64']
@@ -414,9 +490,6 @@ initMap['min-focal-x64'] = initMap['min-bionic-x64']
 initMap['min-bookworm-x64'] = initMap['min-buster-x64']
 initMap['min-bullseye-x64'] = initMap['min-buster-x64']
 initMap['min-trixie-x64']   = initMap['min-buster-x64']
-initMap['min-hirsute-x64-zenfs'] = initMap['min-bionic-x64']
-initMap['min-focal-x64-zenfs'] = initMap['min-bionic-x64']
-initMap['min-bionic-x64-zenfs'] = initMap['min-bionic-x64']
 
 initMap['docker-32gb-aarch64'] = initMap['docker']
 initMap['docker-64gb-aarch64'] = initMap['docker']
@@ -430,7 +503,7 @@ initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 
 capMap = [:]
 capMap['c5.xlarge']    = '60'
-capMap['m6a.4xlarge'] = '40'
+capMap['m6i.4xlarge'] = '40'
 capMap['t2.small']     = '10' // micro-amazon
 capMap['r6a.4xlarge']   = '40'
 capMap['i4i.2xlarge']  = '40'
@@ -442,11 +515,10 @@ capMap['m7g.4xlarge'] = '20'
 typeMap = [:]
 typeMap['micro-amazon']      = 't2.small'
 typeMap['docker']            = 'c5.xlarge'
-typeMap['docker-32gb']       = 'm6a.4xlarge' // g4ad.4xlarge spot no longer fulfills in eu-west-1, every launch fell back to on-demand
+typeMap['docker-32gb']       = 'm6i.4xlarge' // m6a.4xlarge spot placement score is 1/10 in every eu-west-1 AZ and its workers were reclaimed mid-build, m6i scores 3/10
 typeMap['docker-64gb']       = typeMap['docker-32gb']
 typeMap['docker2']           = 'r6a.4xlarge'
 typeMap['min-centos-7-x64']  = typeMap['docker-32gb']
-typeMap['min-centos-8-x64']  = typeMap['min-centos-7-x64']
 typeMap['min-ol-8-x64']      = typeMap['min-centos-7-x64']
 typeMap['min-ol-9-x64']      = 'i3en.2xlarge'
 typeMap['min-rhel-10-x64']   = typeMap['docker']
@@ -462,9 +534,6 @@ typeMap['min-bookworm-x64']  = typeMap['min-centos-7-x64']
 typeMap['min-bullseye-x64']  = typeMap['min-centos-7-x64']
 typeMap['min-buster-x64']    = typeMap['min-centos-7-x64']
 typeMap['min-trixie-x64']    = typeMap['docker']
-typeMap['min-hirsute-x64-zenfs'] = typeMap['min-centos-7-x64']
-typeMap['min-focal-x64-zenfs'] = typeMap['min-centos-7-x64']
-typeMap['min-bionic-x64-zenfs'] = typeMap['min-centos-7-x64']
 
 typeMap['docker-32gb-aarch64'] = 'm6g.2xlarge'
 typeMap['docker-64gb-aarch64'] = 'm7g.4xlarge'
@@ -490,7 +559,6 @@ execMap['min-noble-x64']     = '1'
 execMap['min-resolute-x64']     = '1'
 execMap['min-centos-7-x64']  = '1'
 execMap['fips-centos-7-x64'] = '1'
-execMap['min-centos-8-x64']  = '1'
 execMap['min-ol-8-x64']      = '1'
 execMap['min-ol-9-x64']      = '1'
 execMap['min-rhel-10-x64']   = '1'
@@ -499,9 +567,6 @@ execMap['min-buster-x64']    = '1'
 execMap['min-bullseye-x64']  = '1'
 execMap['min-bookworm-x64']  = '1'
 execMap['min-trixie-x64']    = '1'
-execMap['min-hirsute-x64-zenfs'] = '1'
-execMap['min-focal-x64-zenfs'] = '1'
-execMap['min-bionic-x64-zenfs'] = '1'
 
 execMap['docker-32gb-aarch64'] = execMap['docker']
 execMap['docker-64gb-aarch64'] = execMap['docker']
@@ -516,7 +581,7 @@ execMap['min-trixie-aarch64']   = '1'
 devMap = [:]
 devMap['docker']                = '/dev/xvda=:8:true:gp2,/dev/xvdd=:320:true:gp2'
 devMap['docker2']               = '/dev/xvda=:8:true:gp2,/dev/xvdd=:220:true:gp2'
-devMap['docker-32gb']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s, m6a has no instance store
+devMap['docker-32gb']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:500:true:gp3:6000::500' // 500 GB at 6000 IOPS / 500 MiB/s, m6i has no instance store
 devMap['docker-64gb']           = devMap['docker-32gb']
 devMap['micro-amazon']          = devMap['docker']
 devMap['min-amazon-2-x64']      = '/dev/xvda=:30:true:gp2,/dev/xvdd=:220:true:gp2'
@@ -527,7 +592,6 @@ devMap['min-noble-x64']         = devMap['min-bionic-x64']
 devMap['min-resolute-x64']         = devMap['min-bionic-x64']
 devMap['min-centos-7-x64']      = devMap['min-bionic-x64']
 devMap['fips-centos-7-x64']     = devMap['min-bionic-x64']
-devMap['min-centos-8-x64']      = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
 devMap['min-ol-8-x64']          = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
 devMap['min-ol-9-x64']          = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
 devMap['min-rhel-10-x64']       = '/dev/sda1=:30:true:gp3,/dev/sdd=:220:true:gp3'
@@ -536,9 +600,6 @@ devMap['min-buster-x64']        = '/dev/xvda=:30:true:gp2,/dev/sdd=:220:true:gp2
 devMap['min-bullseye-x64']      = '/dev/xvda=:30:true:gp2,/dev/sdd=:220:true:gp2'
 devMap['min-bookworm-x64']      = '/dev/xvda=:30:true:gp2,/dev/sdd=:220:true:gp2'
 devMap['min-trixie-x64']        = '/dev/xvda=:30:true:gp3,/dev/sdd=:220:true:gp3'
-devMap['min-hirsute-x64-zenfs'] = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
-devMap['min-focal-x64-zenfs']   = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
-devMap['min-bionic-x64-zenfs']  = '/dev/sda1=:30:true:gp2,/dev/sdd=:220:true:gp2'
 
 devMap['docker-32gb-aarch64'] = devMap['docker']
 devMap['docker-64gb-aarch64'] = devMap['docker']
@@ -564,7 +625,6 @@ labelMap['min-noble-x64']     = ''
 labelMap['min-resolute-x64']     = ''
 labelMap['min-centos-7-x64']  = ''
 labelMap['fips-centos-7-x64'] = ''
-labelMap['min-centos-8-x64']  = ''
 labelMap['min-ol-8-x64']      = ''
 labelMap['min-ol-9-x64']      = ''
 labelMap['min-rhel-10-x64']   = ''
@@ -573,9 +633,6 @@ labelMap['min-buster-x64']    = ''
 labelMap['min-bullseye-x64']  = ''
 labelMap['min-bookworm-x64']  = ''
 labelMap['min-trixie-x64']    = ''
-labelMap['min-hirsute-x64-zenfs']  = ''
-labelMap['min-focal-x64-zenfs']    = ''
-labelMap['min-bionic-x64-zenfs']   = ''
 
 labelMap['docker-32gb-aarch64'] = ''
 labelMap['docker-64gb-aarch64'] = ''
@@ -601,7 +658,6 @@ jvmoptsMap['min-noble-x64']     = jvmoptsMap['docker']
 jvmoptsMap['min-resolute-x64']     = jvmoptsMap['docker']
 jvmoptsMap['min-centos-7-x64']  = jvmoptsMap['docker']
 jvmoptsMap['fips-centos-7-x64'] = jvmoptsMap['docker']
-jvmoptsMap['min-centos-8-x64']  = jvmoptsMap['docker']
 jvmoptsMap['min-ol-8-x64']      = jvmoptsMap['docker']
 jvmoptsMap['min-ol-9-x64']      = jvmoptsMap['docker']
 jvmoptsMap['min-rhel-10-x64']   = jvmoptsMap['docker']
@@ -610,9 +666,6 @@ jvmoptsMap['min-buster-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-bullseye-x64']  = jvmoptsMap['docker']
 jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
 jvmoptsMap['min-trixie-x64']    = jvmoptsMap['min-bookworm-x64']
-jvmoptsMap['min-hirsute-x64-zenfs']  = jvmoptsMap['docker']
-jvmoptsMap['min-focal-x64-zenfs']    = jvmoptsMap['docker']
-jvmoptsMap['min-bionic-x64-zenfs']   = jvmoptsMap['docker']
 
 jvmoptsMap['docker-32gb-aarch64'] = jvmoptsMap['docker']
 jvmoptsMap['docker-64gb-aarch64'] = jvmoptsMap['docker']
@@ -645,7 +698,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         new UnixData('', '', '', '22', ''),         // AMITypeData amiType
         jvmoptsMap[OSType],                         // String jvmopts
         false,                                      // boolean stopOnTerminate
-        netMap[AZ],                                 // String subnetId
+        subnetsFor(OSType),                         // String subnetId (round-robin over the three AZ subnets, staggered start)
         [
             new EC2Tag('Name', 'jenkins-rel-' + OSType),
             new EC2Tag('iit-billing-tag', 'jenkins-rel-worker')
@@ -707,14 +760,10 @@ String region = 'eu-west-1'
             getTemplate('min-ol-9-x64',          "$${region}$${it}"),
             getTemplate('min-rhel-10-x64',       "$${region}$${it}"),
             getTemplate('min-al2023-x64',        "$${region}$${it}"),
-            getTemplate('min-centos-8-x64',      "$${region}$${it}"),
             getTemplate('min-centos-7-x64',      "$${region}$${it}"),
             getTemplate('min-bullseye-x64',      "$${region}$${it}"),
             getTemplate('min-bookworm-x64',      "$${region}$${it}"),
             getTemplate('min-trixie-x64',        "$${region}$${it}"),
-            // getTemplate('min-hirsute-x64-zenfs', "$${region}$${it}"),
-            getTemplate('min-focal-x64-zenfs',   "$${region}$${it}"),
-            getTemplate('min-bionic-x64-zenfs',  "$${region}$${it}"),
             // docker-32gb-aarch64 retired from the classic plugin: the arm-graviton
             // Fleet (ec2FleetCloud.groovy) is the sole provider for that label, so the
             // two providers cannot race the same queue item.

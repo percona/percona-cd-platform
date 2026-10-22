@@ -2131,8 +2131,8 @@
         },
         {
           "id": 402,
-          "title": "DC circuit breaker transitions (5m rate, per location)",
-          "description": "Rate of CLOSED<->OPEN<->HALF_OPEN transitions per DC location. Sustained non-zero values indicate churn (cycling between failing and probing). The `arch` dim (v25+) is collapsed via `by (master, location, to)`.",
+          "title": "DC circuit breaker transitions and stale closes (5m rate, per location)",
+          "description": "Transitions come from provisioning outcomes. Stale closes (v103.percona.32+) are separate: a HALF_OPEN or idle OPEN breaker with no recorded outcome for 30 minutes closes on the one-minute sweep or at load, and that close is not counted as a transition.",
           "type": "timeseries",
           "datasource": {
             "type": "prometheus",
@@ -2191,6 +2191,15 @@
               },
               "expr": "sum by (master, location, to) (rate(hetzner_dc_circuit_breaker_transitions_total{master=~\"$master\",location=~\"$location\",arch=~\"$arch\"}[5m]))",
               "legendFormat": "{{master}} {{location}} ->{{to}}"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "sum by (master, location) (rate(hetzner_dc_health_stale_half_open_closes_total{master=~\"$master\",location=~\"$location\",arch=~\"$arch\"}[5m]))",
+              "legendFormat": "{{master}} {{location}} stale close"
             }
           ]
         },
@@ -2261,6 +2270,146 @@
               "expr": "max by (master, location, arch) (hetzner_dc_circuit_breaker_consecutive_failures{master=~\"$master\",location=~\"$location\",arch=~\"$arch\"})",
               "legendFormat": "{{master}} {{location}} {{arch}}",
               "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 611,
+          "title": "DC breakers restored at last JVM start",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "description": "Breakers the plugin reloaded from hetzner-dc-health.xml at the most recent JVM start.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 70
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 20,
+                "spanNulls": true,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "max by (master) (hetzner_dc_health_loaded_breakers{master=~\"$master\"})",
+              "legendFormat": "{{master}}"
+            }
+          ]
+        },
+        {
+          "id": 612,
+          "title": "DC breaker state saves (5m rate)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "description": "Successful writes of hetzner-dc-health.xml.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 70
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 20,
+                "spanNulls": true,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "sum by (master) (rate(hetzner_dc_health_saves_total{master=~\"$master\"}[5m]))",
+              "legendFormat": "{{master}}"
             }
           ]
         }
@@ -2523,6 +2672,76 @@
               }
             }
           }
+        },
+        {
+          "id": 613,
+          "title": "API retries (5m rate)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "description": "Hetzner API retry attempts, counted before each retry sleep.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 59
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 20,
+                "spanNulls": true,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "expr": "sum by (master, reason) (rate(hetzner_api_retries_total{master=~\"$master\"}[5m]))",
+              "legendFormat": "{{master}} {{reason}}"
+            }
+          ]
         }
       ]
     },
@@ -2697,6 +2916,15 @@
               "refId": "L",
               "expr": "sum(increase(hetzner_dc_health_save_failures_total{master=~\"$master\"}[1h])) or vector(0)",
               "legendFormat": "DC-health save failures"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "M",
+              "expr": "sum(increase(hetzner_dc_health_stale_half_open_closes_total{master=~\"$master\"}[1h])) or vector(0)",
+              "legendFormat": "DC stale closes"
             }
           ]
         },

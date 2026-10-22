@@ -27,7 +27,7 @@ locals {
   worker_logical = var.worker_role_legacy_naming ? "slave" : "worker"
   worker_name    = "${var.short_name}-${local.worker_logical}"
 
-  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) for psmdb and pg.
+  # CF used AZ index 1 (B) + 2 (C); extra_subnet_a adds 0 (A) where a master needs it.
   subnet_indices = merge(
     { "b" = 1, "c" = 2 },
     var.extra_subnet_a ? { "a" = 0 } : {},
@@ -430,7 +430,8 @@ resource "aws_iam_role" "worker" {
 # EC2 tag perms always; conditional extras per caller: S3 cache
 # (cache_bucket_name), Packer amazon-ebs lifecycle (worker_ami_builder),
 # ECR read + public-ECR auth (worker_ecr_read), Bedrock invoke on Anthropic
-# models (worker_bedrock_invoke).
+# models (worker_bedrock_invoke), Auto Scaling activity reads for CI reports
+# (worker_ci_insights_read).
 data "aws_iam_policy_document" "worker" {
   statement {
     sid    = "EC2Tags"
@@ -550,6 +551,23 @@ data "aws_iam_policy_document" "worker" {
         "arn:aws:bedrock:*::foundation-model/anthropic.*",
         "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*anthropic.*",
       ]
+    }
+  }
+
+  # Auto Scaling activity reads (worker_ci_insights_read): the weekly jobs
+  # digest reports agent-fleet launches, spot interruptions and capacity
+  # failures from the fleet ASGs' activity history. Describe* calls take no
+  # resource-level scope, and both are read-only metadata.
+  dynamic "statement" {
+    for_each = var.worker_ci_insights_read ? [1] : []
+    content {
+      sid    = "AutoScalingActivityRead"
+      effect = "Allow"
+      actions = [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeScalingActivities",
+      ]
+      resources = ["*"]
     }
   }
 
@@ -894,6 +912,7 @@ locals {
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""
     init_groovy_files       = local.init_groovy_sha256
     jvm_memory_opts         = var.jvm_memory_opts
+    jvm_extra_opts          = var.jvm_extra_opts == "" ? "" : " ${var.jvm_extra_opts}"
   })
 }
 
@@ -1091,6 +1110,7 @@ resource "aws_instance" "master" {
   lifecycle {
     # AMI is owned by the launch template ($Latest); ignore drift here so
     # an LT version bump (userdata edit) doesn't force instance replacement.
-    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version]
+    # PerconaCreatedBy is added by the org tagger after launch, not by Terraform.
+    ignore_changes = [ami, user_data, user_data_base64, launch_template[0].version, tags["PerconaCreatedBy"]]
   }
 }

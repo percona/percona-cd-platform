@@ -24,7 +24,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 
 | Topic | Doc |
 |---|---|
-| Authentication (Duo SAML → Authentik → OIDC) | [`authentication.md`](authentication.md) |
+| Authentication (JumpCloud SAML → Authentik → OIDC) | [`authentication.md`](authentication.md) |
 | Pod Identity (vs IRSA) | [`pod-identity.md`](pod-identity.md) |
 | EKS hardening | [`eks-hardening.md`](eks-hardening.md) |
 | Red-team reviews | [`security-review-2026-06-11.md`](security-review-2026-06-11.md) (Authentik posture), [`security-review-2026-05-07.md`](security-review-2026-05-07.md) |
@@ -64,6 +64,7 @@ Step-by-step procedures for operational tasks.
 - [`master-shell-access.md`](runbooks/master-shell-access.md): shell on a master (`just ssh`, SSM, EIP allow-list, ps3 kubectl)
 - [`migrate-ps3-to-eks.md`](runbooks/migrate-ps3-to-eks.md): moving a Jenkins master in-cluster (ps3 done, the EC2 master retired, see `decommission-ps3-ec2-master.md`)
 - [`mng-label-taint-changes.md`](runbooks/mng-label-taint-changes.md): apply MNG label/taint edits without a drain
+- [`ps3-aws-stash.md`](runbooks/ps3-aws-stash.md): rotate or reload the ps3 `AWS_STASH` access key
 - [`restore-mimir.md`](runbooks/restore-mimir.md): restore Mimir state from S3
 - [`rotate-acm.md`](runbooks/rotate-acm.md): rotate the ACM wildcard cert (stub)
 

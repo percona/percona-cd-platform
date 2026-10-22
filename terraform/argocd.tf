@@ -93,7 +93,7 @@ resource "helm_release" "argocd" {
       # admin.enabled: false — local 'admin' login form disabled after
       # SSO was validated end-to-end (browser flow + CLI). SSO-only path.
       #
-      # Recovery if Authentik / Duo / SAML SP cert is broken:
+      # Recovery if Authentik / JumpCloud / SAML SP cert is broken:
       #   kubectl -n argocd patch cm argocd-cm --type merge \
       #     -p '{"data":{"admin.enabled":"true"}}'
       #   kubectl -n argocd rollout restart deploy/argocd-server
@@ -321,7 +321,7 @@ resource "kubernetes_secret_v1" "argocd_cluster" {
       lgtm_push_tempo = var.lgtm_push_hostnames.tempo
 
       # Authentik bridge (HD-30780, replaces direct Grafana SAML since
-      # Grafana OSS lacks SAML support). Authentik talks SAML to Duo as
+      # Grafana OSS lacks SAML support). Authentik talks SAML to JumpCloud as
       # the SP, exposes OIDC inward to Grafana / future Jenkins masters.
       # IdP metadata is base64-encoded for safe transit through the
       # annotation → ApplicationSet valuesObject → Helm values pipeline

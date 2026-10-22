@@ -23,7 +23,6 @@ locals {
   # re-asserted (no provider default_tags on ASG-launched resources).
   fleet_tags = merge(
     var.tags,
-    var.tickets == "" ? {} : { tickets = var.tickets },
     {
       "iit-billing-tag" = "${var.short_name}-worker"
       "PerconaKeep"     = "True"

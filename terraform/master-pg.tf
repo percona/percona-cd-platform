@@ -20,7 +20,8 @@ module "pg" {
   master_profile          = "eks_observability"
   ssh_allowed_cidrs       = local.master_ssh_allowed_cidrs
   engineer_roster         = local.master_ssh_engineer_roster
-  jenkins_package_version = "2.541.3" # closes CVE-2026-27100 (pg is on 2.528.3)
+  jenkins_package_version = "2.568.3"
+  java_package            = "java-21-amazon-corretto-headless"
 
   # Live network shape. B/C are the module's own cidrsubnet() math; B2/C2
   # ride the secondary block.
@@ -104,7 +105,6 @@ module "pg_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_euc1.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
-  tickets                      = "PS-11179"
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not

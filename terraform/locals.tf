@@ -23,14 +23,14 @@ locals {
   # Authentik SAML IdP metadata. Source of truth is an SSM Parameter at
   #   /${cluster_name}/authentik/saml/idp_metadata
   # populated by the operator with `aws ssm put-parameter` (one-time;
-  # rotates only when Duo's signing cert rotates). TF reads it at apply
+  # rotates only when JumpCloud's signing cert rotates). TF reads it at apply
   # time via data.aws_ssm_parameter.authentik_saml_idp_metadata, base64-
   # encodes into the cluster-Secret annotation, and the Authentik chart
   # wrapper decodes into a ConfigMap that Authentik mounts. Empty string
   # when SAML is disabled — chart wrapper template no-ops in that case.
   #
   # Why SSM (not Secrets Manager): IdP metadata is public config —
-  # Duo's signing cert is the public half of the IdP signature. SSM
+  # JumpCloud's signing cert is the public half of the IdP signature. SSM
   # ParameterStore is the right home for this; Secrets Manager stays
   # for the SP private key + cert (which ARE secrets).
   #

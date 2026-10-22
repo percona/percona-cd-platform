@@ -116,6 +116,12 @@ variable "worker_bedrock_invoke" {
   default     = false
 }
 
+variable "worker_ci_insights_read" {
+  description = "Grant the worker role read-only Auto Scaling group and scaling-activity describes, so CI report jobs can show fleet launches, spot interruptions and capacity failures. Every job on the master's EC2 workers inherits it."
+  type        = bool
+  default     = false
+}
+
 variable "extra_master_inline_policies" {
   description = "Extra inline policies for the master role. Each entry is { name, json }."
   type = list(object({
@@ -196,7 +202,7 @@ variable "worker_role_legacy_naming" {
 }
 
 variable "extra_subnet_a" {
-  description = "Create an extra subnet in AZ index 0. Only psmdb and pg."
+  description = "Create an extra subnet in AZ index 0 for masters that need a third worker AZ."
   type        = bool
   default     = false
 }
@@ -307,6 +313,21 @@ variable "jvm_memory_opts" {
   validation {
     condition     = !can(regex("hetzner\\.rehydrate|durabletask", var.jvm_memory_opts))
     error_message = "jvm_memory_opts is the memory/GC knob only. The durabletask and hetzner.rehydrate flags are fleet-invariant and fixed in the template. Do not set them here."
+  }
+}
+
+variable "jvm_extra_opts" {
+  description = "Extra -D system properties for the Jenkins JVM, spliced into JAVA_OPTS after jvm_memory_opts in the eks_observability systemd override. For plugin and core settings that must survive a rebuild, e.g. the JUnit history lookup depth on psmdb. Memory flags stay in jvm_memory_opts and the durabletask/hetzner.rehydrate flags stay fixed in the template."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !can(regex("-Xm[sx]|-Xss", var.jvm_extra_opts))
+    error_message = "jvm_extra_opts takes -D properties only. Heap and stack sizes belong in jvm_memory_opts."
+  }
+  validation {
+    condition     = !can(regex("hetzner\\.rehydrate|durabletask", var.jvm_extra_opts))
+    error_message = "The durabletask and hetzner.rehydrate flags are fleet-invariant and fixed in the template. Do not set them here."
   }
 }
 

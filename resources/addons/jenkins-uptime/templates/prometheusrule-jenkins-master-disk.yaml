@@ -1,0 +1,53 @@
+{{/*
+Data-volume alerts for the EC2 masters. JENKINS_HOME lives on the /mnt
+volume, and a full /mnt keeps Jenkins from starting at all: every restart
+fails to write its configuration and the master flaps between starting and
+down. The series come from the master-side Alloy node exporter, pushed with
+the `master` external label. The selector is the masters inventory, so
+fenced clones stay out. The in-cluster controller keeps its home on a PVC and
+is not covered by these node_filesystem series.
+
+Synced to the Mimir ruler by the Alloy DS `mimir.rules.kubernetes`
+component, same path as prometheusrule-jenkins-uptime.yaml.
+*/}}
+{{- $masters := list }}
+{{- range .Values.masters }}
+{{- $masters = append $masters .master }}
+{{- end }}
+{{- $sel := printf "fstype=\"xfs\", mountpoint=\"/mnt\", master=~\"%s\"" (join "|" $masters) }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: jenkins-master-disk
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: jenkins-uptime
+    app.kubernetes.io/component: rules
+spec:
+  groups:
+    - name: jenkins-master-disk.rules
+      rules:
+        - record: jenkins:master_data_volume_used:percent
+          expr: 100 * max by (master) ((node_filesystem_size_bytes{ {{- $sel -}} } - node_filesystem_avail_bytes{ {{- $sel -}} }) / clamp_min(node_filesystem_size_bytes{ {{- $sel -}} }, 1))
+        - alert: JenkinsMasterDataVolumeFilling
+          expr: jenkins:master_data_volume_used:percent >= 85
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: The {{ "{{" }} $labels.master {{ "}}" }} data volume is {{ "{{" }} $value | printf "%.0f" {{ "}}" }}% full
+            description: >-
+              JENKINS_HOME on /mnt is filling. Find the largest jobs and build
+              logs, set or tighten build discarders, and prune old builds before
+              it reaches 95%. Runbook: percona-jenkins DISK_INVESTIGATION.
+        - alert: JenkinsMasterDataVolumeCritical
+          expr: jenkins:master_data_volume_used:percent >= 95
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: The {{ "{{" }} $labels.master {{ "}}" }} data volume is {{ "{{" }} $value | printf "%.0f" {{ "}}" }}% full, the next restart may fail
+            description: >-
+              A full /mnt stops Jenkins from writing its configuration, so the
+              next restart, planned or after an out-of-memory kill, leaves the
+              master down. Free space now or grow the volume in Terraform.

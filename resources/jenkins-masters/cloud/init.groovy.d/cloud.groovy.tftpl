@@ -85,7 +85,7 @@ initMap['docker'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
     sudo yum -y install npm --disableplugin=priorities
 
@@ -167,7 +167,7 @@ initMap['docker-32gb'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-openjdk-headless tzdata-java cronie unzip || :
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java cronie unzip || sudo yum -y install java-17-amazon-corretto-headless tzdata-java cronie unzip || :
     sudo yum -y install git docker
 
     sudo systemctl enable crond
@@ -267,7 +267,7 @@ initMap['micro-amazon'] = '''
         sleep 1
         echo try again
     done
-    sudo yum -y install java-17-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-openjdk-headless tzdata-java || :
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java || sudo yum -y install java-17-amazon-corretto-headless tzdata-java || :
     sudo yum -y install git aws-cli || :
     sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
 '''
@@ -293,7 +293,7 @@ initMap['min-al2023-x64'] = '''
         echo try again
     done
 
-    sudo yum -y install java-17-amazon-corretto tzdata-java git docker p7zip cronie
+    sudo yum -y install java-21-amazon-corretto-headless tzdata-java git docker p7zip cronie
     sudo yum -y install npm --disableplugin=priorities
     sudo yum -y remove awscli
     sudo systemctl enable crond

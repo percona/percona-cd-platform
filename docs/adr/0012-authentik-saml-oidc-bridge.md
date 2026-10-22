@@ -1,6 +1,10 @@
 # 0012 — Authentik as Duo SAML → OIDC bridge
 
 **Status:** Accepted (2026-05-07)
+**Update (2026-09):** the IdP behind the SAML source moved from Duo to
+JumpCloud. Slugs, SP entity ID, and keypair names are unchanged. Current
+state in [authentication.md](../authentication.md). Body below is kept
+as written.
 **Amends:** [ADR 0010](0010-distributed-lgtm.md) (the "Auth at the edge"
 section there assumed Grafana would speak SAML to Duo directly; that path
 turned out to be Enterprise-only, which this ADR resolves).
