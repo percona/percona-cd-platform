@@ -30,6 +30,9 @@ spec:
             # Roll the Job's Pod template whenever the host list changes so the
             # next tick picks it up; an image rebuild (tag bump) rolls it too.
             checksum/hosts: {{ .Values.hosts | toYaml | sha256sum }}
+            # A run lasts under a minute. Keep Karpenter from removing the node
+            # mid-run, since backoffLimit 0 turns that kill into a failed run.
+            karpenter.sh/do-not-disrupt: "true"
         spec:
           serviceAccountName: {{ .Values.serviceAccount.name }}
           restartPolicy: Never
