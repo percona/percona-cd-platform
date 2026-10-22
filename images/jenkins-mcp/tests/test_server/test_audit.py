@@ -454,3 +454,32 @@ async def test_bad_arguments_log_error_detail_through_fastmcp(capture_audit, moc
     assert {'loc': 'fullname', 'type': 'missing_argument'} in record['error_detail']
     assert {'loc': 'job_name', 'type': 'unexpected_keyword_argument'} in record['error_detail']
     assert record['args'] == {'master': 'ps80', 'dropped_keys': ['job_name']}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('tool', 'is_write'), [('search_item_configs', False), ('stop_builds', True)])
+async def test_new_gated_tools_denied_without_writers_group(capture_audit, mocker, tool, is_write):
+    from fastmcp.exceptions import ToolError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    ctx = mocker.Mock()
+    ctx.message.name = tool
+    ctx.message.arguments = {'pattern': 'x', 'fullname_pattern': 'j'}
+    ctx.timestamp = datetime.now(UTC)
+    call_next = mocker.AsyncMock()
+
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    call_next.assert_not_called()
+    rec = json.loads(capture_audit[-1])
+    assert (rec['status'], rec['is_write']) == ('denied', is_write)
+
+
+def test_summarize_args_logs_stop_targets_not_other_item_fields():
+    summary = audit._summarize_args(
+        {'items': [{'fullname': 'j', 'number': 3, 'note': 'secret'}, {'fullname': 'k', 'number': 4}]}
+    )
+
+    assert summary == {'items': [{'fullname': 'j', 'number': 3}, {'fullname': 'k', 'number': 4}], 'items_count': 2}

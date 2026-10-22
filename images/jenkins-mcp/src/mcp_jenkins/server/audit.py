@@ -32,11 +32,12 @@ _CONFIG_TOOLS = frozenset({'set_node_config', 'run_groovy_script'})
 _MANAGE_TOOLS = frozenset({'create_item', 'set_item_config', 'delete_item'})
 # Build-lifecycle tools: served in operate mode AND gated to the writers group.
 # They trigger/replay/stop/cancel builds; they never update or delete job config.
-_OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'})
-# Config-XML read: get_item_config returns a job's raw config.xml, which routinely carries plaintext
-# secrets (e.g. the <authToken> "trigger builds remotely" token). It is served as a 'read' tool but
-# gated to the writers group so it is NOT exposed to every authenticated SSO user. See PS-11341.
-_CONFIG_READ_TOOLS = frozenset({'get_item_config'})
+_OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item'})
+# Config-XML reads: get_item_config returns a job's raw config.xml, which routinely carries plaintext
+# secrets (e.g. the <authToken> "trigger builds remotely" token), and search_item_configs greps many.
+# Both are served as 'read' tools but gated to the writers group so they are NOT exposed to every
+# authenticated SSO user. See PS-11341.
+_CONFIG_READ_TOOLS = frozenset({'get_item_config', 'search_item_configs'})
 # Every tool whose call requires the writers group: build lifecycle, job-config CRUD, config-write,
 # config read. _CONFIG_TOOLS (run_groovy_script, set_node_config) are normally never registered (they
 # are write-tagged and no mode serves them), but they are gated here too so a mode-filter regression
@@ -134,7 +135,13 @@ def _summarize_args(arguments: dict | None) -> dict:
             summary[key] = value
         elif key == 'data' and isinstance(value, dict):
             summary['data_keys'] = sorted(value.keys())  # build-parameter NAMES, never values
-        elif key != 'data':
+        elif key == 'items' and isinstance(value, list):
+            # stop_builds targets: job names and build numbers only, both already logged for stop_build.
+            summary['items'] = [
+                {'fullname': i.get('fullname'), 'number': i.get('number')} for i in value[:50] if isinstance(i, dict)
+            ]
+            summary['items_count'] = len(value)
+        elif key not in ('data', 'items'):
             dropped.append(str(key)[:_MAX_KEY_LEN])
     if dropped:
         summary['dropped_keys'] = sorted(dropped)[:_MAX_DROPPED_KEYS]

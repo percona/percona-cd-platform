@@ -15,6 +15,7 @@ _READ_SET = {
     'find_items',
     'get_item',
     'get_item_config',
+    'search_item_configs',
     'get_item_parameters',
     'get_running_builds',
     'get_build',
@@ -46,7 +47,7 @@ _READ_SET = {
     'list_archive_artifact',
     'extract_archive_artifact',
 }
-_OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'}
+_OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item'}
 _MANAGE_SET = _OPERATE_SET | {'create_item', 'set_item_config', 'delete_item'}
 
 

@@ -11,7 +11,7 @@ from mcp_jenkins.core.fleet import get_fleet
 from mcp_jenkins.core.scope import visible_masters
 from mcp_jenkins.server import mcp
 
-_OPERATE_TOOLS = ('build_item', 'replay_build', 'stop_build', 'cancel_queue_item')
+_OPERATE_TOOLS = ('build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item')
 _MANAGE_TOOLS = ('create_item', 'set_item_config', 'delete_item')
 
 # Curated catalog: (group heading, [(tool_name, description_line)...]). Lines are filtered to
@@ -44,6 +44,11 @@ _CATALOG = [
             ('find_items', '      every master you can reach at once (no master argument needed)'),
             ('get_item', 'get_item(fullname, master?)             one job/folder'),
             ('get_item_config', 'get_item_config(fullname, master?)      job config XML (jenkins-mcp-writers only)'),
+            (
+                'search_item_configs',
+                'search_item_configs(pattern, fullname_pattern, ...)   grep many job configs, matching lines only,',
+            ),
+            ('search_item_configs', '      secrets blanked (jenkins-mcp-writers only)'),
             ('get_item_parameters', 'get_item_parameters(fullname, master?)  the build parameters a job accepts'),
         ],
     ),
@@ -174,6 +179,10 @@ _CATALOG = [
             ),
             ('stop_build', 'stop_build(fullname, number, master?)              abort a running build'),
             (
+                'stop_builds',
+                'stop_builds(items=[{fullname, number}], master?)   abort up to 50 builds, a status per build',
+            ),
+            (
                 'cancel_queue_item',
                 'cancel_queue_item(id, master?)                     drop a queued (not-yet-running) build',
             ),
@@ -229,11 +238,13 @@ _SAMPLES_OPERATE = [
     '  "build with params"      -> build_item(fullname="<job>", build_type="buildWithParameters", data={"K":"V"})',
     '  "replay the last build"    -> replay_build(fullname="<job>")',
     '  "stop <job> build 123"     -> stop_build(fullname="<job>", number=123)',
+    '  "stop these 5 builds"      -> stop_builds(items=[{"fullname": "<job>", "number": 123}, ...])',
     '  "cancel queue item 45"     -> cancel_queue_item(id=45)',
 ]
 
 _SAMPLES_MANAGE = [
     '  "download a job config"  -> get_item_config(fullname="<job>")',
+    '  "which jobs set X?"      -> search_item_configs(pattern="UPLOAD_HOST", fullname_pattern="^pmm3-")',
     '  "create a job from XML"  -> create_item(fullname="<folder/job>", config_xml="<config.xml>")',
     '  "update a job config"    -> set_item_config(fullname="<job>", config_xml="<config.xml>")',
     '  "delete a job"           -> delete_item(fullname="<job>")',
@@ -295,7 +306,7 @@ async def get_readme() -> str:
         '',
         '## Access tiers',
         '  - Read (everyone): inspect jobs, builds, logs, nodes, queue, views across the whole fleet.',
-        '    Exception: get_item_config (raw config.xml) needs the jenkins-mcp-writers group, since',
+        '    Exception: get_item_config and search_item_configs (config.xml) need jenkins-mcp-writers, since',
         '    config.xml can carry plaintext secrets (e.g. the <authToken> trigger-builds-remotely token).',
         f'  - Operate (build lifecycle): build / replay / stop / cancel. {operate_status}',
         f'  - Manage (create / update / delete job definitions): {manage_status}',
@@ -338,8 +349,8 @@ async def get_readme() -> str:
         '  - get_all_items / query_items return a flat compact list capped by limit (total + truncated reported).',
         '  - On a big master, narrow with query_items(fullname_pattern=...) rather than raising limit.',
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
-        '  - Reads are open to any authenticated Percona user (JumpCloud SSO login); the one exception is',
-        '    get_item_config (raw config.xml), which needs the jenkins-mcp-writers group.',
+        '  - Reads are open to any authenticated Percona user (JumpCloud SSO login); the exceptions are',
+        '    get_item_config and search_item_configs (config.xml), which need the jenkins-mcp-writers group.',
         '  - Operate and manage tools additionally need the jenkins-mcp-writers group (refused otherwise).',
         '  - A manage writer can define a job that runs code on a master, so the group is code-execution-capable.',
         '  - export_build_log / export_build_artifact stream big logs/artifacts to a short-lived signed S3 URL.',

@@ -3,6 +3,7 @@ import time
 from typing import Literal
 
 from fastmcp import Context
+from pydantic import BaseModel
 from requests.exceptions import HTTPError
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
@@ -369,6 +370,51 @@ async def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg
         number: The number of the build to stop
     """
     return jenkins(ctx, master).stop_build(fullname=fullname, number=number)
+
+
+class StopTarget(BaseModel):
+    fullname: str
+    number: int
+
+
+_MAX_STOP_ITEMS = 50
+
+
+@mcp.tool(tags=['operate'])
+def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None) -> dict:
+    """Stop several running builds in one call (each needs an explicit build number).
+
+    Builds are stopped one after another; a failure on one is reported in its row and the rest still
+    run. Duplicate targets are refused rather than stopped twice.
+
+    Args:
+        items: Up to 50 {fullname, number} targets on the selected master
+
+    Returns:
+        A dict: results [{fullname, number, status: stopped|error, error?}], stopped, failed.
+    """
+    if not items:
+        msg = 'stop_builds needs at least one {fullname, number} item'
+        raise ValueError(msg)
+    if len(items) > _MAX_STOP_ITEMS:
+        msg = f'stop_builds takes at most {_MAX_STOP_ITEMS} items per call, got {len(items)}'
+        raise ValueError(msg)
+    keys = [(i.fullname, i.number) for i in items]
+    if len(set(keys)) != len(keys):
+        msg = 'stop_builds items contain duplicates; list each build once'
+        raise ValueError(msg)
+    client = jenkins(ctx, master)
+    results = []
+    for target in items:
+        row = {'fullname': target.fullname, 'number': target.number}
+        try:
+            client.stop_build(fullname=target.fullname, number=target.number)
+            row['status'] = 'stopped'
+        except HTTPError as e:
+            row.update(status='error', error=f'{type(e).__name__}: {e}'[:300])
+        results.append(row)
+    stopped = sum(r['status'] == 'stopped' for r in results)
+    return {'results': results, 'stopped': stopped, 'failed': len(results) - stopped}
 
 
 @mcp.tool(tags=['read'])
