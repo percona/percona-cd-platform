@@ -912,6 +912,7 @@ locals {
     init_groovy_s3_bucket   = length(local.init_groovy_all) > 0 ? aws_s3_bucket.init_config[0].id : ""
     init_groovy_files       = local.init_groovy_sha256
     jvm_memory_opts         = var.jvm_memory_opts
+    jvm_extra_opts          = var.jvm_extra_opts == "" ? "" : " ${var.jvm_extra_opts}"
   })
 }
 
