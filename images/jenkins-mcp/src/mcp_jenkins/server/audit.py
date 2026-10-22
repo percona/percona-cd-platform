@@ -77,6 +77,7 @@ _SAFE_ARG_KEYS = frozenset(
         'include',
         'queue_id',
         'timeout_seconds',
+        'masters',
     }
 )
 

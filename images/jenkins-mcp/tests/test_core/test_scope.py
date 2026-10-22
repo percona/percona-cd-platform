@@ -133,6 +133,21 @@ async def test_list_masters_shows_only_reachable(mocker, two_masters):
 
 
 @pytest.mark.asyncio
+async def test_find_items_searches_only_reachable_masters(mocker, two_masters):
+    _token(mocker, PMM_SCOPED)
+    built = []
+    mocker.patch(
+        'mcp_jenkins.server.fleet.client_for',
+        side_effect=lambda name: built.append(name) or mocker.Mock(query_items=lambda **kw: []),
+    )
+
+    result = await fleet.find_items(fullname_pattern='pmm3', masters=['ps80', 'pmm'])
+
+    assert built == ['pmm']
+    assert result['per_master'] == {'ps80': {'error': 'not reachable for this account'}, 'pmm': {'total': 0}}
+
+
+@pytest.mark.asyncio
 async def test_list_masters_unscoped_shows_fleet(mocker, two_masters):
     _token(mocker, ['percona'])
     assert [m['name'] for m in await fleet.list_masters()] == ['ps80', 'pmm']

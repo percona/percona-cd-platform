@@ -12,6 +12,7 @@ _READ_SET = {
     'get_readme',
     'get_all_items',
     'query_items',
+    'find_items',
     'get_item',
     'get_item_config',
     'get_item_parameters',

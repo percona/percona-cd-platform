@@ -37,6 +37,11 @@ _CATALOG = [
                 'query_items',
                 '      freestyle/matrix only (pipeline jobs keep their label in the Jenkinsfile, so they never match).',
             ),
+            (
+                'find_items',
+                'find_items(fullname_pattern, class_pattern?, masters?, limit?)   WHICH MASTER hosts a job: searches',
+            ),
+            ('find_items', '      every master you can reach at once (no master argument needed)'),
             ('get_item', 'get_item(fullname, master?)             one job/folder'),
             ('get_item_config', 'get_item_config(fullname, master?)      job config XML (jenkins-mcp-writers only)'),
             ('get_item_parameters', 'get_item_parameters(fullname, master?)  the build parameters a job accepts'),
@@ -192,6 +197,7 @@ _CATALOG = [
 _SAMPLES_READ = [
     '  "which masters are up?"                       -> list_masters()',
     '  "what jobs are on a master?" -> get_all_items(master="<master>")',
+    '  "which master runs <job>?" -> find_items(fullname_pattern="<job>")',
     '  "jobs whose name matches a pattern" -> query_items(fullname_pattern=".*nightly.*", master="<master>")',
     '  "jobs by agent label" -> query_items(label_pattern="<label>", master="<master>")',
     '  "list files in a .tar.gz artifact" -> list_archive_artifact(relative_path="<path>.tar.gz", glob="*.log")',

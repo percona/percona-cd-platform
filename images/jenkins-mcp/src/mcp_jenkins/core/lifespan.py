@@ -70,7 +70,8 @@ def _selected_master(ctx: Context, override: str | None = None) -> str:
         if len(masters) == 1:
             return masters[0].name
         msg = (
-            'No Jenkins master selected. Pass the master argument, send the x-jenkins-master header, '
+            'No Jenkins master selected. To locate a job across masters, call find_items(fullname_pattern=...). '
+            'Otherwise pass the master argument, send the x-jenkins-master header, '
             f'set the jenkins_master default, or configure exactly one master. Configured: {get_fleet().names()}'
         )
         raise ValueError(msg)
