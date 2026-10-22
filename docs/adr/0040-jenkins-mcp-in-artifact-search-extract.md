@@ -2,6 +2,7 @@
 # 0040: Jenkins MCP in-artifact search and extract (incl. tarballs)
 
 **Status:** Accepted (2026-06-23)
+**Amended by:** [ADR 0049](0049-jenkins-mcp-batch-and-fleet-read-tools.md) (`grep_build_artifact` accepts a glob over the build's artifacts)
 **Related:** [ADR 0039](0039-jenkins-mcp-s3-export.md) (the server-side S3 export this reuses for large extracted members; `extract_archive_artifact` is a new consumer of `s3_export`), [ADR 0038](0038-jenkins-mcp-image-autodeploy.md) (the gateway's deploy path), [ADR 0024](0024-jenkins-fleet-ownership-boundary.md) (the "large artifacts to S3" ownership principle), [ADR 0012](0012-authentik-saml-oidc-bridge.md) / [ADR 0013](0013-push-from-masters-with-nginx-bearer.md) (the gateway's Authentik/Duo OIDC + single-credential posture this stays inside).
 
 ## Context
