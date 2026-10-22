@@ -349,6 +349,8 @@ async def get_build_parameters(
 ) -> dict:
     """Get the parameters of a specific build in Jenkins
 
+    For the parameters of several recent builds, call get_build_walk once instead of this per build.
+
     Args:
         fullname: The fullname of the job
         number: The number of the build, if None, get the last build
@@ -494,7 +496,11 @@ async def get_build_artifact_url(
 async def get_build_history(
     ctx: Context, fullname: str, count: int = 10, limit: int | None = None, master: MasterArg = None
 ) -> list[dict]:
-    """Get the most recent builds of a Jenkins job.
+    """Get the most recent builds of a Jenkins job (number, result, timing only).
+
+    To summarise or compare recent builds (which stage failed, with which parameters, how many
+    tests failed), call get_build_walk instead: one call returns all of that for up to 30 builds,
+    where this tool would need a follow-up call per build.
 
     Args:
         fullname: The fullname of the job
