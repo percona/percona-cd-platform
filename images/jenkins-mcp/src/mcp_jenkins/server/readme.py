@@ -135,6 +135,10 @@ _CATALOG = [
                 '      grep inside ONE artifact (or a member of a .tar.gz via archive_member); streamed + capped',
             ),
             (
+                'grep_build_artifact',
+                '      relative_path may be a glob ("results/mtr-test-w_*.log") to grep up to 30 artifacts at once',
+            ),
+            (
                 'list_archive_artifact',
                 'list_archive_artifact(fullname, relative_path, glob?, number?, master?)  list members of a .tar.gz',
             ),
@@ -202,6 +206,7 @@ _SAMPLES_READ = [
     '  "jobs by agent label" -> query_items(label_pattern="<label>", master="<master>")',
     '  "list files in a .tar.gz artifact" -> list_archive_artifact(relative_path="<path>.tar.gz", glob="*.log")',
     '  "grep a .tar.gz member" -> grep_build_artifact(relative_path="a.tgz", archive_member="<m>", pattern="ERROR")',
+    '  "grep every worker log" -> grep_build_artifact(relative_path="results/mtr-test-w_*.log", pattern="Failing")',
     '  "did the last build of <job> pass?" -> get_build(fullname="<job>")',
     '  "console for <job> build 123" -> get_build_console_output(fullname="<job>", number=123)',
     '  "just the errors in a log" -> get_build_console_output(fullname="<job>", pattern="(?i)error|fail")',
