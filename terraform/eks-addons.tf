@@ -72,16 +72,17 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   resolve_conflicts_on_update = "PRESERVE"
 
   # EBS-CSI controller pins to the system NG; the node DaemonSet is unrestricted.
-  # extraVolumeTags is the backstop for any future StorageClass added without
-  # parameters.tagSpecification_*: every CSI-provisioned volume gets the reaper
-  # pair (docs/runbooks/cleanup-reapers.md) even if the class forgets it.
+  # The driver stamps extraVolumeTags on snapshots as well as volumes, so they
+  # leave out PerconaKeep: on a snapshot it means keep forever and blocks the
+  # snapshot reaper. Volumes get PerconaKeep from each StorageClass
+  # tagSpecification instead, enforced by
+  # terraform/lambdas/tests/test_storageclass_reaper_tags.py.
   configuration_values = jsonencode({
     controller = {
       nodeSelector = { "workload.percona.com/tier" = "bootstrap" }
       replicaCount = 2
       extraVolumeTags = {
         "iit-billing-tag" = "percona-ci-platform"
-        "PerconaKeep"     = "True"
         "managed-by"      = "ebs-csi-driver"
         "team"            = "platform"
       }
