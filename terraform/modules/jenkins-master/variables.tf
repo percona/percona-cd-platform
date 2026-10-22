@@ -316,6 +316,21 @@ variable "jvm_memory_opts" {
   }
 }
 
+variable "jvm_extra_opts" {
+  description = "Extra -D system properties for the Jenkins JVM, spliced into JAVA_OPTS after jvm_memory_opts in the eks_observability systemd override. For plugin and core settings that must survive a rebuild, e.g. the JUnit history lookup depth on psmdb. Memory flags stay in jvm_memory_opts and the durabletask/hetzner.rehydrate flags stay fixed in the template."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !can(regex("-Xm[sx]|-Xss", var.jvm_extra_opts))
+    error_message = "jvm_extra_opts takes -D properties only. Heap and stack sizes belong in jvm_memory_opts."
+  }
+  validation {
+    condition     = !can(regex("hetzner\\.rehydrate|durabletask", var.jvm_extra_opts))
+    error_message = "The durabletask and hetzner.rehydrate flags are fleet-invariant and fixed in the template. Do not set them here."
+  }
+}
+
 variable "launch_template_name" {
   description = "Override the master launch template name. null derives `<SHORT>MasterTemplate` (preserves ps3). Set a distinct value where a same-named CFN launch template must coexist during a CFN->TF cutover (ps80's CFN JMasterTemplate is literally `PS80MasterTemplate`)."
   type        = string
