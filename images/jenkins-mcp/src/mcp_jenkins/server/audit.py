@@ -75,6 +75,8 @@ _SAFE_ARG_KEYS = frozenset(
         'matches_per_build',
         'max_total_matches',
         'include',
+        'queue_id',
+        'timeout_seconds',
     }
 )
 

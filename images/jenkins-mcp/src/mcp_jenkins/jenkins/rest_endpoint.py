@@ -47,7 +47,7 @@ BUILD_TEST_REPORT = RestEndpoint('{folder}job/{name}/{number}/testReport/api/jso
 BUILD_ARTIFACT = RestEndpoint('{folder}job/{name}/{number}/artifact/{relative_path}')
 BUILD_ARTIFACTS = RestEndpoint('{folder}job/{name}/{number}/api/json?tree=artifacts[fileName,relativePath,displayPath]')
 JOB_BUILDS = RestEndpoint(
-    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url]{{0,{count}}}'
+    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url,queueId]{{0,{count}}}'
 )
 # One GET for a build walk: history plus each build's parameters and JUnit counts. ParametersAction and
 # TestResultAction both surface under actions, in no fixed position.

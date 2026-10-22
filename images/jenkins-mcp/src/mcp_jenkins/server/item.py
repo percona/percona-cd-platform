@@ -173,7 +173,8 @@ async def build_item(
         build_type: If your item is configured with parameters, you must use 'buildWithParameters' as build_type.
 
     Returns:
-        The queue item number of the item.
+        The queue item number of the item. Pass it to wait_for_build(fullname, queue_id=...) to get
+        the build number once the build starts.
     """
     return jenkins(ctx, master).build_item(fullname=fullname, build_type=build_type, data=data)
 

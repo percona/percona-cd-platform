@@ -144,6 +144,11 @@ _CATALOG = [
         [
             ('get_all_nodes', 'get_all_nodes / get_node / get_node_config(name?, master?)   build agents'),
             ('get_all_queue_items', 'get_all_queue_items / get_queue_item(id?, master?)           build queue'),
+            (
+                'wait_for_build',
+                'wait_for_build(fullname, queue_id? | number?, timeout_seconds?, master?)   queue id -> build number,',
+            ),
+            ('wait_for_build', '      then wait (<= 60 s per call) until it finishes; never raises on timeout'),
             ('get_all_views', 'get_all_views / get_view(view_path, depth?, master?)         views'),
         ],
     ),
@@ -209,6 +214,7 @@ _SAMPLES_READ = [
 
 _SAMPLES_OPERATE = [
     '  "rebuild <job>"            -> build_item(fullname="<job>", build_type="build")',
+    '  "which build did that start?" -> wait_for_build(fullname="<job>", queue_id=<id from build_item>)',
     '  "build with params"      -> build_item(fullname="<job>", build_type="buildWithParameters", data={"K":"V"})',
     '  "replay the last build"    -> replay_build(fullname="<job>")',
     '  "stop <job> build 123"     -> stop_build(fullname="<job>", number=123)',

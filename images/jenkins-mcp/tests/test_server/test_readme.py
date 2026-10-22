@@ -36,6 +36,7 @@ _READ_SET = {
     'get_node_config',
     'get_all_queue_items',
     'get_queue_item',
+    'wait_for_build',
     'get_all_views',
     'get_view',
     'get_build_console_tail',
