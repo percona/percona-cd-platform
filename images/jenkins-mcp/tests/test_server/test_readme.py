@@ -25,6 +25,7 @@ _READ_SET = {
     'get_build_artifact',
     'get_build_artifact_url',
     'get_build_history',
+    'get_build_walk',
     'get_build_stages',
     'get_build_changeset',
     'export_build_log',

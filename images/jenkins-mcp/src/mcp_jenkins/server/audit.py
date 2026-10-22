@@ -74,6 +74,7 @@ _SAFE_ARG_KEYS = frozenset(
         'builds_per_job',
         'matches_per_build',
         'max_total_matches',
+        'include',
     }
 )
 

@@ -486,6 +486,23 @@ class Jenkins:
         )
         return [Build.model_validate(b) for b in response.json().get('builds', [])]
 
+    def get_build_walk(self, *, fullname: str, count: int = 10) -> list[dict]:
+        """Get the most recent builds of a job with their parameters and test counts, in one request.
+
+        Args:
+            fullname: The fullname of the job.
+            count: The maximum number of recent builds to return.
+
+        Returns:
+            Raw build dicts, most recent first, each with an `actions` list to parse.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self.request(
+            'GET',
+            rest_endpoint.JOB_BUILDS_WALK(folder=folder, name=name, count=count),
+        )
+        return response.json().get('builds', [])
+
     def get_build_stages(self, *, fullname: str, number: int) -> PipelineStages:
         """Get the pipeline stage breakdown of a build via the Stage View workflow API.
 

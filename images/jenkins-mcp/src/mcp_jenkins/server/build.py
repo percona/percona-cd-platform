@@ -1,4 +1,5 @@
 import base64
+import time
 from typing import Literal
 
 from fastmcp import Context
@@ -14,6 +15,10 @@ _MAX_PATTERN_LEN = 2000
 _MAX_HISTORY_COUNT = 100
 _MAX_TAIL_LINES = 5000
 _MAX_FAILURE_CASES = 1000
+_MAX_WALK_COUNT = 30
+# Stages cost one wfapi request per build; stop fetching them once the walk has spent this long.
+_WALK_STAGES_BUDGET_SECONDS = 45
+_WALK_INCLUDES = ('stages', 'parameters', 'test_counts')
 
 # JUnit case-status sets per failure-summary filter. UNSTABLE = the statuses Jenkins marks a build
 # unstable for (FAILED + REGRESSION). None = no status filter (every case).
@@ -457,6 +462,81 @@ async def get_build_history(
     count = max(1, min(count, _MAX_HISTORY_COUNT))
     builds = jenkins(ctx, master).get_build_history(fullname=fullname, count=count)
     return [b.model_dump(exclude_none=True) for b in builds]
+
+
+def _walk_row(raw: dict, include: set[str]) -> dict:
+    """Compact one build of a walk: identity and outcome, plus the parsed parameters and test counts."""
+    row = {
+        key: raw.get(src)
+        for key, src in (
+            ('number', 'number'),
+            ('result', 'result'),
+            ('building', 'building'),
+            ('timestamp', 'timestamp'),
+            ('duration', 'duration'),
+            ('url', 'url'),
+            ('queue_id', 'queueId'),
+        )
+        if raw.get(src) is not None
+    }
+    actions = [a for a in raw.get('actions') or [] if isinstance(a, dict)]
+    if 'parameters' in include:
+        params = next((a['parameters'] for a in actions if 'parameters' in a), [])
+        row['parameters'] = {p.get('name'): p.get('value') for p in params if isinstance(p, dict)}
+    if 'test_counts' in include:
+        report = next((a for a in actions if 'failCount' in a), None)
+        if report is not None:
+            fail, skip = report.get('failCount') or 0, report.get('skipCount') or 0
+            total = report.get('totalCount') or 0
+            row['test_counts'] = {'fail': fail, 'skip': skip, 'pass': max(0, total - fail - skip), 'total': total}
+    return row
+
+
+@mcp.tool(tags=['read'])
+def get_build_walk(
+    ctx: Context,
+    fullname: str,
+    count: int = 10,
+    include: list[Literal['stages', 'parameters', 'test_counts']] | None = None,
+    master: MasterArg = None,
+) -> dict:
+    """Summarise the last N builds of one job in a single call (instead of history + one call per build).
+
+    Use it to compare recent runs: which builds failed, which stage failed in each, with which
+    parameters, and how many tests failed. Parameters and test counts come from one request for
+    the whole walk; stages cost one request per build and stop after a time budget (see notes).
+
+    Args:
+        fullname: The fullname of the job
+        count: How many recent builds, most recent first (capped at 30)
+        include: Any of stages, parameters, test_counts (default: all three)
+
+    Returns:
+        A dict: fullname, builds (number, result, building, timestamp, duration, url, queue_id, plus
+        the included parameters, test_counts and stages [{name, status, durationMillis}]), errors
+        (per-build stage fetch failures, inline), notes (any cap or budget that clipped the walk).
+    """
+    wanted = set(include) if include else set(_WALK_INCLUDES)
+    notes: list[str] = []
+    clamped = max(1, min(count, _MAX_WALK_COUNT))
+    if clamped != count:
+        notes.append(f'count adjusted from {count} to {clamped}')
+    client = jenkins(ctx, master)
+    builds = [_walk_row(raw, wanted) for raw in client.get_build_walk(fullname=fullname, count=clamped)]
+    errors: list[dict] = []
+    if 'stages' in wanted:
+        deadline = time.monotonic() + _WALK_STAGES_BUDGET_SECONDS
+        for row in builds:
+            if time.monotonic() > deadline:
+                notes.append(f'stages budget ({_WALK_STAGES_BUDGET_SECONDS}s) spent; later builds have no stages')
+                break
+            try:
+                stages = client.get_build_stages(fullname=fullname, number=row['number'])
+            except Exception as e:  # noqa: BLE001
+                errors.append({'number': row['number'], 'step': 'stages', 'error': f'{type(e).__name__}: {e}'[:300]})
+                continue
+            row['stages'] = [s.model_dump(include={'name', 'status', 'durationMillis'}) for s in stages.stages]
+    return {'fullname': fullname, 'builds': builds, 'errors': errors, 'notes': notes}
 
 
 @mcp.tool(tags=['read'])

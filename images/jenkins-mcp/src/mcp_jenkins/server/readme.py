@@ -92,6 +92,14 @@ _CATALOG = [
                 'get_build_history(fullname, count?, master?)     recent builds (number/result/timestamp/duration)',
             ),
             (
+                'get_build_walk',
+                'get_build_walk(fullname, count?, include?, master?)   last N builds in ONE call: result + stages',
+            ),
+            (
+                'get_build_walk',
+                '      + parameters + test counts per build (instead of history + a call per build)',
+            ),
+            (
                 'get_build_stages',
                 'get_build_stages(fullname, number?, master?)     pipeline stage breakdown (empty for freestyle)',
             ),
@@ -191,6 +199,7 @@ _SAMPLES_READ = [
     '  "what parameters does <job> take?" -> get_item_parameters(fullname="<job>")',
     '  "what is running right now?" -> get_running_builds(master="<master>")',
     '  "last 10 builds of <job>" -> get_build_history(fullname="<job>", count=10)',
+    '  "compare the last 20 runs of <job>" -> get_build_walk(fullname="<job>", count=20)',
     '  "which stage failed in <job>?" -> get_build_stages(fullname="<job>")',
     '  "what changed in <job> build 50?" -> get_build_changeset(fullname="<job>", number=50)',
     '  "find text across recent builds" -> search_build_logs(pattern="<text>", job_pattern="<prefix>.*")',
