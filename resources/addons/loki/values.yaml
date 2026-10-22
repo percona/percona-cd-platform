@@ -59,6 +59,14 @@ loki:
     # EBS only buffers the last ~5min of in-flight log lines.
     commonConfig:
       replication_factor: 1
+    # Per-tenant overrides, reloaded from the loki-runtime ConfigMap without a pod restart
+    # (auth is off, so the single tenant is "fake"). The jenkins-mcp dashboard counts audit lines by
+    # distinct request_id (Alloy can ingest a line twice), which needs one series per request: a busy
+    # day already passes the default 500 series, a 30-day range is about 8k.
+    runtimeConfig:
+      overrides:
+        fake:
+          max_query_series: 20000
     # Auto-evict ring entries whose heartbeat is past the timeout. Without
     # this, ungraceful pod terminations leave UNHEALTHY entries pinned in
     # the ring forever, the lifecycler's readiness gate refuses to declare
