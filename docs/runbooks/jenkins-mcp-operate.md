@@ -12,8 +12,8 @@ the access model are in `images/jenkins-mcp/README.md`; the S3 export path in
 
 - **Reads** (jobs, builds, logs, nodes, queue, views, and the S3 log/artifact export) are open to
   **any authenticated Percona user** (Authentik / JumpCloud SSO). There is no read group, and first login
-  JIT-provisions the Authentik user. **Exception:** `get_item_config` (a job's raw config.xml) is
-  gated to **`jenkins-mcp-writers`**, because config.xml can carry plaintext secrets (e.g. the
+  JIT-provisions the Authentik user. **Exception:** `get_item_config` (a job's raw config.xml) and
+  `search_item_configs` (grep across many configs) are gated to **`jenkins-mcp-writers`**, because config.xml can carry plaintext secrets (e.g. the
   `<authToken>` remote-build-trigger token).
 - **Operate** (build, replay, stop, cancel) and **manage** (create / update / delete job definitions)
   are served only with `--enable-operate`, gated per call to **`jenkins-mcp-writers`**. The manage

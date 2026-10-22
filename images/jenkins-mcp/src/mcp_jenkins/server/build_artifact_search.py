@@ -11,14 +11,18 @@ per-test logs live inside work/results/<job>-test-mtr_logs-N.tar.gz.
 import base64
 import fnmatch
 import gzip
+import posixpath
 import re
 import tarfile
+import time
 import zlib
 from collections import deque
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, BinaryIO
 
+import urllib3
 from fastmcp import Context
+from requests.exceptions import RequestException
 
 from mcp_jenkins.core import s3_export
 from mcp_jenkins.core.lifespan import MasterArg, _selected_master, jenkins
@@ -27,6 +31,8 @@ from mcp_jenkins.server.build_export import _emit_export_audit, _resolve_number,
 
 if TYPE_CHECKING:
     from requests import Response
+
+    from mcp_jenkins.jenkins import Jenkins
 
 # Every artifact read is bounded AT READ TIME so one call can never buffer a whole file or scan forever.
 _CHUNK = 65536  # read granularity for the chunked line reader and limited reader
@@ -40,6 +46,11 @@ _MAX_MEMBERS_SCANNED = 50000  # list/grep/extract: hard ceiling on members exami
 _MAX_DECOMPRESSED_TOTAL = 256 * 1024 * 1024  # any tar op: cumulative gunzipped bytes (bomb guard)
 _MAX_MEMBER_BYTES = 25 * 1024 * 1024  # extract: largest single member we will read
 _MAX_INLINE_BYTES = 256 * 1024  # extract: inline up to this, else S3
+_MAX_GLOB_FILES = 30  # grep glob: most artifacts one call greps (the MTR worker-log fan is w_1..w_30)
+_MAX_GLOB_BYTES = 256 * 1024 * 1024  # grep glob: total bytes scanned across all files
+_GLOB_SECONDS = 120  # grep glob: stop starting new files after this wall-clock time
+_GLOB_CHARS = frozenset('*?[]')
+_ARCHIVE_SUFFIXES = ('.tar.gz', '.tgz', '.gz', '.zip', '.tar', '.bz2', '.xz', '.zst')
 
 
 class _ArchiveLimitError(Exception):
@@ -149,7 +160,9 @@ def _build_matcher(pattern: str, literal: bool, ignore_case: bool) -> Callable[[
     return lambda line: rx.search(line) is not None
 
 
-def _bounded_line_reader(read: Callable[[int], bytes], holder: dict) -> Iterator[tuple[int, str]]:
+def _bounded_line_reader(
+    read: Callable[[int], bytes], holder: dict, limit: int = _MAX_BYTES_SCANNED
+) -> Iterator[tuple[int, str]]:
     """Yield (line_no, line) from a byte reader, bounded in MEMORY and total bytes at read time.
 
     The pending line buffer is capped at _MAX_LINE_LEN: a line longer than that is emitted truncated
@@ -159,8 +172,8 @@ def _bounded_line_reader(read: Callable[[int], bytes], holder: dict) -> Iterator
     n = 0
     buf = bytearray()
     eating = False  # discarding the tail of an over-length line until the next newline
-    while holder['scanned'] < _MAX_BYTES_SCANNED:
-        chunk = read(min(_CHUNK, _MAX_BYTES_SCANNED - holder['scanned']))
+    while holder['scanned'] < limit:
+        chunk = read(min(_CHUNK, limit - holder['scanned']))
         if not chunk:
             break
         holder['scanned'] += len(chunk)
@@ -216,8 +229,121 @@ def _grep_stream(
     return matches, limit_hit
 
 
+def _validate_glob(glob: str) -> str:
+    """Validate an artifact glob with the same rules as a path, allowing only `*`, `?` and `[]` extra.
+
+    The glob is never sent to Jenkins: it is matched against the build's artifact list, and every
+    concrete path it selects is validated again before it is streamed.
+    """
+    stand_in = ''.join('x' if c in _GLOB_CHARS else c for c in glob)
+    _validate_relative_path(stand_in)
+    return posixpath.normpath(glob)
+
+
+def _natural_key(path: str) -> list:
+    """Sort mtr-test-w_2.log before mtr-test-w_10.log."""
+    return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', path)]
+
+
+def _grep_one(
+    client: 'Jenkins',
+    fullname: str,
+    number: int,
+    safe_path: str,
+    safe_member: str | None,
+    *,
+    matcher: Callable[[str], bool],
+    context_lines: int,
+    max_matches: int,
+    byte_limit: int = _MAX_BYTES_SCANNED,
+) -> dict:
+    """Stream one artifact (or one member of it) through the bounded reader and collect matches."""
+    holder = {'scanned': 0, 'truncated': False}
+    with client.stream_build_artifact(fullname=fullname, number=number, relative_path=safe_path) as response:
+        if safe_member is None:
+            lines = _bounded_line_reader(response.raw.read, holder, byte_limit)
+            matches, limit_hit = _grep_stream(
+                lines, matcher=matcher, context_lines=context_lines, max_matches=max_matches
+            )
+        else:
+            matches, limit_hit = _grep_member(
+                response, safe_member, holder, matcher=matcher, context_lines=context_lines, max_matches=max_matches
+            )
+    return {
+        'relative_path': safe_path,
+        'archive_member': safe_member,
+        'match_count': len(matches),
+        'matches': matches,
+        'bytes_scanned': holder['scanned'],
+        'truncated': holder['truncated'],
+        'limit_hit': limit_hit,
+    }
+
+
+def _grep_glob(
+    client: 'Jenkins',
+    fullname: str,
+    number: int,
+    glob: str,
+    *,
+    matcher: Callable[[str], bool],
+    context_lines: int,
+    max_matches: int,
+) -> dict:
+    """Grep every artifact the glob selects, capped in files, total matches, total bytes and time."""
+    paths = sorted(
+        (a.relativePath for a in client.get_build_artifacts(fullname=fullname, number=number)),
+        key=_natural_key,
+    )
+    matched = [p for p in paths if fnmatch.fnmatchcase(p, glob)]
+    # Compressed bytes are not text: a glob greps plain files, an archive needs archive_member.
+    selected = [p for p in matched if not p.endswith(_ARCHIVE_SUFFIXES)]
+    files: list[dict] = []
+    notes: list[str] = []
+    if len(selected) < len(matched):
+        notes.append(f'{len(matched) - len(selected)} archive(s) skipped; grep one with archive_member')
+    total_matches = total_bytes = 0
+    deadline = time.monotonic() + _GLOB_SECONDS
+    for path in selected[:_MAX_GLOB_FILES]:
+        if total_matches >= _MAX_MATCHES or total_bytes >= _MAX_GLOB_BYTES or time.monotonic() > deadline:
+            notes.append(f'stopped before {path}: total match, byte or time budget spent')
+            break
+        try:
+            safe_path = _validate_relative_path(path)
+            result = _grep_one(
+                client,
+                fullname,
+                number,
+                safe_path,
+                None,
+                matcher=matcher,
+                context_lines=context_lines,
+                max_matches=min(max_matches, _MAX_MATCHES - total_matches),
+                byte_limit=min(_MAX_BYTES_SCANNED, _MAX_GLOB_BYTES - total_bytes),
+            )
+        except (ValueError, RequestException, urllib3.exceptions.HTTPError) as e:
+            # urllib3 errors come from response.raw.read mid-stream (reset, read timeout, decode).
+            files.append({'relative_path': path, 'error': f'{type(e).__name__}: {e}'[:300]})
+            continue
+        result.pop('archive_member')
+        files.append(result)
+        total_matches += result['match_count']
+        total_bytes += result['bytes_scanned']
+    if len(selected) > _MAX_GLOB_FILES:
+        notes.append(f'{len(selected)} artifacts matched, only the first {_MAX_GLOB_FILES} were grepped')
+    return {
+        'files': files,
+        'files_matched': len(selected),
+        'files_scanned': sum(1 for f in files if 'error' not in f),
+        'files_truncated': len(selected) > _MAX_GLOB_FILES,
+        'match_count': total_matches,
+        'bytes_scanned': total_bytes,
+        'notes': notes,
+    }
+
+
 @mcp.tool(tags=['read'])
-async def grep_build_artifact(
+def grep_build_artifact(
     ctx: Context,
     fullname: str,
     relative_path: str,
@@ -236,9 +362,13 @@ async def grep_build_artifact(
     log. If archive_member is set, greps that member of a `.tar.gz` (e.g. an MTR per-test log inside
     work/results/<job>-test-mtr_logs-N.tar.gz). For the whole file use export_build_artifact.
 
+    relative_path may be a glob (`*`, `?`, `[]`; `*` also crosses `/`) to grep many artifacts of the
+    build in one call, e.g. "pxc/sources/pxc/results/mtr-test-w_*.log": up to 30 files, results per
+    file. A glob cannot be combined with archive_member.
+
     Args:
         fullname: The fullname of the job
-        relative_path: Artifact path (e.g. work/results/foo-mtr_logs-5.tar.gz or a plain .log)
+        relative_path: Artifact path (e.g. work/results/foo-mtr_logs-5.tar.gz or a plain .log), or a glob
         pattern: Substring (default) or regex (set literal=False) matched per line
         number: Build number, if None the last build
         archive_member: If set, grep this member inside the .tar.gz at relative_path
@@ -246,46 +376,45 @@ async def grep_build_artifact(
         literal: Treat pattern as a literal substring (default). Set False for regex (bounded input,
             but Python re has no timeout, so a pathological regex can still burn CPU on a long line).
         context_lines: Lines of context to keep before/after each match (capped at 10)
-        max_matches: Max matches to return (capped at 200)
+        max_matches: Max matches to return per file (capped at 200, and 200 across a glob)
 
     Returns:
         A dict: matches [{line_no, line, before, after}], match_count, bytes_scanned, truncated
-        (byte cap hit), limit_hit (match cap hit), plus the echoed query.
+        (byte cap hit), limit_hit (match cap hit), plus the echoed query. For a glob: files (one such
+        result per artifact, or an error), files_matched, files_scanned, files_truncated, notes.
     """
-    safe_path = _validate_relative_path(relative_path)
+    is_glob = any(c in _GLOB_CHARS for c in relative_path)
+    safe_path = _validate_glob(relative_path) if is_glob else _validate_relative_path(relative_path)
     context_lines = max(0, min(context_lines, _MAX_CONTEXT_LINES))
     max_matches = max(1, min(max_matches, _MAX_MATCHES))
     matcher = _build_matcher(pattern, literal, ignore_case)
     safe_member = None
     if archive_member is not None:
+        if is_glob:
+            msg = 'archive_member cannot be combined with a glob relative_path; grep one archive at a time'
+            raise ValueError(msg)
         _require_targz(safe_path)
         safe_member = _safe_member_name(archive_member)
 
     client = jenkins(ctx, master)
     number = _resolve_number(client, fullname, number)
-    holder = {'scanned': 0, 'truncated': False}
-    with client.stream_build_artifact(fullname=fullname, number=number, relative_path=safe_path) as response:
-        if safe_member is None:
-            lines = _bounded_line_reader(response.raw.read, holder)
-            matches, limit_hit = _grep_stream(
-                lines, matcher=matcher, context_lines=context_lines, max_matches=max_matches
-            )
-        else:
-            matches, limit_hit = _grep_member(
-                response, safe_member, holder, matcher=matcher, context_lines=context_lines, max_matches=max_matches
-            )
-
-    return {
-        'relative_path': safe_path,
-        'archive_member': safe_member,
-        'pattern': pattern,
-        'literal': literal,
-        'match_count': len(matches),
-        'matches': matches,
-        'bytes_scanned': holder['scanned'],
-        'truncated': holder['truncated'],
-        'limit_hit': limit_hit,
-    }
+    query = {'pattern': pattern, 'literal': literal}
+    if is_glob:
+        result = _grep_glob(
+            client, fullname, number, safe_path, matcher=matcher, context_lines=context_lines, max_matches=max_matches
+        )
+        return {'relative_path': safe_path, **query, **result}
+    result = _grep_one(
+        client,
+        fullname,
+        number,
+        safe_path,
+        safe_member,
+        matcher=matcher,
+        context_lines=context_lines,
+        max_matches=max_matches,
+    )
+    return {**result, **query}
 
 
 def _grep_member(

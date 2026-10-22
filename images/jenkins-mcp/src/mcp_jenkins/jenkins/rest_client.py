@@ -45,6 +45,19 @@ def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
         raise ValueError(msg) from e
 
 
+def require_narrow_pattern(pattern: str, tool: str) -> None:
+    """Reject a job-selecting regex that is invalid or matches every name.
+
+    A pattern that matches the empty string (".*", "a|.*", "x?") matches every job, so a fan-out
+    tool would read everything; this also compiles it once up front, so a bad regex fails the call
+    instead of every master or job.
+    """
+    compiled = _compile_query_pattern(pattern)
+    if compiled is None or compiled.search('') is not None:
+        msg = f'{tool} needs a fullname_pattern that narrows the jobs (it must not match every name)'
+        raise ValueError(msg)
+
+
 class Jenkins:
     DEFAULT_HEADERS = {'Content-Type': 'text/xml; charset=utf-8'}
 
@@ -485,6 +498,23 @@ class Jenkins:
             rest_endpoint.JOB_BUILDS(folder=folder, name=name, count=count),
         )
         return [Build.model_validate(b) for b in response.json().get('builds', [])]
+
+    def get_build_walk(self, *, fullname: str, count: int = 10) -> list[dict]:
+        """Get the most recent builds of a job with their parameters and test counts, in one request.
+
+        Args:
+            fullname: The fullname of the job.
+            count: The maximum number of recent builds to return.
+
+        Returns:
+            Raw build dicts, most recent first, each with an `actions` list to parse.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self.request(
+            'GET',
+            rest_endpoint.JOB_BUILDS_WALK(folder=folder, name=name, count=count),
+        )
+        return response.json().get('builds', [])
 
     def get_build_stages(self, *, fullname: str, number: int) -> PipelineStages:
         """Get the pipeline stage breakdown of a build via the Stage View workflow API.

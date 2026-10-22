@@ -49,3 +49,18 @@ async def test_get_queue_item(mock_jenkins, mocker):
 async def test_cancel_queue_item(mock_jenkins, mocker):
     await queue.cancel_queue_item(mocker.Mock(), id=1)
     mock_jenkins.cancel_queue_item.assert_called_once_with(id=1)
+
+
+@pytest.mark.asyncio
+async def test_get_queue_item_accepts_number_alias(mock_jenkins, mocker):
+    mock_jenkins.get_queue_item.return_value = QueueItem(id=7, inQueueSince=1, url='u', why=None, task=QueueItemTask())
+
+    await queue.get_queue_item(mocker.Mock(), number=7)
+
+    mock_jenkins.get_queue_item.assert_called_once_with(id=7, depth=1)
+
+
+@pytest.mark.asyncio
+async def test_get_queue_item_requires_an_id(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='needs id'):
+        await queue.get_queue_item(mocker.Mock())

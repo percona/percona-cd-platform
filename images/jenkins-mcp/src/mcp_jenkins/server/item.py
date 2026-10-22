@@ -1,9 +1,14 @@
+import re
+import time
 from typing import Literal
 
 from fastmcp import Context
+from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
+from mcp_jenkins.jenkins.rest_client import require_narrow_pattern
 from mcp_jenkins.server import mcp
+from mcp_jenkins.server.build_artifact_search import _build_matcher
 
 
 @mcp.tool(tags=['read'])
@@ -60,6 +65,96 @@ async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None)
         The config XML of the item
     """
     return jenkins(ctx, master).get_item_config(fullname=fullname)
+
+
+# search_item_configs caps: jobs read per call, matches kept, and wall-clock time.
+_MAX_CONFIG_JOBS = 100
+_MAX_CONFIG_LINE = 500
+_MAX_CONFIG_MATCHES_PER_JOB = 50
+_MAX_CONFIG_MATCHES = 500
+_CONFIG_SEARCH_SECONDS = 120
+# Matching lines are returned with secret-bearing element text and Jenkins-encrypted blobs blanked.
+_SECRET_ELEMENT = re.compile(
+    r'<([\w.-]*(?:authToken|password|passphrase|secret|token|apiKey)[\w.-]*)(\s[^>]*)?>[^<]*</\1>', re.IGNORECASE
+)
+_ENCRYPTED_BLOB = re.compile(r'\{AQAAAB[A-Za-z0-9+/=]+\}')
+
+
+def _redact(line: str) -> str:
+    line = _SECRET_ELEMENT.sub(r'<\1\2>[redacted]</\1>', line)
+    return _ENCRYPTED_BLOB.sub('{[redacted]}', line)
+
+
+@mcp.tool(tags=['read'])
+def search_item_configs(
+    ctx: Context,
+    pattern: str,
+    fullname_pattern: str,
+    literal: bool = True,  # noqa: FBT001, FBT002
+    ignore_case: bool = False,  # noqa: FBT001, FBT002
+    limit: int = 100,
+    master: MasterArg = None,
+) -> dict:
+    """Grep the config.xml of many jobs at once (jenkins-mcp-writers only), instead of get_item_config per job.
+
+    Gated like get_item_config, because config.xml can carry secrets. Returns only the matching
+    lines, never a whole config, and blanks secret-bearing elements (authToken, password, secret,
+    token, apiKey) and Jenkins-encrypted values in them.
+
+    Args:
+        pattern: Substring (default) or regex (set literal=False) matched per config.xml line
+        fullname_pattern: Regex selecting the jobs to read (required; a catch-all like ".*" is rejected)
+        literal: Treat pattern as a literal substring (default)
+        ignore_case: Case-insensitive match
+        limit: Maximum jobs to read (capped at 100)
+
+    Returns:
+        A dict: jobs [{fullname, matches [{line_no, line}], truncated?}] for jobs with a match,
+        errors [{fullname, error}], jobs_selected, jobs_read, match_count, notes.
+    """
+    require_narrow_pattern(fullname_pattern, 'search_item_configs')
+    matcher = _build_matcher(pattern, literal, ignore_case)
+    limit = max(1, min(limit, _MAX_CONFIG_JOBS))
+    client = jenkins(ctx, master)
+    selected = [i.fullname for i in client.query_items(fullname_pattern=fullname_pattern) if i.fullname]
+    notes: list[str] = []
+    if len(selected) > limit:
+        notes.append(f'{len(selected)} jobs matched fullname_pattern, only the first {limit} were read')
+    jobs: list[dict] = []
+    errors: list[dict] = []
+    read = total = 0
+    deadline = time.monotonic() + _CONFIG_SEARCH_SECONDS
+    for fullname in selected[:limit]:
+        if total >= _MAX_CONFIG_MATCHES or time.monotonic() > deadline:
+            notes.append(f'stopped before {fullname}: match or time budget spent')
+            break
+        try:
+            config = client.get_item_config(fullname=fullname)
+        except RequestException as e:
+            errors.append({'fullname': fullname, 'error': f'{type(e).__name__}: {e}'[:300]})
+            continue
+        read += 1
+        hits = [
+            {'line_no': n, 'line': _redact(line.strip())[:_MAX_CONFIG_LINE]}
+            for n, line in enumerate(config.splitlines(), 1)
+            if matcher(line)
+        ]
+        if not hits:
+            continue
+        keep = min(len(hits), _MAX_CONFIG_MATCHES_PER_JOB, _MAX_CONFIG_MATCHES - total)
+        entry = {'fullname': fullname, 'matches': hits[:keep]}
+        if keep < len(hits):
+            entry['truncated'] = True
+        jobs.append(entry)
+        total += keep
+    return {
+        'jobs': jobs,
+        'errors': errors,
+        'jobs_selected': len(selected),
+        'jobs_read': read,
+        'match_count': total,
+        'notes': notes,
+    }
 
 
 @mcp.tool(tags=['manage'])
@@ -173,7 +268,8 @@ async def build_item(
         build_type: If your item is configured with parameters, you must use 'buildWithParameters' as build_type.
 
     Returns:
-        The queue item number of the item.
+        The queue item number of the item. Pass it to wait_for_build(fullname, queue_id=...) to get
+        the build number once the build starts.
     """
     return jenkins(ctx, master).build_item(fullname=fullname, build_type=build_type, data=data)
 

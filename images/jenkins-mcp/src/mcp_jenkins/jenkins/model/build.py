@@ -19,6 +19,7 @@ class Build(BaseModel):
 
     building: bool = None
     result: str | None = None
+    queueId: int | None = None
 
     nextBuild: Optional['Build'] = None
     previousBuild: Optional['Build'] = None

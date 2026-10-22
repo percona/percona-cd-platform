@@ -12,8 +12,10 @@ _READ_SET = {
     'get_readme',
     'get_all_items',
     'query_items',
+    'find_items',
     'get_item',
     'get_item_config',
+    'search_item_configs',
     'get_item_parameters',
     'get_running_builds',
     'get_build',
@@ -25,6 +27,7 @@ _READ_SET = {
     'get_build_artifact',
     'get_build_artifact_url',
     'get_build_history',
+    'get_build_walk',
     'get_build_stages',
     'get_build_changeset',
     'export_build_log',
@@ -35,6 +38,7 @@ _READ_SET = {
     'get_node_config',
     'get_all_queue_items',
     'get_queue_item',
+    'wait_for_build',
     'get_all_views',
     'get_view',
     'get_build_console_tail',
@@ -43,7 +47,7 @@ _READ_SET = {
     'list_archive_artifact',
     'extract_archive_artifact',
 }
-_OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'cancel_queue_item'}
+_OPERATE_SET = _READ_SET | {'build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item'}
 _MANAGE_SET = _OPERATE_SET | {'create_item', 'set_item_config', 'delete_item'}
 
 
