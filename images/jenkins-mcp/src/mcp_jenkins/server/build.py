@@ -439,16 +439,21 @@ async def get_build_artifact_url(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_history(ctx: Context, fullname: str, count: int = 10, master: MasterArg = None) -> list[dict]:
+async def get_build_history(
+    ctx: Context, fullname: str, count: int = 10, limit: int | None = None, master: MasterArg = None
+) -> list[dict]:
     """Get the most recent builds of a Jenkins job.
 
     Args:
         fullname: The fullname of the job
         count: Maximum number of recent builds to return (most recent first)
+        limit: Alias of count (every other list tool names its cap limit); wins when both are given
 
     Returns:
         A list of builds with number, result, timestamp, duration, building, url
     """
+    if limit is not None:
+        count = limit
     count = max(1, min(count, _MAX_HISTORY_COUNT))
     builds = jenkins(ctx, master).get_build_history(fullname=fullname, count=count)
     return [b.model_dump(exclude_none=True) for b in builds]

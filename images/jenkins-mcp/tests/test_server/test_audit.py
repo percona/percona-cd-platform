@@ -426,3 +426,31 @@ async def test_middleware_metric_master_label_unknown_clamped_to_invalid(capture
     after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
     assert after == before + 1  # bogus master collapses to the 'invalid' label (cardinality bound)
     assert json.loads(capture_audit[-1])['master'] == 'bogus-not-in-fleet'  # raw value kept in the log
+
+
+def test_summarize_args_keeps_dropped_key_names_not_values():
+    summary = audit._summarize_args({'job_name': 'secret-job', 'build_number': 7, 'config_xml': '<x/>'})
+
+    assert summary == {'dropped_keys': ['build_number', 'config_xml', 'job_name']}
+    assert 'secret-job' not in json.dumps(summary)
+
+
+@pytest.mark.asyncio
+async def test_bad_arguments_log_error_detail_through_fastmcp(capture_audit, mocker):
+    from fastmcp import Client
+
+    from mcp_jenkins.server import mcp
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+
+    async with Client(mcp) as client:
+        with pytest.raises(Exception, match='fullname'):
+            await client.call_tool('get_build', {'job_name': 'x', 'master': 'ps80'})
+
+    record = json.loads(capture_audit[-1])
+    assert record['status'] == 'error'
+    assert record['error'] == 'ValidationError'
+    assert record['error_module'] == 'fastmcp.exceptions'
+    assert {'loc': 'fullname', 'type': 'missing_argument'} in record['error_detail']
+    assert {'loc': 'job_name', 'type': 'unexpected_keyword_argument'} in record['error_detail']
+    assert record['args'] == {'master': 'ps80', 'dropped_keys': ['job_name']}

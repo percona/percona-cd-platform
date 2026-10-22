@@ -77,6 +77,11 @@ _SAFE_ARG_KEYS = frozenset(
     }
 )
 
+# Bounds on what an audit line may carry about a failed or malformed call (names only, never values).
+_MAX_KEY_LEN = 40
+_MAX_DROPPED_KEYS = 10
+_MAX_ERROR_DETAILS = 5
+
 # Dedicated stdout sink: emit ONLY audit records, as one raw JSON line (parsed by Loki `| json`).
 logger.add(sys.stdout, level='INFO', format='{message}', filter=lambda r: r['extra'].get('audit', False))
 
@@ -111,16 +116,49 @@ def _master_label(name: str | None) -> str:
 
 
 def _summarize_args(arguments: dict | None) -> dict:
-    """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped."""
+    """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped.
+
+    The NAMES of dropped keys are kept (never their values), so a call that failed on an argument the
+    tool does not take (job_name instead of fullname) still shows what the client sent.
+    """
     if not arguments:
         return {}
     summary: dict = {}
+    dropped: list[str] = []
     for key, value in arguments.items():
         if key in _SAFE_ARG_KEYS:
             summary[key] = value
         elif key == 'data' and isinstance(value, dict):
             summary['data_keys'] = sorted(value.keys())  # build-parameter NAMES, never values
+        elif key != 'data':
+            dropped.append(str(key)[:_MAX_KEY_LEN])
+    if dropped:
+        summary['dropped_keys'] = sorted(dropped)[:_MAX_DROPPED_KEYS]
     return summary
+
+
+def _error_detail(error: Exception) -> list[dict] | None:
+    """Pydantic `loc` + `type` per failed argument (never the input value), or None.
+
+    FastMCP raises its own ValidationError for bad arguments with the pydantic error as the cause; a
+    pydantic error raised inside a tool body (an unexpected Jenkins payload) carries errors() itself.
+    """
+    for source in (error, error.__cause__):
+        errors = getattr(source, 'errors', None)
+        if not callable(errors):
+            continue
+        try:
+            items = errors()
+        except Exception:  # noqa: BLE001
+            return None
+        return [
+            {
+                'loc': '.'.join(str(part)[:_MAX_KEY_LEN] for part in item.get('loc', ())),
+                'type': item.get('type'),
+            }
+            for item in items[:_MAX_ERROR_DETAILS]
+        ]
+    return None
 
 
 def _identity() -> dict:
@@ -208,6 +246,10 @@ class AuditMiddleware(Middleware):
             if record.get('status') != 'denied':
                 record['status'] = 'error'
                 record['error'] = type(e).__name__
+                record['error_module'] = type(e).__module__
+                detail = _error_detail(e)
+                if detail:
+                    record['error_detail'] = detail
             raise
         finally:
             duration_s = time.perf_counter() - start

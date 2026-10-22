@@ -15,15 +15,23 @@ async def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[di
 
 
 @mcp.tool(tags=['read'])
-async def get_queue_item(ctx: Context, id: int, master: MasterArg = None) -> dict:
+async def get_queue_item(
+    ctx: Context, id: int | None = None, number: int | None = None, master: MasterArg = None
+) -> dict:
     """Get a specific item in Jenkins queue by id
 
     Args:
-        id: The id of the queue item
+        id: The id of the queue item (the int build_item and replay_build return)
+        number: Alias of id, for callers that name the queue item a number
 
     Returns:
         The queue item
     """
+    if id is None:
+        id = number
+    if id is None:
+        msg = 'get_queue_item needs id (the queue item id that build_item returns)'
+        raise ValueError(msg)
     item = jenkins(ctx, master).get_queue_item(id=id, depth=1)
     return item.model_dump(exclude_none=True)
 
