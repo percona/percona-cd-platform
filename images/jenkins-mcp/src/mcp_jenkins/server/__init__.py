@@ -71,7 +71,10 @@ _INSTRUCTIONS = (
     'Most read tools are open to any authenticated user (get_item_config and search_item_configs need '
     'the jenkins-mcp-writers group); the operate (build/replay/stop/cancel) and manage '
     '(create/update/delete job) tiers also need jenkins-mcp-writers. Every per-master tool takes an '
-    'optional master argument (omit for the default); call list_masters() for the configured masters. For '
+    'optional master argument (omit for the default); call list_masters() for the configured masters. '
+    'Prefer the batch tools over loops: find_items to locate a job on any master, get_build_walk to '
+    'summarise or compare recent builds, wait_for_build after build_item, a glob relative_path in '
+    'grep_build_artifact for many artifacts. For '
     'a failing build start with get_build_failure_summary; if it reports partial=true (a rolled-up wrapper '
     'case), get the real failing tests from get_build_console_tail or grep_build_artifact.'
 )

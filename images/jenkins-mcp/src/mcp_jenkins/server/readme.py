@@ -99,7 +99,7 @@ _CATALOG = [
             ),
             (
                 'get_build_history',
-                'get_build_history(fullname, count?, master?)     recent builds (number/result/timestamp/duration)',
+                'get_build_history(fullname, count?, master?)  build numbers + timing only (summaries: get_build_walk)',
             ),
             (
                 'get_build_walk',
@@ -223,7 +223,8 @@ _SAMPLES_READ = [
     '  "the end of the <job> log" -> get_build_console_tail(fullname="<job>", lines=200)',
     '  "what parameters does <job> take?" -> get_item_parameters(fullname="<job>")',
     '  "what is running right now?" -> get_running_builds(master="<master>")',
-    '  "last 10 builds of <job>" -> get_build_history(fullname="<job>", count=10)',
+    '  "summarise the last 10 builds of <job>" -> get_build_walk(fullname="<job>", count=10)',
+    '  "just the build numbers of <job>" -> get_build_history(fullname="<job>", count=10)',
     '  "compare the last 20 runs of <job>" -> get_build_walk(fullname="<job>", count=20)',
     '  "which stage failed in <job>?" -> get_build_stages(fullname="<job>")',
     '  "what changed in <job> build 50?" -> get_build_changeset(fullname="<job>", number=50)',
