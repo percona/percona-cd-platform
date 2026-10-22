@@ -6,6 +6,7 @@ from requests.exceptions import HTTPError
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
+from mcp_jenkins.server.build_export import _resolve_number as _resolve_client_number
 
 # Caps that bound a single read so a tool call can never pull an unbounded payload or hand a
 # pathological regex to the line filter.
@@ -32,12 +33,9 @@ _WRAPPER_FAIL_STATUSES = {'FAILED', 'REGRESSION'}
 
 def _resolve_number(ctx: Context, fullname: str, number: int | None, master: MasterArg) -> int:
     """Resolve an explicit build number, or the job's last build number, or raise."""
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        msg = f'No build found for job: {fullname}'
-        raise ValueError(msg)
-    return number
+    if number is not None:
+        return number
+    return _resolve_client_number(jenkins(ctx, master), fullname, None)
 
 
 def _is_wrapper_case(entry: dict) -> bool:
@@ -106,8 +104,7 @@ async def get_build(ctx: Context, fullname: str, number: int | None = None, mast
     Returns:
         The build info
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build(fullname=fullname, number=number).model_dump(exclude_none=True)
 
@@ -125,8 +122,7 @@ async def get_build_scripts(
     Returns:
         A list of scripts used in the build
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_replay(fullname=fullname, number=number).scripts
 
@@ -176,8 +172,7 @@ async def get_build_test_report(
     Returns:
         The test report of the build
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_test_report(fullname=fullname, number=number)
 
@@ -355,8 +350,7 @@ async def get_build_parameters(
     Returns:
         A dictionary of build parameter names and their values
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_parameters(fullname=fullname, number=number)
 
@@ -387,8 +381,7 @@ async def get_all_build_artifacts(
         path is recognizable) a short `hint` of what the artifact holds. For a `.tar.gz`, use
         list_archive_artifact to see members and grep_build_artifact(archive_member=...) to read one.
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     artifacts = []
     for artifact in jenkins(ctx, master).get_build_artifacts(fullname=fullname, number=number):
@@ -416,8 +409,7 @@ async def get_build_artifact(
     Returns:
         A dict with 'content' (str) and 'encoding' ('utf-8' or 'base64')
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     content = jenkins(ctx, master).get_build_artifact(fullname=fullname, number=number, relative_path=relative_path)
 
@@ -441,8 +433,7 @@ async def get_build_artifact_url(
     Returns:
         The direct Jenkins URL of the artifact
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_artifact_url(fullname=fullname, number=number, relative_path=relative_path)
 
@@ -474,8 +465,7 @@ async def get_build_stages(ctx: Context, fullname: str, number: int | None = Non
     Returns:
         The run status plus a stages list; empty stages for a non-pipeline job
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
     if number is None:
         raise ValueError(f'No build found for job: {fullname}')
 
@@ -495,8 +485,7 @@ async def get_build_changeset(
     Returns:
         A list of changes: commitId, author, msg, timestamp, affectedPaths
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
     if number is None:
         raise ValueError(f'No build found for job: {fullname}')
 
@@ -518,8 +507,7 @@ async def replay_build(ctx: Context, fullname: str, number: int | None = None, m
     Returns:
         The queue item number of the newly triggered build.
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
     if number is None:
         raise ValueError(f'No build found for job: {fullname}')
 
