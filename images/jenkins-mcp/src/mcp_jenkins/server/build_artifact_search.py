@@ -20,6 +20,7 @@ from collections import deque
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, BinaryIO
 
+import urllib3
 from fastmcp import Context
 from requests.exceptions import RequestException
 
@@ -49,6 +50,7 @@ _MAX_GLOB_FILES = 30  # grep glob: most artifacts one call greps (the MTR worker
 _MAX_GLOB_BYTES = 256 * 1024 * 1024  # grep glob: total bytes scanned across all files
 _GLOB_SECONDS = 120  # grep glob: stop starting new files after this wall-clock time
 _GLOB_CHARS = frozenset('*?[]')
+_ARCHIVE_SUFFIXES = ('.tar.gz', '.tgz', '.gz', '.zip', '.tar', '.bz2', '.xz', '.zst')
 
 
 class _ArchiveLimitError(Exception):
@@ -158,7 +160,9 @@ def _build_matcher(pattern: str, literal: bool, ignore_case: bool) -> Callable[[
     return lambda line: rx.search(line) is not None
 
 
-def _bounded_line_reader(read: Callable[[int], bytes], holder: dict) -> Iterator[tuple[int, str]]:
+def _bounded_line_reader(
+    read: Callable[[int], bytes], holder: dict, limit: int = _MAX_BYTES_SCANNED
+) -> Iterator[tuple[int, str]]:
     """Yield (line_no, line) from a byte reader, bounded in MEMORY and total bytes at read time.
 
     The pending line buffer is capped at _MAX_LINE_LEN: a line longer than that is emitted truncated
@@ -168,8 +172,8 @@ def _bounded_line_reader(read: Callable[[int], bytes], holder: dict) -> Iterator
     n = 0
     buf = bytearray()
     eating = False  # discarding the tail of an over-length line until the next newline
-    while holder['scanned'] < _MAX_BYTES_SCANNED:
-        chunk = read(min(_CHUNK, _MAX_BYTES_SCANNED - holder['scanned']))
+    while holder['scanned'] < limit:
+        chunk = read(min(_CHUNK, limit - holder['scanned']))
         if not chunk:
             break
         holder['scanned'] += len(chunk)
@@ -251,12 +255,13 @@ def _grep_one(
     matcher: Callable[[str], bool],
     context_lines: int,
     max_matches: int,
+    byte_limit: int = _MAX_BYTES_SCANNED,
 ) -> dict:
     """Stream one artifact (or one member of it) through the bounded reader and collect matches."""
     holder = {'scanned': 0, 'truncated': False}
     with client.stream_build_artifact(fullname=fullname, number=number, relative_path=safe_path) as response:
         if safe_member is None:
-            lines = _bounded_line_reader(response.raw.read, holder)
+            lines = _bounded_line_reader(response.raw.read, holder, byte_limit)
             matches, limit_hit = _grep_stream(
                 lines, matcher=matcher, context_lines=context_lines, max_matches=max_matches
             )
@@ -290,9 +295,13 @@ def _grep_glob(
         (a.relativePath for a in client.get_build_artifacts(fullname=fullname, number=number)),
         key=_natural_key,
     )
-    selected = [p for p in paths if fnmatch.fnmatchcase(p, glob)]
+    matched = [p for p in paths if fnmatch.fnmatchcase(p, glob)]
+    # Compressed bytes are not text: a glob greps plain files, an archive needs archive_member.
+    selected = [p for p in matched if not p.endswith(_ARCHIVE_SUFFIXES)]
     files: list[dict] = []
     notes: list[str] = []
+    if len(selected) < len(matched):
+        notes.append(f'{len(matched) - len(selected)} archive(s) skipped; grep one with archive_member')
     total_matches = total_bytes = 0
     deadline = time.monotonic() + _GLOB_SECONDS
     for path in selected[:_MAX_GLOB_FILES]:
@@ -310,8 +319,10 @@ def _grep_glob(
                 matcher=matcher,
                 context_lines=context_lines,
                 max_matches=min(max_matches, _MAX_MATCHES - total_matches),
+                byte_limit=min(_MAX_BYTES_SCANNED, _MAX_GLOB_BYTES - total_bytes),
             )
-        except (ValueError, RequestException) as e:
+        except (ValueError, RequestException, urllib3.exceptions.HTTPError) as e:
+            # urllib3 errors come from response.raw.read mid-stream (reset, read timeout, decode).
             files.append({'relative_path': path, 'error': f'{type(e).__name__}: {e}'[:300]})
             continue
         result.pop('archive_member')

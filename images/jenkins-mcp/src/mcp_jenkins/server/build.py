@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastmcp import Context
 from pydantic import BaseModel
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
@@ -410,7 +410,8 @@ def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None)
         try:
             client.stop_build(fullname=target.fullname, number=target.number)
             row['status'] = 'stopped'
-        except HTTPError as e:
+        except RequestException as e:
+            # Includes connection errors and timeouts, where the stop may or may not have landed.
             row.update(status='error', error=f'{type(e).__name__}: {e}'[:300])
         results.append(row)
     stopped = sum(r['status'] == 'stopped' for r in results)
@@ -562,7 +563,7 @@ def get_build_walk(
         the included parameters, test_counts and stages [{name, status, durationMillis}]), errors
         (per-build stage fetch failures, inline), notes (any cap or budget that clipped the walk).
     """
-    wanted = set(include) if include else set(_WALK_INCLUDES)
+    wanted = set(include) if include is not None else set(_WALK_INCLUDES)
     notes: list[str] = []
     clamped = max(1, min(count, _MAX_WALK_COUNT))
     if clamped != count:
@@ -597,8 +598,6 @@ async def get_build_stages(ctx: Context, fullname: str, number: int | None = Non
         The run status plus a stages list; empty stages for a non-pipeline job
     """
     number = _resolve_number(ctx, fullname, number, master)
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
 
     return jenkins(ctx, master).get_build_stages(fullname=fullname, number=number).model_dump(exclude_none=True)
 
@@ -617,8 +616,6 @@ async def get_build_changeset(
         A list of changes: commitId, author, msg, timestamp, affectedPaths
     """
     number = _resolve_number(ctx, fullname, number, master)
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
 
     changes = jenkins(ctx, master).get_build_changeset(fullname=fullname, number=number)
     return [c.model_dump(exclude_none=True) for c in changes]
@@ -639,8 +636,6 @@ async def replay_build(ctx: Context, fullname: str, number: int | None = None, m
         The queue item number of the newly triggered build.
     """
     number = _resolve_number(ctx, fullname, number, master)
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
 
     params = jenkins(ctx, master).get_build_parameters(fullname=fullname, number=number)
     if params:

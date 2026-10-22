@@ -62,9 +62,10 @@ def test_blanks_secrets_in_matching_lines(mock_jenkins, mocker):
     assert '<authToken>[redacted]</authToken>' in text
 
 
-def test_rejects_catch_all_job_pattern(mock_jenkins, mocker):
-    with pytest.raises(ValueError, match='narrowing fullname_pattern'):
-        item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='.*')
+@pytest.mark.parametrize('pattern', ['.*', 'pmm|.*', '.{0,}'])
+def test_rejects_catch_all_job_pattern(mock_jenkins, mocker, pattern):
+    with pytest.raises(ValueError, match='must not match every name'):
+        item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern=pattern)
     mock_jenkins.query_items.assert_not_called()
 
 

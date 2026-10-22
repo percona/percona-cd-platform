@@ -372,3 +372,47 @@ def test_grep_glob_rejects_archive_member(mock_jenkins, mocker):
         bas.grep_build_artifact(
             mocker.Mock(), fullname='j', relative_path='*.tar.gz', pattern='x', number=1, archive_member='a.log'
         )
+
+
+def test_grep_glob_skips_archives(mock_jenkins, mocker):
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'r/a.log', 'r/logs.tar.gz', 'r/core.gz')
+    _streams(mock_jenkins, {'r/a.log': ['hit']})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='r/*', pattern='hit', number=1)
+
+    assert [f['relative_path'] for f in out['files']] == ['r/a.log']
+    assert out['notes'] == ['2 archive(s) skipped; grep one with archive_member']
+
+
+def test_grep_glob_total_bytes_never_pass_the_cap(mock_jenkins, mocker):
+    mocker.patch.object(bas, '_MAX_GLOB_BYTES', 50)
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log')
+    _streams(mock_jenkins, {'a.log': ['x' * 30], 'b.log': ['y' * 30]})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='z', number=1)
+
+    assert out['bytes_scanned'] <= 50
+    assert out['files'][1]['truncated'] is True
+
+
+def test_grep_glob_reports_a_mid_stream_urllib3_error_inline(mock_jenkins, mocker):
+    import urllib3
+
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log')
+    broken = _plain('hit')
+
+    def boom(_n: int) -> bytes:
+        msg = 'Connection broken'
+        raise urllib3.exceptions.ProtocolError(msg)
+
+    broken.raw.read = boom
+
+    def stream(*, fullname: str, number: int, relative_path: str):  # noqa: ARG001
+        return _stream(broken if relative_path == 'a.log' else _plain('hit'))
+
+    mock_jenkins.stream_build_artifact.side_effect = stream
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='hit', number=1)
+
+    assert out['files'][0]['error'].startswith('ProtocolError')
+    assert out['files'][1]['match_count'] == 1

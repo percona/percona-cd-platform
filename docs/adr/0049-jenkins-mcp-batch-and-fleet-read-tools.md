@@ -22,19 +22,21 @@ Add batch tools that do the loop server-side, each bounded, each reporting parti
 
 - `get_build_walk` (read): history, parameters, JUnit counts and queue ids in one REST request, stages per build under a time budget, at most 30 builds.
 - `wait_for_build` (read): queue id to build number, then wait until finished, at most 60 s per call, never raises on timeout. `QueueItem` keeps `executable` and `cancelled`, and builds carry `queueId` as the fallback once Jenkins forgets a queue item.
-- `find_items` (read): one fullname regex across every master the caller may reach, concurrently, 30 s budget, catch-all patterns rejected.
+- `find_items` (read): one fullname regex across every master the caller may reach, concurrently, 30 s budget. A pattern that matches every name (it matches the empty string) is rejected, the same guard as `search_item_configs`.
 - `grep_build_artifact` glob: matched against the build's artifact list, never sent to Jenkins, every selected path validated again, at most 30 files, 200 matches, 256 MiB in total.
 - `search_item_configs` (read, writers-gated like `get_item_config`): matching lines only, secret-bearing elements and encrypted values blanked, at most 100 jobs.
 - `stop_builds` (operate): up to 50 explicit `{fullname, number}` targets, duplicates refused, a status per build.
 
 Two rules hold for every tool that fans out:
 
-- **Blocking work leaves the event loop.** A tool that makes more than one Jenkins request is a sync `def` (FastMCP runs it on a worker thread) or awaits each request through `anyio.to_thread.run_sync`. A blocking body on the loop freezes `/healthz` and the kubelet kills the pod, the failure behind the `search_build_logs` fix. `grep_build_artifact` moved to sync for this reason.
+- **Blocking work leaves the event loop.** Each batch tool is a sync `def` (FastMCP runs it on a worker thread) or awaits each request through `anyio.to_thread.run_sync`. A blocking body on the loop freezes `/healthz` and the kubelet kills the pod, the failure behind the `search_build_logs` fix. `grep_build_artifact` moved to sync for this reason. The older single-build `async def` tools still make one or two short requests on the loop (the last-build lookup plus the read). Moving them is a follow-up, not part of this decision.
 - **Scope is decided on the request context.** The caller's master scope comes from the token in a context variable. A plain thread pool does not carry it, so `allowed_masters()` there returns "unscoped" and a scoped service account would reach the whole fleet. `find_items` reads the scope and builds every client on the request context, and worker threads only run the request.
 
 ## Consequences
 
 - 46 tools (38 read, 5 operate, 3 manage). Clients discover them through `get_readme` and the README.
-- The audit line keeps `error_module`, the pydantic `loc` and `type` of a failed argument, and the names (never values) of dropped arguments, so argument mistakes are diagnosable from Loki.
+- The audit line keeps `error_module`, the pydantic `loc` and `type` of a failed argument, and the names (never values) of dropped arguments, so argument mistakes are diagnosable from Loki. A `search_item_configs` pattern is logged as a hash and length only, since a config search can be for a secret value.
 - `search_item_configs` redacts single-line secret elements only. A plaintext secret split across lines in a config would pass through to a writer, who can already read the full config with `get_item_config`.
 - Batch calls run longer than single calls (up to the budgets above). The fleet request timeout per Jenkins request is unchanged.
+- `find_items` and `wait_for_build` abandon a request still running at their deadline. The worker thread keeps running until the Jenkins request times out and no longer holds an AnyIO limiter slot, so repeated timeouts can briefly run more threads than the limiter allows.
+- `search_item_configs` redaction keys on element names. A plaintext secret in a generic element (a string parameter's `defaultValue`) passes through to the writer, who can read the full config anyway. A regex pattern (opt-in, length-capped) has no per-line timeout, the same accepted limit as ADR 0040.

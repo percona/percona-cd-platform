@@ -45,6 +45,19 @@ def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
         raise ValueError(msg) from e
 
 
+def require_narrow_pattern(pattern: str, tool: str) -> None:
+    """Reject a job-selecting regex that is invalid or matches every name.
+
+    A pattern that matches the empty string (".*", "a|.*", "x?") matches every job, so a fan-out
+    tool would read everything; this also compiles it once up front, so a bad regex fails the call
+    instead of every master or job.
+    """
+    compiled = _compile_query_pattern(pattern)
+    if compiled is None or compiled.search('') is not None:
+        msg = f'{tool} needs a fullname_pattern that narrows the jobs (it must not match every name)'
+        raise ValueError(msg)
+
+
 class Jenkins:
     DEFAULT_HEADERS = {'Content-Type': 'text/xml; charset=utf-8'}
 

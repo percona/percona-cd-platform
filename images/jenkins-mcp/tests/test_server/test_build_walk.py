@@ -104,3 +104,12 @@ def test_walk_stops_stage_requests_after_budget(mock_jenkins, mocker):
     assert mock_jenkins.get_build_stages.call_count == 1
     assert 'stages' not in result['builds'][1]
     assert 'stages budget' in result['notes'][0]
+
+
+def test_walk_empty_include_fetches_nothing_extra(mock_jenkins, mocker):
+    mock_jenkins.get_build_walk.return_value = [_raw(1, params=[{'name': 'A', 'value': '1'}])]
+
+    result = build.get_build_walk(mocker.Mock(), fullname='job1', include=[])
+
+    mock_jenkins.get_build_stages.assert_not_called()
+    assert set(result['builds'][0]) == {'number', 'result', 'building', 'timestamp', 'duration', 'url', 'queue_id'}

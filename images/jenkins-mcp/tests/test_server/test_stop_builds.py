@@ -48,3 +48,15 @@ def test_refuses_more_than_fifty(mock_jenkins, mocker):
 def test_refuses_empty(mock_jenkins, mocker):
     with pytest.raises(ValueError, match='at least one'):
         build.stop_builds(mocker.Mock(), items=[])
+
+
+def test_transport_error_on_one_target_keeps_the_batch_going(mock_jenkins, mocker):
+    from requests.exceptions import ConnectionError as RequestsConnectionError
+
+    mock_jenkins.stop_build.side_effect = [None, RequestsConnectionError('reset by peer'), None]
+    items = [StopTarget(fullname='a', number=n) for n in (1, 2, 3)]
+
+    out = build.stop_builds(mocker.Mock(), items=items)
+
+    assert [r['status'] for r in out['results']] == ['stopped', 'error', 'stopped']
+    assert out['results'][1]['error'] == 'ConnectionError: reset by peer'

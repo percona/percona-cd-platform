@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import time
+import urllib.parse
 from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeVar
 
@@ -66,14 +67,33 @@ _POLL_INTERVAL_SECONDS = 2
 _QUEUE_FALLBACK_HISTORY = 20
 
 
-async def _blocking(fn: Callable[..., _T], **kwargs: object) -> _T:
-    """Run one blocking Jenkins request on a worker thread (contextvars, so the caller's scope, carry over)."""
-    return await anyio.to_thread.run_sync(functools.partial(fn, **kwargs))
+async def _blocking(fn: Callable[..., _T], deadline: float, **kwargs: object) -> _T:
+    """Run one blocking Jenkins request on a worker thread, giving up at the deadline.
+
+    contextvars (the caller's scope) carry over to the thread. A request still running at the
+    deadline is abandoned to finish on its own and TimeoutError is raised.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError
+    with anyio.move_on_after(remaining) as scope:
+        return await anyio.to_thread.run_sync(functools.partial(fn, **kwargs), abandon_on_cancel=True)
+    if scope.cancelled_caught:
+        raise TimeoutError
+    raise AssertionError  # unreachable: the block either returned or was cancelled
 
 
-async def _number_from_history(client: 'Jenkins', fullname: str, queue_id: int) -> int | None:
-    builds = await _blocking(client.get_build_history, fullname=fullname, count=_QUEUE_FALLBACK_HISTORY)
+async def _number_from_history(client: 'Jenkins', fullname: str, queue_id: int, deadline: float) -> int | None:
+    builds = await _blocking(client.get_build_history, deadline, fullname=fullname, count=_QUEUE_FALLBACK_HISTORY)
     return next((b.number for b in builds if b.queueId == queue_id), None)
+
+
+def _belongs_to(url: str | None, fullname: str) -> bool:
+    """True when a Jenkins job or build URL is under the job named fullname (or carries no URL)."""
+    if not url:
+        return True
+    job_path = '/job/' + '/job/'.join(fullname.strip('/').split('/')) + '/'
+    return job_path in urllib.parse.unquote(url)
 
 
 @mcp.tool(tags=['read'])
@@ -112,31 +132,38 @@ async def wait_for_build(
     def done(state: str, *, timed_out: bool = False) -> dict:
         return {**out, 'state': state, 'timed_out': timed_out, 'waited_seconds': round(time.monotonic() - start, 1)}
 
-    while number is None:
-        try:
-            item = await _blocking(client.get_queue_item, id=queue_id, depth=1)
-        except HTTPError as e:
-            if e.response is None or e.response.status_code != 404:
-                raise
-            number = await _number_from_history(client, fullname, queue_id)
-            if number is None:
-                return done('not_found')
-            break
-        if item.cancelled:
-            return done('cancelled')
-        if item.executable is not None and item.executable.number is not None:
-            number = item.executable.number
-            break
-        if time.monotonic() + _POLL_INTERVAL_SECONDS > deadline:
-            return done('queued', timed_out=True)
-        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    try:
+        while number is None:
+            try:
+                item = await _blocking(client.get_queue_item, deadline, id=queue_id, depth=1)
+            except HTTPError as e:
+                if e.response is None or e.response.status_code != 404:
+                    raise
+                number = await _number_from_history(client, fullname, queue_id, deadline)
+                if number is None:
+                    return done('not_found')
+                break
+            executable_url = item.executable.url if item.executable else None
+            if not (_belongs_to(item.task.url, fullname) and _belongs_to(executable_url, fullname)):
+                msg = f'queue item {queue_id} is for {item.task.url or executable_url}, not job {fullname!r}'
+                raise ValueError(msg)
+            if item.cancelled:
+                return done('cancelled')
+            if item.executable is not None and item.executable.number is not None:
+                number = item.executable.number
+                break
+            if time.monotonic() + _POLL_INTERVAL_SECONDS > deadline:
+                return done('queued', timed_out=True)
+            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
-    out['number'] = number
-    while True:
-        build = await _blocking(client.get_build, fullname=fullname, number=number)
-        out.update(url=build.url, result=build.result, building=build.building)
-        if not build.building:
-            return done('finished')
-        if time.monotonic() + _POLL_INTERVAL_SECONDS > deadline:
-            return done('running', timed_out=True)
-        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+        out['number'] = number
+        while True:
+            build = await _blocking(client.get_build, deadline, fullname=fullname, number=number)
+            out.update(url=build.url, result=build.result, building=build.building)
+            if not build.building:
+                return done('finished')
+            if time.monotonic() + _POLL_INTERVAL_SECONDS > deadline:
+                return done('running', timed_out=True)
+            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    except TimeoutError:
+        return done('queued' if out['number'] is None else 'running', timed_out=True)

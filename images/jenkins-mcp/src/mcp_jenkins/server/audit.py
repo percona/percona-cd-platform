@@ -120,7 +120,7 @@ def _master_label(name: str | None) -> str:
     return name if name in get_fleet().names() else 'invalid'
 
 
-def _summarize_args(arguments: dict | None) -> dict:
+def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
     """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped.
 
     The NAMES of dropped keys are kept (never their values), so a call that failed on an argument the
@@ -131,7 +131,11 @@ def _summarize_args(arguments: dict | None) -> dict:
     summary: dict = {}
     dropped: list[str] = []
     for key, value in arguments.items():
-        if key in _SAFE_ARG_KEYS:
+        if key == 'pattern' and tool in _CONFIG_READ_TOOLS:
+            # A config search can be for a secret value itself: log its fingerprint, never the text.
+            summary['pattern_sha'] = _hash(str(value))
+            summary['pattern_len'] = len(str(value))
+        elif key in _SAFE_ARG_KEYS:
             summary[key] = value
         elif key == 'data' and isinstance(value, dict):
             summary['data_keys'] = sorted(value.keys())  # build-parameter NAMES, never values
@@ -141,7 +145,8 @@ def _summarize_args(arguments: dict | None) -> dict:
                 {'fullname': i.get('fullname'), 'number': i.get('number')} for i in value[:50] if isinstance(i, dict)
             ]
             summary['items_count'] = len(value)
-        elif key not in ('data', 'items'):
+        else:
+            # Includes a data or items argument of the wrong type, which the tool will reject.
             dropped.append(str(key)[:_MAX_KEY_LEN])
     if dropped:
         summary['dropped_keys'] = sorted(dropped)[:_MAX_DROPPED_KEYS]
@@ -158,17 +163,17 @@ def _error_detail(error: Exception) -> list[dict] | None:
         errors = getattr(source, 'errors', None)
         if not callable(errors):
             continue
+        # Runs inside the middleware's except block: any surprise here must not mask the real error.
         try:
-            items = errors()
+            return [
+                {
+                    'loc': '.'.join(str(part)[:_MAX_KEY_LEN] for part in item.get('loc', ())),
+                    'type': str(item.get('type')),
+                }
+                for item in list(errors())[:_MAX_ERROR_DETAILS]
+            ]
         except Exception:  # noqa: BLE001
             return None
-        return [
-            {
-                'loc': '.'.join(str(part)[:_MAX_KEY_LEN] for part in item.get('loc', ())),
-                'type': item.get('type'),
-            }
-            for item in items[:_MAX_ERROR_DETAILS]
-        ]
     return None
 
 
@@ -217,7 +222,7 @@ class AuditMiddleware(Middleware):
             'tool': tool,
             'is_write': tool in _WRITE_TOOLS,
             'master': _selected_master(arguments),
-            'args': _summarize_args(arguments),
+            'args': _summarize_args(arguments, tool),
             **_identity(),
         }
         start = time.perf_counter()

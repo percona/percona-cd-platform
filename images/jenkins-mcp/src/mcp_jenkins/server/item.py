@@ -6,6 +6,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
+from mcp_jenkins.jenkins.rest_client import require_narrow_pattern
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_artifact_search import _build_matcher
 
@@ -72,16 +73,15 @@ _MAX_CONFIG_LINE = 500
 _MAX_CONFIG_MATCHES_PER_JOB = 50
 _MAX_CONFIG_MATCHES = 500
 _CONFIG_SEARCH_SECONDS = 120
-_CONFIG_CATCH_ALL = {'', '.*', '.+', '.*?', '*', '^.*$'}
 # Matching lines are returned with secret-bearing element text and Jenkins-encrypted blobs blanked.
 _SECRET_ELEMENT = re.compile(
-    r'<([\w.-]*(?:authToken|password|passphrase|secret|token|apiKey)[\w.-]*)>[^<]*</\1>', re.IGNORECASE
+    r'<([\w.-]*(?:authToken|password|passphrase|secret|token|apiKey)[\w.-]*)(\s[^>]*)?>[^<]*</\1>', re.IGNORECASE
 )
 _ENCRYPTED_BLOB = re.compile(r'\{AQAAAB[A-Za-z0-9+/=]+\}')
 
 
 def _redact(line: str) -> str:
-    line = _SECRET_ELEMENT.sub(r'<\1>[redacted]</\1>', line)
+    line = _SECRET_ELEMENT.sub(r'<\1\2>[redacted]</\1>', line)
     return _ENCRYPTED_BLOB.sub('{[redacted]}', line)
 
 
@@ -112,9 +112,7 @@ def search_item_configs(
         A dict: jobs [{fullname, matches [{line_no, line}], truncated?}] for jobs with a match,
         errors [{fullname, error}], jobs_selected, jobs_read, match_count, notes.
     """
-    if fullname_pattern.strip() in _CONFIG_CATCH_ALL:
-        msg = 'search_item_configs needs a narrowing fullname_pattern (a catch-all would read every config)'
-        raise ValueError(msg)
+    require_narrow_pattern(fullname_pattern, 'search_item_configs')
     matcher = _build_matcher(pattern, literal, ignore_case)
     limit = max(1, min(limit, _MAX_CONFIG_JOBS))
     client = jenkins(ctx, master)

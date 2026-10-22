@@ -82,10 +82,10 @@ def export(loki: str, days: int) -> tuple[list[dict], int]:
     t = start
     while t < end:
         window_end = min(t + WINDOW_S, end)
-        page_end = window_end
+        page_end_ns = window_end * 1_000_000_000
         while True:
             qs = urllib.parse.urlencode({
-                "query": QUERY, "start": f"{t}000000000", "end": f"{page_end}000000000",
+                "query": QUERY, "start": t * 1_000_000_000, "end": page_end_ns,
                 "limit": PAGE, "direction": "backward",
             })
             with urllib.request.urlopen(f"{loki}/loki/api/v1/query_range?{qs}", timeout=60) as resp:
@@ -102,7 +102,9 @@ def export(loki: str, days: int) -> tuple[list[dict], int]:
                 seen[record.get("request_id") or line] = record
             if len(values) < PAGE:
                 break
-            page_end = min(int(v[0]) for v in values) // 1_000_000_000
+            # end is exclusive: reopen it one nanosecond past the oldest line returned, so lines that
+            # share its timestamp but missed this page are fetched again (dedupe drops the repeats).
+            page_end_ns = min(int(v[0]) for v in values) + 1
         t = window_end
     return sorted(seen.values(), key=lambda r: r["ts"]), raw
 

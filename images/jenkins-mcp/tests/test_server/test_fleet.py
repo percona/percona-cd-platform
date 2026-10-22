@@ -122,9 +122,42 @@ async def test_find_items_builds_clients_on_the_request_thread(two_masters, mock
 
 
 @pytest.mark.asyncio
-async def test_find_items_rejects_catch_all(two_masters):
-    with pytest.raises(ValueError, match='narrowing fullname_pattern'):
-        await fleet.find_items(fullname_pattern='.*')
+@pytest.mark.parametrize('pattern', ['.*', 'a|.*', '.{0,}', 'x?', '^', '(?:)'])
+async def test_find_items_rejects_patterns_that_match_every_name(two_masters, pattern):
+    with pytest.raises(ValueError, match='must not match every name'):
+        await fleet.find_items(fullname_pattern=pattern)
+    two_masters['ps80'].query_items.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_find_items_invalid_regex_fails_the_call_not_each_master(two_masters):
+    with pytest.raises(ValueError, match='invalid regex'):
+        await fleet.find_items(fullname_pattern='(unclosed')
+    with pytest.raises(ValueError, match='invalid regex'):
+        await fleet.find_items(fullname_pattern='ok', class_pattern='[')
+    two_masters['ps80'].query_items.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_find_items_dedupes_requested_masters(two_masters):
+    two_masters['ps57'].query_items.return_value = [_job('a')]
+
+    result = await fleet.find_items(fullname_pattern='a', masters=['ps57', 'ps57'])
+
+    assert two_masters['ps57'].query_items.call_count == 1
+    assert result['total'] == 1
+
+
+@pytest.mark.asyncio
+async def test_find_items_hides_the_fleet_from_a_scoped_caller(two_masters, mocker):
+    mocker.patch('mcp_jenkins.server.fleet.allowed_masters', return_value=frozenset({'ps57'}))
+    two_masters['ps57'].query_items.return_value = []
+
+    result = await fleet.find_items(fullname_pattern='a', masters=['nope', 'ps80'])
+
+    assert result['per_master']['nope'] == {'error': 'not reachable for this account'}
+    assert result['per_master']['ps80'] == {'error': 'not reachable for this account'}
+    assert 'ps80' not in str(result['per_master']['nope'])
 
 
 @pytest.mark.asyncio

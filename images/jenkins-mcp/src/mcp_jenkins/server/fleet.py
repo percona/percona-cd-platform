@@ -12,13 +12,12 @@ from loguru import logger
 
 from mcp_jenkins.core.fleet import client_for, get_fleet
 from mcp_jenkins.core.scope import allowed_masters
+from mcp_jenkins.jenkins.rest_client import _compile_query_pattern, require_narrow_pattern
 from mcp_jenkins.server import mcp
 
 _MAX_FIND_ITEMS = 2000
 # Whole-call budget: a master still crawling its job tree at this point is reported as timed out.
 _FIND_SECONDS = 30
-# Patterns that would list every job on every master; find_items is for locating jobs.
-_FIND_CATCH_ALL = {'', '.*', '.+', '.*?', '*', '^.*$'}
 
 
 @mcp.tool(tags={'read'})
@@ -68,9 +67,8 @@ async def find_items(
         A dict: items [{master, fullname, class_, color, url}], per_master {name: {total} or {error}},
         total (matches across masters), returned, truncated.
     """
-    if fullname_pattern.strip() in _FIND_CATCH_ALL:
-        msg = 'find_items needs a narrowing fullname_pattern; to list one master use query_items(master=...)'
-        raise ValueError(msg)
+    require_narrow_pattern(fullname_pattern, 'find_items')
+    _compile_query_pattern(class_pattern)
     limit = max(1, min(limit, _MAX_FIND_ITEMS))
     fleet_names = get_fleet().names()
     # Scope is read here, on the request's own context: worker threads below never decide reachability.
@@ -79,11 +77,15 @@ async def find_items(
     per_master: dict[str, dict] = {}
     targets = reachable
     if masters is not None:
-        targets = [n for n in masters if n in reachable]
-        for name in masters:
-            if name not in fleet_names:
+        requested = list(dict.fromkeys(masters))
+        targets = [n for n in requested if n in reachable]
+        for name in requested:
+            if name in reachable:
+                continue
+            # A scoped caller learns nothing about masters outside its scope, not even which exist.
+            if allowed is None and name not in fleet_names:
                 per_master[name] = {'error': f'unknown master; configured: {fleet_names}'}
-            elif name not in reachable:
+            else:
                 per_master[name] = {'error': 'not reachable for this account'}
 
     found: dict[str, list] = {}

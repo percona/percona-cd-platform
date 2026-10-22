@@ -119,3 +119,36 @@ async def test_wait_keeps_the_event_loop_responsive(mock_jenkins, mocker):
 
     assert result.structured_content['state'] == 'finished'
     assert ticks >= 5
+
+
+@pytest.mark.asyncio
+async def test_queue_item_for_another_job_is_refused(mock_jenkins, mocker):
+    item = _item(task=QueueItemTask(url='https://ps80.cd/job/other-job/'))
+    mock_jenkins.get_queue_item.return_value = item
+
+    with pytest.raises(ValueError, match="not job 'job1'"):
+        await queue.wait_for_build(mocker.Mock(), fullname='job1', queue_id=45)
+
+
+@pytest.mark.asyncio
+async def test_queue_item_for_the_named_folder_job_is_accepted(mock_jenkins, mocker):
+    mock_jenkins.get_queue_item.return_value = _item(
+        task=QueueItemTask(url='https://ps80.cd/job/f/job/job%201/'),
+        executable=QueueExecutable(number=4, url='https://ps80.cd/job/f/job/job%201/4/'),
+    )
+    mock_jenkins.get_build.return_value = Build(number=4, url='u4', building=False, result='SUCCESS')
+
+    result = await queue.wait_for_build(mocker.Mock(), fullname='f/job 1', queue_id=45)
+
+    assert (result['state'], result['number']) == ('finished', 4)
+
+
+@pytest.mark.asyncio
+async def test_a_slow_request_cannot_push_the_wait_past_its_deadline(mock_jenkins, mocker):
+    mock_jenkins.get_build.side_effect = lambda **kw: time.sleep(3) or Build(number=3, url='u3', building=False)
+    started = time.monotonic()
+
+    result = await queue.wait_for_build(mocker.Mock(), fullname='job1', number=3, timeout_seconds=1)
+
+    assert time.monotonic() - started < 2
+    assert (result['state'], result['timed_out']) == ('running', True)

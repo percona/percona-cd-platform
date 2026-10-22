@@ -483,3 +483,27 @@ def test_summarize_args_logs_stop_targets_not_other_item_fields():
     )
 
     assert summary == {'items': [{'fullname': 'j', 'number': 3}, {'fullname': 'k', 'number': 4}], 'items_count': 2}
+
+
+def test_config_search_pattern_is_fingerprinted_not_logged():
+    summary = audit._summarize_args({'pattern': 'ghp_secretvalue', 'fullname_pattern': '^pmm3-'}, 'search_item_configs')
+
+    assert 'ghp_secretvalue' not in json.dumps(summary)
+    assert summary['pattern_len'] == 15
+    assert summary['pattern_sha'] == audit._hash('ghp_secretvalue')
+    assert summary['fullname_pattern'] == '^pmm3-'
+    assert audit._summarize_args({'pattern': 'ERROR'}, 'search_build_logs') == {'pattern': 'ERROR'}
+
+
+def test_wrongly_typed_data_and_items_are_recorded_as_dropped():
+    summary = audit._summarize_args({'data': '{"K": "V"}', 'items': 'a#1'})
+
+    assert summary == {'dropped_keys': ['data', 'items']}
+
+
+def test_error_detail_never_masks_the_real_error():
+    class OddError(Exception):
+        def errors(self) -> list:
+            return [object()]
+
+    assert audit._error_detail(OddError()) is None
