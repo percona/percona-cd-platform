@@ -416,3 +416,16 @@ def test_grep_glob_reports_a_mid_stream_urllib3_error_inline(mock_jenkins, mocke
 
     assert out['files'][0]['error'].startswith('ProtocolError')
     assert out['files'][1]['match_count'] == 1
+
+
+def test_grep_accepts_context_and_regex_aliases(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _plain('a', 'b', 'ERR 1', 'c', 'd'))
+
+    out = bas.grep_build_artifact(
+        mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERR [0-9]', number=1, before=2, after=1, regex=True
+    )
+
+    assert out['literal'] is False
+    assert out['match_count'] == 1
+    assert out['matches'][0]['before'] == ['a', 'b']
+    assert out['matches'][0]['after'] == ['c', 'd']
