@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from mcp_jenkins.core.fleet import client_for, get_fleet
+from mcp_jenkins.core.grants import get_grants
 from mcp_jenkins.core.scope import allowed_masters, check_master
 from mcp_jenkins.jenkins import Jenkins
 
@@ -34,6 +35,8 @@ class LifespanContext(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastMCP[LifespanContext]) -> AsyncIterator['LifespanContext']:
+    # Validate the service build grants now, so a malformed value stops the pod instead of the first build.
+    get_grants()
     yield LifespanContext(
         default_master=os.getenv('jenkins_master') or None,
         jenkins_session_singleton=os.getenv('jenkins_session_singleton', 'true').lower() == 'true',

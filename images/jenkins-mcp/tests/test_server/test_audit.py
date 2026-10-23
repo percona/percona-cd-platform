@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 from loguru import logger
 
+from mcp_jenkins.core import grants
 from mcp_jenkins.server import audit
 
 
@@ -525,3 +526,119 @@ async def test_successful_call_logs_its_parameters_and_no_dropped_keys(capture_a
 
     record = json.loads(capture_audit[-1])
     assert record['args'] == {'fullname': 'j', 'lines': 200}
+
+
+def _service_build_ctx(mocker, fullname, data=None):
+    token = mocker.Mock(
+        claims={
+            'sub': 's1',
+            'preferred_username': 'pmm-automation',
+            'groups': ['jenkins-mcp-service-accounts', 'jenkins-mcp-master-pmm'],
+        },
+        client_id='c',
+    )
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.core.grants.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.core.scope.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    mocker.patch(
+        'mcp_jenkins.core.grants.get_grants',
+        return_value={'pmm-automation': {'pmm': {'pmm3-nightly-orchestrator': grants.JobRule()}}},
+    )
+    ctx = mocker.Mock()
+    ctx.message.name = 'build_item'
+    ctx.message.arguments = {'fullname': fullname, 'build_type': 'build', **({'data': data} if data else {})}
+    ctx.timestamp = datetime.now(UTC)
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_service_account_build_on_granted_job_runs(capture_audit, mocker):
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+
+    async def call_next(_):
+        return 'queued'
+
+    assert await audit.AuditMiddleware().on_call_tool(ctx, call_next) == 'queued'
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'ok'
+    assert rec['is_write'] is True
+    assert rec['preferred_username'] == 'pmm-automation'
+
+
+@pytest.mark.asyncio
+async def test_service_account_build_on_ungranted_job_denied(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-ha-eks')
+    called = {'ran': False}
+
+    async def call_next(_):
+        called['ran'] = True
+
+    with pytest.raises(ToolError, match='not granted'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    assert called['ran'] is False
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'denied'
+    assert rec['deny_reason'] == 'not_granted'
+
+
+@pytest.mark.parametrize('tool', ['replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item', 'get_item_config'])
+@pytest.mark.asyncio
+async def test_service_account_grant_covers_build_item_only(capture_audit, mocker, tool):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+    ctx.message.name = tool
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_service_account_in_writers_group_still_needs_a_grant(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-ha-eks')
+    token = audit.get_access_token()
+    token.claims['groups'].append('jenkins-mcp-writers')
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError, match='not granted'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    ctx.message.name = 'stop_build'
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_malformed_service_build_is_audited_and_refused(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, ['pmm3-nightly-orchestrator'])
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'denied'
+    assert rec['deny_reason'] == 'not_granted'
+
+
+@pytest.mark.asyncio
+async def test_granted_build_records_the_resolved_master(capture_audit, mocker):
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+
+    async def call_next(_):
+        return 'queued'
+
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    assert json.loads(capture_audit[-1])['master'] == 'pmm'
