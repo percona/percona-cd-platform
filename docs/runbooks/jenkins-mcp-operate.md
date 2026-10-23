@@ -84,7 +84,7 @@ denied there, and a reputation policy denies repeated bad passwords from one IP 
 username (score -5, expires 24h after the first failure). A locked-out account is restored early by
 deleting its score: `GET $AK/policies/reputation/scores/?search=<name>`, then
 `DELETE $AK/policies/reputation/scores/<pk>/`. Service accounts stay on the read tier: never add
-one to `jenkins-mcp-writers`. They also reach only the masters named by their
+one to `jenkins-mcp-writers`. The only exception is a per-job build grant (next section). They also reach only the masters named by their
 `jenkins-mcp-master-<name>` groups. A service account with no such group reaches no master.
 
 1. Declare the user in `resources/addons/authentik/templates/blueprint-jenkins-mcp.yaml`
@@ -132,6 +132,22 @@ curl -s -H "Authorization: Bearer $TOK" "$AK/core/tokens/?user__username=<name>"
   | python3 -c 'import json,sys; [print(t["identifier"]) for t in json.load(sys.stdin)["results"]]' \
   | xargs -I{} curl -s -o /dev/null -w '{} %{http_code}\n' -H "Authorization: Bearer $TOK" -X DELETE "$AK/core/tokens/{}/"
 ```
+
+## Grant a service account build on named jobs
+
+A service account can start builds without the writers group, but only on the jobs listed for its
+username under `serviceGrants` in `resources/addons/jenkins-mcp/values.yaml` (username, then master,
+then job fullname). The grant covers `build_item` only. Stop, replay, cancel, the manage tier and
+config reads stay writers-only, and the master scope still applies.
+
+- `{}` grants the job with any parameters.
+- `require: [P]` refuses the call unless parameter `P` is present and non-blank.
+- `deny: {P: [V]}` refuses the call when `P` is `V`. Use it for a job's delete-everything action.
+
+Read the job's parameters (`get_item_parameters`) before granting a job that deletes or stops
+anything, and grant it only for one named resource. A merged values change rolls the pod through
+ArgoCD, no image build needed. A malformed value makes the gateway refuse to start, so run
+`helm template` first. A refused call returns `not granted` (audit `deny_reason` `not_granted`).
 
 ## Do not grant Job/Create to activate the manage tier
 

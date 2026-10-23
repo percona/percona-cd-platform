@@ -22,7 +22,8 @@ from loguru import logger
 from prometheus_client import Counter, Histogram
 
 from mcp_jenkins.core.fleet import get_fleet
-from mcp_jenkins.core.scope import MasterScopeError
+from mcp_jenkins.core.grants import build_denial
+from mcp_jenkins.core.scope import SERVICE_ACCOUNTS_GROUP, MasterScopeError, allowed_masters
 
 # Raw config/script mutators (node config, script console): NEVER served. They stay tagged 'write'
 # in the server modules, so read-only/operate/manage all exclude them. run_groovy_script is RCE.
@@ -229,6 +230,14 @@ def _selected_master(arguments: dict | None) -> str | None:
         return None
 
 
+def _grant_master(selected: str | None) -> str | None:
+    """The master a build grant is checked against: the selected one, else the caller's only one."""
+    if selected:
+        return selected
+    allowed = allowed_masters()
+    return next(iter(allowed)) if allowed is not None and len(allowed) == 1 else None
+
+
 class AuditMiddleware(Middleware):
     """Emit one structured JSON audit line per tool call (user + tool + summary + outcome)."""
 
@@ -251,9 +260,22 @@ class AuditMiddleware(Middleware):
         claim_groups = record.get('groups')
         is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups
         denied = tool in _GROUP_GATED and not is_writer
+        grant_denial = None
+        is_service = isinstance(claim_groups, list) and SERVICE_ACCOUNTS_GROUP in claim_groups
+        if denied and tool == 'build_item' and is_service:
+            # A service account may start the jobs its grant lists, see core.grants.
+            grant_denial = build_denial(_grant_master(record['master']), arguments or {})
+            denied = grant_denial is not None
         try:
+            if grant_denial:
+                record['status'] = 'denied'
+                record['deny_reason'] = 'not_granted'
+                _DENIED.labels(tool=tool, reason='not_granted').inc()
+                msg = f"{grant_denial}. To change this account's build grants, ask in #opensource-jenkins."
+                raise ToolError(msg)
             if denied:
                 record['status'] = 'denied'
+                record['deny_reason'] = 'not_writer'
                 _DENIED.labels(tool=tool, reason='not_writer').inc()
                 msg = (
                     f'{tool} requires the {_WRITERS_GROUP} Authentik group. To get access, ask in '
@@ -278,6 +300,7 @@ class AuditMiddleware(Middleware):
             # The master scope is enforced where the tool resolves its master (core.lifespan),
             # which also covers the header and default paths. Recorded here as a denial.
             record['status'] = 'denied'
+            record['deny_reason'] = 'master_scope'
             _DENIED.labels(tool=tool, reason='master_scope').inc()
             raise
         except Exception as e:  # noqa: BLE001

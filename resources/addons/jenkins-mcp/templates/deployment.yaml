@@ -78,6 +78,10 @@ spec:
               value: {{ (.Values.aws | default dict).region | default "us-east-1" | quote }}
             - name: MCP_S3_PRESIGN_TTL
               value: {{ .Values.s3.presignTtl | default 21600 | quote }}
+            {{- with .Values.serviceGrants }}
+            - name: MCP_JENKINS_SERVICE_GRANTS
+              value: {{ toJson . | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 9887

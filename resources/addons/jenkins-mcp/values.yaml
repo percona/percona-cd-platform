@@ -29,6 +29,40 @@ statelessHttp: true
 readOnly: false
 enableOperate: true
 
+# Per-job build grants for service accounts (jenkins-mcp-service-accounts members), keyed by
+# username, then master, then job fullname. A grant lets build_item run on that job without the
+# writers group, nothing else in the operate tier. `require` lists parameters that must be present
+# and non-blank, `deny` lists refused values per parameter. Runbook: docs/runbooks/jenkins-mcp-operate.md.
+serviceGrants:
+  pmm-automation:
+    pmm:
+      pmm3-nightly-orchestrator: {}
+      pmm3-ui-tests-nightly-gha: {}
+      pmm3-ui-tests-matrix: {}
+      pmm3-ui-tests: {}
+      pmm3-upgrade-ami-test-runner: {}
+      pmm3-ui-tests-nightly-gssapi: {}
+      openshift-helm-tests: {}
+      pmm3-ha-tests: {}
+      pmm3-ha-backup-restore-tests: {}
+      pmm3-ha-upgrade-tests: {}
+      pmm3-post-release-testing: {}
+      pmm3-image-scanning: {}
+      # Cleanup: one named resource per run, never the delete-everything action or the VM picker.
+      pmm3-ha-eks-cleanup:
+        require: [CLUSTER_NAME]
+        deny: {ACTION: [DELETE_ALL]}
+      pmm3-ha-rosa-cleanup:
+        require: [CLUSTER_NAME]
+        deny: {ACTION: [DELETE_ALL]}
+      openshift-cluster-destroy:
+        require: [CLUSTER_NAME]
+      aws-staging-stop:
+        require: [VM]
+        deny: {VM: [list-all-vms]}
+      pmm3-ami-staging-stop:
+        require: [AMI_ID]
+
 # OAuth2 resource-server auth against Authentik (JumpCloud-backed). The server validates
 # bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the
 # Authentik client_id (Authentik stamps aud = client_id, as the headlamp client does).
