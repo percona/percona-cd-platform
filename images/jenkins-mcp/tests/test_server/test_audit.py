@@ -597,3 +597,48 @@ async def test_service_account_grant_covers_build_item_only(capture_audit, mocke
 
     with pytest.raises(ToolError, match='jenkins-mcp-writers'):
         await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_service_account_in_writers_group_still_needs_a_grant(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-ha-eks')
+    token = audit.get_access_token()
+    token.claims['groups'].append('jenkins-mcp-writers')
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError, match='not granted'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    ctx.message.name = 'stop_build'
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_malformed_service_build_is_audited_and_refused(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, ['pmm3-nightly-orchestrator'])
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'denied'
+    assert rec['deny_reason'] == 'not_granted'
+
+
+@pytest.mark.asyncio
+async def test_granted_build_records_the_resolved_master(capture_audit, mocker):
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+
+    async def call_next(_):
+        return 'queued'
+
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    assert json.loads(capture_audit[-1])['master'] == 'pmm'

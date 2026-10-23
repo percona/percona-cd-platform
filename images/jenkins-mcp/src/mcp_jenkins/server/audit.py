@@ -230,10 +230,8 @@ def _selected_master(arguments: dict | None) -> str | None:
         return None
 
 
-def _grant_master(selected: str | None) -> str | None:
-    """The master a build grant is checked against: the selected one, else the caller's only one."""
-    if selected:
-        return selected
+def _grant_master() -> str | None:
+    """The caller's only reachable master, used when the call selects none (same rule as core.lifespan)."""
     allowed = allowed_masters()
     return next(iter(allowed)) if allowed is not None and len(allowed) == 1 else None
 
@@ -258,21 +256,22 @@ class AuditMiddleware(Middleware):
         # A non-list `groups` claim would turn `not in` into a substring test and could fail open
         # (e.g. a bare 'x-jenkins-mcp-writers-y' string). Force list-membership semantics.
         claim_groups = record.get('groups')
-        is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups
-        denied = tool in _GROUP_GATED and not is_writer
-        grant_denial = None
         is_service = isinstance(claim_groups, list) and SERVICE_ACCOUNTS_GROUP in claim_groups
-        if denied and tool == 'build_item' and is_service:
-            # A service account may start the jobs its grant lists, see core.grants.
-            grant_denial = build_denial(_grant_master(record['master']), arguments or {})
-            denied = grant_denial is not None
+        # A service account never gets the writers tier, even when it is also put in that group.
+        is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups and not is_service
+        denied = tool in _GROUP_GATED and not is_writer
         try:
-            if grant_denial:
-                record['status'] = 'denied'
-                record['deny_reason'] = 'not_granted'
-                _DENIED.labels(tool=tool, reason='not_granted').inc()
-                msg = f"{grant_denial}. To change this account's build grants, ask in #opensource-jenkins."
-                raise ToolError(msg)
+            if denied and tool == 'build_item' and is_service:
+                # A service account may start the jobs its grant lists, see core.grants.
+                record['master'] = record['master'] or _grant_master()
+                grant_denial = build_denial(record['master'], arguments or {})
+                if grant_denial:
+                    record['status'] = 'denied'
+                    record['deny_reason'] = 'not_granted'
+                    _DENIED.labels(tool=tool, reason='not_granted').inc()
+                    msg = f"{grant_denial}. To change this account's build grants, ask in #opensource-jenkins."
+                    raise ToolError(msg)
+                denied = False
             if denied:
                 record['status'] = 'denied'
                 record['deny_reason'] = 'not_writer'
