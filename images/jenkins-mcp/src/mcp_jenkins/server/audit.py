@@ -79,6 +79,26 @@ _SAFE_ARG_KEYS = frozenset(
         'queue_id',
         'timeout_seconds',
         'masters',
+        'archive_member',
+        'context_lines',
+        'glob',
+        'include_error_details',
+        'label_pattern',
+        'lines',
+        'literal',
+        'max_cases',
+        'max_entries',
+        'max_error_chars',
+        'max_inline_bytes',
+        'max_matches',
+        'member',
+        'start_after_job',
+        'status_filter',
+        'time_budget_seconds',
+        'context',
+        'before',
+        'after',
+        'regex',
     }
 )
 
@@ -251,6 +271,8 @@ class AuditMiddleware(Middleware):
                 raise ToolError(msg)
             result = await call_next(context)
             record['status'] = 'ok'
+            # Dropped names only matter when the call failed (an argument the tool does not take).
+            record['args'].pop('dropped_keys', None)
             return result
         except MasterScopeError:
             # The master scope is enforced where the tool resolves its master (core.lifespan),

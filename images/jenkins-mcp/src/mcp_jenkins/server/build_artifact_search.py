@@ -354,6 +354,10 @@ def grep_build_artifact(
     literal: bool = True,  # noqa: FBT001, FBT002
     context_lines: int = 3,
     max_matches: int = 50,
+    context: int | None = None,
+    before: int | None = None,
+    after: int | None = None,
+    regex: bool | None = None,  # noqa: FBT001
     master: MasterArg = None,
 ) -> dict:
     """Grep INSIDE a build artifact without downloading the whole file (streamed, capped).
@@ -377,12 +381,21 @@ def grep_build_artifact(
             but Python re has no timeout, so a pathological regex can still burn CPU on a long line).
         context_lines: Lines of context to keep before/after each match (capped at 10)
         max_matches: Max matches to return per file (capped at 200, and 200 across a glob)
+        context: Alias of context_lines
+        before: Alias of context_lines (the larger of before and after is used)
+        after: Alias of context_lines (the larger of before and after is used)
+        regex: True is the same as literal=False
 
     Returns:
         A dict: matches [{line_no, line, before, after}], match_count, bytes_scanned, truncated
         (byte cap hit), limit_hit (match cap hit), plus the echoed query. For a glob: files (one such
         result per artifact, or an error), files_matched, files_scanned, files_truncated, notes.
     """
+    aliases = [v for v in (context, before, after) if v is not None]
+    if aliases:
+        context_lines = max(aliases)
+    if regex is not None:
+        literal = not regex
     is_glob = any(c in _GLOB_CHARS for c in relative_path)
     safe_path = _validate_glob(relative_path) if is_glob else _validate_relative_path(relative_path)
     context_lines = max(0, min(context_lines, _MAX_CONTEXT_LINES))

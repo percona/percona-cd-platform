@@ -507,3 +507,21 @@ def test_error_detail_never_masks_the_real_error():
             return [object()]
 
     assert audit._error_detail(OddError()) is None
+
+
+@pytest.mark.asyncio
+async def test_successful_call_logs_its_parameters_and_no_dropped_keys(capture_audit, mocker):
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build_console_tail'
+    ctx.message.arguments = {'fullname': 'j', 'lines': 200, 'surprise': 'x'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return 'tail'
+
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    record = json.loads(capture_audit[-1])
+    assert record['args'] == {'fullname': 'j', 'lines': 200}
