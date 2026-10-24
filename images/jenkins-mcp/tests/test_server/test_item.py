@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from mcp_jenkins.jenkins.model.item import Folder, Job
@@ -156,6 +158,7 @@ async def test_query_items_compact_parameters(mock_jenkins, mocker):
             'description': 'Arch',
             'choices': ['amd64', 'arm64'],
         },
+        {'name': 'NOTE', 'type': 'StringParameterDefinition', 'defaultValue': '', 'description': ''},
     ]
     mock_jenkins.query_items.return_value = [
         Job(fullname='job1', color='blue', name='job1', url='1', class_='Job', parameters=params),
@@ -167,14 +170,69 @@ async def test_query_items_compact_parameters(mock_jenkins, mocker):
     assert result['items'] == [
         {
             'fullname': 'job1',
-            'parameters': [
-                {'name': 'BRANCH', 'type': 'String', 'defaultValue': 'x' * 200 + '...'},
-                {'name': 'ARCH', 'type': 'Choice', 'defaultValue': 'amd64', 'choices': ['amd64', 'arm64']},
-            ],
+            'parameters': ['BRANCH String=' + 'x' * 200 + '...', 'ARCH Choice=amd64 [amd64|arm64]', 'NOTE String'],
         },
         {'fullname': 'job2', 'parameters': []},
     ]
     assert result['total'] == 2
+    assert result['returned'] == 2
+    assert result['page'] == 0
+    assert result['pages'] == 1
+    assert result['truncated'] is False
+
+
+@pytest.mark.asyncio
+async def test_query_items_compact_groups_identical_parameter_lists(mock_jenkins, mocker):
+    shared = [{'name': 'BUILD_OS', 'type': 'StringParameterDefinition', 'defaultValue': 'ol9'}]
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='mb/PR-1', color='blue', name='PR-1', url='1', class_='Job', parameters=shared),
+        Job(fullname='solo', color='blue', name='solo', url='2', class_='Job', parameters=[]),
+        Job(fullname='mb/PR-2', color='blue', name='PR-2', url='3', class_='Job', parameters=shared),
+    ]
+
+    result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+
+    assert result['items'] == [
+        {'jobs': ['mb/PR-1', 'mb/PR-2'], 'parameters': ['BUILD_OS String=ol9']},
+        {'fullname': 'solo', 'parameters': []},
+    ]
+    assert result['returned'] == 3
+
+
+@pytest.mark.asyncio
+async def test_query_items_compact_pages_cover_every_job(mock_jenkins, mocker):
+    mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 300)
+    mock_jenkins.query_items.return_value = [
+        Job(
+            fullname=f'job{n}',
+            color='blue',
+            name=f'job{n}',
+            url=str(n),
+            class_='Job',
+            parameters=[{'name': f'P{n}', 'type': 'StringParameterDefinition', 'defaultValue': 'v' * 50}],
+        )
+        for n in range(20)
+    ]
+
+    first = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+    assert first['pages'] > 1
+    assert first['truncated'] is True
+
+    seen = []
+    for page in range(first['pages']):
+        result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, page=page)
+        assert len(json.dumps(result['items'], separators=(',', ':'))) <= 300
+        assert result['truncated'] is (page < first['pages'] - 1)
+        seen += [e['fullname'] for e in result['items']]
+    assert seen == [f'job{n}' for n in range(20)]
+
+
+@pytest.mark.asyncio
+async def test_query_items_compact_page_out_of_range(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [Job(fullname='job1', color='blue', name='job1', url='1', class_='Job')]
+
+    with pytest.raises(ValueError, match='page 1 is out of range, this query has 1 page'):
+        await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, page=1)
 
 
 @pytest.mark.asyncio
