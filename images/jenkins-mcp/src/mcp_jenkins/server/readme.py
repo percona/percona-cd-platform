@@ -27,7 +27,7 @@ _CATALOG = [
             ),
             (
                 'query_items',
-                'query_items(fullname_pattern?, class_pattern?, color_pattern?, label_pattern?, ..., master?)',
+                'query_items(fullname_pattern?, label_pattern?, include_parameters?, ..., master?)',
             ),
             (
                 'query_items',
@@ -222,6 +222,7 @@ _SAMPLES_READ = [
     '  "why is <job> failing / what failed?" -> get_build_failure_summary(fullname="<job>")',
     '  "the end of the <job> log" -> get_build_console_tail(fullname="<job>", lines=200)',
     '  "what parameters does <job> take?" -> get_item_parameters(fullname="<job>")',
+    '  "parameters of every <x> job" -> query_items(fullname_pattern="<x>", include_parameters=True)',
     '  "what is running right now?" -> get_running_builds(master="<master>")',
     '  "summarise the last 10 builds of <job>" -> get_build_walk(fullname="<job>", count=10)',
     '  "just the build numbers of <job>" -> get_build_history(fullname="<job>", count=10)',

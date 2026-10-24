@@ -18,6 +18,7 @@ class _ItemBase(BaseModel):
     name: str
     url: str
     fullname: str = Field(default=None, alias='fullName')
+    parameters: list[dict] | None = None
 
     def assigned_label_name(self) -> str | None:
         """The job's assigned agent label name, or None. Freestyle/matrix expose it; pipeline

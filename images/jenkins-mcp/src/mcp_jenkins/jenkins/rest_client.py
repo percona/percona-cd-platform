@@ -25,6 +25,27 @@ from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
 _MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS surface on an authenticated call)
 
+_PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
+
+
+def _parse_parameter_definitions(properties: list | None) -> list[dict]:
+    """Flatten a job's `property[].parameterDefinitions` into name, type, defaultValue,
+    description, and choices (only for choice parameters)."""
+    params: list[dict] = []
+    for prop in properties or []:
+        for definition in prop.get('parameterDefinitions') or []:
+            default = definition.get('defaultParameterValue') or {}
+            entry = {
+                'name': definition.get('name', ''),
+                'type': definition.get('type', ''),
+                'defaultValue': default.get('value', ''),
+                'description': definition.get('description', ''),
+            }
+            if definition.get('choices'):
+                entry['choices'] = definition['choices']
+            params.append(entry)
+    return params
+
 
 def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
     """Compile a query_items filter pattern with a length cap and a sanitized error.
@@ -717,18 +738,29 @@ class Jenkins:
 
         return list(builds.values())
 
-    def get_items(self, *, folder_depth: int | None = None, folder_depth_per_request: int = 10) -> list[ItemType]:
+    def get_items(
+        self,
+        *,
+        folder_depth: int | None = None,
+        folder_depth_per_request: int = 10,
+        include_parameters: bool = False,
+    ) -> list[ItemType]:
         """Get items in the Jenkins instance up to a specified folder depth.
 
         Args:
             folder_depth: The maximum depth of folders to traverse. If None, traverses all levels.
             folder_depth_per_request: The depth of folders to request per API call.
+            include_parameters: Also fetch each job's parameter definitions in the same request,
+                set on the item's `parameters` field.
 
         Returns:
             A list of ItemType objects representing the items.
         """
+        fields = 'url,color,name,lastBuild[number,url],assignedLabel[name]'
+        if include_parameters:
+            fields += f',{_PARAMETERS_TREE}'
         query = reduce(
-            lambda q, _: f'jobs[url,color,name,lastBuild[number,url],assignedLabel[name],{q}]',
+            lambda q, _: f'jobs[{fields},{q}]',
             range(folder_depth_per_request),
             'jobs',
         )
@@ -743,6 +775,8 @@ class Jenkins:
             for item in current_items:
                 job_path = path + [item['name']]
                 item.setdefault('fullname', '/'.join(job_path))
+                if include_parameters:
+                    item['parameters'] = _parse_parameter_definitions(item.pop('property', None))
                 items.append(serialize_item(item))
 
                 children = item.get('jobs')
@@ -793,20 +827,7 @@ class Jenkins:
         """
         folder, name = self._parse_fullname(fullname)
         response = self.request('GET', rest_endpoint.ITEM_PARAMETERS(folder=folder, name=name))
-        params: list[dict] = []
-        for prop in response.json().get('property', []):
-            for definition in prop.get('parameterDefinitions') or []:
-                default = definition.get('defaultParameterValue') or {}
-                entry = {
-                    'name': definition.get('name', ''),
-                    'type': definition.get('type', ''),
-                    'defaultValue': default.get('value', ''),
-                    'description': definition.get('description', ''),
-                }
-                if definition.get('choices'):
-                    entry['choices'] = definition['choices']
-                params.append(entry)
-        return params
+        return _parse_parameter_definitions(response.json().get('property'))
 
     def set_item_config(self, *, fullname: str, config_xml: str) -> None:
         """Set item configuration by its fullname.
@@ -860,6 +881,7 @@ class Jenkins:
         fullname_pattern: str | None = None,
         color_pattern: str | None = None,
         label_pattern: str | None = None,
+        include_parameters: bool = False,
     ) -> list['ItemType']:
         """Query items by specific field patterns.
 
@@ -872,6 +894,7 @@ class Jenkins:
             label_pattern: The pattern of the assigned agent label. Matches freestyle/matrix jobs
                 (which expose assignedLabel); pipeline jobs keep their label in the Jenkinsfile and
                 so never match.
+            include_parameters: Also fetch each job's parameter definitions (same single request).
 
         Returns:
             A list of ItemType objects matching the specified patterns.
@@ -881,7 +904,11 @@ class Jenkins:
             for pattern in (class_pattern, fullname_pattern, color_pattern, label_pattern)
         )
 
-        items = self.get_items(folder_depth=folder_depth, folder_depth_per_request=folder_depth_per_request)
+        items = self.get_items(
+            folder_depth=folder_depth,
+            folder_depth_per_request=folder_depth_per_request,
+            include_parameters=include_parameters,
+        )
 
         result = []
 
