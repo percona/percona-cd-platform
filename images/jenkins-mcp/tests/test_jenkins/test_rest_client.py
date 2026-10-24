@@ -1314,6 +1314,82 @@ class TestItem:
         # the get_items tree must actually request the label
         assert 'assignedLabel[name]' in mock_session.request.call_args.kwargs['url']
 
+    def test_query_items_include_parameters(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'jobs': [
+                    {
+                        'name': 'pipe',
+                        'url': 'https://example.com/job/pipe/',
+                        '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+                        'color': 'blue',
+                        'property': [
+                            {},
+                            {
+                                'parameterDefinitions': [
+                                    {
+                                        'name': 'BRANCH',
+                                        'type': 'StringParameterDefinition',
+                                        'description': 'Branch',
+                                        'defaultParameterValue': {'value': 'main'},
+                                    },
+                                    {
+                                        'name': 'ARCH',
+                                        'type': 'ChoiceParameterDefinition',
+                                        'defaultParameterValue': {'value': 'amd64'},
+                                        'choices': ['amd64', 'arm64'],
+                                    },
+                                ]
+                            },
+                        ],
+                    },
+                    {
+                        'name': 'bare',
+                        'url': 'https://example.com/job/bare/',
+                        '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+                        'color': 'blue',
+                        'property': [],
+                    },
+                ]
+            }
+        )
+
+        matched = jenkins.query_items(include_parameters=True)
+
+        # one request for every job's parameters, projected through the tree
+        assert mock_session.request.call_count == 1
+        assert 'parameterDefinitions[' in mock_session.request.call_args.kwargs['url']
+        assert matched[0].parameters == [
+            {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},
+            {
+                'name': 'ARCH',
+                'type': 'ChoiceParameterDefinition',
+                'defaultValue': 'amd64',
+                'description': '',
+                'choices': ['amd64', 'arm64'],
+            },
+        ]
+        assert matched[1].parameters == []
+
+    def test_query_items_default_omits_parameters(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'jobs': [
+                    {
+                        'name': 'j',
+                        'url': 'u',
+                        '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+                        'color': 'blue',
+                    }
+                ]
+            }
+        )
+
+        matched = jenkins.query_items()
+
+        assert 'parameterDefinitions' not in mock_session.request.call_args.kwargs['url']
+        assert matched[0].parameters is None
+
     def test_query_items_rejects_bad_pattern(self, jenkins):
         # The pattern guard fires before any API call (raised during the compile of the 4 patterns).
         with pytest.raises(ValueError, match='invalid regex pattern'):

@@ -133,6 +133,19 @@ async def test_query_items_surfaces_label_and_passes_filter(mock_jenkins, mocker
 
 
 @pytest.mark.asyncio
+async def test_query_items_include_parameters(mock_jenkins, mocker):
+    params = [{'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': ''}]
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='job1', color='blue', name='job1', url='1', class_='Job', parameters=params),
+    ]
+
+    result = await item.query_items(mocker.Mock(), fullname_pattern='job.*', include_parameters=True)
+
+    assert result['items'][0]['parameters'] == params
+    assert mock_jenkins.query_items.call_args.kwargs['include_parameters'] is True
+
+
+@pytest.mark.asyncio
 async def test_build_item(mock_jenkins, mocker):
     mock_jenkins.build_item.return_value = None
 

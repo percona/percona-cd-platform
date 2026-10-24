@@ -211,6 +211,7 @@ async def query_items(
     label_pattern: str = None,
     folder_depth: int | None = None,
     limit: int = 200,
+    include_parameters: bool = False,  # noqa: FBT001, FBT002
     master: MasterArg = None,
 ) -> dict:
     """Query items by field patterns, returned as a flat, compact list.
@@ -225,10 +226,13 @@ async def query_items(
             for those filter by fullname_pattern or read get_item_parameters.
         folder_depth: The maximum depth of folders to traverse. If None, traverses all levels.
         limit: Maximum items to return (capped at 2000).
+        include_parameters: Also return each job's parameter definitions (name, type,
+            defaultValue, description, choices) in the same single Jenkins request. Use this
+            instead of get_item_parameters per job when you need parameters for many jobs.
 
     Returns:
-        A dict: items (compact: fullname, class, color, and label when the job exposes one), total
-        (items found), returned, truncated.
+        A dict: items (compact: fullname, class, color, label when the job exposes one, and
+        parameters when include_parameters is set), total (items found), returned, truncated.
     """
     limit = max(1, min(limit, 2000))
     items = []
@@ -238,6 +242,7 @@ async def query_items(
         color_pattern=color_pattern,
         label_pattern=label_pattern,
         folder_depth=folder_depth,
+        include_parameters=include_parameters,
     ):
         entry = i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild', 'assignedLabel'})
         label = i.assigned_label_name()
