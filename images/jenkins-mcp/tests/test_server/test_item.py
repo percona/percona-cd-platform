@@ -146,6 +146,50 @@ async def test_query_items_include_parameters(mock_jenkins, mocker):
 
 
 @pytest.mark.asyncio
+async def test_query_items_compact_parameters(mock_jenkins, mocker):
+    params = [
+        {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'x' * 300, 'description': 'long'},
+        {
+            'name': 'ARCH',
+            'type': 'ChoiceParameterDefinition',
+            'defaultValue': 'amd64',
+            'description': 'Arch',
+            'choices': ['amd64', 'arm64'],
+        },
+    ]
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='job1', color='blue', name='job1', url='1', class_='Job', parameters=params),
+        Job(fullname='job2', color='blue', name='job2', url='2', class_='Job', parameters=[]),
+    ]
+
+    result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+
+    assert result['items'] == [
+        {
+            'fullname': 'job1',
+            'parameters': [
+                {'name': 'BRANCH', 'type': 'String', 'defaultValue': 'x' * 200 + '...'},
+                {'name': 'ARCH', 'type': 'Choice', 'defaultValue': 'amd64', 'choices': ['amd64', 'arm64']},
+            ],
+        },
+        {'fullname': 'job2', 'parameters': []},
+    ]
+    assert result['total'] == 2
+
+
+@pytest.mark.asyncio
+async def test_query_items_compact_needs_include_parameters(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='job1', color='blue', name='job1', url='1', class_='Job'),
+    ]
+
+    result = await item.query_items(mocker.Mock(), compact_parameters=True)
+
+    # compact without include_parameters keeps the normal compact item list
+    assert result['items'] == [{'class_': 'Job', 'color': 'blue', 'fullname': 'job1', 'name': 'job1', 'url': '1'}]
+
+
+@pytest.mark.asyncio
 async def test_build_item(mock_jenkins, mocker):
     mock_jenkins.build_item.return_value = None
 

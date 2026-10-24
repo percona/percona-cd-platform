@@ -202,6 +202,25 @@ async def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> 
     jenkins(ctx, master).delete_item(fullname=fullname)
 
 
+_MAX_COMPACT_DEFAULT = 200
+
+
+def _compact_parameter(param: dict) -> dict:
+    """A parameter definition without its description, type without the ParameterDefinition
+    suffix, and a long text default cut to _MAX_COMPACT_DEFAULT chars."""
+    default = param.get('defaultValue', '')
+    if isinstance(default, str) and len(default) > _MAX_COMPACT_DEFAULT:
+        default = default[:_MAX_COMPACT_DEFAULT] + '...'
+    entry = {
+        'name': param.get('name', ''),
+        'type': param.get('type', '').removesuffix('ParameterDefinition'),
+        'defaultValue': default,
+    }
+    if param.get('choices'):
+        entry['choices'] = param['choices']
+    return entry
+
+
 @mcp.tool(tags=['read'])
 async def query_items(
     ctx: Context,
@@ -212,6 +231,7 @@ async def query_items(
     folder_depth: int | None = None,
     limit: int = 200,
     include_parameters: bool = False,  # noqa: FBT001, FBT002
+    compact_parameters: bool = False,  # noqa: FBT001, FBT002
     master: MasterArg = None,
 ) -> dict:
     """Query items by field patterns, returned as a flat, compact list.
@@ -229,6 +249,9 @@ async def query_items(
         include_parameters: Also return each job's parameter definitions (name, type,
             defaultValue, description, choices) in the same single Jenkins request. Use this
             instead of get_item_parameters per job when you need parameters for many jobs.
+        compact_parameters: With include_parameters, return each item as fullname plus parameters
+            reduced to name, short type, defaultValue and choices (no descriptions). About a third
+            of the full size, so a whole master fits in one response.
 
     Returns:
         A dict: items (compact: fullname, class, color, label when the job exposes one, and
@@ -236,6 +259,7 @@ async def query_items(
     """
     limit = max(1, min(limit, 2000))
     items = []
+    compact = include_parameters and compact_parameters
     for i in jenkins(ctx, master).query_items(
         class_pattern=class_pattern,
         fullname_pattern=fullname_pattern,
@@ -244,6 +268,9 @@ async def query_items(
         folder_depth=folder_depth,
         include_parameters=include_parameters,
     ):
+        if compact:
+            items.append({'fullname': i.fullname, 'parameters': [_compact_parameter(p) for p in i.parameters or []]})
+            continue
         entry = i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild', 'assignedLabel'})
         label = i.assigned_label_name()
         if label:
