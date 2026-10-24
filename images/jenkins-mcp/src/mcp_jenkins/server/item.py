@@ -285,6 +285,7 @@ async def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = N
 
     Reads the job's parameterDefinitions via the standard job API (Job/Read), so it is open to all
     readers. For the full config.xml use get_item_config, which is gated to jenkins-mcp-writers.
+    For many jobs at once use query_items(include_parameters=True), one request for all of them.
 
     Args:
         fullname: The fullname of the item
