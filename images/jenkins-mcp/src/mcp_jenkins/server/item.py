@@ -1,3 +1,4 @@
+import json
 import re
 import time
 from typing import Literal
@@ -203,22 +204,53 @@ async def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> 
 
 
 _MAX_COMPACT_DEFAULT = 200
+# A compact page stays under this many characters of JSON, so it fits one MCP client result
+# (Claude Code spills a result of about 60k characters to a file and inlines one of about 37k).
+_COMPACT_PAGE_CHARS = 30_000
 
 
-def _compact_parameter(param: dict) -> dict:
-    """A parameter definition without its description, type without the ParameterDefinition
-    suffix, and a long text default cut to _MAX_COMPACT_DEFAULT chars."""
+def _compact_parameter(param: dict) -> str:
+    """One parameter as 'NAME Type=default [choice|choice]', type without the
+    ParameterDefinition suffix and a long text default cut to _MAX_COMPACT_DEFAULT chars."""
+    line = f'{param.get("name", "")} {param.get("type", "").removesuffix("ParameterDefinition")}'
     default = param.get('defaultValue', '')
     if isinstance(default, str) and len(default) > _MAX_COMPACT_DEFAULT:
         default = default[:_MAX_COMPACT_DEFAULT] + '...'
-    entry = {
-        'name': param.get('name', ''),
-        'type': param.get('type', '').removesuffix('ParameterDefinition'),
-        'defaultValue': default,
-    }
+    if default not in (None, ''):
+        line += f'={default}'
     if param.get('choices'):
-        entry['choices'] = param['choices']
-    return entry
+        line += ' [' + '|'.join(map(str, param['choices'])) + ']'
+    return line
+
+
+def _compact_entries(items: list) -> list[dict]:
+    """Jobs whose parameter lists are identical collapse into one {jobs, parameters} entry, a
+    job with a list of its own stays {fullname, parameters}. First-seen order."""
+    groups: dict[tuple, list[str]] = {}
+    for i in items:
+        groups.setdefault(tuple(_compact_parameter(p) for p in i.parameters or []), []).append(i.fullname)
+    return [
+        {'fullname': names[0], 'parameters': list(params)}
+        if len(names) == 1
+        else {'jobs': names, 'parameters': list(params)}
+        for params, names in groups.items()
+    ]
+
+
+def _paginate(entries: list[dict], budget: int) -> list[list[dict]]:
+    """Split entries into pages of at most budget characters of JSON. An entry is never split,
+    so one larger than the budget gets a page of its own."""
+    pages: list[list[dict]] = [[]]
+    size = 2  # the list brackets
+    for entry in entries:
+        n = len(json.dumps(entry, separators=(',', ':'))) + (1 if pages[-1] else 0)  # comma separator
+        if pages[-1] and size + n > budget:
+            pages.append([])
+            size = 2
+            n -= 1
+        pages[-1].append(entry)
+        size += n
+    return pages
 
 
 @mcp.tool(tags=['read'])
@@ -232,6 +264,7 @@ async def query_items(
     limit: int = 200,
     include_parameters: bool = False,  # noqa: FBT001, FBT002
     compact_parameters: bool = False,  # noqa: FBT001, FBT002
+    page: int = 0,
     master: MasterArg = None,
 ) -> dict:
     """Query items by field patterns, returned as a flat, compact list.
@@ -249,28 +282,42 @@ async def query_items(
         include_parameters: Also return each job's parameter definitions (name, type,
             defaultValue, description, choices) in the same single Jenkins request. Use this
             instead of get_item_parameters per job when you need parameters for many jobs.
-        compact_parameters: With include_parameters, return each item as fullname plus parameters
-            reduced to name, short type, defaultValue and choices (no descriptions). About a third
-            of the full size, so a whole master fits in one response.
+        compact_parameters: With include_parameters, return each parameter as one string,
+            "NAME Type=default [choice|choice]" (no descriptions), collapse jobs with identical
+            parameter lists into one {jobs, parameters} entry, and page the result so every
+            response fits one client result. Read page 0, then every page up to pages - 1.
+        page: With compact_parameters, the page to return (0-based, see pages in the result).
 
     Returns:
         A dict: items (compact: fullname, class, color, label when the job exposes one, and
         parameters when include_parameters is set), total (items found), returned, truncated.
+        With compact_parameters, items are {fullname, parameters} or {jobs, parameters} entries,
+        returned counts the jobs on this page, and page and pages are added.
     """
     limit = max(1, min(limit, 2000))
-    items = []
-    compact = include_parameters and compact_parameters
-    for i in jenkins(ctx, master).query_items(
+    found = jenkins(ctx, master).query_items(
         class_pattern=class_pattern,
         fullname_pattern=fullname_pattern,
         color_pattern=color_pattern,
         label_pattern=label_pattern,
         folder_depth=folder_depth,
         include_parameters=include_parameters,
-    ):
-        if compact:
-            items.append({'fullname': i.fullname, 'parameters': [_compact_parameter(p) for p in i.parameters or []]})
-            continue
+    )
+    if include_parameters and compact_parameters:
+        pages = _paginate(_compact_entries(found[:limit]), _COMPACT_PAGE_CHARS)
+        if not 0 <= page < len(pages):
+            msg = f'page {page} is out of range, this query has {len(pages)} page(s) (0 to {len(pages) - 1})'
+            raise ValueError(msg)
+        return {
+            'items': pages[page],
+            'total': len(found),
+            'returned': sum(len(e.get('jobs', [e.get('fullname')])) for e in pages[page]),
+            'truncated': len(found) > limit or page < len(pages) - 1,
+            'page': page,
+            'pages': len(pages),
+        }
+    items = []
+    for i in found:
         entry = i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild', 'assignedLabel'})
         label = i.assigned_label_name()
         if label:
