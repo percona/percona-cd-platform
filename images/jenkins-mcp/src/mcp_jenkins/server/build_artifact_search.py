@@ -26,6 +26,7 @@ from requests.exceptions import RequestException
 
 from mcp_jenkins.core import s3_export
 from mcp_jenkins.core.lifespan import MasterArg, _selected_master, jenkins
+from mcp_jenkins.jenkins.rest_client import compile_user_regex
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_export import _emit_export_audit, _resolve_number, _validate_relative_path
 
@@ -153,7 +154,7 @@ def _build_matcher(pattern: str, literal: bool, ignore_case: bool) -> Callable[[
             return lambda line: needle in line.lower()
         return lambda line: pattern in line
     try:
-        rx = re.compile(pattern, re.IGNORECASE if ignore_case else 0)
+        rx = compile_user_regex(pattern, re.IGNORECASE if ignore_case else 0)
     except re.error as e:
         msg = f'invalid regex pattern: {e}'
         raise ValueError(msg) from e
