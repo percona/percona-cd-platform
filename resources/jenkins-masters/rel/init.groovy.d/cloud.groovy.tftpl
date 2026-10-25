@@ -137,7 +137,7 @@ imageMap['eu-west-1c.min-bookworm-aarch64'] = imageMap['eu-west-1a.min-bookworm-
 imageMap['eu-west-1c.min-trixie-aarch64']   = imageMap['eu-west-1a.min-trixie-aarch64']
 
 priceMap = [:]
-priceMap['t2.small'] = '0.02'    // type=t2.small, vCPU=1, memory=2GiB, saving=68%, interruption='<5%', price=0.008000
+priceMap['c7a.medium'] = '0.06'  // bid at on-demand (0.0551) so spot is never rejected as price-too-low, 7-day spot max was 0.0279, vCPU=1, memory=2GiB, non-burstable
 priceMap['c5.xlarge'] = '0.15'   // type=c5.xlarge, vCPU=4, memory=8GiB, saving=58%, interruption='<5%', price=0.086400
 priceMap['m6i.4xlarge'] = '0.86' // type=m6i.4xlarge, vCPU=16, memory=64GiB, on-demand=0.856, 7-day spot max 0.458 (2026-10-16). Bid at on-demand so spot is never rejected as price-too-low
 priceMap['r6a.4xlarge'] = '1.02' // bid at on-demand (1.0152) so spot is never rejected as price-too-low, 7-day spot max was 0.57 against the old bid
@@ -504,7 +504,7 @@ initMap['min-trixie-aarch64']   = initMap['min-buster-x64']
 capMap = [:]
 capMap['c5.xlarge']    = '60'
 capMap['m6i.4xlarge'] = '40'
-capMap['t2.small']     = '10' // micro-amazon
+capMap['c7a.medium']   = '10' // micro-amazon
 capMap['r6a.4xlarge']   = '40'
 capMap['i4i.2xlarge']  = '40'
 capMap['i3en.2xlarge'] = '40'
@@ -513,7 +513,7 @@ capMap['m6g.2xlarge'] = '20'
 capMap['m7g.4xlarge'] = '20'
 
 typeMap = [:]
-typeMap['micro-amazon']      = 't2.small'
+typeMap['micro-amazon']      = 'c7a.medium'
 typeMap['docker']            = 'c5.xlarge'
 typeMap['docker-32gb']       = 'm6i.4xlarge' // m6a.4xlarge spot placement score is 1/10 in every eu-west-1 AZ and its workers were reclaimed mid-build, m6i scores 3/10
 typeMap['docker-64gb']       = typeMap['docker-32gb']
