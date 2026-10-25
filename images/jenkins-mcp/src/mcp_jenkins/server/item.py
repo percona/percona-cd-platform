@@ -1,6 +1,8 @@
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Literal
 
 from fastmcp import Context
@@ -68,8 +70,11 @@ async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None)
     return jenkins(ctx, master).get_item_config(fullname=fullname)
 
 
-# search_item_configs caps: jobs read per call, matches kept, and wall-clock time.
-_MAX_CONFIG_JOBS = 100
+# search_item_configs caps: jobs read per call, matches kept, and wall-clock time. Configs are
+# read concurrently, one request each, so a whole master fits the time budget.
+_MAX_CONFIG_JOBS = 500
+_CONFIG_WORKERS = 8
+_config_pool = ThreadPoolExecutor(max_workers=_CONFIG_WORKERS, thread_name_prefix='config-scan')
 _MAX_CONFIG_LINE = 500
 _MAX_CONFIG_MATCHES_PER_JOB = 50
 _MAX_CONFIG_MATCHES = 500
@@ -93,7 +98,8 @@ def search_item_configs(
     fullname_pattern: str,
     literal: bool = True,  # noqa: FBT001, FBT002
     ignore_case: bool = False,  # noqa: FBT001, FBT002
-    limit: int = 100,
+    limit: int = _MAX_CONFIG_JOBS,
+    offset: int = 0,
     master: MasterArg = None,
 ) -> dict:
     """Grep the config.xml of many jobs at once (jenkins-mcp-writers only), instead of get_item_config per job.
@@ -107,7 +113,8 @@ def search_item_configs(
         fullname_pattern: Regex selecting the jobs to read (required; a catch-all like ".*" is rejected)
         literal: Treat pattern as a literal substring (default)
         ignore_case: Case-insensitive match
-        limit: Maximum jobs to read (capped at 100)
+        limit: Maximum jobs to read (capped at 500, read 8 at a time)
+        offset: Skip this many selected jobs, to resume where a note says the last call stopped
 
     Returns:
         A dict: jobs [{fullname, matches [{line_no, line}], truncated?}] for jobs with a match,
@@ -116,21 +123,30 @@ def search_item_configs(
     require_narrow_pattern(fullname_pattern, 'search_item_configs')
     matcher = _build_matcher(pattern, literal, ignore_case)
     limit = max(1, min(limit, _MAX_CONFIG_JOBS))
+    offset = max(0, offset)
     client = jenkins(ctx, master)
     selected = [i.fullname for i in client.query_items(fullname_pattern=fullname_pattern) if i.fullname]
+    batch = selected[offset : offset + limit]
     notes: list[str] = []
-    if len(selected) > limit:
-        notes.append(f'{len(selected)} jobs matched fullname_pattern, only the first {limit} were read')
+    if offset + limit < len(selected):
+        notes.append(
+            f'{len(selected)} jobs matched fullname_pattern, read {offset} to {offset + len(batch) - 1}, '
+            f'call again with offset={offset + len(batch)} for the rest'
+        )
     jobs: list[dict] = []
     errors: list[dict] = []
     read = total = 0
     deadline = time.monotonic() + _CONFIG_SEARCH_SECONDS
-    for fullname in selected[:limit]:
-        if total >= _MAX_CONFIG_MATCHES or time.monotonic() > deadline:
-            notes.append(f'stopped before {fullname}: match or time budget spent')
+    futures = [_config_pool.submit(client.get_item_config, fullname=fullname) for fullname in batch]
+    for index, (fullname, future) in enumerate(zip(batch, futures, strict=True)):
+        if total >= _MAX_CONFIG_MATCHES:
+            notes.append(f'stopped before {fullname}: match budget spent, call again with offset={offset + index}')
             break
         try:
-            config = client.get_item_config(fullname=fullname)
+            config = future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except FutureTimeout:
+            notes.append(f'stopped before {fullname}: time budget spent, call again with offset={offset + index}')
+            break
         except RequestException as e:
             errors.append({'fullname': fullname, 'error': f'{type(e).__name__}: {e}'[:300]})
             continue
@@ -148,6 +164,8 @@ def search_item_configs(
             entry['truncated'] = True
         jobs.append(entry)
         total += keep
+    for future in futures:
+        future.cancel()
     return {
         'jobs': jobs,
         'errors': errors,

@@ -113,3 +113,25 @@ def test_walk_empty_include_fetches_nothing_extra(mock_jenkins, mocker):
 
     mock_jenkins.get_build_stages.assert_not_called()
     assert set(result['builds'][0]) == {'number', 'result', 'building', 'timestamp', 'duration', 'url', 'queue_id'}
+
+
+def test_walk_reports_build_causes(mock_jenkins, mocker):
+    timer = _raw(2)
+    timer['actions'][0]['causes'] = [{'shortDescription': 'Started by timer'}]
+    user = _raw(1)
+    user['actions'][0]['causes'] = [
+        {'shortDescription': 'Started by user Jane Doe'},
+        {'shortDescription': 'Started by user Jane Doe'},
+    ]
+    rebuild = {'_class': 'hudson.model.CauseAction', 'causes': [{'shortDescription': 'Rebuilds build #7'}]}
+    user['actions'].append(rebuild)
+    mock_jenkins.get_build_walk.return_value = [timer, user, _raw(0)]
+
+    result = build.get_build_walk(mocker.Mock(), fullname='job1', include=['causes'])
+
+    assert [b['causes'] for b in result['builds']] == [
+        ['Started by timer'],
+        ['Started by user Jane Doe', 'Rebuilds build #7'],
+        [],
+    ]
+    mock_jenkins.get_build_stages.assert_not_called()

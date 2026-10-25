@@ -107,7 +107,7 @@ _CATALOG = [
             ),
             (
                 'get_build_walk',
-                '      + parameters + test counts per build (instead of history + a call per build)',
+                '      + parameters + causes + test counts per build (instead of history + a call per build)',
             ),
             (
                 'get_build_stages',
@@ -229,6 +229,7 @@ _SAMPLES_READ = [
     '  "summarise the last 10 builds of <job>" -> get_build_walk(fullname="<job>", count=10)',
     '  "just the build numbers of <job>" -> get_build_history(fullname="<job>", count=10)',
     '  "compare the last 20 runs of <job>" -> get_build_walk(fullname="<job>", count=20)',
+    '  "who started the last builds of <job>?" -> get_build_walk(fullname="<job>", include=["causes"])',
     '  "which stage failed in <job>?" -> get_build_stages(fullname="<job>")',
     '  "what changed in <job> build 50?" -> get_build_changeset(fullname="<job>", number=50)',
     '  "find text across recent builds" -> search_build_logs(pattern="<text>", job_pattern="<prefix>.*")',

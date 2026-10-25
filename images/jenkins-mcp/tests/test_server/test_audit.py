@@ -642,3 +642,53 @@ async def test_granted_build_records_the_resolved_master(capture_audit, mocker):
 
     await audit.AuditMiddleware().on_call_tool(ctx, call_next)
     assert json.loads(capture_audit[-1])['master'] == 'pmm'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('wrapped', [False, True])
+async def test_middleware_turns_jenkins_404_into_not_found(capture_audit, mocker, wrapped):
+    from fastmcp.exceptions import ToolError
+    from requests.exceptions import HTTPError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build_walk'
+    ctx.message.arguments = {'master': 'ps80', 'fullname': 'no-such-job'}
+    ctx.timestamp = datetime.now(UTC)
+    response = mocker.Mock(status_code=404, url='https://ps80.cd.percona.com/job/no-such-job/api/json?tree=x')
+    http_error = HTTPError('404 Client Error: Not Found', response=response)
+
+    async def call_next(_):
+        if wrapped:
+            msg = "Error calling tool 'get_build_walk'"
+            raise ToolError(msg) from http_error
+        raise http_error
+
+    with pytest.raises(ToolError, match=r'^Not found on ps80: /job/no-such-job/api/json does not exist\. '):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'error'
+    assert rec['error'] == ('ToolError' if wrapped else 'HTTPError')
+
+
+@pytest.mark.asyncio
+async def test_middleware_keeps_other_http_errors(capture_audit, mocker):
+    from requests.exceptions import HTTPError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build'
+    ctx.message.arguments = {'master': 'ps80'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        msg = '500 Server Error'
+        raise HTTPError(msg, response=mocker.Mock(status_code=500, url='u'))
+
+    with pytest.raises(HTTPError, match='500 Server Error'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)

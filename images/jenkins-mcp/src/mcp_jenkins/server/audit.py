@@ -14,12 +14,14 @@ import sys
 import time
 import uuid
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_access_token, get_http_request
 from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 from loguru import logger
 from prometheus_client import Counter, Histogram
+from requests.exceptions import HTTPError
 
 from mcp_jenkins.core.fleet import get_fleet
 from mcp_jenkins.core.grants import build_denial
@@ -198,6 +200,19 @@ def _error_detail(error: Exception) -> list[dict] | None:
     return None
 
 
+def _not_found(error: Exception, master: str | None) -> ToolError | None:
+    """A plain not-found message for a Jenkins 404, raised by the tool or wrapped by FastMCP, or None."""
+    for source in (error, error.__cause__):
+        if not isinstance(source, HTTPError) or source.response is None or source.response.status_code != 404:
+            continue
+        path = unquote(urlparse(source.response.url or '').path) or 'the requested item'
+        return ToolError(
+            f'Not found on {master or "the default master"}: {path} does not exist. Find the exact job '
+            f'name with find_items(fullname_pattern=...) and build numbers with get_build_history.'
+        )
+    return None
+
+
 def _identity() -> dict:
     """User identity from the validated JWT; graceful anonymous when unauthenticated (local dev)."""
     token = get_access_token()
@@ -310,6 +325,9 @@ class AuditMiddleware(Middleware):
                 detail = _error_detail(e)
                 if detail:
                     record['error_detail'] = detail
+            not_found = _not_found(e, record['master'])
+            if not_found is not None:
+                raise not_found from e
             raise
         finally:
             duration_s = time.perf_counter() - start

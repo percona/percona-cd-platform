@@ -53,7 +53,7 @@ JOB_BUILDS = RestEndpoint(
 # TestResultAction both surface under actions, in no fixed position.
 JOB_BUILDS_WALK = RestEndpoint(
     '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url,queueId,'
-    'actions[parameters[name,value],failCount,skipCount,totalCount]]{{0,{count}}}'
+    'actions[parameters[name,value],failCount,skipCount,totalCount,causes[shortDescription]]]{{0,{count}}}'
 )
 BUILD_WORKFLOW_DESCRIBE = RestEndpoint('{folder}job/{name}/{number}/wfapi/describe')
 BUILD_CHANGESETS = RestEndpoint(
