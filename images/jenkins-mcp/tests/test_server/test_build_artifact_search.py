@@ -429,3 +429,10 @@ def test_grep_accepts_context_and_regex_aliases(mock_jenkins, mocker):
     assert out['match_count'] == 1
     assert out['matches'][0]['before'] == ['a', 'b']
     assert out['matches'][0]['after'] == ['c', 'd']
+
+
+def test_regex_matcher_accepts_a_mid_pattern_flag():
+    match = bas._build_matcher('ok|(?i)timed out', literal=False, ignore_case=False)
+
+    assert match('Build TIMED OUT')
+    assert not match('Build passed')

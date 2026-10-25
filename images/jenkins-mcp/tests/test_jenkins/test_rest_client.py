@@ -1781,3 +1781,30 @@ class TestPlugin:
             params=None,
             timeout=75,
         )
+
+
+@pytest.mark.parametrize(
+    ('pattern', 'expected'),
+    [
+        ('conclusion=x|(?i)timeout', '(?i)conclusion=x|timeout'),
+        ('x(?im)y(?s)z', '(?ims)xyz'),
+        ('(?i)a|(?i)b', '(?i)a|b'),
+        ('(?i)already-first', '(?i)already-first'),
+        ('a(?i:scoped)c', 'a(?i:scoped)c'),
+        ('plain|text', 'plain|text'),
+    ],
+)
+def test_hoist_inline_flags(pattern, expected):
+    from mcp_jenkins.jenkins.rest_client import hoist_inline_flags
+
+    assert hoist_inline_flags(pattern) == expected
+
+
+def test_compile_user_regex_matches_hoisted_flags_and_keeps_real_errors():
+    import re
+
+    from mcp_jenkins.jenkins.rest_client import compile_user_regex
+
+    assert compile_user_regex('ok|(?i)timed out').search('Build TIMED OUT')
+    with pytest.raises(re.error, match='unterminated character set'):
+        compile_user_regex('a(?i)[')

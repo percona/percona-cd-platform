@@ -79,6 +79,32 @@ def _parse_parameter_definitions(properties: list | None) -> list[dict]:
     return params
 
 
+# A bare global flag group such as (?i) or (?im), not a scoped (?i:...) and not an escaped \(.
+_GLOBAL_FLAG_GROUP = re.compile(r'(?<!\\)\(\?([aiLmsux]+)\)')
+
+
+def hoist_inline_flags(pattern: str) -> str:
+    """Move global flag groups that are not at the start, like 'a|(?i)b', to the front.
+
+    Python rejects them ('global flags not at the start'), callers write them anyway. A pattern
+    that compiles is returned unchanged, so this only rewrites patterns that would fail.
+    """
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        if 'global flags not at the start' not in str(e):
+            return pattern
+    else:
+        return pattern
+    flags = ''.join(dict.fromkeys(''.join(_GLOBAL_FLAG_GROUP.findall(pattern))))
+    return f'(?{flags}){_GLOBAL_FLAG_GROUP.sub("", pattern)}' if flags else pattern
+
+
+def compile_user_regex(pattern: str, flags: int = 0) -> re.Pattern:
+    """re.compile for a caller-supplied pattern, with misplaced global flags moved to the front."""
+    return re.compile(hoist_inline_flags(pattern), flags)
+
+
 def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
     """Compile a query_items filter pattern with a length cap and a sanitized error.
 
@@ -92,7 +118,7 @@ def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
         msg = f'pattern too long ({len(pattern)} > {_MAX_QUERY_PATTERN_LEN} chars)'
         raise ValueError(msg)
     try:
-        return re.compile(pattern)
+        return compile_user_regex(pattern)
     except re.error as e:
         msg = f'invalid regex pattern: {e}'
         raise ValueError(msg) from e
@@ -410,7 +436,7 @@ class Jenkins:
             The console output as a string.
         """
         folder, name = self._parse_fullname(fullname)
-        compiled = re.compile(pattern) if pattern else None
+        compiled = compile_user_regex(pattern) if pattern else None
 
         response = self._session.get(
             self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
