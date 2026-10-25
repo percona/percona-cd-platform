@@ -73,8 +73,10 @@ def build_denial(master: object, arguments: dict) -> str | None:
         return 'the caller is not a service account'
     username = claims.get('preferred_username')
     fullname = arguments.get('fullname')
-    if not isinstance(username, str) or not isinstance(fullname, str) or not isinstance(master, str):
-        return 'build is not granted: the account, job or master is missing'
+    if not isinstance(username, str) or not isinstance(fullname, str):
+        return 'build is not granted: the account or job is missing'
+    if not isinstance(master, str):
+        return 'build is not granted: pass master=<name>, this account can reach more than one master'
     rule = get_grants().get(username, {}).get(master, {}).get(fullname)
     if rule is None:
         return f'build of {fullname!r} on master {master!r} is not granted to {username!r}'

@@ -580,6 +580,16 @@ class Jenkins:
         )
         return [Build.model_validate(b) for b in response.json().get('builds', [])]
 
+    def get_job_builds(self, *, fullname: str, count: int) -> list[dict]:
+        """The most recent `count` builds of one job from allBuilds, parsed like get_items(include_builds)."""
+        folder, name = self._parse_fullname(fullname)
+        response = self.request(
+            'GET',
+            rest_endpoint.JOB_ALL_BUILDS(folder=folder, name=name, count=count),
+            timeout=_BUILDS_TIMEOUT,
+        )
+        return _parse_builds(response.json().get('allBuilds'))
+
     def get_build_walk(self, *, fullname: str, count: int = 10) -> list[dict]:
         """Get the most recent builds of a job with their parameters and test counts, in one request.
 
@@ -844,7 +854,7 @@ class Jenkins:
             for item in current_items:
                 job_path = path + [item['name']]
                 item.setdefault('fullname', '/'.join(job_path))
-                if include_parameters:
+                if include_parameters and not isinstance(item.get('jobs'), list):
                     item['parameters'] = _parse_parameter_definitions(item.pop('property', None))
                 if include_builds and 'allBuilds' in item:
                     item['builds'] = _parse_builds(item.pop('allBuilds'))

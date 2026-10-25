@@ -491,7 +491,7 @@ def test_config_search_pattern_is_fingerprinted_not_logged():
 
     assert 'ghp_secretvalue' not in json.dumps(summary)
     assert summary['pattern_len'] == 15
-    assert summary['pattern_sha'] == audit._hash('ghp_secretvalue')
+    assert 'pattern_sha' not in summary
     assert summary['fullname_pattern'] == '^pmm3-'
     assert audit._summarize_args({'pattern': 'ERROR'}, 'search_build_logs') == {'pattern': 'ERROR'}
 
@@ -666,7 +666,9 @@ async def test_middleware_turns_jenkins_404_into_not_found(capture_audit, mocker
             raise ToolError(msg) from http_error
         raise http_error
 
-    with pytest.raises(ToolError, match=r'^Not found on ps80: /job/no-such-job/api/json does not exist\. '):
+    with pytest.raises(
+        ToolError, match=r'^Not found on ps80: /job/no-such-job/api/json: the job or build does not exist\. '
+    ):
         await audit.AuditMiddleware().on_call_tool(ctx, call_next)
 
     rec = json.loads(capture_audit[-1])
@@ -692,3 +694,50 @@ async def test_middleware_keeps_other_http_errors(capture_audit, mocker):
 
     with pytest.raises(HTTPError, match='500 Server Error'):
         await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.parametrize(
+    ('path', 'hint'),
+    [
+        ('/job/j/5/testReport/api/json', 'no test report'),
+        ('/job/j/5/artifact/out.log', 'get_all_build_artifacts'),
+        ('/job/j/5/wfapi/describe', 'not a pipeline'),
+        ('/queue/item/45/api/json', 'wait_for_build'),
+    ],
+)
+def test_not_found_hint_names_the_missing_resource(mocker, path, hint):
+    from requests.exceptions import HTTPError
+
+    error = HTTPError('404', response=mocker.Mock(status_code=404, url=f'https://h{path}?tree=x'))
+
+    message = str(audit._not_found(error, 'pmm'))
+
+    assert message.startswith(f'Not found on pmm: {path}: ')
+    assert hint in message
+    assert 'find_items' not in message
+
+
+def test_summarize_args_bounds_values_and_logs_new_query_arguments():
+    huge = [{'fullname': 'x' * 8000, 'number': '1; drop'}] * 50
+    summary = audit._summarize_args(
+        {
+            'items': huge,
+            'fullname': 'y' * 5000,
+            'masters': ['ps80'] * 100,
+            'include_builds': 200,
+            'builds_since_days': 90,
+            'include_parameters': True,
+            'compact_parameters': True,
+            'cursor': 'job#2',
+            'depth': {'nested': 'object'},
+        },
+        'query_items',
+    )
+
+    assert len(json.dumps(summary)) < 20_000
+    assert summary['items'][0] == {'fullname': 'x' * audit._MAX_VALUE_LEN, 'number': None}
+    assert summary['fullname'] == 'y' * audit._MAX_VALUE_LEN
+    assert len(summary['masters']) == audit._MAX_LIST_ITEMS
+    assert (summary['include_builds'], summary['builds_since_days'], summary['cursor']) == (200, 90, 'job#2')
+    assert summary['include_parameters'] is True
+    assert summary['dropped_keys'] == ['depth']
