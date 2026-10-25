@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 
@@ -286,3 +287,105 @@ def test_assigned_label_name_coerces_non_string():
     assert bad.assigned_label_name() is None
     ok = UnknownItem(_class='hudson.matrix.MatrixProject', name='m', url='u', assignedLabel={'name': 'docker-aarch64'})
     assert ok.assigned_label_name() == 'docker-aarch64'
+
+
+def _build(number, result='SUCCESS', *, hours_ago=1, duration=3_600_000, causes=('Started by timer',)):
+    return {
+        'number': number,
+        'result': result,
+        'building': False,
+        'timestamp': int((time.time() - hours_ago * 3600) * 1000),
+        'duration': duration,
+        'causes': list(causes),
+    }
+
+
+@pytest.mark.asyncio
+async def test_query_items_include_builds(mock_jenkins, mocker):
+    upstream = 'Started by upstream project "parent/ARCH=x86_64" build number 73'
+    mock_jenkins.query_items.return_value = [
+        Job(
+            fullname='job1',
+            color='blue',
+            name='job1',
+            url='1',
+            class_='Job',
+            builds=[
+                {
+                    **_build(2, 'UNSTABLE', duration=9_420_000, causes=('Started by user Jane Doe',)),
+                    'timestamp': 1792500000000,
+                },
+                {**_build(1, causes=(upstream,)), 'timestamp': 1792400000000},
+            ],
+        ),
+        Folder(fullname='dir', jobs=[], class_='Folder', name='dir', url='2'),
+    ]
+
+    result = await item.query_items(mocker.Mock(), include_builds=10)
+
+    mock_jenkins.query_items.assert_called_once()
+    assert mock_jenkins.query_items.call_args.kwargs['include_builds'] == 10
+    assert result['items'] == [
+        {
+            'fullname': 'job1',
+            'builds': [
+                '#2 UNSTABLE 2026-10-20T12:40Z 2h37m user Jane Doe',
+                '#1 SUCCESS 2026-10-19T08:53Z 1h00m upstream parent/ARCH=x86_64 #73',
+            ],
+        }
+    ]
+    assert (result['builds_total'], result['returned'], result['total'], result['pages']) == (2, 1, 2, 1)
+
+
+@pytest.mark.asyncio
+async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='busy', color='blue', name='busy', url='1', class_='Job', builds=[_build(2), _build(1)]),
+        Job(
+            fullname='old',
+            color='blue',
+            name='old',
+            url='2',
+            class_='Job',
+            builds=[_build(5), _build(4, hours_ago=24 * 40)],
+        ),
+        Job(fullname='never', color='notbuilt', name='never', url='3', class_='Job', builds=[]),
+    ]
+
+    result = await item.query_items(mocker.Mock(), include_builds=2, builds_since_days=30)
+
+    # busy filled its 2-build cap inside the window, so older builds may exist: more=True
+    assert [(e['fullname'], len(e['builds']), e.get('more', False)) for e in result['items']] == [
+        ('busy', 2, True),
+        ('old', 1, False),
+        ('never', 0, False),
+    ]
+    assert result['builds_total'] == 3
+
+
+@pytest.mark.asyncio
+async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, mocker):
+    mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 400)
+    builds = [_build(n, causes=('Started by user ' + 'x' * 40,)) for n in range(30, 0, -1)]
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='big', color='blue', name='big', url='1', class_='Job', builds=builds),
+    ]
+
+    first = await item.query_items(mocker.Mock(), include_builds=30)
+    parts, lines = [], []
+    for page in range(first['pages']):
+        result = await item.query_items(mocker.Mock(), include_builds=30, page=page)
+        assert len(json.dumps(result['items'], separators=(',', ':'))) <= 400
+        parts += [e['part'] for e in result['items']]
+        lines += [line for e in result['items'] for line in e['builds']]
+
+    assert parts == list(range(1, len(parts) + 1))
+    assert len(parts) > 1
+    assert [line.split()[0] for line in lines] == [f'#{n}' for n in range(30, 0, -1)]
+    assert first['returned'] == 1
+
+
+@pytest.mark.asyncio
+async def test_query_items_builds_and_parameters_are_exclusive(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='include_builds or include_parameters, not both'):
+        await item.query_items(mocker.Mock(), include_builds=5, include_parameters=True)

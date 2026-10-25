@@ -1371,6 +1371,57 @@ class TestItem:
         ]
         assert matched[1].parameters == []
 
+    def test_query_items_include_builds(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'jobs': [
+                    {
+                        'name': 'pipe',
+                        'url': 'https://example.com/job/pipe/',
+                        '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+                        'color': 'blue',
+                        'allBuilds': [
+                            {
+                                'number': 7,
+                                'result': 'SUCCESS',
+                                'building': False,
+                                'timestamp': 1000,
+                                'duration': 60000,
+                                'actions': [{}, {'causes': [{'shortDescription': 'Started by timer'}]}],
+                            },
+                        ],
+                    },
+                    {
+                        'name': 'dir',
+                        'url': 'https://example.com/job/dir/',
+                        '_class': 'com.cloudbees.hudson.plugins.folder.Folder',
+                        'jobs': [],
+                    },
+                ]
+            }
+        )
+
+        matched = jenkins.query_items(include_builds=50)
+
+        kwargs = mock_session.request.call_args.kwargs
+        assert mock_session.request.call_count == 1
+        assert (
+            'allBuilds[number,result,timestamp,duration,building,actions[causes[shortDescription]]]{0,50}'
+            in kwargs['url']
+        )
+        assert kwargs['timeout'] == 180
+        assert matched[0].builds == [
+            {
+                'number': 7,
+                'result': 'SUCCESS',
+                'building': False,
+                'timestamp': 1000,
+                'duration': 60000,
+                'causes': ['Started by timer'],
+            }
+        ]
+        assert matched[1].builds is None
+
     def test_query_items_default_omits_parameters(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(
             json=lambda: {

@@ -3,6 +3,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastmcp import Context
@@ -255,6 +256,64 @@ def _compact_entries(items: list) -> list[dict]:
     ]
 
 
+_MAX_INCLUDE_BUILDS = 200
+_UPSTREAM_CAUSE = re.compile(r'^upstream project "(.+)" build number (\d+)$')
+
+
+def _duration(millis: int | None) -> str:
+    """A build duration as 2h37m, 43m or 12s."""
+    seconds = int((millis or 0) / 1000)
+    hours, rest = divmod(seconds, 3600)
+    if hours:
+        return f'{hours}h{rest // 60:02d}m'
+    return f'{rest // 60}m' if rest >= 60 else f'{rest}s'
+
+
+def _build_line(build: dict) -> str:
+    """One build as '#1484 UNSTABLE 2026-10-20T14:31Z 2h37m user JNKPercona'."""
+    result = 'RUNNING' if build.get('building') else build.get('result') or 'NONE'
+    started = datetime.fromtimestamp((build.get('timestamp') or 0) / 1000, tz=UTC).strftime('%Y-%m-%dT%H:%MZ')
+    line = f'#{build.get("number")} {result} {started} {_duration(build.get("duration"))}'
+    causes = [_UPSTREAM_CAUSE.sub(r'upstream \1 #\2', c.removeprefix('Started by ')) for c in build.get('causes') or []]
+    return f'{line} {"; ".join(causes)}' if causes else line
+
+
+def _split_entry(entry: dict, budget: int) -> list[dict]:
+    """An entry larger than budget characters of JSON, as consecutive part entries that each fit."""
+    if len(json.dumps(entry, separators=(',', ':'))) <= budget:
+        return [entry]
+    base = len(json.dumps({'fullname': entry['fullname'], 'part': 0, 'builds': []}, separators=(',', ':')))
+    chunks: list[list[str]] = [[]]
+    size = base
+    for line in entry['builds']:
+        n = len(json.dumps(line)) + 1
+        if chunks[-1] and size + n > budget:
+            chunks.append([])
+            size = base
+        chunks[-1].append(line)
+        size += n
+    parts = [{'fullname': entry['fullname'], 'part': k, 'builds': c} for k, c in enumerate(chunks, 1)]
+    if entry.get('more'):
+        parts[-1]['more'] = True
+    return parts
+
+
+def _build_entries(items: list, per_job: int, since_days: int | None) -> list[dict]:
+    """One {fullname, builds} entry per job (folders skipped), builds newest first and inside the
+    since_days window. more=True marks a job whose history goes on past per_job inside the window."""
+    cutoff = (time.time() - since_days * 86400) * 1000 if since_days else None
+    entries = []
+    for i in items:
+        if i.builds is None:
+            continue
+        kept = [b for b in i.builds if cutoff is None or (b.get('timestamp') or 0) >= cutoff]
+        entry = {'fullname': i.fullname, 'builds': [_build_line(b) for b in kept]}
+        if len(i.builds) >= per_job and len(kept) == len(i.builds):
+            entry['more'] = True
+        entries.extend(_split_entry(entry, _COMPACT_PAGE_CHARS))
+    return entries
+
+
 def _paginate(entries: list[dict], budget: int) -> list[list[dict]]:
     """Split entries into pages of at most budget characters of JSON. An entry is never split,
     so one larger than the budget gets a page of its own."""
@@ -282,6 +341,8 @@ async def query_items(
     limit: int = 200,
     include_parameters: bool = False,  # noqa: FBT001, FBT002
     compact_parameters: bool = False,  # noqa: FBT001, FBT002
+    include_builds: int = 0,
+    builds_since_days: int | None = None,
     page: int = 0,
     master: MasterArg = None,
 ) -> dict:
@@ -304,15 +365,25 @@ async def query_items(
             "NAME Type=default [choice|choice]" (no descriptions), collapse jobs with identical
             parameter lists into one {jobs, parameters} entry, and page the result so every
             response fits one client result. Read page 0, then every page up to pages - 1.
-        page: With compact_parameters, the page to return (0-based, see pages in the result).
+        include_builds: Also return up to this many most recent builds per job (capped at 200), each
+            one string "#number RESULT start duration cause", in the same single Jenkins request.
+            Use it for build history across many jobs instead of get_build_walk per job. Paged
+            like compact_parameters. A job with more=True has older builds past the cap.
+        builds_since_days: With include_builds, keep only builds started in the last N days.
+        page: With compact_parameters or include_builds, the page to return (0-based, see pages).
 
     Returns:
         A dict: items (compact: fullname, class, color, label when the job exposes one, and
         parameters when include_parameters is set), total (items found), returned, truncated.
         With compact_parameters, items are {fullname, parameters} or {jobs, parameters} entries,
-        returned counts the jobs on this page, and page and pages are added.
+        returned counts the jobs on this page, and page and pages are added. With include_builds,
+        items are {fullname, builds, more?} entries, and builds_total counts builds on all pages.
     """
+    if include_builds and include_parameters:
+        msg = 'pass include_builds or include_parameters, not both (one call each)'
+        raise ValueError(msg)
     limit = max(1, min(limit, 2000))
+    per_job = max(0, min(include_builds, _MAX_INCLUDE_BUILDS))
     found = jenkins(ctx, master).query_items(
         class_pattern=class_pattern,
         fullname_pattern=fullname_pattern,
@@ -320,20 +391,27 @@ async def query_items(
         label_pattern=label_pattern,
         folder_depth=folder_depth,
         include_parameters=include_parameters,
+        include_builds=per_job,
     )
-    if include_parameters and compact_parameters:
-        pages = _paginate(_compact_entries(found[:limit]), _COMPACT_PAGE_CHARS)
+    if per_job or (include_parameters and compact_parameters):
+        entries = (
+            _build_entries(found[:limit], per_job, builds_since_days) if per_job else _compact_entries(found[:limit])
+        )
+        pages = _paginate(entries, _COMPACT_PAGE_CHARS)
         if not 0 <= page < len(pages):
             msg = f'page {page} is out of range, this query has {len(pages)} page(s) (0 to {len(pages) - 1})'
             raise ValueError(msg)
-        return {
+        result = {
             'items': pages[page],
             'total': len(found),
-            'returned': sum(len(e.get('jobs', [e.get('fullname')])) for e in pages[page]),
+            'returned': sum(len(e['jobs']) if 'jobs' in e else int(e.get('part', 1) == 1) for e in pages[page]),
             'truncated': len(found) > limit or page < len(pages) - 1,
             'page': page,
             'pages': len(pages),
         }
+        if per_job:
+            result['builds_total'] = sum(len(e['builds']) for e in entries)
+        return result
     items = []
     for i in found:
         entry = i.model_dump(exclude_none=True, exclude={'jobs', 'lastBuild', 'assignedLabel'})

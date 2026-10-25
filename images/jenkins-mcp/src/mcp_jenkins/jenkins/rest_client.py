@@ -28,6 +28,38 @@ _MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS s
 _PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
 
 
+# include_builds reads allBuilds (builds stops at 100) and needs longer than the default timeout:
+# a cold master loads every requested build record from disk (ps80, 200 per job: 82 s cold, 8 s warm).
+_BUILDS_TREE = 'allBuilds[number,result,timestamp,duration,building,actions[causes[shortDescription]]]{{0,{count}}}'
+_BUILDS_TIMEOUT = 180
+
+
+def _parse_builds(builds: list | None) -> list[dict]:
+    """Builds from an allBuilds projection: number, result, building, timestamp, duration, causes."""
+    parsed = []
+    for build in builds or []:
+        if not isinstance(build, dict):
+            continue
+        causes = [
+            c.get('shortDescription')
+            for a in build.get('actions') or []
+            if isinstance(a, dict)
+            for c in a.get('causes') or []
+            if isinstance(c, dict)
+        ]
+        parsed.append(
+            {
+                'number': build.get('number'),
+                'result': build.get('result'),
+                'building': bool(build.get('building')),
+                'timestamp': build.get('timestamp'),
+                'duration': build.get('duration'),
+                'causes': list(dict.fromkeys(c for c in causes if c)),
+            }
+        )
+    return parsed
+
+
 def _parse_parameter_definitions(properties: list | None) -> list[dict]:
     """Flatten a job's `property[].parameterDefinitions` into name, type, defaultValue,
     description, and choices (only for choice parameters)."""
@@ -120,6 +152,7 @@ class Jenkins:
         headers: dict = None,
         crumb: bool = True,
         params: dict = None,
+        timeout: int | None = None,
     ) -> Response:
         """Send an HTTP request to a Jenkins REST endpoint.
 
@@ -130,6 +163,7 @@ class Jenkins:
             headers: Optional headers to include in the request.
             crumb: Whether to include a CSRF crumb header.
             params: Optional query parameters to include in the request.
+            timeout: Seconds to wait for this request, instead of the client default.
 
         Returns:
             Response: The HTTP response object.
@@ -151,7 +185,7 @@ class Jenkins:
             headers=headers,
             params=params,
             data=data,
-            timeout=self.timeout,
+            timeout=timeout or self.timeout,
         )
 
         # When a Jenkins HTTP session expires the cached CSRF crumb becomes
@@ -168,7 +202,7 @@ class Jenkins:
                 headers=headers,
                 params=params,
                 data=data,
-                timeout=self.timeout,
+                timeout=timeout or self.timeout,
             )
 
         response.raise_for_status()
@@ -744,6 +778,7 @@ class Jenkins:
         folder_depth: int | None = None,
         folder_depth_per_request: int = 10,
         include_parameters: bool = False,
+        include_builds: int = 0,
     ) -> list[ItemType]:
         """Get items in the Jenkins instance up to a specified folder depth.
 
@@ -752,6 +787,8 @@ class Jenkins:
             folder_depth_per_request: The depth of folders to request per API call.
             include_parameters: Also fetch each job's parameter definitions in the same request,
                 set on the item's `parameters` field.
+            include_builds: Also fetch up to this many most recent builds per job in the same
+                request, set on the item's `builds` field (0 = none).
 
         Returns:
             A list of ItemType objects representing the items.
@@ -759,12 +796,18 @@ class Jenkins:
         fields = 'url,color,name,lastBuild[number,url],assignedLabel[name]'
         if include_parameters:
             fields += f',{_PARAMETERS_TREE}'
+        if include_builds:
+            fields += ',' + _BUILDS_TREE.format(count=include_builds)
         query = reduce(
             lambda q, _: f'jobs[{fields},{q}]',
             range(folder_depth_per_request),
             'jobs',
         )
-        response = self.request('GET', rest_endpoint.ITEMS(folder='', query=query))
+        response = self.request(
+            'GET',
+            rest_endpoint.ITEMS(folder='', query=query),
+            timeout=_BUILDS_TIMEOUT if include_builds else None,
+        )
 
         items = []
 
@@ -777,6 +820,8 @@ class Jenkins:
                 item.setdefault('fullname', '/'.join(job_path))
                 if include_parameters:
                     item['parameters'] = _parse_parameter_definitions(item.pop('property', None))
+                if include_builds and 'allBuilds' in item:
+                    item['builds'] = _parse_builds(item.pop('allBuilds'))
                 items.append(serialize_item(item))
 
                 children = item.get('jobs')
@@ -882,6 +927,7 @@ class Jenkins:
         color_pattern: str | None = None,
         label_pattern: str | None = None,
         include_parameters: bool = False,
+        include_builds: int = 0,
     ) -> list['ItemType']:
         """Query items by specific field patterns.
 
@@ -895,6 +941,7 @@ class Jenkins:
                 (which expose assignedLabel); pipeline jobs keep their label in the Jenkinsfile and
                 so never match.
             include_parameters: Also fetch each job's parameter definitions (same single request).
+            include_builds: Also fetch up to this many recent builds per job (same single request).
 
         Returns:
             A list of ItemType objects matching the specified patterns.
@@ -908,6 +955,7 @@ class Jenkins:
             folder_depth=folder_depth,
             folder_depth_per_request=folder_depth_per_request,
             include_parameters=include_parameters,
+            include_builds=include_builds,
         )
 
         result = []

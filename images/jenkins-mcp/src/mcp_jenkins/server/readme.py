@@ -225,6 +225,8 @@ _SAMPLES_READ = [
     '  "parameters of every <x> job" -> query_items(fullname_pattern="<x>", include_parameters=True)',
     '  "parameters of every job on a master" -> query_items(include_parameters=True, compact_parameters=True),',
     '      then page=1 up to pages - 1 when the result reports more than one page',
+    '  "build history of every job on a master" -> query_items(include_builds=200, builds_since_days=90),',
+    '      paged the same way (one string per build: number, result, start, duration, cause)',
     '  "what is running right now?" -> get_running_builds(master="<master>")',
     '  "summarise the last 10 builds of <job>" -> get_build_walk(fullname="<job>", count=10)',
     '  "just the build numbers of <job>" -> get_build_history(fullname="<job>", count=10)',
