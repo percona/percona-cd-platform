@@ -1,4 +1,5 @@
 import inspect
+import threading
 import time
 
 import pytest
@@ -120,3 +121,49 @@ def test_time_budget_names_the_resume_offset(mock_jenkins, mocker):
 
     assert [j['fullname'] for j in out['jobs']] == ['fast']
     assert out['notes'] == ['stopped before slow: time budget spent, call again with offset=1']
+
+
+def test_keeps_at_most_the_worker_count_in_flight_per_call(mock_jenkins, mocker):
+    in_flight = peak = 0
+    lock = threading.Lock()
+
+    def config(fullname):
+        nonlocal in_flight, peak
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        time.sleep(0.01)
+        with lock:
+            in_flight -= 1
+        return '<a>x</a>'
+
+    submitted = mocker.spy(item._config_pool, 'submit')
+    mock_jenkins.query_items.return_value = [_job(f'j{i}') for i in range(40)]
+    mock_jenkins.get_item_config.side_effect = config
+
+    out = item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='j')
+
+    assert out['jobs_read'] == 40
+    assert peak <= item._CONFIG_WORKERS
+    assert submitted.call_count == 40
+
+
+def test_match_budget_stop_cancels_queued_reads(mock_jenkins, mocker):
+    mocker.patch.object(item, '_MAX_CONFIG_MATCHES', 1)
+    mock_jenkins.query_items.return_value = [_job(f'j{i}') for i in range(30)]
+    mock_jenkins.get_item_config.return_value = '<a>x</a>'
+    submitted = mocker.spy(item._config_pool, 'submit')
+
+    out = item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='j')
+
+    assert out['match_count'] == 1
+    assert out['notes'] == ['stopped before j1: match budget spent, call again with offset=1']
+    assert submitted.call_count <= 1 + item._CONFIG_WORKERS
+
+
+@pytest.mark.parametrize(
+    'line',
+    ['<privateKey>-----BEGIN RSA-----</privateKey>', '<passwd>hunter2</passwd>', '<awsAccessKey>AKIA</awsAccessKey>'],
+)
+def test_redacts_private_key_passwd_and_access_key(line):
+    assert '>[redacted]<' in item._redact(line)

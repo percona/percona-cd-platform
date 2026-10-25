@@ -152,3 +152,23 @@ async def test_a_slow_request_cannot_push_the_wait_past_its_deadline(mock_jenkin
 
     assert time.monotonic() - started < 2
     assert (result['state'], result['timed_out']) == ('running', True)
+
+
+@pytest.mark.parametrize(
+    ('url', 'fullname', 'expected'),
+    [
+        ('https://h/job/folder/job/foo/', 'foo', False),
+        ('https://h/job/folder/job/foo/7/', 'foo', False),
+        ('https://h/job/foobar/', 'foo', False),
+        ('https://h/job/foo/', 'foo', True),
+        ('https://h/job/foo/7/', 'foo', True),
+        ('https://h/job/folder/job/foo/7/', 'folder/foo', True),
+        ('https://h/jenkins/job/foo/', 'foo', True),
+        ('https://h/job/foo%20bar/', 'foo bar', True),
+        (None, 'foo', True),
+    ],
+)
+def test_belongs_to_matches_the_whole_job_chain(url, fullname, expected):
+    from mcp_jenkins.server.queue import _belongs_to
+
+    assert _belongs_to(url, fullname) is expected

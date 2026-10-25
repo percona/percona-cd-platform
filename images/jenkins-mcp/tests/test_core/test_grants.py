@@ -182,3 +182,14 @@ async def test_lifespan_refuses_to_start_on_malformed_grants(monkeypatch):
         async with lifespan(None):
             pass
     grants.get_grants.cache_clear()
+
+
+def test_missing_master_asks_for_an_explicit_one(mocker):
+    mocker.patch(
+        'mcp_jenkins.core.grants.get_access_token',
+        return_value=mocker.Mock(claims={'groups': [grants.SERVICE_ACCOUNTS_GROUP], 'preferred_username': 'svc'}),
+    )
+
+    denial = grants.build_denial(None, {'fullname': 'job', 'build_type': 'build'})
+
+    assert denial == 'build is not granted: pass master=<name>, this account can reach more than one master'

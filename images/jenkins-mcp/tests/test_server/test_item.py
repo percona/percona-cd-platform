@@ -23,7 +23,7 @@ async def test_get_all_items(mock_jenkins, mocker):
         Folder(fullname='job2', jobs=[], class_='Folder', name='folder', url='1'),
     ]
 
-    result = await item.get_all_items(mocker.Mock())
+    result = item.get_all_items(mocker.Mock())
 
     assert result['total'] == 2
     assert result['truncated'] is False
@@ -39,7 +39,7 @@ async def test_get_all_items_truncates(mock_jenkins, mocker):
         Job(fullname=f'job{i}', color='blue', name=f'job{i}', url='1', class_='Job') for i in range(5)
     ]
 
-    result = await item.get_all_items(mocker.Mock(), limit=2)
+    result = item.get_all_items(mocker.Mock(), limit=2)
 
     assert result['total'] == 5
     assert result['returned'] == 2
@@ -100,7 +100,7 @@ async def test_query_items(mock_jenkins, mocker):
         Job(fullname='job1', color='blue', name='job1', url='1', class_='Job'),
     ]
 
-    result = await item.query_items(
+    result = item.query_items(
         mocker.Mock(),
         class_pattern='.*',
         fullname_pattern='job.*',
@@ -128,7 +128,7 @@ async def test_query_items_surfaces_label_and_passes_filter(mock_jenkins, mocker
         ),
     ]
 
-    result = await item.query_items(mocker.Mock(), label_pattern='.*aarch64.*')
+    result = item.query_items(mocker.Mock(), label_pattern='.*aarch64.*')
 
     assert result['items'][0]['label'] == 'docker-aarch64'
     assert 'assignedLabel' not in result['items'][0]  # surfaced as `label`, raw field not leaked
@@ -142,7 +142,7 @@ async def test_query_items_include_parameters(mock_jenkins, mocker):
         Job(fullname='job1', color='blue', name='job1', url='1', class_='Job', parameters=params),
     ]
 
-    result = await item.query_items(mocker.Mock(), fullname_pattern='job.*', include_parameters=True)
+    result = item.query_items(mocker.Mock(), fullname_pattern='job.*', include_parameters=True)
 
     assert result['items'][0]['parameters'] == params
     assert mock_jenkins.query_items.call_args.kwargs['include_parameters'] is True
@@ -166,7 +166,7 @@ async def test_query_items_compact_parameters(mock_jenkins, mocker):
         Job(fullname='job2', color='blue', name='job2', url='2', class_='Job', parameters=[]),
     ]
 
-    result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+    result = item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
 
     assert result['items'] == [
         {
@@ -177,8 +177,7 @@ async def test_query_items_compact_parameters(mock_jenkins, mocker):
     ]
     assert result['total'] == 2
     assert result['returned'] == 2
-    assert result['page'] == 0
-    assert result['pages'] == 1
+    assert result['next_cursor'] is None
     assert result['truncated'] is False
 
 
@@ -191,7 +190,7 @@ async def test_query_items_compact_groups_identical_parameter_lists(mock_jenkins
         Job(fullname='mb/PR-2', color='blue', name='PR-2', url='3', class_='Job', parameters=shared),
     ]
 
-    result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+    result = item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
 
     assert result['items'] == [
         {'jobs': ['mb/PR-1', 'mb/PR-2'], 'parameters': ['BUILD_OS String=ol9']},
@@ -215,25 +214,26 @@ async def test_query_items_compact_pages_cover_every_job(mock_jenkins, mocker):
         for n in range(20)
     ]
 
-    first = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
-    assert first['pages'] > 1
-    assert first['truncated'] is True
-
-    seen = []
-    for page in range(first['pages']):
-        result = await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, page=page)
+    seen, cursor, calls = [], None, 0
+    while True:
+        result = item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, cursor=cursor)
+        calls += 1
         assert len(json.dumps(result['items'], separators=(',', ':'))) <= 300
-        assert result['truncated'] is (page < first['pages'] - 1)
+        assert result['truncated'] is (result['next_cursor'] is not None)
         seen += [e['fullname'] for e in result['items']]
-    assert seen == [f'job{n}' for n in range(20)]
+        cursor = result['next_cursor']
+        if cursor is None:
+            break
+    assert calls > 1
+    assert seen == sorted(f'job{n}' for n in range(20))
 
 
 @pytest.mark.asyncio
 async def test_query_items_compact_page_out_of_range(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = [Job(fullname='job1', color='blue', name='job1', url='1', class_='Job')]
 
-    with pytest.raises(ValueError, match='page 1 is out of range, this query has 1 page'):
-        await item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, page=1)
+    with pytest.raises(ValueError, match='is not one this tool returned'):
+        item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True, cursor='job1')
 
 
 @pytest.mark.asyncio
@@ -242,7 +242,7 @@ async def test_query_items_compact_needs_include_parameters(mock_jenkins, mocker
         Job(fullname='job1', color='blue', name='job1', url='1', class_='Job'),
     ]
 
-    result = await item.query_items(mocker.Mock(), compact_parameters=True)
+    result = item.query_items(mocker.Mock(), compact_parameters=True)
 
     # compact without include_parameters keeps the normal compact item list
     assert result['items'] == [{'class_': 'Job', 'color': 'blue', 'fullname': 'job1', 'name': 'job1', 'url': '1'}]
@@ -321,10 +321,11 @@ async def test_query_items_include_builds(mock_jenkins, mocker):
         Folder(fullname='dir', jobs=[], class_='Folder', name='dir', url='2'),
     ]
 
-    result = await item.query_items(mocker.Mock(), include_builds=10)
+    result = item.query_items(mocker.Mock(), include_builds=10)
 
     mock_jenkins.query_items.assert_called_once()
-    assert mock_jenkins.query_items.call_args.kwargs['include_builds'] == 10
+    # one build past the cap is fetched, so more=True only when an older build really exists
+    assert mock_jenkins.query_items.call_args.kwargs['include_builds'] == 11
     assert result['items'] == [
         {
             'fullname': 'job1',
@@ -334,13 +335,15 @@ async def test_query_items_include_builds(mock_jenkins, mocker):
             ],
         }
     ]
-    assert (result['builds_total'], result['returned'], result['total'], result['pages']) == (2, 1, 2, 1)
+    assert (result['builds_total'], result['returned'], result['total'], result['next_cursor']) == (2, 1, 2, None)
 
 
 @pytest.mark.asyncio
 async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = [
-        Job(fullname='busy', color='blue', name='busy', url='1', class_='Job', builds=[_build(2), _build(1)]),
+        Job(
+            fullname='busy', color='blue', name='busy', url='1', class_='Job', builds=[_build(3), _build(2), _build(1)]
+        ),
         Job(
             fullname='old',
             color='blue',
@@ -352,13 +355,13 @@ async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
         Job(fullname='never', color='notbuilt', name='never', url='3', class_='Job', builds=[]),
     ]
 
-    result = await item.query_items(mocker.Mock(), include_builds=2, builds_since_days=30)
+    result = item.query_items(mocker.Mock(), include_builds=2, builds_since_days=30)
 
-    # busy filled its 2-build cap inside the window, so older builds may exist: more=True
+    # busy has a third build inside the window past its 2-build cap: more=True
     assert [(e['fullname'], len(e['builds']), e.get('more', False)) for e in result['items']] == [
         ('busy', 2, True),
-        ('old', 1, False),
         ('never', 0, False),
+        ('old', 1, False),
     ]
     assert result['builds_total'] == 3
 
@@ -371,13 +374,16 @@ async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, mocker)
         Job(fullname='big', color='blue', name='big', url='1', class_='Job', builds=builds),
     ]
 
-    first = await item.query_items(mocker.Mock(), include_builds=30)
-    parts, lines = [], []
-    for page in range(first['pages']):
-        result = await item.query_items(mocker.Mock(), include_builds=30, page=page)
+    parts, lines, cursor, first = [], [], None, None
+    while True:
+        result = item.query_items(mocker.Mock(), include_builds=30, cursor=cursor)
+        first = first or result
         assert len(json.dumps(result['items'], separators=(',', ':'))) <= 400
         parts += [e['part'] for e in result['items']]
         lines += [line for e in result['items'] for line in e['builds']]
+        cursor = result['next_cursor']
+        if cursor is None:
+            break
 
     assert parts == list(range(1, len(parts) + 1))
     assert len(parts) > 1
@@ -388,4 +394,120 @@ async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, mocker)
 @pytest.mark.asyncio
 async def test_query_items_builds_and_parameters_are_exclusive(mock_jenkins, mocker):
     with pytest.raises(ValueError, match='include_builds or include_parameters, not both'):
-        await item.query_items(mocker.Mock(), include_builds=5, include_parameters=True)
+        item.query_items(mocker.Mock(), include_builds=5, include_parameters=True)
+
+
+def test_query_items_and_get_all_items_run_off_the_event_loop():
+    import inspect
+
+    # FastMCP runs a sync tool in a worker thread, a slow Jenkins read must not stall /healthz
+    assert not inspect.iscoroutinefunction(item.query_items)
+    assert not inspect.iscoroutinefunction(item.get_all_items)
+
+
+def test_query_items_compact_splits_an_oversized_group(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(fullname=f'mb/feature-branch-{n:04d}', color='blue', name='x', url='u', class_='Job', parameters=[])
+        for n in range(2000)
+    ]
+
+    seen, cursor = [], None
+    while True:
+        result = item.query_items(
+            mocker.Mock(), include_parameters=True, compact_parameters=True, limit=2000, cursor=cursor
+        )
+        assert len(json.dumps(result['items'], separators=(',', ':'))) <= item._COMPACT_PAGE_CHARS
+        seen += [name for e in result['items'] for name in e['jobs']]
+        cursor = result['next_cursor']
+        if cursor is None:
+            break
+
+    assert seen == [f'mb/feature-branch-{n:04d}' for n in range(2000)]
+
+
+def test_query_items_compact_leaves_folders_out(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Folder(fullname='dir', jobs=[], class_='Folder', name='dir', url='1'),
+        Job(fullname='job', color='blue', name='job', url='2', class_='Job', parameters=[]),
+    ]
+
+    result = item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+
+    assert result['items'] == [{'fullname': 'job', 'parameters': []}]
+
+
+def test_query_items_cursor_never_repeats_a_job_when_entries_grow(mock_jenkins, mocker):
+    mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 500)
+
+    def jobs(extra):
+        return [
+            Job(
+                fullname=f'job{n:02d}',
+                color='blue',
+                name='x',
+                url='u',
+                class_='Job',
+                builds=[_build(k) for k in range(2 + (extra if n == 0 else 0))],
+            )
+            for n in range(12)
+        ]
+
+    mock_jenkins.query_items.return_value = jobs(0)
+    first = item.query_items(mocker.Mock(), include_builds=20)
+    mock_jenkins.query_items.return_value = jobs(8)  # job00 gains builds between the two calls
+    second = item.query_items(mocker.Mock(), include_builds=20, cursor=first['next_cursor'])
+
+    names = [e['fullname'] for e in first['items'] + second['items']]
+    assert len(names) == len(set(names))
+    assert names == sorted(names)
+    assert names[: len(first['items']) + 1][-1] == f'job{len(first["items"]):02d}'
+
+
+def test_query_items_rejects_a_non_positive_window(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='builds_since_days must be 1 or more'):
+        item.query_items(mocker.Mock(), include_builds=5, builds_since_days=-7)
+    mock_jenkins.query_items.assert_not_called()
+
+
+def test_query_items_more_is_false_at_exactly_the_cap(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(
+            fullname='exact',
+            color='blue',
+            name='exact',
+            url='1',
+            class_='Job',
+            builds=[_build(k) for k in range(5, 0, -1)],
+        ),
+    ]
+
+    result = item.query_items(mocker.Mock(), include_builds=5)
+
+    assert len(result['items'][0]['builds']) == 5
+    assert 'more' not in result['items'][0]
+
+
+def test_query_items_narrow_pattern_reads_builds_job_by_job(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(fullname='pmm3-a', color='blue', name='a', url='1', class_='Job'),
+        Folder(fullname='pmm3-dir', jobs=[], class_='Folder', name='d', url='2'),
+    ]
+    mock_jenkins.get_job_builds.return_value = [_build(1)]
+
+    result = item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=50)
+
+    # the whole-tree allBuilds projection is never requested for a narrow pattern
+    assert all(c.kwargs.get('include_builds', 0) == 0 for c in mock_jenkins.query_items.call_args_list)
+    mock_jenkins.get_job_builds.assert_called_once_with(fullname='pmm3-a', count=51)
+    assert [e['fullname'] for e in result['items']] == ['pmm3-a']
+
+
+def test_query_items_wide_pattern_falls_back_to_one_tree_request(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [
+        Job(fullname=f'pmm3-{n}', color='blue', name='x', url='u', class_='Job', builds=[]) for n in range(25)
+    ]
+
+    item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=10)
+
+    mock_jenkins.get_job_builds.assert_not_called()
+    assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 11

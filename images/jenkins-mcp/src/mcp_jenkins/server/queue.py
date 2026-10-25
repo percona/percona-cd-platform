@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import re
 import time
 import urllib.parse
 from collections.abc import Callable
@@ -89,11 +90,19 @@ async def _number_from_history(client: 'Jenkins', fullname: str, queue_id: int, 
 
 
 def _belongs_to(url: str | None, fullname: str) -> bool:
-    """True when a Jenkins job or build URL is under the job named fullname (or carries no URL)."""
+    """True when a Jenkins URL is the job named fullname, or a build of it (or carries no URL).
+
+    The whole /job/ chain must match, so a queue item of folder/foo never passes for foo.
+    """
     if not url:
         return True
     job_path = '/job/' + '/job/'.join(fullname.strip('/').split('/')) + '/'
-    return job_path in urllib.parse.unquote(url)
+    path = urllib.parse.unquote(urllib.parse.urlparse(url).path).rstrip('/') + '/'
+    start = path.find('/job/')
+    if start < 0:
+        return False
+    chain = path[start:]
+    return chain == job_path or re.fullmatch(re.escape(job_path) + r'\d+/', chain) is not None
 
 
 @mcp.tool(tags=['read'])

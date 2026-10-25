@@ -102,12 +102,20 @@ _SAFE_ARG_KEYS = frozenset(
         'before',
         'after',
         'regex',
+        'include_parameters',
+        'compact_parameters',
+        'include_builds',
+        'builds_since_days',
+        'cursor',
     }
 )
 
 # Bounds on what an audit line may carry about a failed or malformed call (names only, never values).
 _MAX_KEY_LEN = 40
 _MAX_DROPPED_KEYS = 10
+# Bounds on logged argument values, so one call can never outgrow a Loki line (256 KB default).
+_MAX_VALUE_LEN = 200
+_MAX_LIST_ITEMS = 20
 _MAX_ERROR_DETAILS = 5
 
 # Dedicated stdout sink: emit ONLY audit records, as one raw JSON line (parsed by Loki `| json`).
@@ -143,6 +151,17 @@ def _master_label(name: str | None) -> str:
     return name if name in get_fleet().names() else 'invalid'
 
 
+def _bounded(value: object) -> tuple[bool, object]:
+    """A loggable copy of a scalar or a short list of scalars, strings cut to _MAX_VALUE_LEN."""
+    if value is None or isinstance(value, bool | int | float):
+        return True, value
+    if isinstance(value, str):
+        return True, value[:_MAX_VALUE_LEN]
+    if isinstance(value, list) and all(v is None or isinstance(v, str | bool | int | float) for v in value):
+        return True, [v[:_MAX_VALUE_LEN] if isinstance(v, str) else v for v in value[:_MAX_LIST_ITEMS]]
+    return False, None
+
+
 def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
     """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped.
 
@@ -155,17 +174,26 @@ def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
     dropped: list[str] = []
     for key, value in arguments.items():
         if key == 'pattern' and tool in _CONFIG_READ_TOOLS:
-            # A config search can be for a secret value itself: log its fingerprint, never the text.
-            summary['pattern_sha'] = _hash(str(value))
+            # A config search can be for a secret value itself: log its length only. A digest of a
+            # short secret can be confirmed offline by hashing guesses.
             summary['pattern_len'] = len(str(value))
         elif key in _SAFE_ARG_KEYS:
-            summary[key] = value
+            loggable, bounded = _bounded(value)
+            if loggable:
+                summary[key] = bounded
+            else:
+                dropped.append(str(key)[:_MAX_KEY_LEN])
         elif key == 'data' and isinstance(value, dict):
             summary['data_keys'] = sorted(value.keys())  # build-parameter NAMES, never values
         elif key == 'items' and isinstance(value, list):
             # stop_builds targets: job names and build numbers only, both already logged for stop_build.
             summary['items'] = [
-                {'fullname': i.get('fullname'), 'number': i.get('number')} for i in value[:50] if isinstance(i, dict)
+                {
+                    'fullname': i['fullname'][:_MAX_VALUE_LEN] if isinstance(i.get('fullname'), str) else None,
+                    'number': i['number'] if isinstance(i.get('number'), int) else None,
+                }
+                for i in value[:50]
+                if isinstance(i, dict)
             ]
             summary['items_count'] = len(value)
         else:
@@ -200,16 +228,29 @@ def _error_detail(error: Exception) -> list[dict] | None:
     return None
 
 
+# What a 404 means depends on the resource under the job, so the hint names the right next step.
+_NOT_FOUND_HINTS = (
+    ('/testReport/', 'this build has no test report (no JUnit results were archived)'),
+    ('/artifact/', 'this build has no such artifact, list them with get_all_build_artifacts'),
+    ('/wfapi/', 'this job is not a pipeline, so it has no stage view'),
+    (
+        '/queue/item/',
+        'Jenkins drops a queue item a few minutes after it starts, use wait_for_build or get_build_history',
+    ),
+)
+
+
 def _not_found(error: Exception, master: str | None) -> ToolError | None:
     """A plain not-found message for a Jenkins 404, raised by the tool or wrapped by FastMCP, or None."""
     for source in (error, error.__cause__):
         if not isinstance(source, HTTPError) or source.response is None or source.response.status_code != 404:
             continue
         path = unquote(urlparse(source.response.url or '').path) or 'the requested item'
-        return ToolError(
-            f'Not found on {master or "the default master"}: {path} does not exist. Find the exact job '
-            f'name with find_items(fullname_pattern=...) and build numbers with get_build_history.'
+        hint = next((h for marker, h in _NOT_FOUND_HINTS if marker in path), None) or (
+            'the job or build does not exist. Find the exact job name with find_items(fullname_pattern=...) '
+            'and build numbers with get_build_history'
         )
+        return ToolError(f'Not found on {master or "the default master"}: {path}: {hint}.')
     return None
 
 
