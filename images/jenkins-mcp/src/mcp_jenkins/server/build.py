@@ -1,5 +1,6 @@
 import base64
 import time
+from collections import Counter
 from typing import Literal
 
 from fastmcp import Context
@@ -20,6 +21,9 @@ _MAX_WALK_COUNT = 30
 # Stages cost one wfapi request per build; stop fetching them once the walk has spent this long.
 _WALK_STAGES_BUDGET_SECONDS = 45
 _WALK_INCLUDES = ('stages', 'parameters', 'test_counts', 'causes')
+# A build with more stages than this (a fan-out orchestrator runs about 250) keeps only its
+# non-SUCCESS stages plus stage_counts, so a walk stays one client result.
+_WALK_MAX_STAGES = 30
 
 # JUnit case-status sets per failure-summary filter. UNSTABLE = the statuses Jenkins marks a build
 # unstable for (FAILED + REGRESSION). None = no status filter (every case).
@@ -571,7 +575,8 @@ def get_build_walk(
     Returns:
         A dict: fullname, builds (number, result, building, timestamp, duration, url, queue_id, plus
         the included parameters, test_counts, causes ["Started by user X", "Started by timer", ...]
-        and stages [{name, status, durationMillis}]), errors
+        and stages [{name, status, durationMillis}], a build with more than 30 stages keeps only the
+        non-SUCCESS ones plus stage_counts {status: n}), errors
         (per-build stage fetch failures, inline), notes (any cap or budget that clipped the walk).
     """
     wanted = set(include) if include is not None else set(_WALK_INCLUDES)
@@ -593,7 +598,11 @@ def get_build_walk(
             except Exception as e:  # noqa: BLE001
                 errors.append({'number': row['number'], 'step': 'stages', 'error': f'{type(e).__name__}: {e}'[:300]})
                 continue
-            row['stages'] = [s.model_dump(include={'name', 'status', 'durationMillis'}) for s in stages.stages]
+            rows = [s.model_dump(include={'name', 'status', 'durationMillis'}) for s in stages.stages]
+            if len(rows) > _WALK_MAX_STAGES:
+                row['stage_counts'] = dict(Counter(s['status'] for s in rows))
+                rows = [s for s in rows if s['status'] != 'SUCCESS']
+            row['stages'] = rows
     return {'fullname': fullname, 'builds': builds, 'errors': errors, 'notes': notes}
 
 

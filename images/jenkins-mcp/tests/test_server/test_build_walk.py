@@ -135,3 +135,23 @@ def test_walk_reports_build_causes(mock_jenkins, mocker):
         [],
     ]
     mock_jenkins.get_build_stages.assert_not_called()
+
+
+def test_walk_keeps_only_non_success_stages_of_a_wide_build(mock_jenkins, mocker):
+    names = [f's{n}' for n in range(40)]
+    wide = PipelineStages(
+        stages=[
+            PipelineStage(id=n, name=n, status='FAILED' if n in ('s3', 's9') else 'SUCCESS', durationMillis=1)
+            for n in names
+        ]
+    )
+    mock_jenkins.get_build_walk.return_value = [_raw(2), _raw(1)]
+    mock_jenkins.get_build_stages.side_effect = [wide, _stages('Build', 'Test')]
+
+    result = build.get_build_walk(mocker.Mock(), fullname='job1', count=2, include=['stages'])
+
+    first, second = result['builds']
+    assert first['stage_counts'] == {'SUCCESS': 38, 'FAILED': 2}
+    assert [s['name'] for s in first['stages']] == ['s3', 's9']
+    assert 'stage_counts' not in second
+    assert [s['name'] for s in second['stages']] == ['Build', 'Test']
