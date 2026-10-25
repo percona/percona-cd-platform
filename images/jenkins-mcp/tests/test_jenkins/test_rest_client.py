@@ -916,7 +916,7 @@ class TestBuild:
         assert jenkins.get_build_walk(fullname='folder/example-job', count=7) == [{'number': 3, 'actions': []}]
         url = mock_session.request.call_args.kwargs['url']
         assert url.startswith('https://example.com/job/folder/job/example-job/api/json?tree=builds[')
-        assert 'queueId,actions[parameters[name,value],failCount,skipCount,totalCount]]' in url
+        assert 'queueId,actions[parameters[name,value],failCount,skipCount,totalCount,causes[shortDescription]]]' in url
         assert url.endswith(']{0,7}')
 
     def test_get_build_stages(self, jenkins, mock_session, mocker):

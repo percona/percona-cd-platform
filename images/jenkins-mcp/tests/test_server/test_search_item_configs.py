@@ -1,4 +1,5 @@
 import inspect
+import time
 
 import pytest
 from requests.exceptions import HTTPError
@@ -34,7 +35,8 @@ def test_is_sync_so_fastmcp_offloads_it():
 
 def test_returns_matching_lines_only(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = [_job('pmm3-a'), _job('pmm3-b')]
-    mock_jenkins.get_item_config.side_effect = [_CONFIG, '<project/>']
+    configs = {'pmm3-a': _CONFIG, 'pmm3-b': '<project/>'}
+    mock_jenkins.get_item_config.side_effect = lambda fullname: configs[fullname]
 
     out = item.search_item_configs(mocker.Mock(), pattern='UPLOAD_HOST', fullname_pattern='^pmm3-')
 
@@ -71,13 +73,25 @@ def test_rejects_catch_all_job_pattern(mock_jenkins, mocker, pattern):
 
 def test_caps_jobs_and_reports_errors_inline(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = [_job(f'j{i}') for i in range(3)]
-    mock_jenkins.get_item_config.side_effect = [HTTPError('403 Forbidden'), '<a>x</a>']
+    configs = {'j0': HTTPError('403 Forbidden'), 'j1': '<a>x</a>', 'j2': '<a>x</a>'}
+
+    def config(fullname):
+        if isinstance(configs[fullname], Exception):
+            raise configs[fullname]
+        return configs[fullname]
+
+    mock_jenkins.get_item_config.side_effect = config
 
     out = item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='j', limit=2)
 
     assert out['errors'] == [{'fullname': 'j0', 'error': 'HTTPError: 403 Forbidden'}]
     assert out['jobs'] == [{'fullname': 'j1', 'matches': [{'line_no': 1, 'line': '<a>x</a>'}]}]
-    assert out['notes'] == ['3 jobs matched fullname_pattern, only the first 2 were read']
+    assert out['notes'] == ['3 jobs matched fullname_pattern, read 0 to 1, call again with offset=2 for the rest']
+
+    rest = item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='j', limit=2, offset=2)
+
+    assert rest['jobs'] == [{'fullname': 'j2', 'matches': [{'line_no': 1, 'line': '<a>x</a>'}]}]
+    assert rest['notes'] == []
 
 
 def test_caps_matches_per_job(mock_jenkins, mocker):
@@ -89,3 +103,20 @@ def test_caps_matches_per_job(mock_jenkins, mocker):
 
     assert len(out['jobs'][0]['matches']) == 2
     assert out['jobs'][0]['truncated'] is True
+
+
+def test_time_budget_names_the_resume_offset(mock_jenkins, mocker):
+    mocker.patch.object(item, '_CONFIG_SEARCH_SECONDS', 0.2)
+    mock_jenkins.query_items.return_value = [_job('fast'), _job('slow')]
+
+    def config(fullname):
+        if fullname == 'slow':
+            time.sleep(1)
+        return '<a>x</a>'
+
+    mock_jenkins.get_item_config.side_effect = config
+
+    out = item.search_item_configs(mocker.Mock(), pattern='x', fullname_pattern='j')
+
+    assert [j['fullname'] for j in out['jobs']] == ['fast']
+    assert out['notes'] == ['stopped before slow: time budget spent, call again with offset=1']

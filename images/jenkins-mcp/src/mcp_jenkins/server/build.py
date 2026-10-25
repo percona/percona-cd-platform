@@ -19,7 +19,7 @@ _MAX_FAILURE_CASES = 1000
 _MAX_WALK_COUNT = 30
 # Stages cost one wfapi request per build; stop fetching them once the walk has spent this long.
 _WALK_STAGES_BUDGET_SECONDS = 45
-_WALK_INCLUDES = ('stages', 'parameters', 'test_counts')
+_WALK_INCLUDES = ('stages', 'parameters', 'test_counts', 'causes')
 
 # JUnit case-status sets per failure-summary filter. UNSTABLE = the statuses Jenkins marks a build
 # unstable for (FAILED + REGRESSION). None = no status filter (every case).
@@ -536,6 +536,9 @@ def _walk_row(raw: dict, include: set[str]) -> dict:
     if 'parameters' in include:
         params = next((a['parameters'] for a in actions if 'parameters' in a), [])
         row['parameters'] = {p.get('name'): p.get('value') for p in params if isinstance(p, dict)}
+    if 'causes' in include:
+        causes = [c.get('shortDescription') for a in actions for c in a.get('causes') or [] if isinstance(c, dict)]
+        row['causes'] = list(dict.fromkeys(c for c in causes if c))
     if 'test_counts' in include:
         report = next((a for a in actions if 'failCount' in a), None)
         if report is not None:
@@ -550,23 +553,25 @@ def get_build_walk(
     ctx: Context,
     fullname: str,
     count: int = 10,
-    include: list[Literal['stages', 'parameters', 'test_counts']] | None = None,
+    include: list[Literal['stages', 'parameters', 'test_counts', 'causes']] | None = None,
     master: MasterArg = None,
 ) -> dict:
     """Summarise the last N builds of one job in a single call (instead of history + one call per build).
 
     Use it to compare recent runs: which builds failed, which stage failed in each, with which
-    parameters, and how many tests failed. Parameters and test counts come from one request for
-    the whole walk; stages cost one request per build and stop after a time budget (see notes).
+    parameters, who or what started each one, and how many tests failed. Parameters, causes and
+    test counts come from one request for the whole walk, stages cost one request per build and
+    stop after a time budget (see notes).
 
     Args:
         fullname: The fullname of the job
         count: How many recent builds, most recent first (capped at 30)
-        include: Any of stages, parameters, test_counts (default: all three)
+        include: Any of stages, parameters, test_counts, causes (default: all four)
 
     Returns:
         A dict: fullname, builds (number, result, building, timestamp, duration, url, queue_id, plus
-        the included parameters, test_counts and stages [{name, status, durationMillis}]), errors
+        the included parameters, test_counts, causes ["Started by user X", "Started by timer", ...]
+        and stages [{name, status, durationMillis}]), errors
         (per-build stage fetch failures, inline), notes (any cap or budget that clipped the walk).
     """
     wanted = set(include) if include is not None else set(_WALK_INCLUDES)
