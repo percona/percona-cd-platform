@@ -322,10 +322,6 @@ module "gha_percona_server_ec2_fallback" {
     "repo:percona/percona-server:ref:refs/heads/9.7",
     "repo:percona/percona-server:ref:refs/heads/trunk",
     "repo:percona/percona-server:pull_request",
-    # Temporary: lets one workflow_dispatch with force_provider=aws run from the
-    # build-chain refactor branch so both arch chains are proven on EC2 before
-    # merge. Remove right after that run.
-    "repo:percona/percona-server:ref:refs/heads/PS-11298-x86-64-gcc16-nightly",
   ]
 
   permissions_policy_json = data.aws_iam_policy_document.gha_percona_server_ec2_fallback_perms.json
