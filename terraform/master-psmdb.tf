@@ -64,6 +64,11 @@ module "psmdb" {
   # boxes use the module default.
   jvm_memory_opts = "-Xms6g -Xmx8g -Xss2m -XX:+UseG1GC -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200"
 
+  # No history lookup in the JUnit step. With one shared history of 550k+
+  # test cases per build, the default lookup of 25 earlier builds per
+  # failing test re-reads their result files for hours.
+  jvm_extra_opts = "-Dhudson.tasks.junit.History$HistoryTableResult.PREVIOUS_TEST_RESULT_BACKTRACK_BUILDS_MAX=0"
+
   # Distinct LT name so the module's launch template can coexist with the
   # CFN-created master template during the cutover (no name collision,
   # order-independent of delete-stack). The instance references the LT by ID.

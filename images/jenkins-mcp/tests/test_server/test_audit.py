@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 from loguru import logger
 
+from mcp_jenkins.core import grants
 from mcp_jenkins.server import audit
 
 
@@ -426,3 +427,317 @@ async def test_middleware_metric_master_label_unknown_clamped_to_invalid(capture
     after = REGISTRY.get_sample_value('mcp_tool_calls_total', labels) or 0.0
     assert after == before + 1  # bogus master collapses to the 'invalid' label (cardinality bound)
     assert json.loads(capture_audit[-1])['master'] == 'bogus-not-in-fleet'  # raw value kept in the log
+
+
+def test_summarize_args_keeps_dropped_key_names_not_values():
+    summary = audit._summarize_args({'job_name': 'secret-job', 'build_number': 7, 'config_xml': '<x/>'})
+
+    assert summary == {'dropped_keys': ['build_number', 'config_xml', 'job_name']}
+    assert 'secret-job' not in json.dumps(summary)
+
+
+@pytest.mark.asyncio
+async def test_bad_arguments_log_error_detail_through_fastmcp(capture_audit, mocker):
+    from fastmcp import Client
+
+    from mcp_jenkins.server import mcp
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+
+    async with Client(mcp) as client:
+        with pytest.raises(Exception, match='fullname'):
+            await client.call_tool('get_build', {'job_name': 'x', 'master': 'ps80'})
+
+    record = json.loads(capture_audit[-1])
+    assert record['status'] == 'error'
+    assert record['error'] == 'ValidationError'
+    assert record['error_module'] == 'fastmcp.exceptions'
+    assert {'loc': 'fullname', 'type': 'missing_argument'} in record['error_detail']
+    assert {'loc': 'job_name', 'type': 'unexpected_keyword_argument'} in record['error_detail']
+    assert record['args'] == {'master': 'ps80', 'dropped_keys': ['job_name']}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('tool', 'is_write'), [('search_item_configs', False), ('stop_builds', True)])
+async def test_new_gated_tools_denied_without_writers_group(capture_audit, mocker, tool, is_write):
+    from fastmcp.exceptions import ToolError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    ctx = mocker.Mock()
+    ctx.message.name = tool
+    ctx.message.arguments = {'pattern': 'x', 'fullname_pattern': 'j'}
+    ctx.timestamp = datetime.now(UTC)
+    call_next = mocker.AsyncMock()
+
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    call_next.assert_not_called()
+    rec = json.loads(capture_audit[-1])
+    assert (rec['status'], rec['is_write']) == ('denied', is_write)
+
+
+def test_summarize_args_logs_stop_targets_not_other_item_fields():
+    summary = audit._summarize_args(
+        {'items': [{'fullname': 'j', 'number': 3, 'note': 'secret'}, {'fullname': 'k', 'number': 4}]}
+    )
+
+    assert summary == {'items': [{'fullname': 'j', 'number': 3}, {'fullname': 'k', 'number': 4}], 'items_count': 2}
+
+
+def test_config_search_pattern_is_fingerprinted_not_logged():
+    summary = audit._summarize_args({'pattern': 'ghp_secretvalue', 'fullname_pattern': '^pmm3-'}, 'search_item_configs')
+
+    assert 'ghp_secretvalue' not in json.dumps(summary)
+    assert summary['pattern_len'] == 15
+    assert 'pattern_sha' not in summary
+    assert summary['fullname_pattern'] == '^pmm3-'
+    assert audit._summarize_args({'pattern': 'ERROR'}, 'search_build_logs') == {'pattern': 'ERROR'}
+
+
+def test_wrongly_typed_data_and_items_are_recorded_as_dropped():
+    summary = audit._summarize_args({'data': '{"K": "V"}', 'items': 'a#1'})
+
+    assert summary == {'dropped_keys': ['data', 'items']}
+
+
+def test_error_detail_never_masks_the_real_error():
+    class OddError(Exception):
+        def errors(self) -> list:
+            return [object()]
+
+    assert audit._error_detail(OddError()) is None
+
+
+@pytest.mark.asyncio
+async def test_successful_call_logs_its_parameters_and_no_dropped_keys(capture_audit, mocker):
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build_console_tail'
+    ctx.message.arguments = {'fullname': 'j', 'lines': 200, 'surprise': 'x'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        return 'tail'
+
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    record = json.loads(capture_audit[-1])
+    assert record['args'] == {'fullname': 'j', 'lines': 200}
+
+
+def _service_build_ctx(mocker, fullname, data=None):
+    token = mocker.Mock(
+        claims={
+            'sub': 's1',
+            'preferred_username': 'pmm-automation',
+            'groups': ['jenkins-mcp-service-accounts', 'jenkins-mcp-master-pmm'],
+        },
+        client_id='c',
+    )
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.core.grants.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.core.scope.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    mocker.patch(
+        'mcp_jenkins.core.grants.get_grants',
+        return_value={'pmm-automation': {'pmm': {'pmm3-nightly-orchestrator': grants.JobRule()}}},
+    )
+    ctx = mocker.Mock()
+    ctx.message.name = 'build_item'
+    ctx.message.arguments = {'fullname': fullname, 'build_type': 'build', **({'data': data} if data else {})}
+    ctx.timestamp = datetime.now(UTC)
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_service_account_build_on_granted_job_runs(capture_audit, mocker):
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+
+    async def call_next(_):
+        return 'queued'
+
+    assert await audit.AuditMiddleware().on_call_tool(ctx, call_next) == 'queued'
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'ok'
+    assert rec['is_write'] is True
+    assert rec['preferred_username'] == 'pmm-automation'
+
+
+@pytest.mark.asyncio
+async def test_service_account_build_on_ungranted_job_denied(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-ha-eks')
+    called = {'ran': False}
+
+    async def call_next(_):
+        called['ran'] = True
+
+    with pytest.raises(ToolError, match='not granted'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    assert called['ran'] is False
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'denied'
+    assert rec['deny_reason'] == 'not_granted'
+
+
+@pytest.mark.parametrize('tool', ['replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item', 'get_item_config'])
+@pytest.mark.asyncio
+async def test_service_account_grant_covers_build_item_only(capture_audit, mocker, tool):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+    ctx.message.name = tool
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_service_account_in_writers_group_still_needs_a_grant(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, 'pmm3-ha-eks')
+    token = audit.get_access_token()
+    token.claims['groups'].append('jenkins-mcp-writers')
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError, match='not granted'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    ctx.message.name = 'stop_build'
+    with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.asyncio
+async def test_malformed_service_build_is_audited_and_refused(capture_audit, mocker):
+    from fastmcp.exceptions import ToolError
+
+    ctx = _service_build_ctx(mocker, ['pmm3-nightly-orchestrator'])
+
+    async def call_next(_):
+        return 'ran'
+
+    with pytest.raises(ToolError):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'denied'
+    assert rec['deny_reason'] == 'not_granted'
+
+
+@pytest.mark.asyncio
+async def test_granted_build_records_the_resolved_master(capture_audit, mocker):
+    ctx = _service_build_ctx(mocker, 'pmm3-nightly-orchestrator')
+
+    async def call_next(_):
+        return 'queued'
+
+    await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+    assert json.loads(capture_audit[-1])['master'] == 'pmm'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('wrapped', [False, True])
+async def test_middleware_turns_jenkins_404_into_not_found(capture_audit, mocker, wrapped):
+    from fastmcp.exceptions import ToolError
+    from requests.exceptions import HTTPError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build_walk'
+    ctx.message.arguments = {'master': 'ps80', 'fullname': 'no-such-job'}
+    ctx.timestamp = datetime.now(UTC)
+    response = mocker.Mock(status_code=404, url='https://ps80.cd.percona.com/job/no-such-job/api/json?tree=x')
+    http_error = HTTPError('404 Client Error: Not Found', response=response)
+
+    async def call_next(_):
+        if wrapped:
+            msg = "Error calling tool 'get_build_walk'"
+            raise ToolError(msg) from http_error
+        raise http_error
+
+    with pytest.raises(
+        ToolError, match=r'^Not found on ps80: /job/no-such-job/api/json: the job or build does not exist\. '
+    ):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    rec = json.loads(capture_audit[-1])
+    assert rec['status'] == 'error'
+    assert rec['error'] == ('ToolError' if wrapped else 'HTTPError')
+
+
+@pytest.mark.asyncio
+async def test_middleware_keeps_other_http_errors(capture_audit, mocker):
+    from requests.exceptions import HTTPError
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+    ctx = mocker.Mock()
+    ctx.message.name = 'get_build'
+    ctx.message.arguments = {'master': 'ps80'}
+    ctx.timestamp = datetime.now(UTC)
+
+    async def call_next(_):
+        msg = '500 Server Error'
+        raise HTTPError(msg, response=mocker.Mock(status_code=500, url='u'))
+
+    with pytest.raises(HTTPError, match='500 Server Error'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+
+@pytest.mark.parametrize(
+    ('path', 'hint'),
+    [
+        ('/job/j/5/testReport/api/json', 'no test report'),
+        ('/job/j/5/artifact/out.log', 'get_all_build_artifacts'),
+        ('/job/j/5/wfapi/describe', 'not a pipeline'),
+        ('/queue/item/45/api/json', 'wait_for_build'),
+    ],
+)
+def test_not_found_hint_names_the_missing_resource(mocker, path, hint):
+    from requests.exceptions import HTTPError
+
+    error = HTTPError('404', response=mocker.Mock(status_code=404, url=f'https://h{path}?tree=x'))
+
+    message = str(audit._not_found(error, 'pmm'))
+
+    assert message.startswith(f'Not found on pmm: {path}: ')
+    assert hint in message
+    assert 'find_items' not in message
+
+
+def test_summarize_args_bounds_values_and_logs_new_query_arguments():
+    huge = [{'fullname': 'x' * 8000, 'number': '1; drop'}] * 50
+    summary = audit._summarize_args(
+        {
+            'items': huge,
+            'fullname': 'y' * 5000,
+            'masters': ['ps80'] * 100,
+            'include_builds': 200,
+            'builds_since_days': 90,
+            'include_parameters': True,
+            'compact_parameters': True,
+            'cursor': 'job#2',
+            'depth': {'nested': 'object'},
+        },
+        'query_items',
+    )
+
+    assert len(json.dumps(summary)) < 20_000
+    assert summary['items'][0] == {'fullname': 'x' * audit._MAX_VALUE_LEN, 'number': None}
+    assert summary['fullname'] == 'y' * audit._MAX_VALUE_LEN
+    assert len(summary['masters']) == audit._MAX_LIST_ITEMS
+    assert (summary['include_builds'], summary['builds_since_days'], summary['cursor']) == (200, 90, 'job#2')
+    assert summary['include_parameters'] is True
+    assert summary['dropped_keys'] == ['depth']

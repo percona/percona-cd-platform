@@ -47,7 +47,17 @@ BUILD_TEST_REPORT = RestEndpoint('{folder}job/{name}/{number}/testReport/api/jso
 BUILD_ARTIFACT = RestEndpoint('{folder}job/{name}/{number}/artifact/{relative_path}')
 BUILD_ARTIFACTS = RestEndpoint('{folder}job/{name}/{number}/api/json?tree=artifacts[fileName,relativePath,displayPath]')
 JOB_BUILDS = RestEndpoint(
-    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url]{{0,{count}}}'
+    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url,queueId]{{0,{count}}}'
+)
+# One GET for a build walk: history plus each build's parameters and JUnit counts. ParametersAction and
+# TestResultAction both surface under actions, in no fixed position.
+JOB_ALL_BUILDS = RestEndpoint(
+    '{folder}job/{name}/api/json?tree=allBuilds[number,result,timestamp,duration,building,'
+    'actions[causes[shortDescription]]]{{0,{count}}}'
+)
+JOB_BUILDS_WALK = RestEndpoint(
+    '{folder}job/{name}/api/json?tree=builds[number,result,timestamp,duration,building,url,queueId,'
+    'actions[parameters[name,value],failCount,skipCount,totalCount,causes[shortDescription]]]{{0,{count}}}'
 )
 BUILD_WORKFLOW_DESCRIBE = RestEndpoint('{folder}job/{name}/{number}/wfapi/describe')
 BUILD_CHANGESETS = RestEndpoint(

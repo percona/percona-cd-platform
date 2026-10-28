@@ -91,3 +91,206 @@ data:
         id: jenkins-mcp-writers
         identifiers:
           name: jenkins-mcp-writers
+
+      # ---- Service accounts (automation readers) ----
+      # A team automation (a scheduled Claude routine on a group-owned account) has no
+      # JumpCloud identity, and the default login page offers only the JumpCloud redirect
+      # (blueprint-grafana.yaml empties user_fields on purpose, closing the akadmin MFA
+      # bypass). This separate flow gives a service account a username + app-password
+      # login without touching the default flow. It is reachable only by URL
+      # (/if/flow/jenkins-mcp-service-login/), the password stage accepts app-password
+      # tokens only (TokenBackend, never the account password), and an expression policy
+      # on the password and login bindings lets only service_account users in the group
+      # below through, so akadmin and JumpCloud users are denied here. Members never join
+      # jenkins-mcp-writers, so they stay on the read tier, and every call keeps the
+      # account's own identity in the gateway audit log.
+      #
+      # Session first, then connector: the OAuth authorize endpoint sends an unauthenticated
+      # browser to the brand default flow, which is JumpCloud-only. The operator logs in at
+      # the flow URL first, then connects the MCP client in the same browser session.
+      - model: authentik_core.group
+        id: jenkins-mcp-service-accounts
+        identifiers:
+          name: jenkins-mcp-service-accounts
+
+      # Master scope. The gateway lets a member of a jenkins-mcp-master-<name> group reach only
+      # the masters those groups name, and a service account with no such group reaches none
+      # (fail closed). Add one group per master an account needs.
+      - model: authentik_core.group
+        id: jenkins-mcp-master-pmm
+        identifiers:
+          name: jenkins-mcp-master-pmm
+
+      - model: authentik_policies_expression.expressionpolicy
+        id: jenkins-mcp-service-account-only
+        identifiers:
+          name: jenkins-mcp-service-account-only
+        attrs:
+          execution_logging: true
+          expression: |
+            user = request.context.get("pending_user")
+            if not user:
+                return False
+            return user.type == "service_account" and ak_is_group_member(user, name="jenkins-mcp-service-accounts")
+
+      - model: authentik_flows.flow
+        id: jenkins-mcp-service-flow
+        identifiers:
+          slug: jenkins-mcp-service-login
+        attrs:
+          name: Jenkins MCP service account login
+          title: Jenkins MCP service account login
+          designation: authentication
+          authentication: require_unauthenticated
+          denied_action: message_continue
+          policy_engine_mode: any
+
+      - model: authentik_stages_identification.identificationstage
+        id: jenkins-mcp-service-identification
+        identifiers:
+          name: jenkins-mcp-service-identification
+        attrs:
+          user_fields:
+            - username
+          sources: []
+          show_matched_user: false
+          pretend_user_exists: true
+          case_insensitive_matching: true
+          show_source_labels: false
+
+      - model: authentik_stages_password.passwordstage
+        id: jenkins-mcp-service-password
+        identifiers:
+          name: jenkins-mcp-service-password
+        attrs:
+          backends:
+            - authentik.core.auth.TokenBackend
+          failed_attempts_before_cancel: 3
+
+      - model: authentik_stages_user_login.userloginstage
+        id: jenkins-mcp-service-user-login
+        identifiers:
+          name: jenkins-mcp-service-user-login
+        attrs:
+          session_duration: seconds=0
+
+      # Fail closed. A policy that fails on a stage binding makes Authentik skip that stage,
+      # so without this stage an ineligible username silently falls through the flow (no
+      # session, but also no message, and the prompt-or-redirect difference reveals which
+      # usernames are eligible). The deny stage runs when the account policy fails (bound
+      # negated) or when the reputation policy passes (it passes when the score is AT OR
+      # BELOW the threshold, so it is bound as-is, not negated), so every ineligible or
+      # throttled attempt ends in an explicit denial before the password prompt. Scores
+      # expire 24h after the first failure. An operator clears one early with
+      # DELETE /api/v3/policies/reputation/scores/<pk>/.
+      - model: authentik_policies_reputation.reputationpolicy
+        id: jenkins-mcp-service-reputation
+        identifiers:
+          name: jenkins-mcp-service-reputation
+        attrs:
+          check_ip: true
+          check_username: true
+          threshold: -5
+
+      - model: authentik_stages_deny.denystage
+        id: jenkins-mcp-service-deny
+        identifiers:
+          name: jenkins-mcp-service-deny
+        attrs:
+          deny_message: Access denied.
+
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf jenkins-mcp-service-flow
+          stage: !KeyOf jenkins-mcp-service-identification
+          order: 10
+
+      - model: authentik_flows.flowstagebinding
+        id: jenkins-mcp-service-deny-binding
+        identifiers:
+          target: !KeyOf jenkins-mcp-service-flow
+          stage: !KeyOf jenkins-mcp-service-deny
+          order: 15
+        attrs:
+          evaluate_on_plan: false
+          re_evaluate_policies: true
+          policy_engine_mode: any
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          policy: !KeyOf jenkins-mcp-service-account-only
+          target: !KeyOf jenkins-mcp-service-deny-binding
+          order: 0
+        attrs:
+          enabled: true
+          negate: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          policy: !KeyOf jenkins-mcp-service-reputation
+          target: !KeyOf jenkins-mcp-service-deny-binding
+          order: 1
+        attrs:
+          enabled: true
+          negate: false
+
+      - model: authentik_flows.flowstagebinding
+        id: jenkins-mcp-service-password-binding
+        identifiers:
+          target: !KeyOf jenkins-mcp-service-flow
+          stage: !KeyOf jenkins-mcp-service-password
+          order: 20
+        attrs:
+          evaluate_on_plan: false
+          re_evaluate_policies: true
+          policy_engine_mode: all
+
+      - model: authentik_flows.flowstagebinding
+        id: jenkins-mcp-service-login-binding
+        identifiers:
+          target: !KeyOf jenkins-mcp-service-flow
+          stage: !KeyOf jenkins-mcp-service-user-login
+          order: 30
+        attrs:
+          evaluate_on_plan: false
+          re_evaluate_policies: true
+          policy_engine_mode: all
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          policy: !KeyOf jenkins-mcp-service-account-only
+          target: !KeyOf jenkins-mcp-service-password-binding
+          order: 0
+        attrs:
+          enabled: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          policy: !KeyOf jenkins-mcp-service-account-only
+          target: !KeyOf jenkins-mcp-service-login-binding
+          order: 0
+        attrs:
+          enabled: true
+
+      # The account itself. The app password is not blueprint state: an operator mints it
+      # once through the API (docs/runbooks/jenkins-mcp-operate.md, "Onboard a service
+      # account") and hands it to the owning team out of band. A logged-in account can mint
+      # its own tokens, so the token-* attributes cap anything it creates for itself at 30
+      # minutes. The operator-minted app password is not affected by them. `owner` names the
+      # person accountable for the key, since the username names a team.
+      - model: authentik_core.user
+        identifiers:
+          username: pmm-automation
+        attrs:
+          name: PMM QA automation
+          type: service_account
+          path: goauthentik.io/service-accounts
+          is_active: true
+          groups:
+            - !KeyOf jenkins-mcp-service-accounts
+            - !KeyOf jenkins-mcp-master-pmm
+          attributes:
+            owner: davi.travaglia
+            owner_team: pmm-qa
+            goauthentik.io/user/token-expires: true
+            goauthentik.io/user/token-maximum-lifetime: minutes=30

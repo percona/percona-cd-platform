@@ -33,7 +33,8 @@ def _resolve_number(client: 'Jenkins', fullname: str, number: int | None) -> int
         return number
     item = client.get_item(fullname=fullname, depth=1)
     last = getattr(item, 'lastBuild', None)
-    resolved = getattr(last, 'number', None) if last else None
+    # Matrix/maven jobs route through UnknownItem, where an undeclared lastBuild would stay a raw dict.
+    resolved = last.get('number') if isinstance(last, dict) else getattr(last, 'number', None)
     if resolved is None:
         msg = f'No build found for job: {fullname}'
         raise ValueError(msg)

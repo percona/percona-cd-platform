@@ -24,6 +24,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
+from mcp_jenkins.jenkins.rest_client import hoist_inline_flags
 from mcp_jenkins.server import mcp
 
 if TYPE_CHECKING:
@@ -223,6 +224,9 @@ def search_build_logs(
 ) -> dict:
     """Search build console logs across jobs on a master (grep over recent builds).
 
+    To grep ONE known build, use get_build_console_output(fullname, number, pattern) instead: this
+    tool takes no fullname or number, it selects jobs by job_pattern.
+
     Selects jobs whose fullname matches job_pattern, then greps the most recent finished build(s) of
     each for pattern. Builds still running are skipped: their console has no end, so reading one
     would hang. Read-only and cost-bounded: job_pattern is required and a catch-all is rejected;
@@ -270,7 +274,7 @@ def search_build_logs(
     max_total_matches = _clamp(max_total_matches, _MAX_TOTAL_MATCHES_LIMIT, 'max_total_matches', notes)
     time_budget_seconds = _clamp(time_budget_seconds, _TIME_BUDGET_LIMIT, 'time_budget_seconds', notes)
 
-    effective_pattern = f'(?i){pattern}' if ignore_case else pattern
+    effective_pattern = hoist_inline_flags(f'(?i){pattern}' if ignore_case else pattern)
     try:
         re.compile(effective_pattern)
     except re.error as e:

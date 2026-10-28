@@ -1086,7 +1086,7 @@ wheels = [
 
 [[package]]
 name = "mcp-jenkins"
-version = "0.9.5"
+version = "0.10.10"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },

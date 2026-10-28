@@ -12,7 +12,7 @@ s3:
 # First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
 image:
   repository: percona-cd/jenkins-mcp
-  tag: "0.9.5-2a92a7e45478"
+  tag: "0.10.10-bd11fe380fab"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -24,10 +24,50 @@ replicaCount: 2
 statelessHttp: true
 # Operate mode: serve the build-lifecycle tools (build/replay/stop/cancel) after the fail-closed
 # permission preflight, gated per-call to the jenkins-mcp-writers group. Reads stay open to any
-# authenticated user, except get_item_config (config.xml) which is writers-gated; node-config and
-# script-console mutation are never served. Set readOnly: true to revert.
+# authenticated user, except get_item_config and search_item_configs (config.xml), which are
+# writers-gated; node-config and script-console mutation are never served. Set readOnly: true to revert.
 readOnly: false
 enableOperate: true
+
+# Per-job build grants for service accounts (jenkins-mcp-service-accounts members), keyed by
+# username, then master, then job fullname. A grant lets build_item run on that job without the
+# writers group, nothing else in the operate tier. Rules: `require` (present and non-blank),
+# `allow` (value list, when present), `pattern` (full-match regex, when present). A job with rules
+# must be started with buildWithParameters. Runbook: docs/runbooks/jenkins-mcp-operate.md.
+serviceGrants:
+  pmm-automation:
+    pmm:
+      pmm3-nightly-orchestrator: {}
+      pmm3-ui-tests-nightly-gha: {}
+      pmm3-ui-tests-matrix: {}
+      pmm3-ui-tests: {}
+      pmm3-upgrade-ami-test-runner: {}
+      pmm3-ui-tests-nightly-gssapi: {}
+      openshift-helm-tests: {}
+      pmm3-ha-tests: {}
+      pmm3-ha-backup-restore-tests: {}
+      pmm3-ha-upgrade-tests: {}
+      pmm3-post-release-testing: {}
+      pmm3-image-scanning: {}
+      # Cleanup: one named resource per run, the name in the form its create job generates.
+      pmm3-ha-eks-cleanup:
+        require: [ACTION, CLUSTER_NAME]
+        allow: {ACTION: [DELETE_CLUSTER]}
+        pattern: {CLUSTER_NAME: 'pmm-ha-test-[0-9]{1,6}'}
+      pmm3-ha-rosa-cleanup:
+        require: [ACTION, CLUSTER_NAME]
+        allow: {ACTION: [DELETE_CLUSTER]}
+        pattern: {CLUSTER_NAME: 'pmm-ha-rosa-[0-9]{1,6}'}
+      openshift-cluster-destroy:
+        require: [CLUSTER_NAME, FORCE_MODE]
+        allow: {FORCE_MODE: ['false']}
+        pattern: {CLUSTER_NAME: '(nightly|helm)-test-[0-9]{1,6}'}
+      aws-staging-stop:
+        require: [VM]
+        pattern: {VM: 'pmm-[A-Za-z0-9._-]{1,40}-[0-9]{8}\.[0-9]{6}-[0-9]{1,8}'}
+      pmm3-ami-staging-stop:
+        require: [AMI_ID]
+        pattern: {AMI_ID: 'i-[0-9a-f]{8,17}'}
 
 # OAuth2 resource-server auth against Authentik (JumpCloud-backed). The server validates
 # bearer JWTs and serves RFC 9728 protected-resource-metadata. audience is the

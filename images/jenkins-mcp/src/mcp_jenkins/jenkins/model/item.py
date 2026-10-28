@@ -18,6 +18,8 @@ class _ItemBase(BaseModel):
     name: str
     url: str
     fullname: str = Field(default=None, alias='fullName')
+    parameters: list[dict] | None = None
+    builds: list[dict] | None = None
 
     def assigned_label_name(self) -> str | None:
         """The job's assigned agent label name, or None. Freestyle/matrix expose it; pipeline
@@ -53,7 +55,11 @@ class MultiBranchProject(_ItemBase):
 
 
 class UnknownItem(_ItemBase):
+    """Any job class the suffix map does not name (MatrixProject, MavenModuleSet, ...)."""
+
     model_config = ConfigDict(extra='allow')
+
+    lastBuild: Optional['Build'] = None
 
 
 def serialize_item(item: dict) -> ItemType:

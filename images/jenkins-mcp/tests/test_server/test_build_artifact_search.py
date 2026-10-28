@@ -58,7 +58,7 @@ def _plain(*lines: str) -> _FakeResponse:
 @pytest.mark.asyncio
 async def test_grep_plain_matches_with_context(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _plain('noise', 'ERROR boom', 'after1', 'after2', 'ERROR two'))
-    out = await bas.grep_build_artifact(
+    out = bas.grep_build_artifact(
         mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1, context_lines=1
     )
     assert out['match_count'] == 2
@@ -72,7 +72,7 @@ async def test_grep_plain_matches_with_context(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_grep_max_matches_limit_hit(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _plain(*[f'ERROR {i}' for i in range(10)]))
-    out = await bas.grep_build_artifact(
+    out = bas.grep_build_artifact(
         mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1, max_matches=3
     )
     assert out['match_count'] == 3
@@ -83,7 +83,7 @@ async def test_grep_max_matches_limit_hit(mock_jenkins, mocker):
 async def test_grep_truncates_long_line(mock_jenkins, mocker, monkeypatch):
     monkeypatch.setattr(bas, '_MAX_LINE_LEN', 5)
     _set_stream(mock_jenkins, _plain('ERRORxxxxxxxxxx'))
-    out = await bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1)
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1)
     assert out['matches'][0]['line'] == 'ERROR'  # truncated to MAX_LINE_LEN at read time
 
 
@@ -92,7 +92,7 @@ async def test_grep_plain_no_newline_blob_is_bounded(mock_jenkins, mocker, monke
     # A multi-"MB" single line with no newline must NOT buffer past the line cap (HIGH-1 from review).
     monkeypatch.setattr(bas, '_MAX_LINE_LEN', 10)
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=b'ERROR' + b'x' * 100000))  # no newline
-    out = await bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1)
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERROR', number=1)
     assert out['match_count'] == 1
     assert len(out['matches'][0]['line']) == 10  # capped, not 100005
 
@@ -100,12 +100,12 @@ async def test_grep_plain_no_newline_blob_is_bounded(mock_jenkins, mocker, monke
 @pytest.mark.asyncio
 async def test_grep_regex_opt_in_and_invalid(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _plain('fail: 42'))
-    out = await bas.grep_build_artifact(
+    out = bas.grep_build_artifact(
         mocker.Mock(), fullname='j', relative_path='x.log', pattern=r'fail: \d+', number=1, literal=False
     )
     assert out['match_count'] == 1
     with pytest.raises(ValueError, match='invalid regex'):
-        await bas.grep_build_artifact(
+        bas.grep_build_artifact(
             mocker.Mock(), fullname='j', relative_path='x.log', pattern='(unclosed', number=1, literal=False
         )
 
@@ -114,7 +114,7 @@ async def test_grep_regex_opt_in_and_invalid(mock_jenkins, mocker):
 async def test_grep_inside_tar_member(mock_jenkins, mocker):
     tgz = _targz({'work/main.dd_upgrade.log': b'CURRENT_TEST: main.dd_upgrade\nok\nERROR: AddressSanitizer\n'})
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=tgz))
-    out = await bas.grep_build_artifact(
+    out = bas.grep_build_artifact(
         mocker.Mock(),
         fullname='j',
         relative_path='work/results/x-mtr_logs-5.tar.gz',
@@ -273,3 +273,166 @@ async def test_malformed_archive_raises_sanitized(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=b'this is not a gzip tarball'))
     with pytest.raises(ValueError, match='invalid or unsupported tar.gz archive'):
         await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+
+
+# ---- grep (glob over many artifacts) ----
+def _artifacts(mocker, *paths: str) -> list:
+    from mcp_jenkins.jenkins.model.build import Artifact
+
+    return [Artifact(fileName=p.rsplit('/', 1)[-1], relativePath=p) for p in paths]
+
+
+def _streams(mock_jenkins, contents: dict[str, list[str]]) -> None:
+    def stream(*, fullname: str, number: int, relative_path: str):  # noqa: ARG001
+        return _stream(_plain(*contents[relative_path]))
+
+    mock_jenkins.stream_build_artifact.side_effect = stream
+
+
+def test_grep_is_sync_so_fastmcp_offloads_it():
+    import inspect
+
+    assert not inspect.iscoroutinefunction(bas.grep_build_artifact)
+
+
+def test_grep_glob_greps_each_matching_artifact(mock_jenkins, mocker):
+    paths = [f'r/mtr-test-w_{i}.log' for i in (10, 2, 1)] + ['r/other.log']
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, *paths)
+    _streams(mock_jenkins, {p: ['noise', f'Completed: {p}'] for p in paths})
+
+    out = bas.grep_build_artifact(
+        mocker.Mock(), fullname='j', relative_path='r/mtr-test-w_*.log', pattern='Completed:', number=79
+    )
+
+    assert [f['relative_path'] for f in out['files']] == [
+        'r/mtr-test-w_1.log',
+        'r/mtr-test-w_2.log',
+        'r/mtr-test-w_10.log',
+    ]
+    assert out['files_matched'] == 3
+    assert out['files_scanned'] == 3
+    assert out['match_count'] == 3
+    assert out['files_truncated'] is False
+    streamed = [c.kwargs['relative_path'] for c in mock_jenkins.stream_build_artifact.call_args_list]
+    assert '*' not in ''.join(streamed)
+
+
+def test_grep_glob_caps_files(mock_jenkins, mocker):
+    paths = [f'w_{i}.log' for i in range(1, 41)]
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, *paths)
+    _streams(mock_jenkins, {p: ['x'] for p in paths})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='w_*.log', pattern='x', number=1)
+
+    assert len(out['files']) == 30
+    assert out['files_matched'] == 40
+    assert out['files_truncated'] is True
+
+
+def test_grep_glob_reports_a_failing_file_inline(mock_jenkins, mocker):
+    from requests.exceptions import HTTPError
+
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log')
+
+    def stream(*, fullname: str, number: int, relative_path: str):  # noqa: ARG001
+        if relative_path == 'a.log':
+            msg = '404 Client Error'
+            raise HTTPError(msg)
+        return _stream(_plain('hit'))
+
+    mock_jenkins.stream_build_artifact.side_effect = stream
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='hit', number=1)
+
+    assert out['files'][0] == {'relative_path': 'a.log', 'error': 'HTTPError: 404 Client Error'}
+    assert out['files'][1]['match_count'] == 1
+
+
+def test_grep_glob_total_matches_capped(mock_jenkins, mocker):
+    mocker.patch.object(bas, '_MAX_MATCHES', 3)
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log', 'c.log')
+    _streams(mock_jenkins, {p: ['hit', 'hit'] for p in ('a.log', 'b.log', 'c.log')})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='hit', number=1)
+
+    assert out['match_count'] == 3
+    assert [f['match_count'] for f in out['files']] == [2, 1]
+    assert out['notes'] == ['stopped before c.log: total match, byte or time budget spent']
+
+
+@pytest.mark.parametrize('glob', ['../*.log', '/etc/*', 'a/%2e%2e/*', 'a\\\\*', '[!a]*.log', 'a/../../*'])
+def test_grep_glob_rejects_unsafe_globs(mock_jenkins, mocker, glob):
+    with pytest.raises(ValueError):  # noqa: PT011
+        bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path=glob, pattern='x', number=1)
+    mock_jenkins.get_build_artifacts.assert_not_called()
+
+
+def test_grep_glob_rejects_archive_member(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='archive_member cannot be combined'):
+        bas.grep_build_artifact(
+            mocker.Mock(), fullname='j', relative_path='*.tar.gz', pattern='x', number=1, archive_member='a.log'
+        )
+
+
+def test_grep_glob_skips_archives(mock_jenkins, mocker):
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'r/a.log', 'r/logs.tar.gz', 'r/core.gz')
+    _streams(mock_jenkins, {'r/a.log': ['hit']})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='r/*', pattern='hit', number=1)
+
+    assert [f['relative_path'] for f in out['files']] == ['r/a.log']
+    assert out['notes'] == ['2 archive(s) skipped; grep one with archive_member']
+
+
+def test_grep_glob_total_bytes_never_pass_the_cap(mock_jenkins, mocker):
+    mocker.patch.object(bas, '_MAX_GLOB_BYTES', 50)
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log')
+    _streams(mock_jenkins, {'a.log': ['x' * 30], 'b.log': ['y' * 30]})
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='z', number=1)
+
+    assert out['bytes_scanned'] <= 50
+    assert out['files'][1]['truncated'] is True
+
+
+def test_grep_glob_reports_a_mid_stream_urllib3_error_inline(mock_jenkins, mocker):
+    import urllib3
+
+    mock_jenkins.get_build_artifacts.return_value = _artifacts(mocker, 'a.log', 'b.log')
+    broken = _plain('hit')
+
+    def boom(_n: int) -> bytes:
+        msg = 'Connection broken'
+        raise urllib3.exceptions.ProtocolError(msg)
+
+    broken.raw.read = boom
+
+    def stream(*, fullname: str, number: int, relative_path: str):  # noqa: ARG001
+        return _stream(broken if relative_path == 'a.log' else _plain('hit'))
+
+    mock_jenkins.stream_build_artifact.side_effect = stream
+
+    out = bas.grep_build_artifact(mocker.Mock(), fullname='j', relative_path='*.log', pattern='hit', number=1)
+
+    assert out['files'][0]['error'].startswith('ProtocolError')
+    assert out['files'][1]['match_count'] == 1
+
+
+def test_grep_accepts_context_and_regex_aliases(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _plain('a', 'b', 'ERR 1', 'c', 'd'))
+
+    out = bas.grep_build_artifact(
+        mocker.Mock(), fullname='j', relative_path='x.log', pattern='ERR [0-9]', number=1, before=2, after=1, regex=True
+    )
+
+    assert out['literal'] is False
+    assert out['match_count'] == 1
+    assert out['matches'][0]['before'] == ['a', 'b']
+    assert out['matches'][0]['after'] == ['c', 'd']
+
+
+def test_regex_matcher_accepts_a_mid_pattern_flag():
+    match = bas._build_matcher('ok|(?i)timed out', literal=False, ignore_case=False)
+
+    assert match('Build TIMED OUT')
+    assert not match('Build passed')

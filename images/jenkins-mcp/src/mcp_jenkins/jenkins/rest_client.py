@@ -25,6 +25,85 @@ from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
 _MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS surface on an authenticated call)
 
+_PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
+
+
+# include_builds reads allBuilds (builds stops at 100) and needs longer than the default timeout:
+# a cold master loads every requested build record from disk (ps80, 200 per job: 82 s cold, 8 s warm).
+_BUILDS_TREE = 'allBuilds[number,result,timestamp,duration,building,actions[causes[shortDescription]]]{{0,{count}}}'
+_BUILDS_TIMEOUT = 180
+
+
+def _parse_builds(builds: list | None) -> list[dict]:
+    """Builds from an allBuilds projection: number, result, building, timestamp, duration, causes."""
+    parsed = []
+    for build in builds or []:
+        if not isinstance(build, dict):
+            continue
+        causes = [
+            c.get('shortDescription')
+            for a in build.get('actions') or []
+            if isinstance(a, dict)
+            for c in a.get('causes') or []
+            if isinstance(c, dict)
+        ]
+        parsed.append(
+            {
+                'number': build.get('number'),
+                'result': build.get('result'),
+                'building': bool(build.get('building')),
+                'timestamp': build.get('timestamp'),
+                'duration': build.get('duration'),
+                'causes': list(dict.fromkeys(c for c in causes if c)),
+            }
+        )
+    return parsed
+
+
+def _parse_parameter_definitions(properties: list | None) -> list[dict]:
+    """Flatten a job's `property[].parameterDefinitions` into name, type, defaultValue,
+    description, and choices (only for choice parameters)."""
+    params: list[dict] = []
+    for prop in properties or []:
+        for definition in prop.get('parameterDefinitions') or []:
+            default = definition.get('defaultParameterValue') or {}
+            entry = {
+                'name': definition.get('name', ''),
+                'type': definition.get('type', ''),
+                'defaultValue': default.get('value', ''),
+                'description': definition.get('description', ''),
+            }
+            if definition.get('choices'):
+                entry['choices'] = definition['choices']
+            params.append(entry)
+    return params
+
+
+# A bare global flag group such as (?i) or (?im), not a scoped (?i:...) and not an escaped \(.
+_GLOBAL_FLAG_GROUP = re.compile(r'(?<!\\)\(\?([aiLmsux]+)\)')
+
+
+def hoist_inline_flags(pattern: str) -> str:
+    """Move global flag groups that are not at the start, like 'a|(?i)b', to the front.
+
+    Python rejects them ('global flags not at the start'), callers write them anyway. A pattern
+    that compiles is returned unchanged, so this only rewrites patterns that would fail.
+    """
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        if 'global flags not at the start' not in str(e):
+            return pattern
+    else:
+        return pattern
+    flags = ''.join(dict.fromkeys(''.join(_GLOBAL_FLAG_GROUP.findall(pattern))))
+    return f'(?{flags}){_GLOBAL_FLAG_GROUP.sub("", pattern)}' if flags else pattern
+
+
+def compile_user_regex(pattern: str, flags: int = 0) -> re.Pattern:
+    """re.compile for a caller-supplied pattern, with misplaced global flags moved to the front."""
+    return re.compile(hoist_inline_flags(pattern), flags)
+
 
 def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
     """Compile a query_items filter pattern with a length cap and a sanitized error.
@@ -39,10 +118,23 @@ def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
         msg = f'pattern too long ({len(pattern)} > {_MAX_QUERY_PATTERN_LEN} chars)'
         raise ValueError(msg)
     try:
-        return re.compile(pattern)
+        return compile_user_regex(pattern)
     except re.error as e:
         msg = f'invalid regex pattern: {e}'
         raise ValueError(msg) from e
+
+
+def require_narrow_pattern(pattern: str, tool: str) -> None:
+    """Reject a job-selecting regex that is invalid or matches every name.
+
+    A pattern that matches the empty string (".*", "a|.*", "x?") matches every job, so a fan-out
+    tool would read everything; this also compiles it once up front, so a bad regex fails the call
+    instead of every master or job.
+    """
+    compiled = _compile_query_pattern(pattern)
+    if compiled is None or compiled.search('') is not None:
+        msg = f'{tool} needs a fullname_pattern that narrows the jobs (it must not match every name)'
+        raise ValueError(msg)
 
 
 class Jenkins:
@@ -86,6 +178,7 @@ class Jenkins:
         headers: dict = None,
         crumb: bool = True,
         params: dict = None,
+        timeout: int | None = None,
     ) -> Response:
         """Send an HTTP request to a Jenkins REST endpoint.
 
@@ -96,6 +189,7 @@ class Jenkins:
             headers: Optional headers to include in the request.
             crumb: Whether to include a CSRF crumb header.
             params: Optional query parameters to include in the request.
+            timeout: Seconds to wait for this request, instead of the client default.
 
         Returns:
             Response: The HTTP response object.
@@ -117,7 +211,7 @@ class Jenkins:
             headers=headers,
             params=params,
             data=data,
-            timeout=self.timeout,
+            timeout=timeout or self.timeout,
         )
 
         # When a Jenkins HTTP session expires the cached CSRF crumb becomes
@@ -134,7 +228,7 @@ class Jenkins:
                 headers=headers,
                 params=params,
                 data=data,
-                timeout=self.timeout,
+                timeout=timeout or self.timeout,
             )
 
         response.raise_for_status()
@@ -342,7 +436,7 @@ class Jenkins:
             The console output as a string.
         """
         folder, name = self._parse_fullname(fullname)
-        compiled = re.compile(pattern) if pattern else None
+        compiled = compile_user_regex(pattern) if pattern else None
 
         response = self._session.get(
             self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
@@ -485,6 +579,33 @@ class Jenkins:
             rest_endpoint.JOB_BUILDS(folder=folder, name=name, count=count),
         )
         return [Build.model_validate(b) for b in response.json().get('builds', [])]
+
+    def get_job_builds(self, *, fullname: str, count: int) -> list[dict]:
+        """The most recent `count` builds of one job from allBuilds, parsed like get_items(include_builds)."""
+        folder, name = self._parse_fullname(fullname)
+        response = self.request(
+            'GET',
+            rest_endpoint.JOB_ALL_BUILDS(folder=folder, name=name, count=count),
+            timeout=_BUILDS_TIMEOUT,
+        )
+        return _parse_builds(response.json().get('allBuilds'))
+
+    def get_build_walk(self, *, fullname: str, count: int = 10) -> list[dict]:
+        """Get the most recent builds of a job with their parameters and test counts, in one request.
+
+        Args:
+            fullname: The fullname of the job.
+            count: The maximum number of recent builds to return.
+
+        Returns:
+            Raw build dicts, most recent first, each with an `actions` list to parse.
+        """
+        folder, name = self._parse_fullname(fullname)
+        response = self.request(
+            'GET',
+            rest_endpoint.JOB_BUILDS_WALK(folder=folder, name=name, count=count),
+        )
+        return response.json().get('builds', [])
 
     def get_build_stages(self, *, fullname: str, number: int) -> PipelineStages:
         """Get the pipeline stage breakdown of a build via the Stage View workflow API.
@@ -687,22 +808,42 @@ class Jenkins:
 
         return list(builds.values())
 
-    def get_items(self, *, folder_depth: int | None = None, folder_depth_per_request: int = 10) -> list[ItemType]:
+    def get_items(
+        self,
+        *,
+        folder_depth: int | None = None,
+        folder_depth_per_request: int = 10,
+        include_parameters: bool = False,
+        include_builds: int = 0,
+    ) -> list[ItemType]:
         """Get items in the Jenkins instance up to a specified folder depth.
 
         Args:
             folder_depth: The maximum depth of folders to traverse. If None, traverses all levels.
             folder_depth_per_request: The depth of folders to request per API call.
+            include_parameters: Also fetch each job's parameter definitions in the same request,
+                set on the item's `parameters` field.
+            include_builds: Also fetch up to this many most recent builds per job in the same
+                request, set on the item's `builds` field (0 = none).
 
         Returns:
             A list of ItemType objects representing the items.
         """
+        fields = 'url,color,name,lastBuild[number,url],assignedLabel[name]'
+        if include_parameters:
+            fields += f',{_PARAMETERS_TREE}'
+        if include_builds:
+            fields += ',' + _BUILDS_TREE.format(count=include_builds)
         query = reduce(
-            lambda q, _: f'jobs[url,color,name,lastBuild[number,url],assignedLabel[name],{q}]',
+            lambda q, _: f'jobs[{fields},{q}]',
             range(folder_depth_per_request),
             'jobs',
         )
-        response = self.request('GET', rest_endpoint.ITEMS(folder='', query=query))
+        response = self.request(
+            'GET',
+            rest_endpoint.ITEMS(folder='', query=query),
+            timeout=_BUILDS_TIMEOUT if include_builds else None,
+        )
 
         items = []
 
@@ -713,6 +854,10 @@ class Jenkins:
             for item in current_items:
                 job_path = path + [item['name']]
                 item.setdefault('fullname', '/'.join(job_path))
+                if include_parameters and not isinstance(item.get('jobs'), list):
+                    item['parameters'] = _parse_parameter_definitions(item.pop('property', None))
+                if include_builds and 'allBuilds' in item:
+                    item['builds'] = _parse_builds(item.pop('allBuilds'))
                 items.append(serialize_item(item))
 
                 children = item.get('jobs')
@@ -763,20 +908,7 @@ class Jenkins:
         """
         folder, name = self._parse_fullname(fullname)
         response = self.request('GET', rest_endpoint.ITEM_PARAMETERS(folder=folder, name=name))
-        params: list[dict] = []
-        for prop in response.json().get('property', []):
-            for definition in prop.get('parameterDefinitions') or []:
-                default = definition.get('defaultParameterValue') or {}
-                entry = {
-                    'name': definition.get('name', ''),
-                    'type': definition.get('type', ''),
-                    'defaultValue': default.get('value', ''),
-                    'description': definition.get('description', ''),
-                }
-                if definition.get('choices'):
-                    entry['choices'] = definition['choices']
-                params.append(entry)
-        return params
+        return _parse_parameter_definitions(response.json().get('property'))
 
     def set_item_config(self, *, fullname: str, config_xml: str) -> None:
         """Set item configuration by its fullname.
@@ -830,6 +962,8 @@ class Jenkins:
         fullname_pattern: str | None = None,
         color_pattern: str | None = None,
         label_pattern: str | None = None,
+        include_parameters: bool = False,
+        include_builds: int = 0,
     ) -> list['ItemType']:
         """Query items by specific field patterns.
 
@@ -842,6 +976,8 @@ class Jenkins:
             label_pattern: The pattern of the assigned agent label. Matches freestyle/matrix jobs
                 (which expose assignedLabel); pipeline jobs keep their label in the Jenkinsfile and
                 so never match.
+            include_parameters: Also fetch each job's parameter definitions (same single request).
+            include_builds: Also fetch up to this many recent builds per job (same single request).
 
         Returns:
             A list of ItemType objects matching the specified patterns.
@@ -851,7 +987,12 @@ class Jenkins:
             for pattern in (class_pattern, fullname_pattern, color_pattern, label_pattern)
         )
 
-        items = self.get_items(folder_depth=folder_depth, folder_depth_per_request=folder_depth_per_request)
+        items = self.get_items(
+            folder_depth=folder_depth,
+            folder_depth_per_request=folder_depth_per_request,
+            include_parameters=include_parameters,
+            include_builds=include_builds,
+        )
 
         result = []
 

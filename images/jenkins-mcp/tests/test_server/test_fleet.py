@@ -31,3 +31,154 @@ async def test_list_masters_reports_liveness(two_masters):
     assert by_name['ps80'] == {'name': 'ps80', 'url': 'https://ps80.cd', 'reachable': True, 'version': '2.541.3'}
     assert by_name['ps57']['reachable'] is False
     assert 'connection refused' in by_name['ps57']['error']
+
+
+def _job(fullname: str) -> object:
+    from mcp_jenkins.jenkins.model.item import serialize_item
+
+    return serialize_item(
+        {
+            '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+            'name': fullname,
+            'fullName': fullname,
+            'url': f'u/{fullname}',
+            'color': 'blue',
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_find_items_searches_every_master_and_tags_results(two_masters):
+    two_masters['ps80'].query_items.return_value = []
+    two_masters['ps57'].query_items.return_value = [_job('ec2-instance-checks')]
+
+    result = await fleet.find_items(fullname_pattern='ec2-instance')
+
+    assert result['items'] == [
+        {
+            'master': 'ps57',
+            'class_': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+            'url': 'u/ec2-instance-checks',
+            'fullname': 'ec2-instance-checks',
+            'color': 'blue',
+        }
+    ]
+    assert result['per_master'] == {'ps80': {'total': 0}, 'ps57': {'total': 1}}
+    two_masters['ps80'].query_items.assert_called_once_with(fullname_pattern='ec2-instance', class_pattern=None)
+
+
+@pytest.mark.asyncio
+async def test_find_items_reports_a_failing_master_inline(two_masters):
+    two_masters['ps80'].query_items.side_effect = RuntimeError('403 Forbidden')
+    two_masters['ps57'].query_items.return_value = [_job('a')]
+
+    result = await fleet.find_items(fullname_pattern='a')
+
+    assert result['per_master']['ps80'] == {'error': 'RuntimeError: 403 Forbidden'}
+    assert result['total'] == 1
+
+
+@pytest.mark.asyncio
+async def test_find_items_masters_subset_and_unknown_name(two_masters):
+    two_masters['ps57'].query_items.return_value = []
+
+    result = await fleet.find_items(fullname_pattern='a', masters=['ps57', 'ps3'])
+
+    two_masters['ps80'].query_items.assert_not_called()
+    assert result['per_master']['ps57'] == {'total': 0}
+    assert 'unknown master' in result['per_master']['ps3']['error']
+
+
+@pytest.mark.asyncio
+async def test_find_items_honours_the_callers_master_scope(two_masters, mocker):
+    mocker.patch('mcp_jenkins.server.fleet.allowed_masters', return_value=frozenset({'ps57'}))
+    two_masters['ps57'].query_items.return_value = []
+
+    result = await fleet.find_items(fullname_pattern='a')
+    asked = await fleet.find_items(fullname_pattern='a', masters=['ps80'])
+
+    two_masters['ps80'].query_items.assert_not_called()
+    assert set(result['per_master']) == {'ps57'}
+    assert asked['per_master'] == {'ps80': {'error': 'not reachable for this account'}}
+
+
+@pytest.mark.asyncio
+async def test_find_items_builds_clients_on_the_request_thread(two_masters, mocker):
+    """Worker threads may not see the request's contextvars (the caller's token); they get a client
+    already chosen on the request thread and never decide which masters are reachable."""
+    import threading
+
+    threads = []
+    mocker.patch(
+        'mcp_jenkins.server.fleet.client_for',
+        side_effect=lambda name: threads.append(threading.current_thread()) or two_masters[name],
+    )
+    for client in two_masters.values():
+        client.query_items.return_value = []
+
+    await fleet.find_items(fullname_pattern='a')
+
+    assert threads == [threading.main_thread()] * 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('pattern', ['.*', 'a|.*', '.{0,}', 'x?', '^', '(?:)'])
+async def test_find_items_rejects_patterns_that_match_every_name(two_masters, pattern):
+    with pytest.raises(ValueError, match='must not match every name'):
+        await fleet.find_items(fullname_pattern=pattern)
+    two_masters['ps80'].query_items.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_find_items_invalid_regex_fails_the_call_not_each_master(two_masters):
+    with pytest.raises(ValueError, match='invalid regex'):
+        await fleet.find_items(fullname_pattern='(unclosed')
+    with pytest.raises(ValueError, match='invalid regex'):
+        await fleet.find_items(fullname_pattern='ok', class_pattern='[')
+    two_masters['ps80'].query_items.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_find_items_dedupes_requested_masters(two_masters):
+    two_masters['ps57'].query_items.return_value = [_job('a')]
+
+    result = await fleet.find_items(fullname_pattern='a', masters=['ps57', 'ps57'])
+
+    assert two_masters['ps57'].query_items.call_count == 1
+    assert result['total'] == 1
+
+
+@pytest.mark.asyncio
+async def test_find_items_hides_the_fleet_from_a_scoped_caller(two_masters, mocker):
+    mocker.patch('mcp_jenkins.server.fleet.allowed_masters', return_value=frozenset({'ps57'}))
+    two_masters['ps57'].query_items.return_value = []
+
+    result = await fleet.find_items(fullname_pattern='a', masters=['nope', 'ps80'])
+
+    assert result['per_master']['nope'] == {'error': 'not reachable for this account'}
+    assert result['per_master']['ps80'] == {'error': 'not reachable for this account'}
+    assert 'ps80' not in str(result['per_master']['nope'])
+
+
+@pytest.mark.asyncio
+async def test_find_items_times_out_a_slow_master(two_masters, mocker):
+    import time
+
+    mocker.patch('mcp_jenkins.server.fleet._FIND_SECONDS', 0.2)
+    two_masters['ps80'].query_items.side_effect = lambda **kw: time.sleep(1) or []
+    two_masters['ps57'].query_items.return_value = [_job('a')]
+
+    result = await fleet.find_items(fullname_pattern='a')
+
+    assert result['per_master']['ps80'] == {'error': 'timed out after 0.2s'}
+    assert result['per_master']['ps57'] == {'total': 1}
+
+
+@pytest.mark.asyncio
+async def test_find_items_truncates_at_limit(two_masters):
+    two_masters['ps80'].query_items.return_value = [_job(f'j{i}') for i in range(3)]
+    two_masters['ps57'].query_items.return_value = [_job('k')]
+
+    result = await fleet.find_items(fullname_pattern='j|k', limit=2)
+
+    assert (result['total'], result['returned'], result['truncated']) == (4, 2, True)

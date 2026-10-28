@@ -1,11 +1,15 @@
 import base64
+import time
+from collections import Counter
 from typing import Literal
 
 from fastmcp import Context
-from requests.exceptions import HTTPError
+from pydantic import BaseModel
+from requests.exceptions import HTTPError, RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
+from mcp_jenkins.server.build_export import _resolve_number as _resolve_client_number
 
 # Caps that bound a single read so a tool call can never pull an unbounded payload or hand a
 # pathological regex to the line filter.
@@ -13,6 +17,13 @@ _MAX_PATTERN_LEN = 2000
 _MAX_HISTORY_COUNT = 100
 _MAX_TAIL_LINES = 5000
 _MAX_FAILURE_CASES = 1000
+_MAX_WALK_COUNT = 30
+# Stages cost one wfapi request per build; stop fetching them once the walk has spent this long.
+_WALK_STAGES_BUDGET_SECONDS = 45
+_WALK_INCLUDES = ('stages', 'parameters', 'test_counts', 'causes')
+# A build with more stages than this (a fan-out orchestrator runs about 250) keeps only its
+# non-SUCCESS stages plus stage_counts, so a walk stays one client result.
+_WALK_MAX_STAGES = 30
 
 # JUnit case-status sets per failure-summary filter. UNSTABLE = the statuses Jenkins marks a build
 # unstable for (FAILED + REGRESSION). None = no status filter (every case).
@@ -32,12 +43,9 @@ _WRAPPER_FAIL_STATUSES = {'FAILED', 'REGRESSION'}
 
 def _resolve_number(ctx: Context, fullname: str, number: int | None, master: MasterArg) -> int:
     """Resolve an explicit build number, or the job's last build number, or raise."""
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        msg = f'No build found for job: {fullname}'
-        raise ValueError(msg)
-    return number
+    if number is not None:
+        return number
+    return _resolve_client_number(jenkins(ctx, master), fullname, None)
 
 
 def _is_wrapper_case(entry: dict) -> bool:
@@ -106,8 +114,7 @@ async def get_build(ctx: Context, fullname: str, number: int | None = None, mast
     Returns:
         The build info
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build(fullname=fullname, number=number).model_dump(exclude_none=True)
 
@@ -125,8 +132,7 @@ async def get_build_scripts(
     Returns:
         A list of scripts used in the build
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_replay(fullname=fullname, number=number).scripts
 
@@ -176,8 +182,7 @@ async def get_build_test_report(
     Returns:
         The test report of the build
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_test_report(fullname=fullname, number=number)
 
@@ -348,6 +353,8 @@ async def get_build_parameters(
 ) -> dict:
     """Get the parameters of a specific build in Jenkins
 
+    For the parameters of several recent builds, call get_build_walk once instead of this per build.
+
     Args:
         fullname: The fullname of the job
         number: The number of the build, if None, get the last build
@@ -355,8 +362,7 @@ async def get_build_parameters(
     Returns:
         A dictionary of build parameter names and their values
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_parameters(fullname=fullname, number=number)
 
@@ -370,6 +376,52 @@ async def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg
         number: The number of the build to stop
     """
     return jenkins(ctx, master).stop_build(fullname=fullname, number=number)
+
+
+class StopTarget(BaseModel):
+    fullname: str
+    number: int
+
+
+_MAX_STOP_ITEMS = 50
+
+
+@mcp.tool(tags=['operate'])
+def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None) -> dict:
+    """Stop several running builds in one call (each needs an explicit build number).
+
+    Builds are stopped one after another; a failure on one is reported in its row and the rest still
+    run. Duplicate targets are refused rather than stopped twice.
+
+    Args:
+        items: Up to 50 {fullname, number} targets on the selected master
+
+    Returns:
+        A dict: results [{fullname, number, status: stopped|error, error?}], stopped, failed.
+    """
+    if not items:
+        msg = 'stop_builds needs at least one {fullname, number} item'
+        raise ValueError(msg)
+    if len(items) > _MAX_STOP_ITEMS:
+        msg = f'stop_builds takes at most {_MAX_STOP_ITEMS} items per call, got {len(items)}'
+        raise ValueError(msg)
+    keys = [(i.fullname, i.number) for i in items]
+    if len(set(keys)) != len(keys):
+        msg = 'stop_builds items contain duplicates; list each build once'
+        raise ValueError(msg)
+    client = jenkins(ctx, master)
+    results = []
+    for target in items:
+        row = {'fullname': target.fullname, 'number': target.number}
+        try:
+            client.stop_build(fullname=target.fullname, number=target.number)
+            row['status'] = 'stopped'
+        except RequestException as e:
+            # Includes connection errors and timeouts, where the stop may or may not have landed.
+            row.update(status='error', error=f'{type(e).__name__}: {e}'[:300])
+        results.append(row)
+    stopped = sum(r['status'] == 'stopped' for r in results)
+    return {'results': results, 'stopped': stopped, 'failed': len(results) - stopped}
 
 
 @mcp.tool(tags=['read'])
@@ -387,8 +439,7 @@ async def get_all_build_artifacts(
         path is recognizable) a short `hint` of what the artifact holds. For a `.tar.gz`, use
         list_archive_artifact to see members and grep_build_artifact(archive_member=...) to read one.
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     artifacts = []
     for artifact in jenkins(ctx, master).get_build_artifacts(fullname=fullname, number=number):
@@ -416,8 +467,7 @@ async def get_build_artifact(
     Returns:
         A dict with 'content' (str) and 'encoding' ('utf-8' or 'base64')
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     content = jenkins(ctx, master).get_build_artifact(fullname=fullname, number=number, relative_path=relative_path)
 
@@ -441,26 +491,119 @@ async def get_build_artifact_url(
     Returns:
         The direct Jenkins URL of the artifact
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_artifact_url(fullname=fullname, number=number, relative_path=relative_path)
 
 
 @mcp.tool(tags=['read'])
-async def get_build_history(ctx: Context, fullname: str, count: int = 10, master: MasterArg = None) -> list[dict]:
-    """Get the most recent builds of a Jenkins job.
+async def get_build_history(
+    ctx: Context, fullname: str, count: int = 10, limit: int | None = None, master: MasterArg = None
+) -> list[dict]:
+    """Get the most recent builds of a Jenkins job (number, result, timing only).
+
+    To summarise or compare recent builds (which stage failed, with which parameters, how many
+    tests failed), call get_build_walk instead: one call returns all of that for up to 30 builds,
+    where this tool would need a follow-up call per build.
 
     Args:
         fullname: The fullname of the job
         count: Maximum number of recent builds to return (most recent first)
+        limit: Alias of count (every other list tool names its cap limit); wins when both are given
 
     Returns:
         A list of builds with number, result, timestamp, duration, building, url
     """
+    if limit is not None:
+        count = limit
     count = max(1, min(count, _MAX_HISTORY_COUNT))
     builds = jenkins(ctx, master).get_build_history(fullname=fullname, count=count)
     return [b.model_dump(exclude_none=True) for b in builds]
+
+
+def _walk_row(raw: dict, include: set[str]) -> dict:
+    """Compact one build of a walk: identity and outcome, plus the parsed parameters and test counts."""
+    row = {
+        key: raw.get(src)
+        for key, src in (
+            ('number', 'number'),
+            ('result', 'result'),
+            ('building', 'building'),
+            ('timestamp', 'timestamp'),
+            ('duration', 'duration'),
+            ('url', 'url'),
+            ('queue_id', 'queueId'),
+        )
+        if raw.get(src) is not None
+    }
+    actions = [a for a in raw.get('actions') or [] if isinstance(a, dict)]
+    if 'parameters' in include:
+        params = next((a['parameters'] for a in actions if 'parameters' in a), [])
+        row['parameters'] = {p.get('name'): p.get('value') for p in params if isinstance(p, dict)}
+    if 'causes' in include:
+        causes = [c.get('shortDescription') for a in actions for c in a.get('causes') or [] if isinstance(c, dict)]
+        row['causes'] = list(dict.fromkeys(c for c in causes if c))
+    if 'test_counts' in include:
+        report = next((a for a in actions if 'failCount' in a), None)
+        if report is not None:
+            fail, skip = report.get('failCount') or 0, report.get('skipCount') or 0
+            total = report.get('totalCount') or 0
+            row['test_counts'] = {'fail': fail, 'skip': skip, 'pass': max(0, total - fail - skip), 'total': total}
+    return row
+
+
+@mcp.tool(tags=['read'])
+def get_build_walk(
+    ctx: Context,
+    fullname: str,
+    count: int = 10,
+    include: list[Literal['stages', 'parameters', 'test_counts', 'causes']] | None = None,
+    master: MasterArg = None,
+) -> dict:
+    """Summarise the last N builds of one job in a single call (instead of history + one call per build).
+
+    Use it to compare recent runs: which builds failed, which stage failed in each, with which
+    parameters, who or what started each one, and how many tests failed. Parameters, causes and
+    test counts come from one request for the whole walk, stages cost one request per build and
+    stop after a time budget (see notes).
+
+    Args:
+        fullname: The fullname of the job
+        count: How many recent builds, most recent first (capped at 30)
+        include: Any of stages, parameters, test_counts, causes (default: all four)
+
+    Returns:
+        A dict: fullname, builds (number, result, building, timestamp, duration, url, queue_id, plus
+        the included parameters, test_counts, causes ["Started by user X", "Started by timer", ...]
+        and stages [{name, status, durationMillis}], a build with more than 30 stages keeps only the
+        non-SUCCESS ones plus stage_counts {status: n}), errors
+        (per-build stage fetch failures, inline), notes (any cap or budget that clipped the walk).
+    """
+    wanted = set(include) if include is not None else set(_WALK_INCLUDES)
+    notes: list[str] = []
+    clamped = max(1, min(count, _MAX_WALK_COUNT))
+    if clamped != count:
+        notes.append(f'count adjusted from {count} to {clamped}')
+    client = jenkins(ctx, master)
+    builds = [_walk_row(raw, wanted) for raw in client.get_build_walk(fullname=fullname, count=clamped)]
+    errors: list[dict] = []
+    if 'stages' in wanted:
+        deadline = time.monotonic() + _WALK_STAGES_BUDGET_SECONDS
+        for row in builds:
+            if time.monotonic() > deadline:
+                notes.append(f'stages budget ({_WALK_STAGES_BUDGET_SECONDS}s) spent; later builds have no stages')
+                break
+            try:
+                stages = client.get_build_stages(fullname=fullname, number=row['number'])
+            except Exception as e:  # noqa: BLE001
+                errors.append({'number': row['number'], 'step': 'stages', 'error': f'{type(e).__name__}: {e}'[:300]})
+                continue
+            rows = [s.model_dump(include={'name', 'status', 'durationMillis'}) for s in stages.stages]
+            if len(rows) > _WALK_MAX_STAGES:
+                row['stage_counts'] = dict(Counter(s['status'] for s in rows))
+                rows = [s for s in rows if s['status'] != 'SUCCESS']
+            row['stages'] = rows
+    return {'fullname': fullname, 'builds': builds, 'errors': errors, 'notes': notes}
 
 
 @mcp.tool(tags=['read'])
@@ -474,10 +617,7 @@ async def get_build_stages(ctx: Context, fullname: str, number: int | None = Non
     Returns:
         The run status plus a stages list; empty stages for a non-pipeline job
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
+    number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_stages(fullname=fullname, number=number).model_dump(exclude_none=True)
 
@@ -495,10 +635,7 @@ async def get_build_changeset(
     Returns:
         A list of changes: commitId, author, msg, timestamp, affectedPaths
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
+    number = _resolve_number(ctx, fullname, number, master)
 
     changes = jenkins(ctx, master).get_build_changeset(fullname=fullname, number=number)
     return [c.model_dump(exclude_none=True) for c in changes]
@@ -518,10 +655,7 @@ async def replay_build(ctx: Context, fullname: str, number: int | None = None, m
     Returns:
         The queue item number of the newly triggered build.
     """
-    if number is None:
-        number = jenkins(ctx, master).get_item(fullname=fullname, depth=1).lastBuild.number
-    if number is None:
-        raise ValueError(f'No build found for job: {fullname}')
+    number = _resolve_number(ctx, fullname, number, master)
 
     params = jenkins(ctx, master).get_build_parameters(fullname=fullname, number=number)
     if params:

@@ -533,3 +533,12 @@ async def test_get_build_history_caps_count(mock_jenkins, mocker):
     mock_jenkins.get_build_history.return_value = []
     await build.get_build_history(mocker.Mock(), fullname='j', count=99999)
     assert mock_jenkins.get_build_history.call_args.kwargs['count'] == 100
+
+
+@pytest.mark.asyncio
+async def test_get_build_history_accepts_limit_alias(mock_jenkins, mocker):
+    mock_jenkins.get_build_history.return_value = []
+
+    await build.get_build_history(mocker.Mock(), fullname='job1', limit=3)
+
+    mock_jenkins.get_build_history.assert_called_once_with(fullname='job1', count=3)

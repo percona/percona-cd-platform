@@ -27,7 +27,8 @@ data:
       access_log /dev/stdout;
       sendfile on;
       tcp_nopush on;
-      keepalive_timeout 65;
+      # Above the ALB idle timeout, so NGINX never closes a connection the ALB still reuses.
+      keepalive_timeout {{ add .Values.ingress.idleTimeoutSeconds 10 }};
       client_max_body_size 500m;
 
       # Runtime DNS resolution for upstreams. Without this nginx caches the

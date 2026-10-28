@@ -41,7 +41,7 @@ this page is the operator's tour.
    ────────────────────
    ServiceMonitor / PodMonitor scrape (incl. kube-state-metrics, prometheus-node-exporter,
                   cloudwatch-exporter = YACE polling AWS LB CloudWatch metrics, ADR 0034) ─► Mimir
-   pod logs    ─► Loki distributor
+   pod logs    ─► Loki distributor (loki.source.kubernetes via the API, labels namespace/pod/container/instance)
    k8s events  ─► Loki distributor (loki.source.kubernetes_events, namespace-sharded)
    OTLP traces ─► Tempo distributor
 
@@ -69,6 +69,19 @@ this page is the operator's tour.
 
 Order matters: Mimir/Loki/Tempo must be running before Alloy can ship
 anything. Grafana ships last so all datasources are up at first reconcile.
+
+### Pod logs
+
+`loki.source.kubernetes "pods"` tails every container through the API
+server (kubelet log stream), not from the node's filesystem, and runs
+clustered: one DS pod owns each target (Alloy shards by namespace, pod,
+container and pod UID). Without clustering every DS pod tailed every
+container, and each new DS pod replayed the full current log of every
+target, so Loki held 2 to 3 copies of some lines (the jenkins-mcp audit
+stream was 8.5% duplicates). A reshard still replays the whole
+kubelet-retained log of a reassigned target (the source has no start
+position), so dashboards that count calls count distinct `request_id`s,
+never lines.
 
 ## Object storage
 
@@ -234,11 +247,17 @@ When it fires for `<inst>.cd`:
    scripts/verify-observability.sh <inst>
    ```
 
-4. For `ps3-k8s` the stream is the controller's stdout, tailed by the Alloy
-   DaemonSet pod on its node.
+4. For `ps3-k8s` the stream is the controller's stdout, tailed through the
+   Kubernetes API by the Alloy DaemonSet pod that owns the target (clustered,
+   not node-bound). Only the `jenkins` container counts, the sidecars in the
+   namespace are excluded. Check that the stream carries `master="ps3-k8s"`
+   and that exactly one Alloy pod has the tailer open.
 
    ```sh
-   kubectl -n alloy logs <alloy-pod-on-the-ps3-node> | grep jenkins-ps3-k8s-0:jenkins
+   kubectl -n loki port-forward svc/loki-query-frontend 3100 &
+   curl -sG localhost:3100/loki/api/v1/query \
+     --data-urlencode 'query=sum(count_over_time({master="ps3-k8s", container="jenkins"} |= "heartbeat" [15m]))'
+   for p in $(kubectl -n alloy get pods -o name); do kubectl -n alloy logs "$p" -c alloy --since=1h | grep -c 'opened log stream.*jenkins-ps3-k8s-0' | sed "s|^|$p |"; done
    ```
 
 Rule-path checks: the Loki ruler lists `jenkins-logs.rules`, and Mimir

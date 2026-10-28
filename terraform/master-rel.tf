@@ -35,12 +35,16 @@ module "rel" {
   # not wired through this module).
   cache_bucket_name = null
 
-  # Retained CFN data volume vol-01b7479079f91c010 is 100 GiB gp2 in
+  # Retained CFN data volume vol-01b7479079f91c010 is 130 GiB gp2 in
   # eu-west-1b. ebs_type must be gp2 (not the module default gp3) so the
   # tofu import is a zero-diff adopt; encrypted/iops are ignore_changes in
   # the module.
-  ebs_size = 100
+  ebs_size = 130
   ebs_type = "gp2"
+
+  # Third worker AZ (eu-west-1a, 10.199.0.0/24) so spot workers can move off
+  # a reclaim-heavy zone. The master stays in eu-west-1b (az_index 1).
+  extra_subnet_a = true
 
   # On-demand to end the spot reclamations. c7i-flex.xlarge (4 vCPU / 8 GB)
   # matches the prior c5a.xlarge footprint and clears the 4 GB JVM heap.
@@ -109,7 +113,7 @@ module "rel_arm_fleet" {
   master_role_name             = module.rel.master_iam_role_name
   key_name                     = "percona-jenkins"
   ami_id                       = data.aws_ami.al2023_arm64_euw1.id
-  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
+  instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m8gd.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
 }
 

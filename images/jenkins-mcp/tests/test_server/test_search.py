@@ -96,6 +96,15 @@ def test_search_ignore_case_prefixes_pattern(mock_jenkins, mocker):
     assert mock_jenkins.get_build_console_output.call_args.kwargs['pattern'] == '(?i)ERROR'
 
 
+def test_search_moves_a_mid_pattern_flag_to_the_front(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = [_job('a')]
+    mock_jenkins.get_build_console_output.return_value = 'error'
+
+    search.search_build_logs(mocker.Mock(), pattern='ok|(?i)ERROR', job_pattern='a.*', ignore_case=True)
+
+    assert mock_jenkins.get_build_console_output.call_args.kwargs['pattern'] == '(?i)ok|ERROR'
+
+
 def test_search_skips_folders_and_unbuilt(mock_jenkins, mocker):
     folder = Folder(fullname='dir', name='dir', url='u', class_='Folder', jobs=[])
     unbuilt = Job(fullname='new', name='new', url='u', class_='Job', color='notbuilt')
