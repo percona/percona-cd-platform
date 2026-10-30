@@ -7,18 +7,6 @@ kubeconfig with the `percona-ci-platform` context.
 
 ## Master-facing
 
-[`check-master-spot-readiness.sh`](check-master-spot-readiness.sh)
-Spot-interrupt readiness audit for a Jenkins master.
-
-- SpotFleet has Capacity Rebalancing + pinned to `$Latest`
-- SSM agent online, cloud-init done
-- `crond` active, `terminate-check` cron installed and firing
-- `jenkins-graceful-stop.sh` present with `flock` guard, `jq` available
-- JVM has the rehydrate flag (eks_observability profile)
-- Secrets Manager fetch + api-admin auth probe from loopback
-
-Exits non-zero if anything is missing.
-
 [`runbook.py`](runbook.py)
 Gated runbook automations behind `just runbook`. One subcommand per
 common operation: `template-change <inst>` is fully automated (clean
