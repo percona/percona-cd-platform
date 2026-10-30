@@ -52,6 +52,29 @@ resource "kubectl_manifest" "argocd_priorityclass" {
   server_side_apply = true
 }
 
+# ArgoCD placement: the system NG (tier bootstrap). The toleration pairs
+# with the CriticalAddonsOnly:NoSchedule taint planned for that NG and is
+# inert until the taint lands.
+#
+# Requests below are sized from 14 days of usage (memory at or above the
+# observed peak, repo-server at its p95 since it spikes during manifest
+# generation). Without requests every pod ran BestEffort and was the first
+# the kubelet evicted under memory pressure. No limits, so a spike is not
+# OOM-killed.
+locals {
+  argocd_node_selector = {
+    "workload.percona.com/tier" = "bootstrap"
+  }
+  argocd_tolerations = [
+    {
+      key      = "CriticalAddonsOnly"
+      operator = "Equal"
+      value    = "true"
+      effect   = "NoSchedule"
+    }
+  ]
+}
+
 resource "helm_release" "argocd" {
   name             = "argocd"
   namespace        = "argocd"
@@ -76,6 +99,12 @@ resource "helm_release" "argocd" {
       # and owned steady-state by resources/addons/priorityclasses/ at
       # sync-wave -100.
       priorityClassName = "platform-system-critical"
+      # Pin every ArgoCD pod to the system NG so addon churn (Karpenter
+      # consolidation, spot replacement) never evicts the GitOps engine.
+      # The chart reads placement only under `global`, the redis-ha
+      # subchart only under its own key.
+      nodeSelector = local.argocd_node_selector
+      tolerations  = local.argocd_tolerations
     }
     # Drop the bundled Dex pod entirely — Authentik replaces it.
     dex = {
@@ -142,12 +171,40 @@ resource "helm_release" "argocd" {
       pdb = {
         enabled = true
       }
+      resources = { requests = { cpu = "100m", memory = "768Mi" } }
     }
     "redis-ha" = {
-      enabled = true
+      enabled      = true
+      nodeSelector = local.argocd_node_selector
+      tolerations  = local.argocd_tolerations
+      redis = {
+        resources = { requests = { cpu = "25m", memory = "64Mi" } }
+      }
+      sentinel = {
+        # CPU limit caps a sentinel stuck in the upstream busy-loop bug (fixed in
+        # redis unstable, not yet released) at a tenth of a core, so a spin
+        # cannot take a system node core for days.
+        resources = {
+          requests = { cpu = "25m", memory = "32Mi" }
+          limits   = { cpu = "100m" }
+        }
+      }
+      splitBrainDetection = {
+        resources = { requests = { cpu = "5m", memory = "16Mi" } }
+      }
+      haproxy = {
+        resources = { requests = { cpu = "10m", memory = "128Mi" } }
+        # One pod per node on a 3-node group leaves no room to surge, so
+        # replace one pod at a time instead.
+        deploymentStrategy = {
+          type          = "RollingUpdate"
+          rollingUpdate = { maxSurge = 0, maxUnavailable = 1 }
+        }
+      }
     }
     server = {
-      replicas = 2
+      replicas  = 2
+      resources = { requests = { cpu = "25m", memory = "128Mi" } }
       pdb = {
         enabled      = true
         minAvailable = 1
@@ -207,36 +264,24 @@ resource "helm_release" "argocd" {
       }
     }
     repoServer = {
-      replicas = 2
+      replicas  = 2
+      resources = { requests = { cpu = "25m", memory = "256Mi" } }
       pdb = {
         enabled      = true
         minAvailable = 1
       }
     }
     applicationSet = {
-      replicas = 2
+      replicas  = 2
+      resources = { requests = { cpu = "10m", memory = "128Mi" } }
       pdb = {
         enabled      = true
         minAvailable = 1
       }
     }
-    # Pin every ArgoCD pod to the system NG so addon churn (Karpenter
-    # scale-from-zero, spot-replacement) never evicts the GitOps engine.
-    nodeSelector = {
-      "workload.percona.com/tier" = "bootstrap"
+    notifications = {
+      resources = { requests = { cpu = "10m", memory = "96Mi" } }
     }
-    # Bootstrap-tier toleration paired with the Stage 2b
-    # CriticalAddonsOnly:NoSchedule taint that will isolate the system
-    # MNG. Inert until the taint lands (NoSchedule semantics) -- safe to
-    # ship now.
-    tolerations = [
-      {
-        key      = "CriticalAddonsOnly"
-        operator = "Equal"
-        value    = "true"
-        effect   = "NoSchedule"
-      }
-    ]
   })]
 
   # coredns + kube-proxy must be running before any pod can resolve cluster
