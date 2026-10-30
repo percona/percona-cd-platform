@@ -66,8 +66,10 @@ module "psmdb" {
 
   # No history lookup in the JUnit step. With one shared history of 550k+
   # test cases per build, the default lookup of 25 earlier builds per
-  # failing test re-reads their result files for hours.
-  jvm_extra_opts = "-Dhudson.tasks.junit.History$HistoryTableResult.PREVIOUS_TEST_RESULT_BACKTRACK_BUILDS_MAX=0"
+  # failing test re-reads their result files for hours. The property name is
+  # single-quoted because /usr/bin/jenkins passes JAVA_OPTS through eval, which
+  # would otherwise expand $HistoryTableResult to nothing.
+  jvm_extra_opts = "-D'hudson.tasks.junit.History$HistoryTableResult.PREVIOUS_TEST_RESULT_BACKTRACK_BUILDS_MAX=0'"
 
   # Distinct LT name so the module's launch template can coexist with the
   # CFN-created master template during the cutover (no name collision,
