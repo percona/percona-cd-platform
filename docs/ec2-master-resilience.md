@@ -5,7 +5,7 @@ since the CFN to TF migrations (the fleet wave completed 2026-06-10, pg
 last on 2026-07-07), which ended the master-side spot reclamations across
 the whole fleet. Without help, an abrupt instance loss or JVM
 crash loses in-flight pipelines and reaps every Hetzner worker the master
-had provisioned. This doc covers the four layered mechanisms the platform
+had provisioned. This doc covers the three layered mechanisms the platform
 puts in place — built for the spot era, retained as defense-in-depth —
 and the specific cases where each one does not help. Worker-side spot
 interruptions are a separate track (`retry(conditions: [agent()])` in the
@@ -17,30 +17,22 @@ and its EC2 spot master was decommissioned on 2026-06-07 (see
 [`runbooks/decommission-ps3-ec2-master.md`](runbooks/decommission-ps3-ec2-master.md));
 the original `ps3` validation is kept as the reference run.
 
-## The four mechanisms
+## The three mechanisms
 
 | Mechanism | What it covers | Where it lives |
 |---|---|---|
 | **SpotFleet Capacity Rebalancing** | AWS launches a replacement on a rebalance recommendation, minutes to hours before a spot interruption notice. The replacement is booting while the old instance still serves traffic. | `terraform/modules/jenkins-master/main.tf` (`spot_maintenance_strategies.capacity_rebalance`) |
-| **Graceful spot-interrupt drain** | A 30-second cron on the master detects `spot/instance-action` IMDS metadata and runs a script that: quietDown, polls `busyExecutors` up to 85 s, safeExit, copies the log, unmounts the data EBS. `flock` prevents concurrent runs. | `terraform/modules/jenkins-master/user-data.sh.tftpl` (`jenkins-graceful-stop.sh` install + cron) |
 | **Pipeline durability** | `MAX_SURVIVABILITY` global default. Every pipeline step is persisted to disk so an abrupt JVM stop resumes at the same step on the next start. | `resources/jenkins-masters/<host>/init.groovy.d/durability.groovy` (S3-delivered) |
 | **Hetzner worker rehydrate** | After a hard JVM stop, the Percona-patched Hetzner plugin re-adopts surviving Hetzner VMs as Jenkins agents instead of letting `OrphanedNodesCleaner` reap them. DC circuit-breaker state is also persisted so a restart does not stampede a still-sick datacenter. | `Percona-Lab/jenkins-hetzner-cloud-plugin` (rehydrate since v103.percona.22), `init.groovy.d` |
 
-The four layers compose: rebalancing reduces the chance of needing the
-2-minute drain at all; the drain handles the case AWS gives no advance
-warning; durability covers everything that did not finish during the
-drain; rehydrate brings the workers back when the JVM died too abruptly
-to disconnect them cleanly.
+The three layers compose. Rebalancing (spot masters only) replaces the
+instance before an interruption notice. Durability resumes pipelines
+after an abrupt JVM stop. Rehydrate brings the workers back when the JVM
+died too abruptly to disconnect them cleanly.
 
-## Operational check
-
-`scripts/check-master-spot-readiness.sh <inst>` walks every moving piece
-(SpotFleet config, cron daemon + watcher, graceful-stop.sh + flock,
-JVM args, Secrets Manager fetch, api-admin auth probe). Exit 0 means
-the master will respond correctly; non-zero shows which stage failed.
-
-Run it before declaring a master "spot-ready" and as a smoke-test after
-any userdata, plugin, or `init.groovy.d` change.
+An earlier graceful spot-interrupt drain (quietDown, then safeExit on the
+IMDS notice) was removed once every master ran on-demand, since it could
+never fire.
 
 ## Rehydrate: when workers are kept across a reboot
 
@@ -49,9 +41,8 @@ chance to disconnect:
 
 - **Kill -9 of the JVM** (OOM, hard fault, manual `kill -9`)
 - **Hard EC2 reboot** without going through `systemctl stop jenkins`
-- **AWS spot interruption that outruns the graceful drain** (e.g. the
-  drain is mid-`safeExit` and `umount` returns "target busy" before
-  cleanly stopping the JVM; AWS terminates ~15 s later regardless)
+- **AWS spot interruption** on a spot master (AWS terminates the
+  instance 2 minutes after the notice)
 
 In each case the JVM dies before `Computer.disconnect()` fires, so the
 Hetzner VMs keep running. When the replacement boots, the rehydrate
@@ -102,9 +93,6 @@ systemd override, gated by `master_profile == "eks_observability"` (only
 the former EC2 `ps3` ever used that profile; its spot master has since been
 decommissioned). On any master without the flag the rehydrate path is a
 no-op.
-
-`check-master-spot-readiness.sh` shows this as `FAIL rehydrate flag in
-JVM args`.
 
 ### 3. Plugin version drift
 
@@ -207,6 +195,5 @@ applies.
 
 ## See also
 
-- [`check-master-spot-readiness.sh`](../scripts/check-master-spot-readiness.sh) — the operational audit
 - [`adr/0013-push-from-masters-with-nginx-bearer.md`](adr/0013-push-from-masters-with-nginx-bearer.md) — alloy push pipeline (parallel resilience story for observability)
 - `Percona/percona-jenkins` skill (private) and `Percona/percona-hetzner` skill — fleet-wide ops notes for the masters

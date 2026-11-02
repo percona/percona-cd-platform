@@ -223,72 +223,8 @@ start_jenkins() {
     systemctl enable jenkins
     systemctl start --no-block jenkins
 
-%{ if master_profile == "eks_observability" ~}
-    # PS-11173 Phase 3: graceful spot-interrupt drain. Replaces the
-    # immediate `systemctl stop jenkins` with a quietDown + busyExecutors
-    # poll + safeExit flow that uses up to ~85s of the AWS 120s warning.
-    # Admin token is fetched per-run from AWS Secrets Manager via the
-    # AdminApiTokenRead IAM grant; no token on disk.
-    install -m 0755 /dev/stdin /usr/local/bin/jenkins-graceful-stop.sh <<'GRACEFUL'
-#!/bin/bash
-# Gracefully drain Jenkins on AWS spot interrupt. Triggered by
-# /etc/cron.d/terminate-check at 30s cadence; the script self-checks
-# the spot/instance-action IMDS endpoint and exits silently when
-# there's no interrupt pending.
-set -u
-
-# IMDSv2: the launch template requires session tokens. 60s TTL is plenty
-# for one drain pass.
-IMDS_TOKEN=$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") || exit 0
-
-# Self-check: is there an active spot interrupt? Non-200 means no
-# (404 in the normal case; we exit 0 so cron stays quiet).
-SPOT_CODE=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" -o /dev/null -w "%%{http_code}" "http://169.254.169.254/latest/meta-data/spot/instance-action" || echo 000)
-[ "$SPOT_CODE" = "200" ] || exit 0
-
-# flock prevents the every-30s cron from piling up duplicate drains
-# while a previous run is still polling busyExecutors.
-exec 9>/run/jenkins-graceful-stop.lock
-flock -n 9 || { echo "graceful-stop: another drain is already running, skipping" >&2; exit 0; }
-
-INSTANCE_REGION=$(curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/[a-z]$//')
-TOKEN=$(aws secretsmanager get-secret-value \
-    --region "$INSTANCE_REGION" \
-    --secret-id ps3.cd/jenkins/admin-api-token \
-    --query SecretString --output text) || {
-    echo "graceful-stop: SM fetch failed; falling back to systemctl stop" >&2
-    systemctl stop jenkins
-    cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log || true
-    umount /mnt || true
-    exit 0
-}
-USER="api-admin"
-BASE="http://127.0.0.1:8080"
-curl -fsS -u "$USER:$TOKEN" -X POST \
-    "$BASE/quietDown?reason=EC2%20Spot%20interruption" || true
-deadline=$(( $(date +%s) + 85 ))
-while [ "$(date +%s)" -lt "$deadline" ]; do
-    busy=$(curl -fsS -u "$USER:$TOKEN" "$BASE/computer/api/json?tree=busyExecutors" \
-           | jq -r '.busyExecutors // 0') || busy=0
-    [ "$busy" -le 0 ] && break
-    echo "graceful-stop: busyExecutors=$busy (deadline in $((deadline - $(date +%s)))s)" >&2
-    sleep 3
-done
-curl -fsS -u "$USER:$TOKEN" -X POST "$BASE/safeExit" || true
-sleep 5
-cp /var/log/jenkins/jenkins.log /mnt/jenkins-latest.log || true
-umount /mnt || true
-GRACEFUL
-
-    # 30s polling cadence (minute boundary + offset 30s). The script
-    # self-checks the spot-action IMDS endpoint and exits 0 when no
-    # interrupt is pending; flock inside the script gates concurrency.
-    printf "* * * * * root /usr/local/bin/jenkins-graceful-stop.sh\n* * * * * root sleep 30; /usr/local/bin/jenkins-graceful-stop.sh\n" > /etc/cron.d/terminate-check
-%{ endif ~}
-
-    # cronie ships disabled on AL2023; the terminate-check cron only
-    # fires once the daemon is enabled+started. Without this, the spot
-    # interrupt watcher never runs (root cause of PS-11173 FIS round 1).
+    # cronie ships disabled on AL2023. Enable it so the stock
+    # /etc/cron.d/0hourly entry and the anacron jobs it drives run.
     systemctl enable --now crond
 }
 
