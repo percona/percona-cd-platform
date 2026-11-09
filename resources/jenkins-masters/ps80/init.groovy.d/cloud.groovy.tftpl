@@ -23,6 +23,7 @@ netMap['us-west-2c'] = 'subnet-0fe430aa745b0116f'
 imageMap = [:]
 imageMap['us-west-2a.docker']            = 'ami-06a974f9b8a97ecf2'
 imageMap['us-west-2a.docker-32gb']       = 'ami-06a974f9b8a97ecf2'
+imageMap['us-west-2a.docker-32gb-ondemand'] = imageMap['us-west-2a.docker-32gb']
 imageMap['us-west-2a.docker-32gb-hirsute']  = 'ami-0cbdf6c0f39fd3950'
 imageMap['us-west-2a.docker-32gb-jammy']    = 'ami-005f7acd8475ac91c'
 imageMap['us-west-2a.docker-32gb-noble']    = 'ami-0cf2b4e024cdb6960'
@@ -63,6 +64,7 @@ imageMap['us-west-2a.min-trixie-aarch64']   = 'ami-021bb099085248f4c'
 
 imageMap['us-west-2b.docker']            = imageMap['us-west-2a.docker']
 imageMap['us-west-2b.docker-32gb']       = imageMap['us-west-2a.docker-32gb']
+imageMap['us-west-2b.docker-32gb-ondemand'] = imageMap['us-west-2b.docker-32gb']
 imageMap['us-west-2b.docker-32gb-hirsute']  = imageMap['us-west-2a.docker-32gb-hirsute']
 imageMap['us-west-2b.docker-32gb-jammy']    = imageMap['us-west-2a.docker-32gb-jammy']
 imageMap['us-west-2b.docker-32gb-noble']    = imageMap['us-west-2a.docker-32gb-noble']
@@ -103,6 +105,7 @@ imageMap['us-west-2b.min-trixie-aarch64']   = imageMap['us-west-2a.min-trixie-aa
 
 imageMap['us-west-2c.docker']            = imageMap['us-west-2a.docker']
 imageMap['us-west-2c.docker-32gb']       = imageMap['us-west-2a.docker-32gb']
+imageMap['us-west-2c.docker-32gb-ondemand'] = imageMap['us-west-2c.docker-32gb']
 imageMap['us-west-2c.docker-32gb-hirsute']  = imageMap['us-west-2a.docker-32gb-hirsute']
 imageMap['us-west-2c.docker-32gb-jammy']    = imageMap['us-west-2a.docker-32gb-jammy']
 imageMap['us-west-2c.docker-32gb-noble']    = imageMap['us-west-2a.docker-32gb-noble']
@@ -143,6 +146,7 @@ imageMap['us-west-2c.min-trixie-aarch64']   = imageMap['us-west-2a.min-trixie-aa
 
 imageMap['us-west-2d.docker']            = imageMap['us-west-2a.docker']
 imageMap['us-west-2d.docker-32gb']       = imageMap['us-west-2a.docker-32gb']
+imageMap['us-west-2d.docker-32gb-ondemand'] = imageMap['us-west-2d.docker-32gb']
 imageMap['us-west-2d.docker-32gb-hirsute']  = imageMap['us-west-2a.docker-32gb-hirsute']
 imageMap['us-west-2d.docker-32gb-jammy']    = imageMap['us-west-2a.docker-32gb-jammy']
 imageMap['us-west-2d.docker-32gb-noble']    = imageMap['us-west-2a.docker-32gb-noble']
@@ -192,6 +196,7 @@ priceMap['i4g.2xlarge'] = '0.34' // aarch
 userMap = [:]
 userMap['docker']            = 'ec2-user'
 userMap['docker-32gb']       = userMap['docker']
+userMap['docker-32gb-ondemand'] = userMap['docker-32gb']
 userMap['docker-32gb-hirsute']  = 'ubuntu'
 userMap['docker-32gb-jammy']    = 'ubuntu'
 userMap['docker-32gb-noble']    = 'ubuntu'
@@ -235,6 +240,7 @@ userMap['psmdb'] = userMap['min-xenial-x64']
 modeMap = [:]
 modeMap['docker']            = Node.Mode.NORMAL
 modeMap['docker-32gb']       = modeMap['docker']
+modeMap['docker-32gb-ondemand'] = Node.Mode.EXCLUSIVE
 modeMap['docker-32gb-hirsute']  = modeMap['docker']
 modeMap['docker-32gb-jammy']    = modeMap['docker']
 modeMap['docker-32gb-noble']    = modeMap['docker']
@@ -341,6 +347,7 @@ initMap['docker'] = '''
     echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
 '''
 initMap['docker-32gb'] = initMap['docker']
+initMap['docker-32gb-ondemand'] = initMap['docker-32gb']
 initMap['docker-32gb-hirsute'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
@@ -906,10 +913,17 @@ capMap['r6a.4xlarge'] = '60'
 capMap['m6a.2xlarge'] = '60'
 capMap['i4g.2xlarge'] = '40'
 
+// Labels that launch on-demand instead of spot, with their own instance cap.
+// Long test runs that call Bedrock lose hours of work to a spot reclaim, and
+// Hetzner workers have no AWS role, so these runs need an on-demand EC2 worker.
+ondemandCapMap = [:]
+ondemandCapMap['docker-32gb-ondemand'] = '10'
+
 typeMap = [:]
 typeMap['micro-amazon']      = 'c6a.large'
 typeMap['docker']            = 'm6a.2xlarge'
 typeMap['docker-32gb']       = 'c6id.4xlarge'
+typeMap['docker-32gb-ondemand'] = typeMap['docker-32gb']
 typeMap['docker-32gb-hirsute']  = 'r6a.4xlarge'
 typeMap['docker-32gb-jammy']    = 'r6a.4xlarge'
 typeMap['docker-32gb-noble']    = 'r6a.4xlarge'
@@ -950,6 +964,7 @@ typeMap['min-trixie-aarch64']   = 'i4g.2xlarge'
 execMap = [:]
 execMap['docker']            = '1'
 execMap['docker-32gb']       = execMap['docker']
+execMap['docker-32gb-ondemand'] = execMap['docker-32gb']
 execMap['docker-32gb-hirsute']  = execMap['docker']
 execMap['docker-32gb-jammy']    = execMap['docker']
 execMap['docker-32gb-noble']    = execMap['docker']
@@ -992,6 +1007,7 @@ devMap = [:]
 devMap['docker']            = '/dev/xvda=:8:true:gp3,/dev/xvdd=:120:true:gp3'
 devMap['docker2']           = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
 devMap['docker-32gb']       = devMap['docker']
+devMap['docker-32gb-ondemand'] = devMap['docker-32gb']
 devMap['docker-32gb-hirsute']  = devMap['docker']
 devMap['docker-32gb-jammy']    = devMap['docker']
 devMap['docker-32gb-noble']    = devMap['docker']
@@ -1032,6 +1048,7 @@ devMap['min-trixie-aarch64']   = '/dev/xvda=:8:true:gp3,/dev/xvdd=:80:true:gp3'
 labelMap = [:]
 labelMap['docker']            = ''
 labelMap['docker-32gb']       = ''
+labelMap['docker-32gb-ondemand'] = labelMap['docker-32gb']
 labelMap['docker-32gb-hirsute']  = ''
 labelMap['docker-32gb-jammy']    = ''
 labelMap['docker-32gb-noble']    = ''
@@ -1073,6 +1090,7 @@ labelMap['min-trixie-aarch64']   = ''
 jvmoptsMap = [:]
 jvmoptsMap['docker']            = '-Xmx512m -Xms512m'
 jvmoptsMap['docker-32gb']       = jvmoptsMap['docker']
+jvmoptsMap['docker-32gb-ondemand'] = jvmoptsMap['docker-32gb']
 jvmoptsMap['docker-32gb-hirsute']  = jvmoptsMap['docker']
 jvmoptsMap['docker-32gb-jammy']    = jvmoptsMap['docker']
 jvmoptsMap['docker-32gb-noble']    = jvmoptsMap['docker']
@@ -1116,7 +1134,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
     return new SlaveTemplate(
         imageMap[AZ + '.' + OSType],                // String ami
         '',                                         // String zone
-        new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (fall back to on-demand when spot capacity is unavailable)
+        ondemandCapMap.containsKey(OSType) ? null : new SpotConfiguration(true, priceMap[typeMap[OSType]], true, '0'), // SpotConfiguration spotConfig (null = on-demand, otherwise spot falling back to on-demand when spot capacity is unavailable)
         'default',                                  // String securityGroups
         '/mnt/jenkins',                             // String remoteFS
         InstanceType.fromValue(typeMap[OSType]),    // InstanceType type
@@ -1140,7 +1158,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         '15',                                       // String idleTerminationMinutes
         0,                                          // Init minimumNumberOfInstances
         0,                                          // minimumNumberOfSpareInstances
-        capMap[typeMap[OSType]],                    // String instanceCapStr
+        ondemandCapMap.getOrDefault(OSType, capMap[typeMap[OSType]]), // String instanceCapStr
         '${worker_instance_profile_arn}', // String iamInstanceProfile
         true,                                       // boolean deleteRootOnTermination
         false,                                      // boolean useEphemeralDevices
@@ -1183,6 +1201,7 @@ String region = 'us-west-2'
             // (ec2FleetCloud.groovy), not a classic template: two clouds
             // serving one label starve provisioning.
             getTemplate('docker-32gb',          "$${region}$${it}"),
+            getTemplate('docker-32gb-ondemand', "$${region}$${it}"),
             getTemplate('docker-32gb-hirsute',  "$${region}$${it}"),
             getTemplate('docker-32gb-jammy',    "$${region}$${it}"),
             getTemplate('docker-32gb-noble',    "$${region}$${it}"),
