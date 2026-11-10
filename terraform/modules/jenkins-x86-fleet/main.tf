@@ -75,12 +75,12 @@ resource "aws_launch_template" "this" {
 
   vpc_security_group_ids = [aws_security_group.this.id]
 
-  # IMDSv2 required (trivy AWS-0130). hop_limit 2 keeps IMDS reachable from
-  # containerized workloads on the worker while still blocking IMDSv1.
+  # IMDSv2 required (trivy AWS-0130). var.imds_hop_limit decides whether
+  # containers on the Docker bridge network reach IMDS (2) or not (1).
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
-    http_put_response_hop_limit = 2
+    http_put_response_hop_limit = var.imds_hop_limit
   }
 
   block_device_mappings {
