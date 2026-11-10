@@ -635,6 +635,9 @@ data "aws_iam_policy_document" "master_start_instances" {
       "ec2:DescribeSpotInstanceRequests",
       "ec2:CancelSpotInstanceRequests",
       "ec2:GetConsoleOutput",
+      # Called by the EC2 plugin on each new spot worker when the
+      # enforceMetadataOptions system property is on.
+      "ec2:ModifyInstanceMetadataOptions",
       "ec2:RequestSpotInstances",
       "ec2:RunInstances",
       "ec2:StartInstances",
