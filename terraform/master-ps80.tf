@@ -118,6 +118,9 @@ module "ps80_arm_fleet" {
   ami_id                       = data.aws_ami.al2023_arm64_usw2.id
   instance_types               = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size                     = 16
+  # Hop limit 1 keeps the worker role credentials away from bridged job
+  # containers. A job that needs AWS in a container passes credentials in.
+  imds_hop_limit = 1
 }
 
 # x86_64 spot fleet for the ec2-fleet plugin -- serves the min-bookworm-x64
@@ -148,6 +151,9 @@ module "ps80_x86_fleet" {
   max_size                     = 24
   root_volume_gb               = 30
   data_volume_gb               = 120
+  # Same IMDS hop limit as ps80_arm_fleet: no worker role credentials in
+  # bridged job containers.
+  imds_hop_limit = 1
 }
 
 # Sibling x86_64 fleet for the `docker` label (general ps80 CI workers, the
@@ -172,6 +178,9 @@ module "ps80_docker_fleet" {
   instance_types               = ["m6a.2xlarge", "m6i.2xlarge", "m7i.2xlarge", "m5a.2xlarge", "m5.2xlarge", "m6id.2xlarge", "m5d.2xlarge", "m5ad.2xlarge"]
   max_size                     = 32
   data_volume_gb               = 120
+  # Same IMDS hop limit as ps80_arm_fleet: no worker role credentials in
+  # bridged job containers.
+  imds_hop_limit = 1
 }
 
 # Rendered in the root so the ARN uses this account's caller-identity, not

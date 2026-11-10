@@ -76,3 +76,13 @@ variable "extra_ssh_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "imds_hop_limit" {
+  description = "IMDSv2 PUT response hop limit on the workers. 2 lets a container on the Docker bridge network fetch a metadata token and the worker role credentials. 1 keeps the metadata service reachable from the worker host only, so bridged containers get no token."
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.imds_hop_limit >= 1 && var.imds_hop_limit <= 64 && floor(var.imds_hop_limit) == var.imds_hop_limit
+    error_message = "imds_hop_limit must be a whole number from 1 to 64."
+  }
+}
