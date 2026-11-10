@@ -1167,6 +1167,11 @@ jenkins.clouds.each {
 
 String sshKeysCredentialsId = '8af5d00a-aeaf-45bd-a5b1-4a7680c9d500'
 
+// The EC2 plugin sets each new spot worker's metadata options to its template
+// values before the agent starts, and terminates the worker if that call fails.
+// The plugin reads this property at every launch.
+System.setProperty('hudson.plugins.ec2.enforceMetadataOptions', 'true')
+
 String region = 'us-west-2'
 ('b'..'c').each {
     // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/AmazonEC2Cloud.java
