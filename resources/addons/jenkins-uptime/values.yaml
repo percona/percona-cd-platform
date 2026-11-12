@@ -39,8 +39,8 @@ prometheus-blackbox-exporter:
 
 # One entry per master. `master` matches the push-pipeline label convention
 # (`<inst>.cd` for EC2/CFN masters, `ps3-k8s` for the in-cluster controller)
-# so the recording rules can join probe_success with hetzner_* push
-# freshness on (master). `internal` targets the per-master Services the
+# so the recording rules can join probe_success with push freshness on
+# (master). `internal` targets the per-master Services the
 # jenkins-endpoint-reconciler writes (its values.yaml is the source of
 # truth for that set); a master without `internal` gets the external probe
 # only. pg is still CloudFormation-managed with no peering Service.
