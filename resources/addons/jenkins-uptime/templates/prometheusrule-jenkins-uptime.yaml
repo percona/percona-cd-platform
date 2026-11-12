@@ -3,7 +3,7 @@ Recording rules for the master uptime probes. The Alloy DS
 `mimir.rules.kubernetes "ruler"` component discovers PrometheusRule
 resources cluster-wide with empty selectors and syncs them to the Mimir
 ruler, where they evaluate against the probe_* series (this addon's Probe
-CRs) and the hetzner_* series the masters push through alloy-gateway.
+CRs) and the up series of the scrapes each master's Alloy pushes.
 
 Rules within a group evaluate sequentially per cycle, so the chained
 references below are safe. The uptime alert group (MasterDown,
@@ -25,13 +25,18 @@ spec:
       rules:
         - record: jenkins:master_http_up
           expr: max by (master, path) (probe_success{job=~"jenkins-uptime-(internal|external)"})
+        # Freshness reads the up series of the scrapes each master's own Alloy
+        # runs (prometheus.scrape.* and the integrations/unix host exporter).
+        # Alloy pushes up for every scrape whatever the target answers, so it
+        # exists with or without the Hetzner plugin. The job filter leaves out
+        # the blackbox probe series, which also carry a master label.
         # The subquery (max_over_time over timestamp()) keeps the freshness
         # series emitting for 24h after a master's push stops (the raw series
-        # go stale after 5m); staleness must not silently hide a dead push
+        # go stale after 5m). Staleness must not silently hide a dead push
         # pipeline. 5m resolution still recovers the exact last-sample
         # timestamp because each step's staleness lookback covers the gap.
         - record: jenkins:master_last_push_age_seconds
-          expr: time() - max by (master) (max_over_time(timestamp(hetzner_api_rate_limit_remaining)[24h:5m]))
+          expr: time() - max by (master) (max_over_time(timestamp(up{job=~"prometheus\\.scrape\\..+|integrations/unix"})[24h:5m]))
         - record: jenkins:master_push_fresh
           expr: jenkins:master_last_push_age_seconds < bool 300
         # Healthy = internal AND external probe up AND pushing metrics.
