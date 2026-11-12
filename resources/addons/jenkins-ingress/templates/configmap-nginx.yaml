@@ -64,6 +64,9 @@ data:
         listen 80;
         server_name {{ .name }}.cd.percona.com;
 
+        # TLS ends at the ALB, so every answer of this host goes out over HTTPS.
+        add_header Strict-Transport-Security "max-age={{ $.Values.hstsMaxAgeSeconds }}" always;
+
         # Bypass upstream for ALB health probes.
         location = /-/healthy { return 200 "ok\n"; }
 
