@@ -27,8 +27,10 @@ resources:
     cpu: 500m
     memory: 256Mi
 
-# max-age of the Strict-Transport-Security header on every proxied host. A browser
-# that has seen the header refuses a certificate mismatch for that host until it expires.
+# max-age of the Strict-Transport-Security header. The ALB listener sets it for every
+# host of the jenkins-masters group (ps3 included), and nginx sets it on every proxied
+# host. A browser that has seen the header refuses a certificate mismatch for that host
+# until it expires.
 hstsMaxAgeSeconds: 86400
 
 # One entry per host on the shared ALB. `name` is the left label of the
