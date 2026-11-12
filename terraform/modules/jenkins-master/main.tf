@@ -908,6 +908,7 @@ locals {
     jenkins_package_version = var.jenkins_package_version
     java_package            = var.java_package
     observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
+    hetzner_plugin          = var.hetzner_plugin
     packages                = join(" ", var.base_packages)
     master_profile          = var.master_profile
     plugin_install_hook     = var.plugin_install_hook == null ? "" : var.plugin_install_hook

@@ -32,6 +32,9 @@ module "pmm" {
   jenkins_package_version = "2.568.3"
   java_package            = "java-21-amazon-corretto-headless"
   cache_bucket_name       = "pmm-build-cache"
+  # pmm runs no Hetzner workers and has no Hetzner plugin, so the master-side
+  # Alloy skips the /hetzner-prometheus scrape.
+  hetzner_plugin = false
 
   # The CFN-era live worker role had grown beyond its template out-of-band:
   # the Packer amazon-ebs set (pmm3-ami nightly + release-candidate builds

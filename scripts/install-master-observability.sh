@@ -8,6 +8,8 @@
 #
 # Caller must export JENKINS_HOST (e.g. ps80.cd.percona.com). Fetched at boot by
 # the Terraform on-demand masters and re-run on a live master via SSM.
+# HETZNER_PLUGIN=false (default true) leaves out the /hetzner-prometheus scrape
+# on a master without the Hetzner plugin, where that endpoint answers 403.
 #
 # Idempotent. A re-run validates the config and restarts Alloy so changes take
 # effect (a plain enable --now would not reload a running unit).
@@ -20,6 +22,12 @@ if [[ -z "${JENKINS_HOST:-}" ]]; then
 fi
 
 MASTER_LABEL="${JENKINS_HOST%.percona.com}"
+
+HETZNER_PLUGIN="${HETZNER_PLUGIN:-true}"
+if [[ "${HETZNER_PLUGIN}" != "true" && "${HETZNER_PLUGIN}" != "false" ]]; then
+    echo "FATAL: HETZNER_PLUGIN must be true or false, got '${HETZNER_PLUGIN}'" >&2
+    exit 1
+fi
 
 # 1. SSM agent for fleet-wide Run Command fan-out.
 dnf -y install amazon-ssm-agent || yum -y install amazon-ssm-agent
@@ -90,15 +98,22 @@ if [[ -f /etc/alloy/config.alloy ]]; then
     cp -a /etc/alloy/config.alloy /etc/alloy-config.alloy.bak
 fi
 
-cat > /etc/alloy/config.alloy <<CONFIG
-prometheus.scrape "hetzner_local" {
+# The block keeps its trailing blank line so the rendered config of a master
+# with the plugin stays byte for byte the same.
+HETZNER_SCRAPE=""
+if [[ "${HETZNER_PLUGIN}" == "true" ]]; then
+    HETZNER_SCRAPE='prometheus.scrape "hetzner_local" {
   targets         = [{__address__ = "localhost:8080", __metrics_path__ = "/hetzner-prometheus/"}]
   forward_to      = [prometheus.remote_write.mimir.receiver]
   scrape_interval = "60s"
   scrape_timeout  = "15s"
 }
 
-prometheus.exporter.unix "node" {
+'
+fi
+
+cat > /etc/alloy/config.alloy <<CONFIG
+${HETZNER_SCRAPE}prometheus.exporter.unix "node" {
   set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "netdev", "loadavg", "uname", "vmstat", "stat", "pressure", "netstat", "ethtool", "filefd", "textfile"]
 
   textfile {

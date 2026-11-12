@@ -331,6 +331,12 @@ variable "jvm_extra_opts" {
   }
 }
 
+variable "hetzner_plugin" {
+  description = "Whether the master runs the Hetzner Cloud plugin. false renders HETZNER_PLUGIN=false into the user-data call of install-master-observability.sh, so the master-side Alloy does not scrape /hetzner-prometheus, which answers 403 without the plugin. true leaves the user-data unchanged."
+  type        = bool
+  default     = true
+}
+
 variable "launch_template_name" {
   description = "Override the master launch template name. null derives `<SHORT>MasterTemplate` (preserves ps3). Set a distinct value where a same-named CFN launch template must coexist during a CFN->TF cutover (ps80's CFN JMasterTemplate is literally `PS80MasterTemplate`)."
   type        = string
