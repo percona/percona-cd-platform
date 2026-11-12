@@ -8,6 +8,8 @@ is allowed.
 The listener-attributes annotation sets Strict-Transport-Security on the
 shared HTTPS listener, so the ALB sends it for every host of the group,
 ps3 included. It also renders identically on every Ingress here.
+deletion_protection.enabled=true keeps the controller and the AWS API from
+deleting the ALB while the annotation is in place.
 */}}
 {{- range .Values.hosts }}
 apiVersion: networking.k8s.io/v1
@@ -26,9 +28,9 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-port: '8081'
     alb.ingress.kubernetes.io/listener-attributes.HTTPS-443: routing.http.response.strict_transport_security.header_value=max-age={{ int64 $.Values.hstsMaxAgeSeconds }}
     {{- if $.Values.ingress.accessLogs.enabled }}
-    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }},access_logs.s3.enabled=true,access_logs.s3.bucket={{ $.Values.ingress.accessLogs.bucket }},access_logs.s3.prefix={{ $.Values.ingress.accessLogs.prefix }}
+    alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=true,idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }},access_logs.s3.enabled=true,access_logs.s3.bucket={{ $.Values.ingress.accessLogs.bucket }},access_logs.s3.prefix={{ $.Values.ingress.accessLogs.prefix }}
     {{- else }}
-    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }}
+    alb.ingress.kubernetes.io/load-balancer-attributes: deletion_protection.enabled=true,idle_timeout.timeout_seconds={{ $.Values.ingress.idleTimeoutSeconds }}
     {{- end }}
 spec:
   ingressClassName: alb
