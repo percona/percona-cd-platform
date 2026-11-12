@@ -7,8 +7,8 @@ import java.util.logging.Logger
 def cloudName = "cloud-htz"
 
 imageMap = [:]                          // ID          TYPE     NAME                 DESCRIPTION          ARCHITECTURE   IMAGE SIZE   DISK SIZE   CREATED                         DEPRECATED
-imageMap['fedora42-x64']     = '342035601' // 342035601   system   fedora-43            Fedora 43            x86
-imageMap['fedora42-aarch64'] = '342035605' // 342035605   system   fedora-43            Fedora 43            arm
+imageMap['fedora42-x64']     = '387893188' // 387893188   system   fedora-44            Fedora 44            x86
+imageMap['fedora42-aarch64'] = '387893189' // 387893189   system   fedora-44            Fedora 44            arm
 imageMap['launcher-x64']  = imageMap['fedora42-x64']
 
 execMap = [:]
@@ -89,7 +89,7 @@ initMap['fedora-docker'] = '''#!/bin/bash -x
         sleep 1
         echo "try again"
     done
-    until sudo dnf install -y java-21-openjdk-headless ca-certificates curl gnupg unzip git dnf-plugins-core cronie bc npm make qemu-user-static; do
+    until sudo dnf install -y java-25-openjdk-headless ca-certificates curl gnupg unzip git dnf-plugins-core cronie bc npm make qemu-user-static; do
         sleep 1
         echo "try again"
     done
