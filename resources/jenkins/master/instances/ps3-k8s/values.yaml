@@ -254,7 +254,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: nbg1
                   name: ubuntu2404-x64-nbg1-min
@@ -352,7 +352,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: nbg1
                   name: ubuntu2404-aarch64-nbg1-min
@@ -450,7 +450,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: hel1
                   name: ubuntu2404-x64-hel1-min
@@ -548,7 +548,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: hel1
                   name: ubuntu2404-aarch64-hel1-min
@@ -646,7 +646,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64-min docker-ubuntu2404-x64-min ubuntu2404-x64-min
                   location: fsn1
                   name: ubuntu2404-x64-fsn1-min
@@ -744,7 +744,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64-min docker-ubuntu2404-aarch64-min ubuntu2404-aarch64-min
                   location: fsn1
                   name: ubuntu2404-aarch64-fsn1-min
@@ -842,7 +842,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: nbg1
                   name: ubuntu2404-x64-nbg1
@@ -940,7 +940,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: nbg1
                   name: ubuntu2404-aarch64-nbg1
@@ -1038,7 +1038,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: hel1
                   name: ubuntu2404-x64-hel1
@@ -1136,7 +1136,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: hel1
                   name: ubuntu2404-aarch64-hel1
@@ -1234,7 +1234,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-x64 docker-ubuntu2404-x64 ubuntu2404-x64
                   location: fsn1
                   name: ubuntu2404-x64-fsn1
@@ -1332,7 +1332,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547270'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: docker-aarch64 docker-ubuntu2404-aarch64 ubuntu2404-aarch64
                   location: fsn1
                   name: ubuntu2404-aarch64-fsn1
@@ -1430,7 +1430,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: launcher-x64
                   location: nbg1
                   name: launcher-x64-nbg1
@@ -1529,7 +1529,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: launcher-x64
                   location: hel1
                   name: launcher-x64-hel1
@@ -1628,7 +1628,7 @@ jenkins:
                       connectionMethod: public
                       sshCredentialsId: htz.cd.key
                   image: '161547269'
-                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelStr: launcher-x64
                   location: fsn1
                   name: launcher-x64-fsn1
@@ -1806,7 +1806,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -1915,7 +1915,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2005,7 +2005,7 @@ jenkins:
 
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: micro-amazon master
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2111,7 +2111,7 @@ jenkins:
                         #echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-al2023-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2201,7 +2201,7 @@ jenkins:
 
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-ol-8-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2291,7 +2291,7 @@ jenkins:
 
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-ol-9-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2363,7 +2363,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-rhel-10-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2493,7 +2493,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: min-bionic-x64 asan
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2623,7 +2623,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-buster-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2753,7 +2753,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelString: 'min-bookworm-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -2883,7 +2883,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bullseye-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3013,7 +3013,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelString: 'min-trixie-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3143,7 +3143,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-stretch-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3273,7 +3273,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-xenial-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3387,7 +3387,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-focal '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3501,7 +3501,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-jammy '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3615,7 +3615,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-noble '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3729,7 +3729,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-resolute '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3850,7 +3850,7 @@ jenkins:
                         /opt/temurin-21/bin/java -version
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-bullseye '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -3959,7 +3959,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4089,7 +4089,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bookworm-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4219,7 +4219,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bullseye-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4349,7 +4349,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-jammy-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4479,7 +4479,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-noble-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4609,7 +4609,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-resolute-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4739,7 +4739,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-trixie-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4845,7 +4845,7 @@ jenkins:
                         #echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-al2023-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -4961,7 +4961,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5070,7 +5070,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5160,7 +5160,7 @@ jenkins:
 
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: micro-amazon master
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5266,7 +5266,7 @@ jenkins:
                         #echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-al2023-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5356,7 +5356,7 @@ jenkins:
 
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-ol-8-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5446,7 +5446,7 @@ jenkins:
 
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-ol-9-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5518,7 +5518,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-rhel-10-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5648,7 +5648,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: min-bionic-x64 asan
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5778,7 +5778,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-buster-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -5908,7 +5908,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelString: 'min-bookworm-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6038,7 +6038,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bullseye-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6168,7 +6168,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                  jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
                   labelString: 'min-trixie-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6298,7 +6298,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-stretch-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6428,7 +6428,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '60'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-xenial-x64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6542,7 +6542,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-focal '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6656,7 +6656,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-jammy '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6770,7 +6770,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-noble '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -6884,7 +6884,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-resolute '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7005,7 +7005,7 @@ jenkins:
                         /opt/temurin-21/bin/java -version
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-bullseye '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7114,7 +7114,7 @@ jenkins:
                         echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'docker-32gb-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7244,7 +7244,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bookworm-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7374,7 +7374,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: /opt/temurin-21/bin/java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-bullseye-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7504,7 +7504,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-jammy-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7634,7 +7634,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-noble-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7764,7 +7764,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-resolute-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -7894,7 +7894,7 @@ jenkins:
                         sudo install -o $(id -u -n) -g $(id -g -n) -d /mnt/jenkins
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-trixie-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true
@@ -8000,7 +8000,7 @@ jenkins:
                         #echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
                   instanceCapStr: '40'
                   javaPath: java
-                  jvmopts: -Xmx512m -Xms512m
+                  jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
                   labelString: 'min-al2023-aarch64 '
                   maxTotalUses: -1
                   metadataEndpointEnabled: true

@@ -82,7 +82,7 @@ FLEETS.each { Map f ->
     try {
     def sshConn = new SSHConnector(
         22, SSH_CRED_ID,
-        '', '', '', '',
+        '-XX:-UseBASE64Intrinsics', '', '', '',
         null, null, null,
         new NonVerifyingKeyVerificationStrategy()
     )

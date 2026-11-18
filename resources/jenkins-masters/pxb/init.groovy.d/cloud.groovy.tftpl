@@ -381,7 +381,7 @@ labelMap['min-bullseye-x64'] = ''
 labelMap['min-bookworm-x64'] = ''
 
 jvmoptsMap = [:]
-jvmoptsMap['docker'] = '-Xmx512m -Xms512m'
+jvmoptsMap['docker'] = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 jvmoptsMap['docker-32gb'] = jvmoptsMap['docker']
 jvmoptsMap['micro-amazon'] = jvmoptsMap['docker']
 jvmoptsMap['min-bionic-x64'] = jvmoptsMap['docker']
@@ -395,7 +395,7 @@ jvmoptsMap['min-ol-8-x64'] = jvmoptsMap['docker']
 jvmoptsMap['min-ol-9-x64'] = jvmoptsMap['docker']
 jvmoptsMap['min-buster-x64'] = jvmoptsMap['docker']
 jvmoptsMap['min-bullseye-x64'] = jvmoptsMap['docker']
-jvmoptsMap['min-bookworm-x64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-x64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.39/src/main/java/hudson/plugins/ec2/SlaveTemplate.java
 SlaveTemplate getTemplate(String OSType) {

@@ -355,7 +355,7 @@ labelMap['min-bookworm-arm64'] = 'min-bookworm-arm64'
 labelMap['min-trixie-arm64']   = 'min-trixie-arm64'
 
 jvmoptsMap = [:]
-jvmoptsMap['min-rhel-8-x64']     = '-Xmx512m -Xms512m'
+jvmoptsMap['min-rhel-8-x64']     = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 jvmoptsMap['min-ol-8-x64']       = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-rhel-9-x64']     = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-ol-9-x64']       = jvmoptsMap['min-rhel-8-x64']
@@ -363,8 +363,8 @@ jvmoptsMap['min-alma-10-x64']    = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-jammy-x64']      = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-noble-x64']      = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-resolute-x64']   = jvmoptsMap['min-rhel-8-x64']
-jvmoptsMap['min-bookworm-x64']   = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
-jvmoptsMap['min-trixie-x64']     = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-x64']   = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
+jvmoptsMap['min-trixie-x64']     = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 
 jvmoptsMap['min-ol-8-arm64']     = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-ol-9-arm64']     = jvmoptsMap['min-rhel-8-x64']
@@ -372,8 +372,8 @@ jvmoptsMap['min-alma-10-arm64']  = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-jammy-arm64']    = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-noble-arm64']    = jvmoptsMap['min-rhel-8-x64']
 jvmoptsMap['min-resolute-arm64'] = jvmoptsMap['min-rhel-8-x64']
-jvmoptsMap['min-bookworm-arm64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
-jvmoptsMap['min-trixie-arm64']   = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-arm64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
+jvmoptsMap['min-trixie-arm64']   = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/SlaveTemplate.java
 // https://javadoc.jenkins.io/plugin/ec2/index.html?hudson/plugins/ec2/UnixData.html
@@ -519,4 +519,3 @@ String region = 'us-east-2'
 jenkins.save()
 
 logger.info("Cloud init finished")
-

@@ -531,7 +531,7 @@ labelMap['min-bookworm-x64']  = ''
 labelMap['min-trixie-x64']    = ''
 
 jvmoptsMap = [:]
-jvmoptsMap['docker']            = '-Xmx512m -Xms512m'
+jvmoptsMap['docker']            = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 jvmoptsMap['docker-32gb']       = jvmoptsMap['docker']
 jvmoptsMap['docker2']           = jvmoptsMap['docker']
 jvmoptsMap['micro-amazon']      = jvmoptsMap['docker']
@@ -553,7 +553,7 @@ jvmoptsMap['min-stretch-x64']   = jvmoptsMap['docker']
 jvmoptsMap['min-xenial-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-buster-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-bullseye-x64']  = jvmoptsMap['docker']
-jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 jvmoptsMap['min-trixie-x64']    = jvmoptsMap['min-bookworm-x64']
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.41/src/main/java/hudson/plugins/ec2/SlaveTemplate.java

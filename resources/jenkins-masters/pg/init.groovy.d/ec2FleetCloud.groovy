@@ -38,7 +38,7 @@ Jenkins.instance.clouds.findAll { it.name == CLOUD_NAME }.each {
 
 def sshConn = new SSHConnector(
     22, SSH_CRED_ID,
-    '', '', '', '',
+    '-XX:-UseBASE64Intrinsics', '', '', '',
     null, null, null,
     new NonVerifyingKeyVerificationStrategy()
 )

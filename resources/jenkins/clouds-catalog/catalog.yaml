@@ -45,7 +45,7 @@ hetzner_defaults:
     root:
       connectionMethod: public
       sshCredentialsId: htz.cd.key
-  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+  jvmOpts: -Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
   network: '10442325'
   primaryIp: default
   remoteFs: /mnt/jenkins/
