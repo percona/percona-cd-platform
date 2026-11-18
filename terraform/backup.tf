@@ -108,3 +108,23 @@ resource "aws_backup_selection" "by_workload" {
     value = each.key
   }
 }
+
+# The ps3 home disk was created outside the cluster and is bound through a
+# static PV, so it never gets the StorageClass workload tag. Tag it for the
+# jenkins selection. The lookup matches exactly one in-use volume or fails.
+data "aws_ebs_volume" "ps3_jenkins_home" {
+  filter {
+    name   = "tag:Name"
+    values = ["ps3-clone-jenkins-home"]
+  }
+  filter {
+    name   = "status"
+    values = ["in-use"]
+  }
+}
+
+resource "aws_ec2_tag" "ps3_jenkins_home_backup" {
+  resource_id = data.aws_ebs_volume.ps3_jenkins_home.id
+  key         = "workload"
+  value       = "jenkins"
+}
