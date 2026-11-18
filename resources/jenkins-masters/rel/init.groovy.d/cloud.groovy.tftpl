@@ -645,7 +645,7 @@ labelMap['min-bookworm-aarch64'] = ''
 labelMap['min-trixie-aarch64']   = ''
 
 jvmoptsMap = [:]
-jvmoptsMap['docker']            = '-Xmx512m -Xms512m'
+jvmoptsMap['docker']            = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 jvmoptsMap['docker-32gb']       = jvmoptsMap['docker']
 jvmoptsMap['docker-64gb']       = jvmoptsMap['docker']
 jvmoptsMap['docker2']           = jvmoptsMap['docker']
@@ -664,7 +664,7 @@ jvmoptsMap['min-rhel-10-x64']   = jvmoptsMap['docker']
 jvmoptsMap['min-al2023-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-buster-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-bullseye-x64']  = jvmoptsMap['docker']
-jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 jvmoptsMap['min-trixie-x64']    = jvmoptsMap['min-bookworm-x64']
 
 jvmoptsMap['docker-32gb-aarch64'] = jvmoptsMap['docker']

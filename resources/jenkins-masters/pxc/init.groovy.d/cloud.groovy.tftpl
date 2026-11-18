@@ -953,7 +953,7 @@ maxUseMap['ramdisk-bookworm-x64'] = maxUseMap['singleUse']
 maxUseMap['performance-centos-6-x64'] = maxUseMap['singleUse']
 
 jvmoptsMap = [:]
-jvmoptsMap['docker']            = '-Xmx512m -Xms512m'
+jvmoptsMap['docker']            = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 jvmoptsMap['docker-32gb']       = jvmoptsMap['docker']
 jvmoptsMap['micro-amazon']      = jvmoptsMap['docker']
 jvmoptsMap['min-bionic-x64']    = jvmoptsMap['docker']
@@ -972,13 +972,13 @@ jvmoptsMap['min-stretch-x64']   = jvmoptsMap['docker']
 jvmoptsMap['min-buster-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-xenial-x64']    = jvmoptsMap['docker']
 jvmoptsMap['min-bullseye-x64']  = jvmoptsMap['docker']
-jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
-jvmoptsMap['min-trixie-x64']    = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['min-bookworm-x64']  = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
+jvmoptsMap['min-trixie-x64']    = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 jvmoptsMap['min-rhel-10-x64']   = jvmoptsMap['docker']
-jvmoptsMap['min-al2023-x64']    = '-Xmx512m -Xms512m'
-jvmoptsMap['min-al2023-aarch64'] = '-Xmx512m -Xms512m'
-jvmoptsMap['metal-x64']     = '-Xmx512m -Xms512m'
-jvmoptsMap['metal-aarch64'] = '-Xmx512m -Xms512m'
+jvmoptsMap['min-al2023-x64']    = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
+jvmoptsMap['min-al2023-aarch64'] = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
+jvmoptsMap['metal-x64']     = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
+jvmoptsMap['metal-aarch64'] = '-Xmx512m -Xms512m -XX:-UseBASE64Intrinsics'
 
 jvmoptsMap['ramdisk-centos-6-x64'] = jvmoptsMap['docker']
 jvmoptsMap['ramdisk-centos-7-x64'] = jvmoptsMap['docker']
@@ -994,9 +994,9 @@ jvmoptsMap['ramdisk-xenial-x64']   = jvmoptsMap['docker']
 jvmoptsMap['ramdisk-stretch-x64']  = jvmoptsMap['docker']
 jvmoptsMap['ramdisk-buster-x64']   = jvmoptsMap['docker']
 jvmoptsMap['ramdisk-bullseye-x64'] = jvmoptsMap['docker']
-jvmoptsMap['ramdisk-bookworm-x64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmoptsMap['ramdisk-bookworm-x64'] = '-Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 
-jvmoptsMap['performance-centos-6-x64'] = 'perf-centos-6-x64'
+jvmoptsMap['performance-centos-6-x64'] = 'perf-centos-6-x64 -XX:-UseBASE64Intrinsics'
 
 // https://github.com/jenkinsci/ec2-plugin/blob/ec2-1.39/src/main/java/hudson/plugins/ec2/SlaveTemplate.java
 SlaveTemplate getTemplate(String OSType, String AZ) {

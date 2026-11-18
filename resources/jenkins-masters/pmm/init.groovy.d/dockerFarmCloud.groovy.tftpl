@@ -108,7 +108,7 @@ Closure<SlaveTemplate> buildTemplate = { Map row ->
         'ec2-user',                                          // remoteAdmin
         new UnixData('', '', '', '22', ''),                  // amiType
         row.java,                                            // javaPath
-        '',                                                  // jvmopts
+        '-XX:-UseBASE64Intrinsics',                                                  // jvmopts
         false,                                               // stopOnTerminate
         row.subnets,                                         // subnetId (whitespace-delimited list rotates per launch)
         tags,                                                // tags

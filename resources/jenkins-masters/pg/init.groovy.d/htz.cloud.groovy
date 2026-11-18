@@ -48,7 +48,7 @@ bootDeadlineMap['launcher-x64-hel1']  = bootDeadlineMap['default']
 bootDeadlineMap['launcher-x64-fsn1']  = bootDeadlineMap['default']
 
 jvmOptsMap = [:]
-jvmOptsMap['deb12']         = '-Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED'
+jvmOptsMap['deb12']         = '-Xms4g -Xmx16g -Xss4m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics'
 jvmOptsMap['deb12-x64-nbg1']     = jvmOptsMap['deb12']
 jvmOptsMap['deb12-x64-hel1']     = jvmOptsMap['deb12']
 jvmOptsMap['deb12-x64-fsn1']     = jvmOptsMap['deb12']

@@ -48,7 +48,7 @@ ec2:
     ebsOptimized: true
     init: docker
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker '
     numExecutors: 1
     os: docker
@@ -62,7 +62,7 @@ ec2:
     ebsOptimized: false
     init: docker
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb '
     numExecutors: 1
     os: docker-32gb
@@ -76,7 +76,7 @@ ec2:
     ebsOptimized: true
     init: micro-amazon
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: micro-amazon master
     numExecutors: 30
     os: micro-amazon
@@ -90,7 +90,7 @@ ec2:
     ebsOptimized: true
     init: min-al2023-aarch64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-al2023-x64 '
     numExecutors: 1
     os: min-al2023-x64
@@ -104,7 +104,7 @@ ec2:
     ebsOptimized: true
     init: micro-amazon
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-ol-8-x64 '
     numExecutors: 1
     os: min-ol-8-x64
@@ -118,7 +118,7 @@ ec2:
     ebsOptimized: false
     init: micro-amazon
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-ol-9-x64 '
     numExecutors: 1
     os: min-ol-9-x64
@@ -132,7 +132,7 @@ ec2:
     ebsOptimized: true
     init: min-rhel-10-x64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-rhel-10-x64 '
     numExecutors: 1
     os: min-rhel-10-x64
@@ -147,7 +147,7 @@ ec2:
     init: min-bionic-x64
     instanceCapStr: '60'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: min-bionic-x64 asan
     numExecutors: 1
     os: min-bionic-x64
@@ -161,7 +161,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-buster-x64 '
     numExecutors: 1
     os: min-buster-x64
@@ -176,7 +176,7 @@ ec2:
     init: min-bionic-x64
     instanceCapStr: '60'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
     labelString: 'min-bookworm-x64 '
     numExecutors: 1
     os: min-bookworm-x64
@@ -191,7 +191,7 @@ ec2:
     init: min-bionic-x64
     instanceCapStr: '60'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-bullseye-x64 '
     numExecutors: 1
     os: min-bullseye-x64
@@ -205,7 +205,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+    jvmopts: -Xmx512m -Xms512m --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED -XX:-UseBASE64Intrinsics
     labelString: 'min-trixie-x64 '
     numExecutors: 1
     os: min-trixie-x64
@@ -219,7 +219,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-stretch-x64 '
     numExecutors: 1
     os: min-stretch-x64
@@ -233,7 +233,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '60'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-xenial-x64 '
     numExecutors: 1
     os: min-xenial-x64
@@ -247,7 +247,7 @@ ec2:
     ebsOptimized: false
     init: docker-32gb-focal
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-focal '
     numExecutors: 1
     os: docker-32gb-focal
@@ -261,7 +261,7 @@ ec2:
     ebsOptimized: false
     init: docker-32gb-focal
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-jammy '
     numExecutors: 1
     os: docker-32gb-jammy
@@ -275,7 +275,7 @@ ec2:
     ebsOptimized: false
     init: docker-32gb-focal
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-noble '
     numExecutors: 1
     os: docker-32gb-noble
@@ -289,7 +289,7 @@ ec2:
     ebsOptimized: false
     init: docker-32gb-focal
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-resolute '
     numExecutors: 1
     os: docker-32gb-resolute
@@ -304,7 +304,7 @@ ec2:
     init: docker-32gb-bullseye
     instanceCapStr: '40'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-bullseye '
     numExecutors: 1
     os: docker-32gb-bullseye
@@ -318,7 +318,7 @@ ec2:
     ebsOptimized: true
     init: docker
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'docker-32gb-aarch64 '
     numExecutors: 1
     os: docker-32gb-aarch64
@@ -333,7 +333,7 @@ ec2:
     init: min-bionic-x64
     instanceCapStr: '40'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-bookworm-aarch64 '
     numExecutors: 1
     os: min-bookworm-aarch64
@@ -348,7 +348,7 @@ ec2:
     init: min-bionic-x64
     instanceCapStr: '40'
     javaPath: /opt/temurin-21/bin/java
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-bullseye-aarch64 '
     numExecutors: 1
     os: min-bullseye-aarch64
@@ -362,7 +362,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-jammy-aarch64 '
     numExecutors: 1
     os: min-jammy-aarch64
@@ -376,7 +376,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-noble-aarch64 '
     numExecutors: 1
     os: min-noble-aarch64
@@ -390,7 +390,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-resolute-aarch64 '
     numExecutors: 1
     os: min-resolute-aarch64
@@ -404,7 +404,7 @@ ec2:
     ebsOptimized: true
     init: min-bionic-x64
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-trixie-aarch64 '
     numExecutors: 1
     os: min-trixie-aarch64
@@ -418,7 +418,7 @@ ec2:
     ebsOptimized: true
     init: min-al2023-aarch64
     instanceCapStr: '40'
-    jvmopts: -Xmx512m -Xms512m
+    jvmopts: -Xmx512m -Xms512m -XX:-UseBASE64Intrinsics
     labelString: 'min-al2023-aarch64 '
     numExecutors: 1
     os: min-al2023-aarch64
