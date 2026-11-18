@@ -164,7 +164,7 @@ alloy:
     # strips the header, and proxy_passes to localhost.
     extraContainers:
       - name: nginx-auth
-        image: nginx:1.27-alpine
+        image: nginx:1.30.7-alpine
         imagePullPolicy: IfNotPresent
         ports:
           - name: prom-rw
