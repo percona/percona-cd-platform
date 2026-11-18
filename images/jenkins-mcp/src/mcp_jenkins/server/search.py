@@ -14,7 +14,6 @@ a worker thread (`call_sync_fn_in_threadpool`), so keeping this function sync is
 responsive. Do not add `async` back without moving the blocking work off the loop yourself.
 """
 
-import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -24,7 +23,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
-from mcp_jenkins.jenkins.rest_client import hoist_inline_flags
+from mcp_jenkins.jenkins.rest_client import compile_user_regex, hoist_inline_flags
 from mcp_jenkins.server import mcp
 
 if TYPE_CHECKING:
@@ -276,9 +275,9 @@ def search_build_logs(
 
     effective_pattern = hoist_inline_flags(f'(?i){pattern}' if ignore_case else pattern)
     try:
-        re.compile(effective_pattern)
-    except re.error as e:
-        msg = f'invalid pattern regex: {e}'
+        compile_user_regex(effective_pattern)
+    except ValueError as e:
+        msg = f'pattern: {e}'
         raise ValueError(msg) from e
     client = jenkins(ctx, master)
 

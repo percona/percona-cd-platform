@@ -41,7 +41,7 @@ _MAX_BYTES_SCANNED = 64 * 1024 * 1024  # grep: stop after this many (decompresse
 _MAX_LINE_LEN = 8192  # grep: cap a single line at read time (a no-newline blob never buffers past this)
 _MAX_MATCHES = 200  # grep: hard ceiling on returned matches
 _MAX_CONTEXT_LINES = 10  # grep: hard ceiling on context_lines
-_MAX_PATTERN_LEN = 2000  # grep: reject longer regex patterns (ReDoS surface)
+_MAX_PATTERN_LEN = 2000  # grep: reject longer patterns, literal or regex
 _MAX_ENTRIES = 2000  # list: hard ceiling on returned members
 _MAX_MEMBERS_SCANNED = 50000  # list/grep/extract: hard ceiling on members examined
 _MAX_DECOMPRESSED_TOTAL = 256 * 1024 * 1024  # any tar op: cumulative gunzipped bytes (bomb guard)
@@ -153,11 +153,7 @@ def _build_matcher(pattern: str, literal: bool, ignore_case: bool) -> Callable[[
             needle = pattern.lower()
             return lambda line: needle in line.lower()
         return lambda line: pattern in line
-    try:
-        rx = compile_user_regex(pattern, re.IGNORECASE if ignore_case else 0)
-    except re.error as e:
-        msg = f'invalid regex pattern: {e}'
-        raise ValueError(msg) from e
+    rx = compile_user_regex(pattern, re.IGNORECASE if ignore_case else 0)
     return lambda line: rx.search(line) is not None
 
 
@@ -378,8 +374,8 @@ def grep_build_artifact(
         number: Build number, if None the last build
         archive_member: If set, grep this member inside the .tar.gz at relative_path
         ignore_case: Case-insensitive match
-        literal: Treat pattern as a literal substring (default). Set False for regex (bounded input,
-            but Python re has no timeout, so a pathological regex can still burn CPU on a long line).
+        literal: Treat pattern as a literal substring (default). Set False for an RE2 regex (linear
+            time, no backreferences or lookaround).
         context_lines: Lines of context to keep before/after each match (capped at 10)
         max_matches: Max matches to return per file (capped at 200, and 200 across a glob)
         context: Alias of context_lines

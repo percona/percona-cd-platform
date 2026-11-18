@@ -6,6 +6,7 @@ from functools import reduce
 from typing import Literal
 from urllib.parse import quote
 
+import re2
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -24,7 +25,7 @@ from mcp_jenkins.jenkins.model.item import (
 from mcp_jenkins.jenkins.model.node import Node
 from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
-_MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS surface on an authenticated call)
+MAX_USER_PATTERN_LEN = 2000  # longest caller-supplied regex accepted by any tool
 
 _PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
 
@@ -103,49 +104,150 @@ def _parse_parameter_definitions(properties: list | None) -> list[dict]:
     return params
 
 
-# A bare global flag group such as (?i) or (?im), not a scoped (?i:...) and not an escaped \(.
-_GLOBAL_FLAG_GROUP = re.compile(r'(?<!\\)\(\?([aiLmsux]+)\)')
+# Python flag letters of a global group. RE2 knows i, m and s. a and u are dropped because RE2
+# classes are ASCII and its input is UTF-8 already. x and L have no RE2 form.
+_PY_FLAG_LETTERS = frozenset('aiLmsux')
+_RE2_FLAG_LETTERS = 'ims'
+_DROPPED_FLAG_LETTERS = frozenset('au')
+_FLAG_LETTER_OF = {re.IGNORECASE: 'i', re.MULTILINE: 'm', re.DOTALL: 's'}
+
+# A compiled RE2 program is cached by the re2 module (128 entries), so its memory budget bounds the cache.
+_RE2_OPTIONS = re2.Options()
+_RE2_OPTIONS.max_mem = 1 << 20
+_RE2_OPTIONS.log_errors = False
+
+# Constructs that backtracking engines accept and RE2 refuses, with the name the caller sees.
+_UNSUPPORTED_GROUPS = (
+    ('(?<=', 'lookbehind (?<=...)'),
+    ('(?<!', 'negative lookbehind (?<!...)'),
+    ('(?=', 'lookahead (?=...)'),
+    ('(?!', 'negative lookahead (?!...)'),
+    ('(?>', 'atomic group (?>...)'),
+    ('(?P=', 'named backreference (?P=name)'),
+    ('(?(', 'conditional group (?(...)...)'),
+    ('(?#', 'comment group (?#...)'),
+)
+
+
+def _scan_pattern(pattern: str) -> tuple[list[tuple[int, int, str]], str | None]:
+    """Walk a pattern outside escapes and character classes.
+
+    Returns the spans of bare global flag groups such as (?i), and the name of the first construct
+    that RE2 does not support, or None.
+    """
+    flag_groups: list[tuple[int, int, str]] = []
+    unsupported: str | None = None
+    i, n, in_class = 0, len(pattern), False
+    while i < n:
+        ch = pattern[i]
+        if ch == '\\':
+            nxt = pattern[i + 1 : i + 2]
+            if unsupported is None and not in_class and nxt in set('123456789'):
+                unsupported = f'backreference \\{nxt}'
+            elif unsupported is None and nxt == 'Z':
+                unsupported = r'\Z (use \z for the end of the text)'
+            i += 2
+            continue
+        if in_class:
+            in_class = ch != ']'
+            i += 1
+            continue
+        if ch == '[':
+            i += 1
+            i += pattern[i : i + 1] == '^'
+            i += pattern[i : i + 1] == ']'
+            in_class = True
+            continue
+        if pattern.startswith('(?', i):
+            end = i + 2
+            while end < n and pattern[end] in _PY_FLAG_LETTERS:
+                end += 1
+            if end > i + 2 and pattern[end : end + 1] == ')':
+                flag_groups.append((i, end + 1, pattern[i + 2 : end]))
+                i = end + 1
+                continue
+            if unsupported is None:
+                unsupported = next(
+                    (name for prefix, name in _UNSUPPORTED_GROUPS if pattern.startswith(prefix, i)), None
+                )
+        elif ch in '*+?}' and pattern[i + 1 : i + 2] == '+' and unsupported is None:
+            unsupported = f'possessive quantifier {ch}+'
+        i += 1
+    return flag_groups, unsupported
 
 
 def hoist_inline_flags(pattern: str) -> str:
     """Move global flag groups that are not at the start, like 'a|(?i)b', to the front.
 
-    Python rejects them ('global flags not at the start'), callers write them anyway. A pattern
-    that compiles is returned unchanged, so this only rewrites patterns that would fail.
+    Callers write them anywhere and mean the whole pattern. RE2 would apply a later group only
+    from its position on, so every bare group is merged into one group at the front.
     """
-    try:
-        re.compile(pattern)
-    except re.error as e:
-        if 'global flags not at the start' not in str(e):
-            return pattern
-    else:
+    groups, _ = _scan_pattern(pattern)
+    if not groups or (len(groups) == 1 and groups[0][0] == 0):
         return pattern
-    flags = ''.join(dict.fromkeys(''.join(_GLOBAL_FLAG_GROUP.findall(pattern))))
-    return f'(?{flags}){_GLOBAL_FLAG_GROUP.sub("", pattern)}' if flags else pattern
+    flags = ''.join(dict.fromkeys(''.join(letters for _, _, letters in groups)))
+    body, cursor = [], 0
+    for start, end, _ in groups:
+        body.append(pattern[cursor:start])
+        cursor = end
+    body.append(pattern[cursor:])
+    return f'(?{flags}){"".join(body)}'
 
 
-def compile_user_regex(pattern: str, flags: int = 0) -> re.Pattern:
-    """re.compile for a caller-supplied pattern, with misplaced global flags moved to the front."""
-    return re.compile(hoist_inline_flags(pattern), flags)
+def compile_user_regex(pattern: str, flags: int = 0) -> 're2._Regexp':
+    """Compile a caller-supplied pattern with the linear-time RE2 engine.
+
+    Global flag groups are hoisted, and IGNORECASE, MULTILINE and DOTALL in flags become inline
+    flags. Any failure raises ValueError with a message that names the cause.
+    """
+    if len(pattern) > MAX_USER_PATTERN_LEN:
+        msg = f'pattern too long ({len(pattern)} > {MAX_USER_PATTERN_LEN} chars)'
+        raise ValueError(msg)
+    hoisted = hoist_inline_flags(pattern)
+    groups, unsupported = _scan_pattern(hoisted)
+    letters = set(groups[0][2]) if groups and groups[0][0] == 0 else set()
+    body = hoisted[groups[0][1] :] if letters else hoisted
+    for flag, letter in _FLAG_LETTER_OF.items():
+        if flags & flag:
+            letters.add(letter)
+    if flags & ~(re.IGNORECASE | re.MULTILINE | re.DOTALL):
+        msg = f'invalid regex pattern: flags {flags!r} are not supported'
+        raise ValueError(msg)
+    letters -= _DROPPED_FLAG_LETTERS
+    if unknown := sorted(letters - set(_RE2_FLAG_LETTERS)):
+        msg = (
+            f'invalid regex pattern: the inline flag (?{"".join(unknown)}) is not supported. '
+            f'Use only the flags i, m and s.'
+        )
+        raise ValueError(msg)
+    prefix = ''.join(c for c in _RE2_FLAG_LETTERS if c in letters)
+    final = f'(?{prefix}){body}' if prefix else body
+    try:
+        return re2.compile(final, _RE2_OPTIONS)
+    except (re2.error, UnicodeEncodeError) as e:
+        if unsupported is not None:
+            msg = (
+                f'invalid regex pattern: {unsupported} is not supported. Regex filters use the '
+                'linear-time RE2 engine, which has no backreferences, lookaround, atomic groups or '
+                'possessive quantifiers. Simplify the pattern, or use literal matching where the tool '
+                'offers it (literal=True).'
+            )
+        else:
+            detail = e.args[0] if e.args else e
+            if isinstance(detail, bytes):
+                detail = detail.decode('utf-8', 'replace')
+            msg = f'invalid regex pattern: {detail} (RE2 syntax)'
+        raise ValueError(msg) from e
 
 
-def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
-    """Compile a query_items filter pattern with a length cap and a sanitized error.
+def _compile_query_pattern(pattern: str | None) -> 're2._Regexp | None':
+    """Compile a query_items filter pattern with the caller-pattern rules of compile_user_regex.
 
-    The matched strings are short (names/labels), but an uncapped or invalid user regex is a CPU /
-    error-leak surface, so bound the input and turn re.error into a clean ValueError (mirrors the
-    grep_build_artifact pattern guard).
+    An invalid, unsupported or over-long pattern raises a clean ValueError before any API call.
     """
     if not pattern:
         return None
-    if len(pattern) > _MAX_QUERY_PATTERN_LEN:
-        msg = f'pattern too long ({len(pattern)} > {_MAX_QUERY_PATTERN_LEN} chars)'
-        raise ValueError(msg)
-    try:
-        return compile_user_regex(pattern)
-    except re.error as e:
-        msg = f'invalid regex pattern: {e}'
-        raise ValueError(msg) from e
+    return compile_user_regex(pattern)
 
 
 def require_narrow_pattern(pattern: str, tool: str) -> None:

@@ -373,5 +373,8 @@ async def get_readme() -> str:
         '    regex opt-in); list_archive_artifact lists members; extract_archive_artifact pulls one (inline or S3).',
         '  - query_items(label_pattern=...) filters jobs by agent label (arch), but only freestyle/matrix jobs expose',
         '    one; pipeline jobs keep their label in the Jenkinsfile, so they will not match.',
+        '  - Every regex argument (pattern, *_pattern) uses RE2 syntax, at most 2000 characters. RE2 runs in linear',
+        '    time and has no backreferences, lookaround, atomic groups or possessive quantifiers. \\d \\w \\b are',
+        '    ASCII only (use \\pL or \\pN for Unicode), and \\Z is written \\z. Inline flags i, m and s work.',
     ]
     return '\n'.join(lines)
