@@ -10,6 +10,7 @@ Rules, checked against the parameters Jenkins will receive:
 - require: [P]       P must be present and non-blank.
 - allow: {P: [V]}    when P is present its value must be one of V (pair with require to force it).
 - pattern: {P: RE}   when P is present its value must fully match RE.
+- a job with any rule refuses every parameter that its require, allow or pattern does not name.
 
 Every parameter value must be a string, since requests form-encodes a list as repeated fields that
 Jenkins reads as a plain value. A job with rules must use buildWithParameters: the /build endpoint
@@ -47,6 +48,9 @@ class JobRule(BaseModel):
 
     def has_rules(self) -> bool:
         return bool(self.require or self.allow or self.pattern)
+
+    def named(self) -> set[str]:
+        return set(self.require) | set(self.allow) | set(self.pattern)
 
 
 _Grants = dict[str, dict[str, dict[str, JobRule]]]
@@ -87,6 +91,9 @@ def build_denial(master: object, arguments: dict) -> str | None:
         return f'{fullname!r} takes string parameter values only'
     if rule.has_rules() and arguments.get('build_type') != 'buildWithParameters':
         return f'{fullname!r} has parameter rules and must be started with buildWithParameters'
+    unnamed = sorted(set(data) - rule.named()) if rule.has_rules() else []
+    if unnamed:
+        return f'{fullname!r} does not take the parameter {unnamed[0]} from this account'
     for name in rule.require:
         if not data.get(name, '').strip():
             return f'{fullname!r} requires a non-blank {name} parameter'

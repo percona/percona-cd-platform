@@ -147,6 +147,9 @@ config reads stay writers-only, and the master scope still applies.
 - `pattern: {P: RE}` refuses a present `P` that does not fully match `RE`. Use it to force a single
   name in the form the create job generates (no comma lists).
 
+A rule that names parameters refuses every other parameter of the job. List each parameter the
+automation may send in `require`, `allow` or `pattern`, and leave out the ones it must never set.
+
 Every parameter value must be a string, and a job with rules must be started with
 `buildWithParameters`: the `/build` endpoint reads parameters from a submitted `json` form field
 that the rules never see. A service account in `jenkins-mcp-writers` still gets only its grants.

@@ -33,7 +33,8 @@ enableOperate: true
 # username, then master, then job fullname. A grant lets build_item run on that job without the
 # writers group, nothing else in the operate tier. Rules: `require` (present and non-blank),
 # `allow` (value list, when present), `pattern` (full-match regex, when present). A job with rules
-# must be started with buildWithParameters. Runbook: docs/runbooks/jenkins-mcp-operate.md.
+# must be started with buildWithParameters. A job with rules refuses every parameter that its rules
+# do not name, so list each parameter the automation may send. Runbook: docs/runbooks/jenkins-mcp-operate.md.
 serviceGrants:
   pmm-automation:
     pmm:
