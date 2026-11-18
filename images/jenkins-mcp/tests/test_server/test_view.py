@@ -19,7 +19,7 @@ async def test_get_all_views(mock_jenkins, mocker):
         {'name': 'frontend', 'url': 'https://example.com/view/frontend/'},
     ]
 
-    result = await view.get_all_views(mocker.Mock())
+    result = view.get_all_views(mocker.Mock())
 
     assert result == [
         {'name': 'All', 'url': 'https://example.com/view/All/'},
@@ -46,7 +46,7 @@ async def test_get_view(mock_jenkins, mocker):
         ],
     }
 
-    result = await view.get_view(mocker.Mock(), view_path='frontend')
+    result = view.get_view(mocker.Mock(), view_path='frontend')
 
     assert result == {
         'name': 'frontend',
@@ -76,7 +76,7 @@ async def test_get_view_nested(mock_jenkins, mocker):
         ],
     }
 
-    result = await view.get_view(mocker.Mock(), view_path='frontend/nightly')
+    result = view.get_view(mocker.Mock(), view_path='frontend/nightly')
 
     assert result['name'] == 'nightly'
     assert len(result['views']) == 2
@@ -96,6 +96,6 @@ async def test_get_view_with_depth(mock_jenkins, mocker):
         ],
     }
 
-    await view.get_view(mocker.Mock(), view_path='frontend', depth=1)
+    view.get_view(mocker.Mock(), view_path='frontend', depth=1)
 
     mock_jenkins.get_view.assert_called_once_with(view_path='frontend', depth=1)

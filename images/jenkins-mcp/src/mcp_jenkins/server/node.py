@@ -5,7 +5,7 @@ from mcp_jenkins.server import mcp
 
 
 @mcp.tool(tags=['read'])
-async def get_all_nodes(ctx: Context, master: MasterArg = None) -> list[dict]:
+def get_all_nodes(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all nodes from Jenkins
 
     Returns:
@@ -15,7 +15,7 @@ async def get_all_nodes(ctx: Context, master: MasterArg = None) -> list[dict]:
 
 
 @mcp.tool(tags=['read'])
-async def get_node(ctx: Context, name: str, master: MasterArg = None) -> dict:
+def get_node(ctx: Context, name: str, master: MasterArg = None) -> dict:
     """Get a specific node from Jenkins
 
     Contains executor about the node.
@@ -30,7 +30,7 @@ async def get_node(ctx: Context, name: str, master: MasterArg = None) -> dict:
 
 
 @mcp.tool(tags=['read', 'config-read'])
-async def get_node_config(ctx: Context, name: str, master: MasterArg = None) -> str:
+def get_node_config(ctx: Context, name: str, master: MasterArg = None) -> str:
     """Get node config from Jenkins
 
     Args:
@@ -43,7 +43,7 @@ async def get_node_config(ctx: Context, name: str, master: MasterArg = None) -> 
 
 
 @mcp.tool(tags=['write'])
-async def set_node_config(ctx: Context, name: str, config_xml: str, master: MasterArg = None) -> None:
+def set_node_config(ctx: Context, name: str, config_xml: str, master: MasterArg = None) -> None:
     """Set specific node config in Jenkins
 
     Args:

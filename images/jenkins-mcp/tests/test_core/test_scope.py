@@ -129,7 +129,7 @@ def two_masters(mocker):
 @pytest.mark.asyncio
 async def test_list_masters_shows_only_reachable(mocker, two_masters):
     _token(mocker, PMM_SCOPED)
-    assert [m['name'] for m in await fleet.list_masters()] == ['pmm']
+    assert [m['name'] for m in fleet.list_masters()] == ['pmm']
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_find_items_searches_only_reachable_masters(mocker, two_masters):
 @pytest.mark.asyncio
 async def test_list_masters_unscoped_shows_fleet(mocker, two_masters):
     _token(mocker, ['percona'])
-    assert [m['name'] for m in await fleet.list_masters()] == ['ps80', 'pmm']
+    assert [m['name'] for m in fleet.list_masters()] == ['ps80', 'pmm']
 
 
 @pytest.mark.asyncio

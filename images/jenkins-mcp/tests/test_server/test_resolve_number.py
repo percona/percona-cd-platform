@@ -62,7 +62,7 @@ async def test_number_defaulting_tools_resolve_matrix_jobs(mocker, tool, client_
     client.get_item.return_value = serialize_item(_MATRIX)
     mocker.patch('mcp_jenkins.server.build.jenkins', return_value=client)
 
-    await getattr(build, tool)(mocker.Mock(), fullname='pxc-5.7-param')
+    getattr(build, tool)(mocker.Mock(), fullname='pxc-5.7-param')
 
     assert getattr(client, client_method).call_args.kwargs['number'] == 3
 

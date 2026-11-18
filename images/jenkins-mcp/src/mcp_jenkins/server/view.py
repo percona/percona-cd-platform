@@ -5,7 +5,7 @@ from mcp_jenkins.server import mcp
 
 
 @mcp.tool(tags=['read'])
-async def get_all_views(ctx: Context, master: MasterArg = None) -> list[dict]:
+def get_all_views(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all top-level views from Jenkins.
 
     Returns:
@@ -15,7 +15,7 @@ async def get_all_views(ctx: Context, master: MasterArg = None) -> list[dict]:
 
 
 @mcp.tool(tags=['read'])
-async def get_view(ctx: Context, view_path: str, depth: int = 0, master: MasterArg = None) -> dict:
+def get_view(ctx: Context, view_path: str, depth: int = 0, master: MasterArg = None) -> dict:
     """Get a Jenkins view by path, returning its jobs and/or nested sub-views.
 
     Views can be nested up to multiple levels deep. Use "/" to separate levels

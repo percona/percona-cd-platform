@@ -20,7 +20,7 @@ _T = TypeVar('_T')
 
 
 @mcp.tool(tags=['read'])
-async def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[dict]:
+def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all items in Jenkins queue
 
     Returns:
@@ -30,9 +30,7 @@ async def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[di
 
 
 @mcp.tool(tags=['read'])
-async def get_queue_item(
-    ctx: Context, id: int | None = None, number: int | None = None, master: MasterArg = None
-) -> dict:
+def get_queue_item(ctx: Context, id: int | None = None, number: int | None = None, master: MasterArg = None) -> dict:
     """Get a specific item in Jenkins queue by id
 
     Args:
@@ -52,7 +50,7 @@ async def get_queue_item(
 
 
 @mcp.tool(tags=['operate'])
-async def cancel_queue_item(ctx: Context, id: int, master: MasterArg = None) -> None:
+def cancel_queue_item(ctx: Context, id: int, master: MasterArg = None) -> None:
     """Cancel a specific item in Jenkins queue by id
 
     Args:

@@ -468,7 +468,7 @@ def _grep_member(
 
 
 @mcp.tool(tags=['read'])
-async def list_archive_artifact(
+def list_archive_artifact(
     ctx: Context,
     fullname: str,
     relative_path: str,
@@ -530,7 +530,7 @@ async def list_archive_artifact(
 
 
 @mcp.tool(tags=['read'])
-async def extract_archive_artifact(
+def extract_archive_artifact(
     ctx: Context,
     fullname: str,
     relative_path: str,

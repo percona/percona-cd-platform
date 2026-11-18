@@ -5,7 +5,7 @@ from mcp_jenkins.server import mcp
 
 
 @mcp.tool(tags={'write'})
-async def run_groovy_script(ctx: Context, script: str, master: MasterArg = None) -> str:
+def run_groovy_script(ctx: Context, script: str, master: MasterArg = None) -> str:
     """Execute an arbitrary Groovy script on Jenkins.
 
     This tool provides access to Jenkins internal features that are not available via REST API.

@@ -51,7 +51,7 @@ async def test_get_all_items_truncates(mock_jenkins, mocker):
 async def test_get_item(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value = Job(fullname='job1', color='blue', name='job1', url='1', class_='Job')
 
-    assert await item.get_item(mocker.Mock(), fullname='job1') == {
+    assert item.get_item(mocker.Mock(), fullname='job1') == {
         'class_': 'Job',
         'color': 'blue',
         'fullname': 'job1',
@@ -64,14 +64,14 @@ async def test_get_item(mock_jenkins, mocker):
 async def test_get_item_config(mock_jenkins, mocker):
     mock_jenkins.get_item_config.return_value = '<xml>config</xml>'
 
-    assert await item.get_item_config(mocker.Mock(), fullname='job1') == '<xml>config</xml>'
+    assert item.get_item_config(mocker.Mock(), fullname='job1') == '<xml>config</xml>'
 
 
 @pytest.mark.asyncio
 async def test_set_item_config(mock_jenkins, mocker):
     mock_jenkins.set_item_config.return_value = None
 
-    await item.set_item_config(mocker.Mock(), fullname='job1', config_xml='<xml>config</xml>')
+    item.set_item_config(mocker.Mock(), fullname='job1', config_xml='<xml>config</xml>')
 
     mock_jenkins.set_item_config.assert_called_once_with(fullname='job1', config_xml='<xml>config</xml>')
 
@@ -80,7 +80,7 @@ async def test_set_item_config(mock_jenkins, mocker):
 async def test_create_item(mock_jenkins, mocker):
     mock_jenkins.create_item.return_value = None
 
-    await item.create_item(mocker.Mock(), fullname='folder1/job1', config_xml='<project/>')
+    item.create_item(mocker.Mock(), fullname='folder1/job1', config_xml='<project/>')
 
     mock_jenkins.create_item.assert_called_once_with(fullname='folder1/job1', config_xml='<project/>')
 
@@ -89,7 +89,7 @@ async def test_create_item(mock_jenkins, mocker):
 async def test_delete_item(mock_jenkins, mocker):
     mock_jenkins.delete_item.return_value = None
 
-    await item.delete_item(mocker.Mock(), fullname='folder1/job1')
+    item.delete_item(mocker.Mock(), fullname='folder1/job1')
 
     mock_jenkins.delete_item.assert_called_once_with(fullname='folder1/job1')
 
@@ -252,7 +252,7 @@ async def test_query_items_compact_needs_include_parameters(mock_jenkins, mocker
 async def test_build_item(mock_jenkins, mocker):
     mock_jenkins.build_item.return_value = None
 
-    await item.build_item(
+    item.build_item(
         mocker.Mock(),
         fullname='job1',
         data={'param1': 'value1'},
@@ -270,7 +270,7 @@ async def test_get_item_parameters(mock_jenkins, mocker):
         {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},
     ]
 
-    result = await item.get_item_parameters(mocker.Mock(), fullname='job1')
+    result = item.get_item_parameters(mocker.Mock(), fullname='job1')
 
     assert result == [
         {'name': 'BRANCH', 'type': 'StringParameterDefinition', 'defaultValue': 'main', 'description': 'Branch'},

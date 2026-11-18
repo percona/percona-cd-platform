@@ -14,7 +14,7 @@ def mock_jenkins(mocker):
 async def test_run_groovy_script(mock_jenkins, mocker):
     mock_jenkins.run_script.return_value = 'Script result: success'
 
-    result = await script.run_groovy_script(mocker.Mock(), script='println("test")')
+    result = script.run_groovy_script(mocker.Mock(), script='println("test")')
 
     assert result == 'Script result: success'
     mock_jenkins.run_script.assert_called_once_with(script='println("test")')
@@ -24,6 +24,6 @@ async def test_run_groovy_script(mock_jenkins, mocker):
 async def test_run_groovy_script_with_result_prefix(mock_jenkins, mocker):
     mock_jenkins.run_script.return_value = 'output only'
 
-    result = await script.run_groovy_script(mocker.Mock(), script='return "output"')
+    result = script.run_groovy_script(mocker.Mock(), script='return "output"')
 
     assert result == 'output only'

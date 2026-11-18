@@ -92,7 +92,7 @@ def _artifact_hint(relative_path: str) -> str | None:
 
 
 @mcp.tool(tags=['read'])
-async def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
+def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all running builds from Jenkins
 
     Returns:
@@ -105,7 +105,7 @@ async def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dic
 
 
 @mcp.tool(tags=['read'])
-async def get_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
+def get_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get specific build info from Jenkins
 
     Args:
@@ -121,9 +121,7 @@ async def get_build(ctx: Context, fullname: str, number: int | None = None, mast
 
 
 @mcp.tool(tags=['read', 'config-read'])
-async def get_build_scripts(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> list[str]:
+def get_build_scripts(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[str]:
     """Get the scripts used in a specific build in Jenkins
 
     Args:
@@ -139,7 +137,7 @@ async def get_build_scripts(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_console_output(
+def get_build_console_output(
     ctx: Context,
     fullname: str,
     number: int | None = None,
@@ -171,9 +169,7 @@ async def get_build_console_output(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_test_report(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> dict:
+def get_build_test_report(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the test report of a specific build in Jenkins
 
     Args:
@@ -189,7 +185,7 @@ async def get_build_test_report(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_failure_summary(
+def get_build_failure_summary(
     ctx: Context,
     fullname: str,
     number: int | None = None,
@@ -326,7 +322,7 @@ async def get_build_failure_summary(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_console_tail(
+def get_build_console_tail(
     ctx: Context, fullname: str, number: int | None = None, lines: int = 200, master: MasterArg = None
 ) -> str:
     """Get the LAST N lines of a build's console (the cheap path to the failure tail + result).
@@ -349,9 +345,7 @@ async def get_build_console_tail(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_parameters(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> dict:
+def get_build_parameters(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the parameters of a specific build in Jenkins
 
     For the parameters of several recent builds, call get_build_walk once instead of this per build.
@@ -369,7 +363,7 @@ async def get_build_parameters(
 
 
 @mcp.tool(tags=['operate'])
-async def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg = None) -> None:
+def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg = None) -> None:
     """Stop a specific build in Jenkins
 
     Args:
@@ -426,7 +420,7 @@ def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None)
 
 
 @mcp.tool(tags=['read'])
-async def get_all_build_artifacts(
+def get_all_build_artifacts(
     ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
 ) -> list[dict]:
     """List the artifacts of a specific build in Jenkins
@@ -453,7 +447,7 @@ async def get_all_build_artifacts(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_artifact(
+def get_build_artifact(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> dict:
     """Download an artifact from a specific build in Jenkins
@@ -483,7 +477,7 @@ async def get_build_artifact(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_artifact_url(
+def get_build_artifact_url(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> str:
     """Get the direct URL of an artifact from a specific build in Jenkins
@@ -506,7 +500,7 @@ async def get_build_artifact_url(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_history(
+def get_build_history(
     ctx: Context, fullname: str, count: int = 10, limit: int | None = None, master: MasterArg = None
 ) -> list[dict]:
     """Get the most recent builds of a Jenkins job (number, result, timing only).
@@ -616,7 +610,7 @@ def get_build_walk(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_stages(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
+def get_build_stages(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the pipeline stage breakdown of a build (which stage ran/failed and per-stage durations).
 
     Args:
@@ -632,9 +626,7 @@ async def get_build_stages(ctx: Context, fullname: str, number: int | None = Non
 
 
 @mcp.tool(tags=['read'])
-async def get_build_changeset(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> list[dict]:
+def get_build_changeset(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[dict]:
     """Get the SCM changes (commits) included in a build.
 
     Args:
@@ -651,7 +643,7 @@ async def get_build_changeset(
 
 
 @mcp.tool(tags=['operate'])
-async def replay_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> int:
+def replay_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> int:
     """Re-run a job using the same parameters as a previous build (retrigger a probe).
 
     Triggers a fresh build with the parameters of build `number` (or the last build). Does not

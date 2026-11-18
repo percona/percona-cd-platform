@@ -42,7 +42,7 @@ def get_all_items(ctx: Context, limit: int = 200, master: MasterArg = None) -> d
 
 
 @mcp.tool(tags=['read'])
-async def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dict:
+def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dict:
     """Get specific item from Jenkins
 
     Args:
@@ -55,7 +55,7 @@ async def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dic
 
 
 @mcp.tool(tags=['read', 'config-read'])
-async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None) -> str:
+def get_item_config(ctx: Context, fullname: str, master: MasterArg = None) -> str:
     """Get a job/folder's raw config.xml (jenkins-mcp-writers only).
 
     Served as a read tool but gated per call to the jenkins-mcp-writers group (see audit.py),
@@ -202,7 +202,7 @@ def search_item_configs(
 
 
 @mcp.tool(tags=['manage'])
-async def set_item_config(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
+def set_item_config(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
     """Update an existing item's config.xml in Jenkins (writers only).
 
     Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
@@ -217,7 +217,7 @@ async def set_item_config(ctx: Context, fullname: str, config_xml: str, master: 
 
 
 @mcp.tool(tags=['manage'])
-async def create_item(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
+def create_item(ctx: Context, fullname: str, config_xml: str, master: MasterArg = None) -> None:
     """Create a new Jenkins item (job/folder) from a config.xml (writers only).
 
     Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
@@ -233,7 +233,7 @@ async def create_item(ctx: Context, fullname: str, config_xml: str, master: Mast
 
 
 @mcp.tool(tags=['manage'])
-async def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> None:
+def delete_item(ctx: Context, fullname: str, master: MasterArg = None) -> None:
     """Delete a Jenkins item (job/folder) by fullname (writers only).
 
     Gated to the jenkins-mcp-writers group (get_readme covers how to join) and served only in
@@ -506,7 +506,7 @@ def query_items(
 
 
 @mcp.tool(tags=['operate'])
-async def build_item(
+def build_item(
     ctx: Context,
     fullname: str,
     build_type: Literal['build', 'buildWithParameters'],
@@ -528,7 +528,7 @@ async def build_item(
 
 
 @mcp.tool(tags=['read'])
-async def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = None) -> list[dict]:
+def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = None) -> list[dict]:
     """Get the parameter definitions of a Jenkins job.
 
     Reads the job's parameterDefinitions via the standard job API (Job/Read), so it is open to all

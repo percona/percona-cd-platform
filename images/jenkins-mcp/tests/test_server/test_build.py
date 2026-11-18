@@ -19,7 +19,7 @@ async def test_get_running_builds(mock_jenkins, mocker):
     build2 = Build(number=2, url='2', building=True, timestamp=1234567891)
     mock_jenkins.get_running_builds.return_value = [build1, build2]
 
-    assert await build.get_running_builds(mocker.Mock()) == [
+    assert build.get_running_builds(mocker.Mock()) == [
         {'number': 1, 'url': '1', 'building': True, 'timestamp': 1234567890},
         {'number': 2, 'url': '2', 'building': True, 'timestamp': 1234567891},
     ]
@@ -30,7 +30,7 @@ async def test_get_build(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build.return_value = Build(number=1, url='1', building=False, timestamp=1234567890)
 
-    assert await build.get_build(mocker.Mock(), fullname='job1') == {
+    assert build.get_build(mocker.Mock(), fullname='job1') == {
         'number': 1,
         'url': '1',
         'building': False,
@@ -43,7 +43,7 @@ async def test_get_build_scripts(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_replay.return_value = BuildReplay(scripts=['script1', 'script2'])
 
-    assert await build.get_build_scripts(mocker.Mock(), fullname='job1') == [
+    assert build.get_build_scripts(mocker.Mock(), fullname='job1') == [
         'script1',
         'script2',
     ]
@@ -54,7 +54,7 @@ async def test_get_build_console_output(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_console_output.return_value = 'Console output here'
 
-    assert await build.get_build_console_output(mocker.Mock(), fullname='job1') == 'Console output here'
+    assert build.get_build_console_output(mocker.Mock(), fullname='job1') == 'Console output here'
     mock_jenkins.get_build_console_output.assert_called_once_with(
         fullname='job1', number=1, pattern=None, offset=0, limit=None
     )
@@ -64,7 +64,7 @@ async def test_get_build_console_output(mock_jenkins, mocker):
 async def test_get_build_console_output_with_number(mock_jenkins, mocker):
     mock_jenkins.get_build_console_output.return_value = 'output'
 
-    assert await build.get_build_console_output(mocker.Mock(), fullname='job1', number=5) == 'output'
+    assert build.get_build_console_output(mocker.Mock(), fullname='job1', number=5) == 'output'
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_console_output.assert_called_once_with(
         fullname='job1', number=5, pattern=None, offset=0, limit=None
@@ -75,7 +75,7 @@ async def test_get_build_console_output_with_number(mock_jenkins, mocker):
 async def test_get_build_console_output_with_all_params(mock_jenkins, mocker):
     mock_jenkins.get_build_console_output.return_value = 'ERROR: boom'
 
-    result = await build.get_build_console_output(
+    result = build.get_build_console_output(
         mocker.Mock(), fullname='job1', number=3, pattern='ERROR', offset=1, limit=10
     )
     assert result == 'ERROR: boom'
@@ -89,7 +89,7 @@ async def test_get_build_console_output_no_build(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = None
 
     with pytest.raises(ValueError, match='No build found for job: job1'):
-        await build.get_build_console_output(mocker.Mock(), fullname='job1')
+        build.get_build_console_output(mocker.Mock(), fullname='job1')
 
 
 @pytest.mark.asyncio
@@ -97,7 +97,7 @@ async def test_get_build_test_reports(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_test_report.return_value = {'reports': ['report1', 'report2']}
 
-    assert await build.get_build_test_report(mocker.Mock(), fullname='job1') == {'reports': ['report1', 'report2']}
+    assert build.get_build_test_report(mocker.Mock(), fullname='job1') == {'reports': ['report1', 'report2']}
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_get_build_parameters(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_parameters.return_value = {'BRANCH': 'main', 'DEBUG': True}
 
-    assert await build.get_build_parameters(mocker.Mock(), fullname='job1') == {
+    assert build.get_build_parameters(mocker.Mock(), fullname='job1') == {
         'BRANCH': 'main',
         'DEBUG': True,
     }
@@ -113,7 +113,7 @@ async def test_get_build_parameters(mock_jenkins, mocker):
 
 @pytest.mark.asyncio
 async def test_stop_build(mock_jenkins, mocker):
-    await build.stop_build(mocker.Mock(), fullname='job1', number=1)
+    build.stop_build(mocker.Mock(), fullname='job1', number=1)
     mock_jenkins.stop_build.assert_called_once_with(fullname='job1', number=1)
 
 
@@ -129,7 +129,7 @@ async def test_get_all_build_artifacts(mock_jenkins, mocker):
         Artifact(fileName='trace.zip', relativePath='trace.zip', displayPath='trace.zip'),
     ]
 
-    assert await build.get_all_build_artifacts(mocker.Mock(), fullname='job1') == [
+    assert build.get_all_build_artifacts(mocker.Mock(), fullname='job1') == [
         {
             'fileName': 'index.html',
             'relativePath': 'playwright-report/index.html',
@@ -148,7 +148,7 @@ async def test_get_all_build_artifacts(mock_jenkins, mocker):
 async def test_get_all_build_artifacts_with_number(mock_jenkins, mocker):
     mock_jenkins.get_build_artifacts.return_value = []
 
-    assert await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=5) == []
+    assert build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=5) == []
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_artifacts.assert_called_once_with(fullname='job1', number=5)
 
@@ -165,7 +165,7 @@ async def test_get_all_build_artifacts_hints_classify_mtr_paths(mock_jenkins, mo
         Artifact(fileName='public_url', relativePath='public_url'),
     ]
 
-    out = await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1270)
+    out = build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1270)
     hints = {a['relativePath']: a.get('hint') for a in out}
     assert hints['build.log.gz'] == 'full build console log'
     assert hints['work/make_build.log'] == 'build log'
@@ -182,7 +182,7 @@ async def test_get_all_build_artifacts_non_log_gz_unlabeled(mock_jenkins, mocker
         Artifact(fileName='dump.sql.gz', relativePath='work/dump.sql.gz'),
     ]
 
-    out = await build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1)
+    out = build.get_all_build_artifacts(mocker.Mock(), fullname='job1', number=1)
     assert all('hint' not in a for a in out)
 
 
@@ -191,9 +191,7 @@ async def test_get_build_artifact_text(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_artifact.return_value = b'<html>report</html>'
 
-    result = await build.get_build_artifact(
-        mocker.Mock(), fullname='job1', relative_path='playwright-report/index.html'
-    )
+    result = build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='playwright-report/index.html')
     assert result == {'content': '<html>report</html>', 'encoding': 'utf-8'}
 
 
@@ -202,7 +200,7 @@ async def test_get_build_artifact_binary(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_artifact.return_value = bytes(range(256))
 
-    result = await build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='trace.zip')
+    result = build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='trace.zip')
     assert result['encoding'] == 'base64'
     import base64
 
@@ -213,7 +211,7 @@ async def test_get_build_artifact_binary(mock_jenkins, mocker):
 async def test_get_build_artifact_with_number(mock_jenkins, mocker):
     mock_jenkins.get_build_artifact.return_value = b'data'
 
-    result = await build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='file.txt', number=3)
+    result = build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='file.txt', number=3)
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_artifact.assert_called_once_with(fullname='job1', number=3, relative_path='file.txt')
     assert result == {'content': 'data', 'encoding': 'utf-8'}
@@ -224,7 +222,7 @@ async def test_get_build_artifact_url(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
     mock_jenkins.get_build_artifact_url.return_value = 'https://jenkins.example.com/job/job1/1/artifact/trace.zip'
 
-    result = await build.get_build_artifact_url(mocker.Mock(), fullname='job1', relative_path='trace.zip')
+    result = build.get_build_artifact_url(mocker.Mock(), fullname='job1', relative_path='trace.zip')
     assert result == 'https://jenkins.example.com/job/job1/1/artifact/trace.zip'
 
 
@@ -232,7 +230,7 @@ async def test_get_build_artifact_url(mock_jenkins, mocker):
 async def test_get_build_artifact_url_with_number(mock_jenkins, mocker):
     mock_jenkins.get_build_artifact_url.return_value = 'https://jenkins.example.com/job/job1/5/artifact/report.html'
 
-    result = await build.get_build_artifact_url(mocker.Mock(), fullname='job1', relative_path='report.html', number=5)
+    result = build.get_build_artifact_url(mocker.Mock(), fullname='job1', relative_path='report.html', number=5)
     mock_jenkins.get_item.assert_not_called()
     mock_jenkins.get_build_artifact_url.assert_called_once_with(fullname='job1', number=5, relative_path='report.html')
     assert result == 'https://jenkins.example.com/job/job1/5/artifact/report.html'
@@ -265,7 +263,7 @@ async def test_artifact_tools_reject_unsafe_path_before_number_lookup(mock_jenki
 async def test_get_build_artifact_keeps_plain_names(mock_jenkins, mocker):
     mock_jenkins.get_build_artifact.return_value = b'data'
 
-    await build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='out/big.bin', number=3)
+    build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='out/big.bin', number=3)
     mock_jenkins.get_build_artifact.assert_called_once_with(fullname='job1', number=3, relative_path='out/big.bin')
 
 
@@ -276,7 +274,7 @@ async def test_get_build_history(mock_jenkins, mocker):
         Build(number=1, url='u1', result='FAILURE', timestamp=1, duration=20, building=False),
     ]
 
-    result = await build.get_build_history(mocker.Mock(), fullname='job1', count=5)
+    result = build.get_build_history(mocker.Mock(), fullname='job1', count=5)
     assert [b['number'] for b in result] == [2, 1]
     mock_jenkins.get_build_history.assert_called_once_with(fullname='job1', count=5)
 
@@ -289,7 +287,7 @@ async def test_get_build_stages_with_number(mock_jenkins, mocker):
         stages=[PipelineStage(id='10', name='Build', status='SUCCESS', durationMillis=100)],
     )
 
-    result = await build.get_build_stages(mocker.Mock(), fullname='job1', number=5)
+    result = build.get_build_stages(mocker.Mock(), fullname='job1', number=5)
     assert result['status'] == 'FAILED'
     assert result['stages'][0]['name'] == 'Build'
     mock_jenkins.get_item.assert_not_called()
@@ -301,7 +299,7 @@ async def test_get_build_stages_resolves_last_build(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 7
     mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
 
-    await build.get_build_stages(mocker.Mock(), fullname='job1')
+    build.get_build_stages(mocker.Mock(), fullname='job1')
     mock_jenkins.get_build_stages.assert_called_once_with(fullname='job1', number=7)
 
 
@@ -310,7 +308,7 @@ async def test_get_build_stages_no_build(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = None
 
     with pytest.raises(ValueError, match='No build found for job: job1'):
-        await build.get_build_stages(mocker.Mock(), fullname='job1')
+        build.get_build_stages(mocker.Mock(), fullname='job1')
 
 
 @pytest.mark.asyncio
@@ -320,7 +318,7 @@ async def test_get_build_changeset(mock_jenkins, mocker):
         ChangeSetItem(commitId='abc', author='Jane', msg='fix', timestamp=1, affectedPaths=['a.py']),
     ]
 
-    result = await build.get_build_changeset(mocker.Mock(), fullname='job1')
+    result = build.get_build_changeset(mocker.Mock(), fullname='job1')
     assert result == [{'commitId': 'abc', 'author': 'Jane', 'msg': 'fix', 'timestamp': 1, 'affectedPaths': ['a.py']}]
     mock_jenkins.get_build_changeset.assert_called_once_with(fullname='job1', number=3)
 
@@ -366,7 +364,7 @@ async def test_get_build_failure_summary_filters_and_dedupes(mock_jenkins, mocke
         ],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='asan-mtr', number=10)
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='asan-mtr', number=10)
 
     assert out['build']['result'] == 'UNSTABLE'
     assert out['test_counts']['failCount'] == 2
@@ -389,9 +387,7 @@ async def test_get_build_failure_summary_status_filter_and_cap(mock_jenkins, moc
         'suites': [{'name': 's', 'cases': [{'className': 'c', 'name': f't{i}', 'status': 'FAILED'} for i in range(3)]}],
     }
 
-    out = await build.get_build_failure_summary(
-        mocker.Mock(), fullname='j', number=5, status_filter='FAILED', max_cases=2
-    )
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=5, status_filter='FAILED', max_cases=2)
     assert out['included_count'] == 2
     assert out['truncated'] is True
 
@@ -404,7 +400,7 @@ async def test_get_build_failure_summary_no_report(mock_jenkins, mocker):
     mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
     mock_jenkins.get_build_test_report.side_effect = HTTPError(response=mocker.Mock(status_code=404))
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
     assert out['cases'] == []
     assert out['test_counts']['failCount'] == 0
     assert any('no test report' in n for n in out['notes'])
@@ -437,7 +433,7 @@ async def test_get_build_failure_summary_flags_unit_tests_wrapper(mock_jenkins, 
         ],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='ps-8.4-mtr', number=1270)
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='ps-8.4-mtr', number=1270)
 
     assert out['partial'] is True
     assert out['wrapper_cases'] == [
@@ -463,7 +459,7 @@ async def test_get_build_failure_summary_not_partial_for_normal_failures(mock_je
         'suites': [{'name': 'worker_1', 'cases': [{'className': 'main', 'name': 'dd_upgrade', 'status': 'FAILED'}]}],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=5)
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=5)
     assert out['partial'] is False
     assert 'wrapper_cases' not in out
     assert 'see_also' not in out
@@ -490,7 +486,7 @@ async def test_get_build_failure_summary_wrapper_detected_despite_status_filter(
         ],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='REGRESSION')
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='REGRESSION')
     assert out['partial'] is True
     assert [w['name'] for w in out['wrapper_cases']] == ['unit_tests']
     assert [c['name'] for c in out['cases']] == ['rpl_x']  # FAILED wrapper excluded from display by the filter
@@ -514,7 +510,7 @@ async def test_get_build_failure_summary_passing_wrapper_not_partial(mock_jenkin
         ],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='ALL')
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1, status_filter='ALL')
     assert out['partial'] is False
     assert 'wrapper_cases' not in out
 
@@ -536,7 +532,7 @@ async def test_get_build_failure_summary_unit_tests_substring_not_wrapper(mock_j
         ],
     }
 
-    out = await build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
     assert out['partial'] is False
     assert 'wrapper_cases' not in out
 
@@ -545,24 +541,24 @@ async def test_get_build_failure_summary_unit_tests_substring_not_wrapper(mock_j
 async def test_get_build_console_tail_passes_and_caps_lines(mock_jenkins, mocker):
     mock_jenkins.get_build_console_tail.return_value = 'line99\nFinished: UNSTABLE'
 
-    out = await build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=2)
+    out = build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=2)
     assert out == 'line99\nFinished: UNSTABLE'
     assert mock_jenkins.get_build_console_tail.call_args.kwargs['lines'] == 2
 
-    await build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=999999)
+    build.get_build_console_tail(mocker.Mock(), fullname='j', number=10, lines=999999)
     assert mock_jenkins.get_build_console_tail.call_args.kwargs['lines'] == 5000
 
 
 @pytest.mark.asyncio
 async def test_get_build_console_output_rejects_long_pattern(mock_jenkins, mocker):
     with pytest.raises(ValueError, match='pattern too long'):
-        await build.get_build_console_output(mocker.Mock(), fullname='j', number=1, pattern='x' * 2001)
+        build.get_build_console_output(mocker.Mock(), fullname='j', number=1, pattern='x' * 2001)
 
 
 @pytest.mark.asyncio
 async def test_get_build_history_caps_count(mock_jenkins, mocker):
     mock_jenkins.get_build_history.return_value = []
-    await build.get_build_history(mocker.Mock(), fullname='j', count=99999)
+    build.get_build_history(mocker.Mock(), fullname='j', count=99999)
     assert mock_jenkins.get_build_history.call_args.kwargs['count'] == 100
 
 
@@ -570,6 +566,6 @@ async def test_get_build_history_caps_count(mock_jenkins, mocker):
 async def test_get_build_history_accepts_limit_alias(mock_jenkins, mocker):
     mock_jenkins.get_build_history.return_value = []
 
-    await build.get_build_history(mocker.Mock(), fullname='job1', limit=3)
+    build.get_build_history(mocker.Mock(), fullname='job1', limit=3)
 
     mock_jenkins.get_build_history.assert_called_once_with(fullname='job1', count=3)

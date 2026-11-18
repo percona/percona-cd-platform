@@ -96,7 +96,7 @@ def _emit_export_audit(*, tool: str, master: str, fullname: str, number: int, ke
 
 
 @mcp.tool(tags=['read'])
-async def export_build_log(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
+def export_build_log(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Export a build's FULL console log to S3 and return a time-limited signed download URL.
 
     Streams the whole console log server-side straight to a private S3 bucket (it never passes
@@ -128,7 +128,7 @@ async def export_build_log(ctx: Context, fullname: str, number: int | None = Non
 
 
 @mcp.tool(tags=['read'])
-async def export_build_artifact(
+def export_build_artifact(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> dict:
     """Export a build artifact to S3 and return a time-limited signed download URL.
