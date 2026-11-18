@@ -16,7 +16,7 @@ import uuid
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import NotFoundError, ToolError
 from fastmcp.server.dependencies import get_access_token, get_http_request
 from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 from loguru import logger
@@ -27,28 +27,13 @@ from mcp_jenkins.core.fleet import get_fleet
 from mcp_jenkins.core.grants import build_denial
 from mcp_jenkins.core.scope import SERVICE_ACCOUNTS_GROUP, MasterScopeError, allowed_masters
 
-# Raw config/script mutators (node config, script console): NEVER served. They stay tagged 'write'
-# in the server modules, so read-only/operate/manage all exclude them. run_groovy_script is RCE.
-_CONFIG_TOOLS = frozenset({'set_node_config', 'run_groovy_script'})
-# Job-definition CRUD: served in operate mode under the 'manage' tag AND gated to the writers group.
-# They create/update/delete a job's config.xml, distinct from build lifecycle.
-_MANAGE_TOOLS = frozenset({'create_item', 'set_item_config', 'delete_item'})
-# Build-lifecycle tools: served in operate mode AND gated to the writers group.
-# They trigger/replay/stop/cancel builds; they never update or delete job config.
-_OPERATE_TOOLS = frozenset({'build_item', 'replay_build', 'stop_build', 'stop_builds', 'cancel_queue_item'})
-# Config-XML reads: get_item_config returns a job's raw config.xml, which routinely carries plaintext
-# secrets (e.g. the <authToken> "trigger builds remotely" token), and search_item_configs greps many.
-# Both are served as 'read' tools but gated to the writers group so they are NOT exposed to every
-# authenticated SSO user. See PS-11341.
-_CONFIG_READ_TOOLS = frozenset({'get_item_config', 'search_item_configs'})
-# Every tool whose call requires the writers group: build lifecycle, job-config CRUD, config-write,
-# config read. _CONFIG_TOOLS (run_groovy_script, set_node_config) are normally never registered (they
-# are write-tagged and no mode serves them), but they are gated here too so a mode-filter regression
-# that registered one keeps it writers-gated rather than open to any authenticated SSO user.
-_GROUP_GATED = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS | _CONFIG_READ_TOOLS
-# All MUTATING tools, for the is_write audit flag. get_item_config is gated but NOT a write, so it is
-# deliberately excluded here and stays is_write=false in the audit record.
-_WRITE_TOOLS = _OPERATE_TOOLS | _MANAGE_TOOLS | _CONFIG_TOOLS
+# The tags of the called tool decide who may call it. operate (build lifecycle), manage (job-definition
+# CRUD) and write (node config, script console, never served) change Jenkins and set the is_write flag.
+_WRITE_TAGS = frozenset({'operate', 'manage', 'write'})
+# config-read rides next to the read tier on tools that return config-class content (job and agent
+# config.xml, pipeline scripts), which can carry plaintext secrets. It needs the writers group too.
+_CONFIG_READ_TAG = 'config-read'
+_GATED_TAGS = _WRITE_TAGS | {_CONFIG_READ_TAG}
 _WRITERS_GROUP = 'jenkins-mcp-writers'
 
 # Argument keys safe to log verbatim (job names, build numbers, search patterns, flags). Everything
@@ -162,7 +147,7 @@ def _bounded(value: object) -> tuple[bool, object]:
     return False, None
 
 
-def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
+def _summarize_args(arguments: dict | None, *, secret_pattern: bool = False) -> dict:
     """Allowlist summary: safe scalars verbatim, build-param KEYS only, everything else dropped.
 
     The NAMES of dropped keys are kept (never their values), so a call that failed on an argument the
@@ -173,7 +158,7 @@ def _summarize_args(arguments: dict | None, tool: str | None = None) -> dict:
     summary: dict = {}
     dropped: list[str] = []
     for key, value in arguments.items():
-        if key == 'pattern' and tool in _CONFIG_READ_TOOLS:
+        if key == 'pattern' and secret_pattern:
             # A config search can be for a secret value itself: log its length only. A digest of a
             # short secret can be confirmed offline by hashing guesses.
             summary['pattern_len'] = len(str(value))
@@ -292,20 +277,43 @@ def _grant_master() -> str | None:
     return next(iter(allowed)) if allowed is not None and len(allowed) == 1 else None
 
 
+class _UnresolvedToolError(Exception):
+    """The tags of the called tool could not be read from the running server."""
+
+
+async def _tool_tags(context: MiddlewareContext) -> frozenset[str] | None:
+    """The tags of the called tool as the running server serves it, or None when it serves no such tool.
+
+    Any failure to read the registry raises _UnresolvedToolError, so the caller can fail closed.
+    """
+    try:
+        tool = await context.fastmcp_context.fastmcp.get_tool(context.message.name)
+        return None if tool is None else frozenset(tool.tags)
+    except Exception as e:  # noqa: BLE001
+        raise _UnresolvedToolError from e
+
+
 class AuditMiddleware(Middleware):
     """Emit one structured JSON audit line per tool call (user + tool + summary + outcome)."""
 
     async def on_call_tool(self, context: MiddlewareContext, call_next: Any) -> Any:  # noqa: ANN401
         tool = context.message.name
         arguments = context.message.arguments
+        # None means the server serves no tool of that name. The call then ends here with "Unknown tool".
+        try:
+            tags = await _tool_tags(context)
+            unresolved = False
+        except _UnresolvedToolError:
+            tags, unresolved = None, True
+        known_tags = tags or frozenset()
         record = {
             'event': 'mcp_tool_call',
             'request_id': uuid.uuid4().hex,
             'ts': context.timestamp.isoformat(),
             'tool': tool,
-            'is_write': tool in _WRITE_TOOLS,
+            'is_write': bool(known_tags & _WRITE_TAGS),
             'master': _selected_master(arguments),
-            'args': _summarize_args(arguments, tool),
+            'args': _summarize_args(arguments, secret_pattern=unresolved or _CONFIG_READ_TAG in known_tags),
             **_identity(),
         }
         start = time.perf_counter()
@@ -315,8 +323,23 @@ class AuditMiddleware(Middleware):
         is_service = isinstance(claim_groups, list) and SERVICE_ACCOUNTS_GROUP in claim_groups
         # A service account never gets the writers tier, even when it is also put in that group.
         is_writer = isinstance(claim_groups, list) and _WRITERS_GROUP in claim_groups and not is_service
-        denied = tool in _GROUP_GATED and not is_writer
+        denied = bool(known_tags & _GATED_TAGS) and not is_writer
         try:
+            if unresolved:
+                # Without the tags the gate cannot tell a read from a write, so nobody passes.
+                record['status'] = 'denied'
+                record['deny_reason'] = 'tool_unresolved'
+                _DENIED.labels(tool=tool, reason='tool_unresolved').inc()
+                msg = (
+                    f'{tool} could not be authorized: the gateway could not resolve its access tier. '
+                    f'Try again, and ask in #opensource-jenkins if it keeps failing.'
+                )
+                raise ToolError(msg)
+            if tags is None:
+                # A name the server does not serve never reaches call_next, so no other dispatch path
+                # (such as a hashed backend name) can run a tool without its tags passing the gate.
+                msg = f'Unknown tool: {tool!r}'
+                raise NotFoundError(msg)
             if denied and tool == 'build_item' and is_service:
                 # A service account may start the jobs its grant lists, see core.grants.
                 record['master'] = record['master'] or _grant_master()
@@ -337,7 +360,7 @@ class AuditMiddleware(Middleware):
                     f'#opensource-jenkins. Once added, disconnect and re-authenticate this MCP '
                     f'connection (reconnecting alone keeps the old group-less token).'
                 )
-                if tool in _MANAGE_TOOLS:
+                if 'manage' in known_tags:
                     # Do not send manage callers through the onboarding loop for nothing: the
                     # backend grant is pending, so manage tools return 403 even for writers.
                     msg += (

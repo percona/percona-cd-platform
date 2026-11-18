@@ -203,3 +203,22 @@ def test_readme_md_onboarding_guidance_pinned():
     assert 'first JumpCloud SSO login' in text  # account is JIT-provisioned; connect before asking
     assert 'Reconnecting alone does not refresh it' in text  # re-auth-after-add gotcha
     assert 'PS-11341' in text  # manage tools 403 even for writers (pending backend grant)
+
+
+@pytest.mark.asyncio
+async def test_every_config_read_tool_is_named_as_writers_only(mocker):
+    # Each surface that names the writers-gated reads must name every tool that carries config-read.
+    gated = {t.name for t in await mcp.list_tools() if 'config-read' in (t.tags or set())}
+    assert {'get_item_config', 'search_item_configs', 'get_node_config', 'get_build_scripts'} <= gated
+
+    _patch_fleet(mocker, [Master(name='ps80', url='u', username='u', token='x')])  # noqa: S106
+    _patch_served(mocker, _READ_SET)
+    text = await readme.get_readme()
+    access = text.split('## Access tiers', 1)[1].split('## Pick a master', 1)[0]
+    readme_md = (Path(__file__).resolve().parents[2] / 'README.md').read_text()
+    access_md = readme_md.split('## Access model', 1)[1].split('## Connect your MCP client', 1)[0]
+
+    for name in sorted(gated):
+        assert name in mcp.instructions, f'{name} missing from the server instructions'
+        assert name in access, f'{name} missing from the get_readme access tiers'
+        assert f'`{name}`' in access_md, f'{name} missing from the README access model'

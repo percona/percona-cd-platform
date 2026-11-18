@@ -29,7 +29,7 @@ async def get_node(ctx: Context, name: str, master: MasterArg = None) -> dict:
     return jenkins(ctx, master).get_node(name=name, depth=2).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'config-read'])
 async def get_node_config(ctx: Context, name: str, master: MasterArg = None) -> str:
     """Get node config from Jenkins
 

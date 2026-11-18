@@ -120,7 +120,7 @@ async def get_build(ctx: Context, fullname: str, number: int | None = None, mast
     return jenkins(ctx, master).get_build(fullname=fullname, number=number).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'config-read'])
 async def get_build_scripts(
     ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
 ) -> list[str]:
