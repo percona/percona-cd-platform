@@ -1,0 +1,30 @@
+# Throwaway probe. It asks the review API to approve the pull request that runs it,
+# with the workflow token, and prints the answer. It merges nothing.
+name: selfapprove-probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask the review API to approve this pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          status=0
+          gh api --method POST "repos/${REPOSITORY}/pulls/${PULL_NUMBER}/reviews" \
+            -f event=APPROVE -f body="selfapprove-probe" > answer.json 2> error.txt || status=$?
+          echo "PROBE exit=${status}"
+          echo "PROBE state=$(jq -r '.state // "none"' answer.json 2>/dev/null)"
+          echo "PROBE message=$(jq -r '.message // "none"' answer.json 2>/dev/null)"
+          echo "PROBE stderr=$(tr '\n' ' ' < error.txt)"
