@@ -117,3 +117,37 @@ podDisruptionBudget:
 serviceMonitor:
   enabled: true
   interval: 30s
+
+# NetworkPolicy for the namespace (templates/networkpolicies.yaml), enforced by the VPC CNI policy
+# engine (terraform/eks-addons.tf). Off by default, because ArgoCD applies a merge to main straight
+# to production. Turn it on in its own change after the live checks.
+networkPolicy:
+  enabled: false
+  # Container port of the gateway (deployment.yaml) and the port that /metrics answers on.
+  gatewayPort: 9887
+  metricsPort: 9887
+  # Internet-facing ALB nodes sit in the public subnets (terraform/vpc.tf public_subnets).
+  albSourceCidrs:
+    - 10.220.96.0/24
+    - 10.220.97.0/24
+    - 10.220.98.0/24
+  # Kubelet probe sources: the node subnets (terraform/vpc.tf private_subnets). Pods share these
+  # subnets, so this admits every pod in the VPC on the gateway port. Set [] once the live
+  # cluster shows that the policy engine admits kubelet probes without it.
+  probeSourceCidrs:
+    - 10.220.0.0/19
+    - 10.220.32.0/19
+    - 10.220.64.0/19
+  # Scraper pods allowed on metricsPort (the Alloy DaemonSet, resources/addons/alloy).
+  scraper:
+    namespace: alloy
+    podLabels:
+      app.kubernetes.io/name: alloy
+  # TCP 443 egress goes to 0.0.0.0/0 minus these ranges. Masters, Authentik and S3 resolve to
+  # public addresses. Set [] to also allow 443 to private addresses.
+  httpsEgressExcept:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+  # Extra egress rules in NetworkPolicy form, appended unchanged.
+  extraEgress: []

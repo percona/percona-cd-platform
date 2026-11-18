@@ -1,0 +1,104 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- $gatewaySources := concat ($np.albSourceCidrs | default list) ($np.probeSourceCidrs | default list) }}
+{{- if not $np.albSourceCidrs }}
+{{- fail "jenkins-mcp: networkPolicy.albSourceCidrs is empty, so the load balancer could not reach the gateway." }}
+{{- end }}
+{{/*
+Default deny for the namespace. Ingress: the ALB and probe sources on gatewayPort, Alloy on metricsPort.
+Egress: kube-dns, the Pod Identity agent, and TCP 443 to public addresses (masters, Authentik, S3).
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-default-deny
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins-mcp
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- range $gatewaySources }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $np.gatewayPort }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.scraper.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $np.scraper.podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ $np.metricsPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: jenkins-mcp
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # EKS Pod Identity agent: the AWS SDK fetches the S3 export credentials here.
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            {{- with $np.httpsEgressExcept }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- with $np.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
