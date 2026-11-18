@@ -68,7 +68,7 @@ user
  -> <host>.cd.percona.com          Route53 record, published by external-dns
  -> jenkins-masters ALB :443       ACM wildcard via SNI, TLS 1.3 PQ policy,
                                    ssl-redirect, target-type ip
- -> nginx pod :80                  2x nginx:1.27-alpine (jenkins-ingress)
+ -> nginx pod :80                  3x nginx:1.30.7-alpine (jenkins-ingress)
  -> Service jenkins-<host> :8080   ClusterIP, selectorless
  -> EndpointSlice IP               written by jenkins-endpoint-reconciler
  -> EC2 master :8080               over the VPC peering, plain HTTP

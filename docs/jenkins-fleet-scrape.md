@@ -27,7 +27,7 @@ covers both metrics and logs over the same egress hole.
 - master `alloy.service` (systemd, Amazon Linux 2023 `dnf install -y alloy`) →
 - ALB at `mimir-push.cd.percona.com`, `loki-push.cd.percona.com`,
   `tempo-push.cd.percona.com` (group `jenkins-cd`, ACM wildcard) →
-- alloy-gateway Pod's NGINX bearer-auth sidecar (`nginx:1.27-alpine`) →
+- alloy-gateway Pod's NGINX bearer-auth sidecar (`nginx:1.30.7-alpine`) →
 - in-Pod Alloy receivers on loopback: `prometheus.receive_http` on
   `127.0.0.1:19009`, `loki.source.api` on `127.0.0.1:13100`,
   `otelcol.receiver.otlp` HTTP on `127.0.0.1:14318` →

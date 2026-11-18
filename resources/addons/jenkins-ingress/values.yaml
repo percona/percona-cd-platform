@@ -12,7 +12,7 @@
 
 image:
   repository: nginx
-  tag: 1.27-alpine
+  tag: 1.30.7-alpine
   pullPolicy: IfNotPresent
 
 # HA web plane de-pin: 3 replicas, hard-spread across >=2 AZs via the dedicated
