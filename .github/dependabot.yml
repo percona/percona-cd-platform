@@ -8,6 +8,9 @@
 #     drift.
 #   - docker: the Jenkins controller base image; PRs trigger the
 #     build-jenkins-image validate job (build + smoke, no push).
+#   - docker + uv for images/jenkins-mcp: the gateway base image digest and
+#     its Python lock (pyproject.toml + uv.lock). PRs trigger the
+#     build-jenkins-mcp-image validate job and the jenkins-mcp tests in ci-gate.
 #
 # Known not covered (manual): the `docker://rhysd/actionlint` ref inside
 # .github/actions/actions-lint and the `pipx install zizmor==` line.
@@ -40,4 +43,22 @@ updates:
       day: monday
     groups:
       jenkins-image:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /images/jenkins-mcp
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      jenkins-mcp-image:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /images/jenkins-mcp
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      jenkins-mcp-deps:
         patterns: ["*"]

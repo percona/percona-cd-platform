@@ -9,10 +9,13 @@ s3:
   exportsBucket: percona-ci-platform-jenkins-mcp-exports
   presignTtl: 21600
 
-# First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/.
+# First-party image (images/jenkins-mcp), pushed to ECR under percona-cd/. The bump job writes
+# tag and digest (the multi-arch index digest). With a digest the pod pulls by digest, and an
+# empty digest falls back to the tag.
 image:
   repository: percona-cd/jenkins-mcp
   tag: "0.10.12-f58e2fa41a81"
+  digest: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 2

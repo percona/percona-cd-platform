@@ -1,6 +1,11 @@
 {{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
 {{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. The server itself fails closed to read-only without a mode flag, but the deployment must still declare its access mode explicitly." }}
 {{- end }}
+{{- with .Values.image.digest }}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}
+{{- fail (printf "jenkins-mcp: image.digest must be empty or sha256:<64 hex>, got %q" .) }}
+{{- end }}
+{{- end }}
 {{- if and (gt (int .Values.replicaCount) 1) (not .Values.statelessHttp) }}
 {{- fail "jenkins-mcp: replicaCount above 1 requires statelessHttp=true. A stateful transport keeps each client's session in one pod's memory and the ALB has no stickiness, so extra replicas reject session-bound requests." }}
 {{- end }}
@@ -41,7 +46,7 @@ spec:
       {{- end }}
       containers:
         - name: jenkins-mcp
-          image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --transport
