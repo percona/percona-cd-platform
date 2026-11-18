@@ -83,7 +83,11 @@ _CATALOG = [
             ),
             (
                 'get_build_test_report',
-                'get_build_test_report / get_build_parameters / get_build_scripts(fullname, number?, master?)',
+                'get_build_test_report / get_build_parameters(fullname, number?, master?)',
+            ),
+            (
+                'get_build_scripts',
+                'get_build_scripts(fullname, number?, master?)   pipeline script of a build (jenkins-mcp-writers only)',
             ),
             (
                 'get_build_test_report',
@@ -156,7 +160,8 @@ _CATALOG = [
     (
         'Infra',
         [
-            ('get_all_nodes', 'get_all_nodes / get_node / get_node_config(name?, master?)   build agents'),
+            ('get_all_nodes', 'get_all_nodes / get_node(name?, master?)   build agents'),
+            ('get_node_config', 'get_node_config(name, master?)          agent config XML (jenkins-mcp-writers only)'),
             ('get_all_queue_items', 'get_all_queue_items / get_queue_item(id?, master?)           build queue'),
             (
                 'wait_for_build',
@@ -313,8 +318,9 @@ async def get_readme() -> str:
         '',
         '## Access tiers',
         '  - Read (everyone): inspect jobs, builds, logs, nodes, queue, views across the whole fleet.',
-        '    Exception: get_item_config and search_item_configs (config.xml) need jenkins-mcp-writers, since',
-        '    config.xml can carry plaintext secrets (e.g. the <authToken> trigger-builds-remotely token).',
+        '    Exception: get_item_config, search_item_configs, get_node_config (config.xml) and get_build_scripts',
+        '    (pipeline script) need jenkins-mcp-writers, since config.xml and pipeline scripts can carry',
+        '    plaintext secrets (e.g. the <authToken> trigger-builds-remotely token).',
         f'  - Operate (build lifecycle): build / replay / stop / cancel. {operate_status}',
         f'  - Manage (create / update / delete job definitions): {manage_status}',
         '    Backend create/configure/delete is NOT granted, so these return 403 today. Manage job',
@@ -357,7 +363,8 @@ async def get_readme() -> str:
         '  - On a big master, narrow with query_items(fullname_pattern=...) rather than raising limit.',
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
         '  - Reads are open to any authenticated Percona user (JumpCloud SSO login); the exceptions are',
-        '    get_item_config and search_item_configs (config.xml), which need the jenkins-mcp-writers group.',
+        '    get_item_config, search_item_configs, get_node_config (config.xml) and get_build_scripts',
+        '    (pipeline script), which need the jenkins-mcp-writers group.',
         '  - Operate and manage tools additionally need the jenkins-mcp-writers group (refused otherwise).',
         '  - A manage writer can define a job that runs code on a master, so the group is code-execution-capable.',
         '  - export_build_log / export_build_artifact stream big logs/artifacts to a short-lived signed S3 URL.',

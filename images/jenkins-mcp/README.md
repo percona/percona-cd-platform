@@ -7,10 +7,12 @@ and injects it per call, so no user ever handles a Jenkins token.
 
 ## Access model
 
-- Reads are open to any authenticated Percona user (Authentik / JumpCloud SSO), with two exceptions:
-  `get_item_config` (a job's raw config.xml) and `search_item_configs` (grep across many configs) are
-  gated to `jenkins-mcp-writers`, because config.xml can carry plaintext secrets (e.g. the
-  `<authToken>` remote-build-trigger token).
+- Reads are open to any authenticated Percona user (Authentik / JumpCloud SSO), with four exceptions:
+  `get_item_config` (a job's raw config.xml), `search_item_configs` (grep across many configs),
+  `get_node_config` (an agent's config.xml) and `get_build_scripts` (the pipeline script of a build)
+  are gated to `jenkins-mcp-writers`, because config.xml and pipeline scripts can carry plaintext
+  secrets (e.g. the `<authToken>` remote-build-trigger token). These tools carry the `config-read`
+  tag next to `read`, and the gateway gates every call by the tags of the called tool.
 - The operate tier (build, replay, stop, bulk stop, cancel) and the manage tier (create, update, delete job
   definitions) are served only when the server runs with `--enable-operate`, and are gated per call
   to the `jenkins-mcp-writers` Authentik group.
@@ -44,8 +46,9 @@ Facts that apply to every client:
   `auth.CLIENT_ID`. Omit it and the client falls back to DCR and fails with "does not support
   dynamic client registration".
 - **Access.** Reads are open to any authenticated Percona user (including downloading a large log or
-  artifact to a short-lived signed S3 URL), except `get_item_config` and `search_item_configs` (raw config.xml), which are gated
-  to `jenkins-mcp-writers`. The operate tier (build, replay, stop, cancel) and the manage tier (create,
+  artifact to a short-lived signed S3 URL), except `get_item_config`, `search_item_configs`,
+  `get_node_config` (raw config.xml) and `get_build_scripts` (pipeline script), which are gated to
+  `jenkins-mcp-writers`. The operate tier (build, replay, stop, cancel) and the manage tier (create,
   update, delete job definitions) are served only to members of the `jenkins-mcp-writers` Authentik
   group, enforced per call. Node-config and script mutation are never exposed. 46 tools total (38 read,
   5 operate, 3 manage).

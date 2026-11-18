@@ -5,7 +5,19 @@ import pytest
 from loguru import logger
 
 from mcp_jenkins.core import grants
-from mcp_jenkins.server import audit
+from mcp_jenkins.server import audit, mcp
+
+# Tags that need the writers group, spelled out here so a change in audit.py cannot also move the test.
+_GATED = frozenset({'operate', 'manage', 'write', 'config-read'})
+_OPERATE_MODE = {'read', 'operate', 'manage'}
+_ALL_TIERS = {'read', 'operate', 'manage', 'write'}
+
+
+def _ctx(mocker):
+    """A middleware context whose server is the real gateway, so the tags come from the live registry."""
+    ctx = mocker.Mock()
+    ctx.fastmcp_context.fastmcp = mcp
+    return ctx
 
 
 def test_summarize_args_allowlist_and_redaction():
@@ -70,7 +82,7 @@ async def test_middleware_emits_read_record(capture_audit, mocker):
     )
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_all_items'
     ctx.message.arguments = {'master': 'ps80'}
     ctx.timestamp = datetime.now(UTC)
@@ -95,7 +107,7 @@ async def test_middleware_error_on_read_tool(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_all_items'
     ctx.message.arguments = {}
     ctx.timestamp = datetime.now(UTC)
@@ -120,7 +132,7 @@ async def test_operate_tool_denied_without_writers_group(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'build_item'
     ctx.message.arguments = {'fullname': 'j', 'data': {'P': 'v'}}
     ctx.timestamp = datetime.now(UTC)
@@ -152,7 +164,7 @@ async def test_operate_tool_allowed_with_writers_group(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'build_item'
     ctx.message.arguments = {'fullname': 'j', 'data': {'P': 'secret'}}
     ctx.timestamp = datetime.now(UTC)
@@ -176,7 +188,7 @@ async def test_manage_tool_denied_without_writers_group(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'create_item'
     ctx.message.arguments = {'fullname': 'j', 'config_xml': '<project/>'}
     ctx.timestamp = datetime.now(UTC)
@@ -206,7 +218,7 @@ async def test_manage_tool_allowed_with_writers_group(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'delete_item'
     ctx.message.arguments = {'fullname': 'j'}
     ctx.timestamp = datetime.now(UTC)
@@ -229,7 +241,7 @@ async def test_get_item_config_denied_without_writers_group(capture_audit, mocke
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_item_config'
     ctx.message.arguments = {'fullname': 'j'}
     ctx.timestamp = datetime.now(UTC)
@@ -256,7 +268,7 @@ async def test_get_item_config_allowed_with_writers_group(capture_audit, mocker)
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_item_config'
     ctx.message.arguments = {'fullname': 'j'}
     ctx.timestamp = datetime.now(UTC)
@@ -281,7 +293,7 @@ async def test_gated_tool_denied_when_groups_claim_is_a_string(capture_audit, mo
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'create_item'
     ctx.message.arguments = {'fullname': 'j', 'config_xml': '<project/>'}
     ctx.timestamp = datetime.now(UTC)
@@ -299,10 +311,14 @@ async def test_gated_tool_denied_when_groups_claim_is_a_string(capture_audit, mo
     assert json.loads(capture_audit[-1])['status'] == 'denied'
 
 
-def test_config_write_tools_are_in_the_group_gated_union():
+@pytest.mark.asyncio
+async def test_config_write_tools_carry_a_gated_tag():
     # Invariant: config-WRITE (RCE-class) tools must be writers-gated, not just excluded by mode tags.
-    assert audit._CONFIG_TOOLS <= audit._GROUP_GATED
-    assert {'run_groovy_script', 'set_node_config'} <= audit._GROUP_GATED
+    for name in ('run_groovy_script', 'set_node_config'):
+        tool = await mcp.get_tool(name)
+        assert tool is not None, f'{name} is not registered'
+        assert 'write' in tool.tags
+    assert 'write' in audit._GATED_TAGS
 
 
 @pytest.mark.asyncio
@@ -315,7 +331,7 @@ async def test_config_write_tool_denied_without_writers_group(capture_audit, moc
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)  # anonymous, no groups
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = tool_name
     ctx.message.arguments = {'name': 'agent1', 'script': 'println secret'}
     ctx.timestamp = datetime.now(UTC)
@@ -343,7 +359,7 @@ async def test_config_write_tool_allowed_with_writers_group(capture_audit, mocke
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'run_groovy_script'
     ctx.message.arguments = {'script': 'println secret'}
     ctx.timestamp = datetime.now(UTC)
@@ -367,7 +383,7 @@ async def test_middleware_increments_metrics(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_all_items'
     ctx.message.arguments = {}
     ctx.timestamp = datetime.now(UTC)
@@ -390,7 +406,7 @@ async def test_middleware_metric_master_label_known_passes_through(capture_audit
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
     mocker.patch('mcp_jenkins.server.audit.get_fleet', return_value=mocker.Mock(names=lambda: ['pxc', 'ps80']))
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_build'
     ctx.message.arguments = {'master': 'pxc'}
     ctx.timestamp = datetime.now(UTC)
@@ -413,7 +429,7 @@ async def test_middleware_metric_master_label_unknown_clamped_to_invalid(capture
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
     mocker.patch('mcp_jenkins.server.audit.get_fleet', return_value=mocker.Mock(names=lambda: ['pxc']))
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_build'
     ctx.message.arguments = {'master': 'bogus-not-in-fleet'}
     ctx.timestamp = datetime.now(UTC)
@@ -464,7 +480,7 @@ async def test_new_gated_tools_denied_without_writers_group(capture_audit, mocke
 
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = tool
     ctx.message.arguments = {'pattern': 'x', 'fullname_pattern': 'j'}
     ctx.timestamp = datetime.now(UTC)
@@ -487,13 +503,29 @@ def test_summarize_args_logs_stop_targets_not_other_item_fields():
 
 
 def test_config_search_pattern_is_fingerprinted_not_logged():
-    summary = audit._summarize_args({'pattern': 'ghp_secretvalue', 'fullname_pattern': '^pmm3-'}, 'search_item_configs')
+    summary = audit._summarize_args({'pattern': 'ghp_secretvalue', 'fullname_pattern': '^pmm3-'}, secret_pattern=True)
 
     assert 'ghp_secretvalue' not in json.dumps(summary)
     assert summary['pattern_len'] == 15
     assert 'pattern_sha' not in summary
     assert summary['fullname_pattern'] == '^pmm3-'
-    assert audit._summarize_args({'pattern': 'ERROR'}, 'search_build_logs') == {'pattern': 'ERROR'}
+    assert audit._summarize_args({'pattern': 'ERROR'}) == {'pattern': 'ERROR'}
+
+
+@pytest.mark.asyncio
+async def test_config_search_call_logs_the_pattern_length_only(capture_audit, mocker):
+    token = mocker.Mock(claims={'sub': 'u1', 'groups': ['jenkins-mcp-writers']}, client_id='c')
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+    ctx = _ctx(mocker)
+    ctx.message.name = 'search_item_configs'
+    ctx.message.arguments = {'pattern': 'ghp_secretvalue'}
+    ctx.timestamp = datetime.now(UTC)
+
+    await audit.AuditMiddleware().on_call_tool(ctx, mocker.AsyncMock(return_value='hits'))
+
+    assert 'ghp_secretvalue' not in capture_audit[-1]
+    assert json.loads(capture_audit[-1])['args'] == {'pattern_len': 15}
 
 
 def test_wrongly_typed_data_and_items_are_recorded_as_dropped():
@@ -514,7 +546,7 @@ def test_error_detail_never_masks_the_real_error():
 async def test_successful_call_logs_its_parameters_and_no_dropped_keys(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_build_console_tail'
     ctx.message.arguments = {'fullname': 'j', 'lines': 200, 'surprise': 'x'}
     ctx.timestamp = datetime.now(UTC)
@@ -545,7 +577,7 @@ def _service_build_ctx(mocker, fullname, data=None):
         'mcp_jenkins.core.grants.get_grants',
         return_value={'pmm-automation': {'pmm': {'pmm3-nightly-orchestrator': grants.JobRule()}}},
     )
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'build_item'
     ctx.message.arguments = {'fullname': fullname, 'build_type': 'build', **({'data': data} if data else {})}
     ctx.timestamp = datetime.now(UTC)
@@ -653,7 +685,7 @@ async def test_middleware_turns_jenkins_404_into_not_found(capture_audit, mocker
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_build_walk'
     ctx.message.arguments = {'master': 'ps80', 'fullname': 'no-such-job'}
     ctx.timestamp = datetime.now(UTC)
@@ -683,7 +715,7 @@ async def test_middleware_keeps_other_http_errors(capture_audit, mocker):
     mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
     mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
 
-    ctx = mocker.Mock()
+    ctx = _ctx(mocker)
     ctx.message.name = 'get_build'
     ctx.message.arguments = {'master': 'ps80'}
     ctx.timestamp = datetime.now(UTC)
@@ -730,8 +762,7 @@ def test_summarize_args_bounds_values_and_logs_new_query_arguments():
             'compact_parameters': True,
             'cursor': 'job#2',
             'depth': {'nested': 'object'},
-        },
-        'query_items',
+        }
     )
 
     assert len(json.dumps(summary)) < 20_000
@@ -741,3 +772,159 @@ def test_summarize_args_bounds_values_and_logs_new_query_arguments():
     assert (summary['include_builds'], summary['builds_since_days'], summary['cursor']) == (200, 90, 'job#2')
     assert summary['include_parameters'] is True
     assert summary['dropped_keys'] == ['depth']
+
+
+@pytest.fixture
+def operate_mode():
+    # The tools that operate mode serves. The full registry comes back afterwards for the tests that follow.
+    mcp.enable(tags=_OPERATE_MODE, only=True)
+    yield
+    mcp.enable(tags=_ALL_TIERS, only=True)
+
+
+def _caller(mocker, groups):
+    token = mocker.Mock(claims={'sub': 'u1', 'groups': groups}, client_id='c')
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=token)
+    mocker.patch('mcp_jenkins.server.audit.get_http_request', side_effect=RuntimeError)
+
+
+@pytest.mark.asyncio
+async def test_every_gated_tool_served_in_operate_mode_is_denied_to_a_reader(capture_audit, mocker, operate_mode):
+    from fastmcp.exceptions import ToolError
+
+    _caller(mocker, ['some-other-group'])
+    served = await mcp.list_tools()
+    assert served, 'operate mode serves nothing'
+    assert {'get_item_config', 'search_item_configs', 'get_node_config', 'get_build_scripts', 'build_item'} <= {
+        t.name for t in served
+    }
+
+    for tool in served:
+        ctx = _ctx(mocker)
+        ctx.message.name = tool.name
+        ctx.message.arguments = {}
+        ctx.timestamp = datetime.now(UTC)
+        call_next = mocker.AsyncMock(return_value='ran')
+
+        if set(tool.tags) & _GATED:
+            with pytest.raises(ToolError, match='jenkins-mcp-writers'):
+                await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+            call_next.assert_not_called()
+            rec = json.loads(capture_audit[-1])
+            assert (rec['tool'], rec['status'], rec['deny_reason']) == (tool.name, 'denied', 'not_writer')
+        else:
+            assert await audit.AuditMiddleware().on_call_tool(ctx, call_next) == 'ran', tool.name
+            call_next.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_every_tool_served_in_operate_mode_reaches_a_writer(capture_audit, mocker, operate_mode):
+    _caller(mocker, ['jenkins-mcp-writers'])
+    served = await mcp.list_tools()
+    assert served, 'operate mode serves nothing'
+
+    for tool in served:
+        ctx = _ctx(mocker)
+        ctx.message.name = tool.name
+        ctx.message.arguments = {}
+        ctx.timestamp = datetime.now(UTC)
+        call_next = mocker.AsyncMock(return_value='ran')
+
+        assert await audit.AuditMiddleware().on_call_tool(ctx, call_next) == 'ran', tool.name
+        rec = json.loads(capture_audit[-1])
+        assert rec['status'] == 'ok', tool.name
+        assert rec['is_write'] is bool(set(tool.tags) & {'operate', 'manage', 'write'}), tool.name
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('tool', 'arguments'),
+    [('get_node_config', {'name': 'agent1'}), ('get_build_scripts', {'fullname': 'j', 'number': 1})],
+)
+async def test_config_class_reads_denied_without_writers_group(capture_audit, mocker, tool, arguments):
+    from fastmcp.exceptions import ToolError
+
+    _caller(mocker, [])
+    ctx = _ctx(mocker)
+    ctx.message.name = tool
+    ctx.message.arguments = arguments
+    ctx.timestamp = datetime.now(UTC)
+    call_next = mocker.AsyncMock()
+
+    with pytest.raises(ToolError, match='requires the jenkins-mcp-writers Authentik group'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    call_next.assert_not_called()
+    rec = json.loads(capture_audit[-1])
+    assert (rec['tool'], rec['status'], rec['deny_reason'], rec['is_write']) == (tool, 'denied', 'not_writer', False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('broken', ['no_server', 'lookup_raises'])
+async def test_unresolved_tags_deny_even_a_writer(capture_audit, mocker, broken):
+    from fastmcp.exceptions import ToolError
+
+    _caller(mocker, ['jenkins-mcp-writers'])
+    ctx = _ctx(mocker)
+    if broken == 'no_server':
+        ctx.fastmcp_context = None
+    else:
+        ctx.fastmcp_context.fastmcp = mocker.Mock(get_tool=mocker.AsyncMock(side_effect=RuntimeError('registry')))
+    ctx.message.name = 'get_all_items'
+    ctx.message.arguments = {'pattern': 'ghp_secretvalue'}
+    ctx.timestamp = datetime.now(UTC)
+    call_next = mocker.AsyncMock()
+
+    with pytest.raises(ToolError, match='could not be authorized'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    call_next.assert_not_called()
+    rec = json.loads(capture_audit[-1])
+    assert (rec['status'], rec['deny_reason']) == ('denied', 'tool_unresolved')
+    assert 'ghp_secretvalue' not in capture_audit[-1]  # an unresolved tool may be a config search
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('name', ['no_such_tool', '0123456789ab_build_item'])
+async def test_unserved_tool_name_ends_in_the_middleware(capture_audit, mocker, name):
+    from fastmcp.exceptions import NotFoundError
+
+    # A hashed backend name must not reach the dispatch path that skips the gate.
+    _caller(mocker, ['jenkins-mcp-writers'])
+    ctx = _ctx(mocker)
+    ctx.message.name = name
+    ctx.message.arguments = {}
+    ctx.timestamp = datetime.now(UTC)
+    call_next = mocker.AsyncMock(return_value='ran')
+    before = len(capture_audit)
+
+    with pytest.raises(NotFoundError, match='Unknown tool'):
+        await audit.AuditMiddleware().on_call_tool(ctx, call_next)
+
+    call_next.assert_not_called()
+    assert len(capture_audit) == before + 1
+    rec = json.loads(capture_audit[-1])
+    assert (rec['tool'], rec['status'], rec['error']) == (name, 'error', 'NotFoundError')
+    assert 'deny_reason' not in rec
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_ends_in_unknown_tool_error_with_one_audit_line(capture_audit, mocker):
+    from fastmcp import Client
+
+    mocker.patch('mcp_jenkins.server.audit.get_access_token', return_value=None)
+
+    async with Client(mcp) as client:
+        before = len(capture_audit)
+        with pytest.raises(Exception, match='Unknown tool'):
+            await client.call_tool('no_such_tool', {})
+
+    assert len(capture_audit) == before + 1
+    rec = json.loads(capture_audit[-1])
+    assert (rec['tool'], rec['status'], rec['error'], rec['error_module']) == (
+        'no_such_tool',
+        'error',
+        'NotFoundError',
+        'fastmcp.exceptions',
+    )
+    assert 'deny_reason' not in rec

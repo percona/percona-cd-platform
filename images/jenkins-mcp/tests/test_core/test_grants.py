@@ -14,6 +14,14 @@ _GRANTS = {
                 'allow': {'ACTION': ['LIST_ONLY', 'DELETE_CLUSTER']},
                 'pattern': {'CLUSTER_NAME': 'pmm-ha-[a-z0-9-]{1,40}'},
             },
+            'openshift-cluster-destroy': {
+                'require': ['CLUSTER_NAME', 'FORCE_MODE'],
+                'allow': {'FORCE_MODE': ['false']},
+                'pattern': {'CLUSTER_NAME': '(nightly|helm)-test-[0-9]{1,6}'},
+            },
+            'only-require': {'require': ['A']},
+            'only-allow': {'allow': {'A': ['x']}},
+            'only-pattern': {'pattern': {'A': '[a-z]+'}},
         }
     }
 }
@@ -120,6 +128,38 @@ def test_rule_bearing_job_refuses_the_build_endpoint(grant_env, mocker):
     override = json.dumps({'parameter': [{'name': 'ACTION', 'value': 'DELETE_ALL'}]})
     assert 'buildWithParameters' in _cleanup({**_NAMED, 'json': override}, build_type='build')
     assert 'buildWithParameters' in _cleanup(_NAMED, build_type='build')
+
+
+def _build(fullname, data):
+    return grants.build_denial('pmm', {'fullname': fullname, 'build_type': 'buildWithParameters', 'data': data})
+
+
+def test_unnamed_parameter_is_refused_on_a_rule_bearing_job(grant_env, mocker):
+    _token(mocker)
+    reason = _cleanup({**_NAMED, 'ZED': 'x', 'EXTRA': 'y'})
+    assert reason == f"'{_CLEANUP}' does not take the parameter EXTRA from this account"
+
+
+@pytest.mark.parametrize(
+    ('fullname', 'value'), [('only-require', 'anything'), ('only-allow', 'x'), ('only-pattern', 'abc')]
+)
+def test_parameter_named_in_one_rule_kind_passes(grant_env, mocker, fullname, value):
+    _token(mocker)
+    assert _build(fullname, {'A': value}) is None
+    assert 'does not take the parameter B' in _build(fullname, {'A': value, 'B': 'x'})
+
+
+def test_empty_rule_still_passes_any_string_parameter(grant_env, mocker):
+    _token(mocker)
+    assert _build('pmm3-nightly-orchestrator', {'ANY': 'x', 'OTHER': 'y'}) is None
+
+
+def test_infra_id_cannot_retarget_cluster_destroy(grant_env, mocker):
+    _token(mocker)
+    named = {'CLUSTER_NAME': 'nightly-test-42', 'FORCE_MODE': 'false'}
+    reason = _build('openshift-cluster-destroy', {**named, 'INFRA_ID': 'prod-abc12'})
+    assert reason == "'openshift-cluster-destroy' does not take the parameter INFRA_ID from this account"
+    assert _build('openshift-cluster-destroy', named) is None
 
 
 def test_data_that_is_not_a_dict_is_refused(grant_env, mocker):

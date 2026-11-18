@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import reduce
 from typing import Literal
+from urllib.parse import quote
 
 import requests
 from bs4 import BeautifulSoup
@@ -32,6 +33,29 @@ _PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultP
 # a cold master loads every requested build record from disk (ps80, 200 per job: 82 s cold, 8 s warm).
 _BUILDS_TREE = 'allBuilds[number,result,timestamp,duration,building,actions[causes[shortDescription]]]{{0,{count}}}'
 _BUILDS_TIMEOUT = 180
+
+# The path part of an endpoint must not hold a dot segment, a backslash, a fragment marker or a
+# percent-encoded dot, slash or backslash. The query part is free, it carries tree=...[...]{0,5}.
+_UNSAFE_ENDPOINT_CHARS = re.compile(r'[\\#]|%2e|%2f|%5c', re.IGNORECASE)
+# A node name must not hold a slash, a URL delimiter, a backslash or a percent sign. A job name part
+# may hold a percent sign (a branch job such as dev%2Ffoo), because it is percent-encoded before use.
+_UNSAFE_NAME_CHARS = ('/', '?', '#', '\\', '%')
+_UNSAFE_JOB_PART_CHARS = ('?', '#', '\\')
+
+
+def _check_endpoint_path(endpoint: str) -> None:
+    """Raise ValueError when the path part of an endpoint is unsafe."""
+    path = str(endpoint).split('?', 1)[0]
+    if _UNSAFE_ENDPOINT_CHARS.search(path) or any(segment in ('.', '..') for segment in path.split('/')):
+        msg = 'unsafe path in Jenkins endpoint'
+        raise ValueError(msg)
+
+
+def _check_name_part(value: str, kind: str, unsafe_chars: tuple[str, ...] = _UNSAFE_NAME_CHARS) -> None:
+    """Raise ValueError for an empty, '.' or '..' name, or one that holds an unsafe character."""
+    if not isinstance(value, str) or value in ('', '.', '..') or any(c in value for c in unsafe_chars):
+        msg = f'unsafe {kind}: {value!r}'
+        raise ValueError(msg)
 
 
 def _parse_builds(builds: list | None) -> list[dict]:
@@ -166,7 +190,11 @@ class Jenkins:
 
         Returns:
             The full URL as a string. (e.g., https://example.com/crumbIssuer/api/json)
+
+        Raises:
+            ValueError: If the path part of the endpoint is unsafe. Every request URL is built here.
         """
+        _check_endpoint_path(endpoint)
         return '/'.join(str(s).strip('/') for s in [self.url, endpoint])
 
     def request(
@@ -197,12 +225,12 @@ class Jenkins:
         Raises:
             HTTPError: If the response status is not successful.
         """
+        url = self.endpoint_url(endpoint)
         if crumb:
             if headers is None:
                 headers = {}
             headers.update(self.crumb_header)
 
-        url = self.endpoint_url(endpoint)
         logger.debug(f'Sending [{method}] request to {url}')
 
         response = self._session.request(
@@ -265,8 +293,18 @@ class Jenkins:
             A tuple containing:
                 - folder: The constructed folder URL (e.g., "job/folder1/job/folder2/").
                 - name: The last component of the path (e.g., "name").
+            Every part is percent-encoded once, so both values are for an endpoint path only.
+
+        Raises:
+            ValueError: If a part is empty, '.' or '..', or holds '?', '#' or a backslash.
         """
+        if not isinstance(fullname, str):
+            msg = f'unsafe job fullname: {fullname!r}'
+            raise ValueError(msg)
         parts = fullname.split('/')
+        for part in parts:
+            _check_name_part(part, 'job fullname', _UNSAFE_JOB_PART_CHARS)
+        parts = [quote(part, safe='') for part in parts]
         name = parts[-1]
         folder = f'job/{"/job/".join(parts[:-1])}/' if len(parts) > 1 else ''
         return folder, name
@@ -354,6 +392,7 @@ class Jenkins:
         Returns:
             The Node object.
         """
+        _check_name_part(name, 'node name')
         name = '(master)' if name in ('master', 'Built-In Node') else name
         response = self.request('GET', rest_endpoint.NODE(name=name, depth=depth))
         return Node.model_validate(response.json())
@@ -379,6 +418,7 @@ class Jenkins:
         Returns:
             The node configuration as an XML string.
         """
+        _check_name_part(name, 'node name')
         response = self.request('GET', rest_endpoint.NODE_CONFIG(name=name))
         return response.text
 
@@ -389,6 +429,7 @@ class Jenkins:
             name: The name of the node.
             config_xml: The node configuration as an XML string.
         """
+        _check_name_part(name, 'node name')
         self.request(
             'POST',
             rest_endpoint.NODE_CONFIG(name=name),
@@ -935,13 +976,14 @@ class Jenkins:
             fullname: The full name of the item to create (e.g., "folder1/new-job").
             config_xml: The item configuration as an XML string.
         """
-        folder, name = self._parse_fullname(fullname)
+        folder, _ = self._parse_fullname(fullname)
+        # requests encodes query params itself, so the createItem name stays unencoded.
         self.request(
             'POST',
             rest_endpoint.ITEM_CREATE(folder=folder),
             headers=self.DEFAULT_HEADERS,
             data=config_xml,
-            params={'name': name},
+            params={'name': fullname.split('/')[-1]},
         )
 
     def delete_item(self, *, fullname: str) -> None:

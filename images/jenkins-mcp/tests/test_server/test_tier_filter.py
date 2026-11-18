@@ -58,3 +58,14 @@ async def test_read_only_mode_serves_only_read_tools(restore_all_tools):
     assert served, 'read-only mode serves nothing'
     for tool in served:
         assert _tier_of(tool) == ['read'], f'{tool.name} ({_tier_of(tool)}) served in read-only mode'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('name', ['get_item_config', 'search_item_configs', 'get_node_config', 'get_build_scripts'])
+async def test_config_class_reads_carry_read_and_config_read(name):
+    # The read tier keeps them served in both modes. The config-read tag puts them behind the writers group.
+    tool = await mcp.get_tool(name)
+
+    assert tool is not None, f'{name} is not registered'
+    assert {'read', 'config-read'} <= set(tool.tags)
+    assert _tier_of(tool) == ['read']

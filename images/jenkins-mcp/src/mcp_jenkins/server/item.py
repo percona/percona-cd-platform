@@ -54,7 +54,7 @@ async def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dic
     return jenkins(ctx, master).get_item(fullname=fullname).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'config-read'])
 async def get_item_config(ctx: Context, fullname: str, master: MasterArg = None) -> str:
     """Get a job/folder's raw config.xml (jenkins-mcp-writers only).
 
@@ -95,7 +95,7 @@ def _redact(line: str) -> str:
     return _ENCRYPTED_BLOB.sub('{[redacted]}', line)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'config-read'])
 def search_item_configs(
     ctx: Context,
     pattern: str,

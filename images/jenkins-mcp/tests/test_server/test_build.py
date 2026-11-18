@@ -238,6 +238,37 @@ async def test_get_build_artifact_url_with_number(mock_jenkins, mocker):
     assert result == 'https://jenkins.example.com/job/job1/5/artifact/report.html'
 
 
+_UNSAFE_RELATIVE_PATHS = ['../../config.xml', 'a/../b', '/abs', 'x?y', '%2e%2e/x']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tool', ['get_build_artifact', 'get_build_artifact_url'])
+@pytest.mark.parametrize('relative_path', _UNSAFE_RELATIVE_PATHS)
+async def test_artifact_tools_reject_unsafe_path(mock_jenkins, mocker, tool, relative_path):
+    with pytest.raises(ValueError):
+        await getattr(build, tool)(mocker.Mock(), fullname='job1', relative_path=relative_path, number=3)
+    getattr(mock_jenkins, tool).assert_not_called()
+    mock_jenkins.get_item.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tool', ['get_build_artifact', 'get_build_artifact_url'])
+@pytest.mark.parametrize('relative_path', _UNSAFE_RELATIVE_PATHS)
+async def test_artifact_tools_reject_unsafe_path_before_number_lookup(mock_jenkins, mocker, tool, relative_path):
+    with pytest.raises(ValueError):
+        await getattr(build, tool)(mocker.Mock(), fullname='job1', relative_path=relative_path)
+    mock_jenkins.get_item.assert_not_called()
+    getattr(mock_jenkins, tool).assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_build_artifact_keeps_plain_names(mock_jenkins, mocker):
+    mock_jenkins.get_build_artifact.return_value = b'data'
+
+    await build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='out/big.bin', number=3)
+    mock_jenkins.get_build_artifact.assert_called_once_with(fullname='job1', number=3, relative_path='out/big.bin')
+
+
 @pytest.mark.asyncio
 async def test_get_build_history(mock_jenkins, mocker):
     mock_jenkins.get_build_history.return_value = [
