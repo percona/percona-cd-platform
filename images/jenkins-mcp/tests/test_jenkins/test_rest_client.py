@@ -219,6 +219,157 @@ def test_parse_fullname(jenkins):
     )
 
 
+_UNSAFE_ENDPOINTS = [
+    '../config.xml',
+    'job/a/../../config.xml',
+    'job/./x',
+    'job/..',
+    '..',
+    'job/a\\b',
+    'job/a#b',
+    'job/%2e%2e/x',
+    'job/%2E%2E/x',
+    'job/a%2fb',
+    'job/a%2Fb',
+    'job/a%5cb',
+    'job/a%5Cb',
+    '../x?tree=y',
+]
+
+
+class TestEndpointUrlSafety:
+    @pytest.mark.parametrize('endpoint', _UNSAFE_ENDPOINTS)
+    def test_rejects_unsafe_endpoint(self, jenkins, endpoint):
+        with pytest.raises(ValueError, match='unsafe path in Jenkins endpoint'):
+            jenkins.endpoint_url(endpoint)
+
+    @pytest.mark.parametrize('endpoint', _UNSAFE_ENDPOINTS)
+    def test_request_sends_nothing_for_unsafe_endpoint(self, jenkins, mock_session, endpoint):
+        with pytest.raises(ValueError):
+            jenkins.request('GET', endpoint)
+        mock_session.request.assert_not_called()
+
+    def test_query_part_is_not_checked(self, jenkins):
+        url = jenkins.endpoint_url('job/a/api/json?tree=builds[number]{0,5}&x=..%2f')
+        assert url == 'https://example.com/job/a/api/json?tree=builds[number]{0,5}&x=..%2f'
+
+    def test_keeps_encoded_space_and_inner_dots(self, jenkins):
+        assert jenkins.endpoint_url('view/nightly%20linux/api/json') == (
+            'https://example.com/view/nightly%20linux/api/json'
+        )
+        assert jenkins.endpoint_url('job/percona-server-8.0_ASAN/1/artifact/a/b.c/big.bin').endswith('big.bin')
+
+    def test_accepts_every_endpoint_constant(self, jenkins):
+        from mcp_jenkins.jenkins import rest_endpoint
+
+        samples = {
+            'folder': 'job/percona/job/sub dir/',
+            'name': 'percona-server-8.0_ASAN',
+            'depth': 1,
+            'query': 'jobs[name,url]',
+            'build_type': 'buildWithParameters',
+            'id': 42,
+            'view_path': 'view/All/view/nightly%20linux',
+            'number': 7,
+            'relative_path': 'out/sub/big.bin',
+            'count': 5,
+            'tree': 'shortName,version',
+        }
+        constants = [v for v in vars(rest_endpoint).values() if isinstance(v, rest_endpoint.RestEndpoint)]
+        assert len(constants) > 20
+        for endpoint in constants:
+            rendered = endpoint(**{field: samples[field] for field in endpoint._fields})
+            assert jenkins.endpoint_url(rendered).startswith('https://example.com/')
+        assert jenkins.endpoint_url(rest_endpoint.ITEMS(folder='', query='jobs[name]')).startswith(
+            'https://example.com/'
+        )
+
+
+_UNSAFE_FULLNAMES = ['', '..', '.', 'a/..', '../a', 'a/./b', 'a//b', 'a/', 'a?b', 'a#b', 'a\\b', 'folder/x?y']
+
+
+class TestParseFullnameSafety:
+    @pytest.mark.parametrize('fullname', _UNSAFE_FULLNAMES)
+    def test_rejects_unsafe_fullname(self, jenkins, fullname):
+        with pytest.raises(ValueError):
+            jenkins._parse_fullname(fullname)
+
+    @pytest.mark.parametrize(
+        ('fullname', 'expected'),
+        [
+            ('folder/sub/job', ('job/folder/job/sub/', 'job')),
+            ('percona-server-8.0_ASAN', ('', 'percona-server-8.0_ASAN')),
+            ('pvs-pr-tests/dev%2FCLOUD-873', ('job/pvs-pr-tests/', 'dev%252FCLOUD-873')),
+            ('my folder/job (old)', ('job/my%20folder/', 'job%20%28old%29')),
+            ('pipelines/tâche', ('job/pipelines/', 't%C3%A2che')),
+            ('a..b', ('', 'a..b')),
+            ('folder/%2e%2e', ('job/folder/', '%252e%252e')),
+        ],
+    )
+    def test_encodes_valid_fullname(self, jenkins, fullname, expected):
+        assert jenkins._parse_fullname(fullname) == expected
+
+    @pytest.mark.parametrize('fullname', ['%2e%2e', 'folder/%2e%2e/job', 'a%2fb/%5c'])
+    def test_encoded_percent_part_passes_endpoint_url(self, jenkins, fullname):
+        from mcp_jenkins.jenkins import rest_endpoint
+
+        folder, name = jenkins._parse_fullname(fullname)
+        url = jenkins.endpoint_url(rest_endpoint.ITEM_CONFIG(folder=folder, name=name))
+        assert url.endswith('/config.xml')
+        assert '%25' in url
+
+    def test_branch_job_url_is_encoded_once(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(
+            json=lambda: {
+                'name': 'dev/CLOUD-873',
+                'url': 'https://example.com/job/pvs-pr-tests/job/dev%252FCLOUD-873/',
+                '_class': 'org.jenkinsci.plugins.workflow.job.WorkflowJob',
+                'fullName': 'pvs-pr-tests/dev%2FCLOUD-873',
+                'color': 'blue',
+            }
+        )
+
+        jenkins.get_item(fullname='pvs-pr-tests/dev%2FCLOUD-873')
+
+        url = mock_session.request.call_args.kwargs['url']
+        assert url == 'https://example.com/job/pvs-pr-tests/job/dev%252FCLOUD-873/api/json?depth=0'
+        assert '/job/pvs-pr-tests/job/dev%252FCLOUD-873/' in url
+        assert '%25252F' not in url
+
+    def test_create_item_sends_the_unencoded_leaf_name(self, jenkins, mock_session, mocker):
+        mock_session.request.return_value = mocker.Mock(status_code=200)
+
+        jenkins.create_item(fullname='my folder/job (old)', config_xml='<project/>')
+
+        kwargs = mock_session.request.call_args.kwargs
+        assert kwargs['url'] == 'https://example.com/job/my%20folder/createItem'
+        assert kwargs['params'] == {'name': 'job (old)'}
+
+
+_UNSAFE_NODE_NAMES = ['', '.', '..', 'a/b', '../config.xml', 'a?b', 'a#b', 'a\\b', 'a%2fb', '%2e%2e']
+
+
+class TestNodeNameSafety:
+    @pytest.mark.parametrize('name', _UNSAFE_NODE_NAMES)
+    def test_node_methods_reject_unsafe_name(self, jenkins, mock_session, name):
+        with pytest.raises(ValueError):
+            jenkins.get_node(name=name)
+        with pytest.raises(ValueError):
+            jenkins.get_node_config(name=name)
+        with pytest.raises(ValueError):
+            jenkins.set_node_config(name=name, config_xml='<slave/>')
+        mock_session.request.assert_not_called()
+        mock_session.get.assert_not_called()
+
+    @pytest.mark.parametrize('name', ['(built-in)', 'agent-1.example', 'docker x64'])
+    def test_node_methods_keep_valid_name(self, jenkins, mock_session, mocker, name):
+        mock_session.request.return_value = mocker.Mock(text='<slave/>')
+        assert jenkins.get_node_config(name=name) == '<slave/>'
+        jenkins.set_node_config(name=name, config_xml='<slave/>')
+        assert mock_session.request.call_count == 2
+        assert mock_session.request.call_args.kwargs['url'] == f'https://example.com/computer/{name}/config.xml'
+
+
 class TestView:
     def test_build_view_path(self, jenkins):
         assert jenkins._build_view_path('All') == 'view/All'

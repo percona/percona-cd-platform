@@ -10,6 +10,7 @@ from requests.exceptions import HTTPError, RequestException
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_export import _resolve_number as _resolve_client_number
+from mcp_jenkins.server.build_export import _validate_relative_path
 
 # Caps that bound a single read so a tool call can never pull an unbounded payload or hand a
 # pathological regex to the line filter.
@@ -467,6 +468,10 @@ async def get_build_artifact(
     Returns:
         A dict with 'content' (str) and 'encoding' ('utf-8' or 'base64')
     """
+    # The path goes to Jenkins as given, so it must already be in canonical form.
+    if _validate_relative_path(relative_path) != relative_path:
+        msg = f'unsafe relative_path: {relative_path!r}'
+        raise ValueError(msg)
     number = _resolve_number(ctx, fullname, number, master)
 
     content = jenkins(ctx, master).get_build_artifact(fullname=fullname, number=number, relative_path=relative_path)
@@ -491,6 +496,10 @@ async def get_build_artifact_url(
     Returns:
         The direct Jenkins URL of the artifact
     """
+    # The path goes to Jenkins as given, so it must already be in canonical form.
+    if _validate_relative_path(relative_path) != relative_path:
+        msg = f'unsafe relative_path: {relative_path!r}'
+        raise ValueError(msg)
     number = _resolve_number(ctx, fullname, number, master)
 
     return jenkins(ctx, master).get_build_artifact_url(fullname=fullname, number=number, relative_path=relative_path)
