@@ -1,11 +1,13 @@
+import json
 import re
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from functools import reduce
 from typing import Literal
 from urllib.parse import quote
 
+import re2
 import requests
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -24,7 +26,89 @@ from mcp_jenkins.jenkins.model.item import (
 from mcp_jenkins.jenkins.model.node import Node
 from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
-_MAX_QUERY_PATTERN_LEN = 2000  # cap query_items regex inputs (CPU-DoS / ReDoS surface on an authenticated call)
+MAX_USER_PATTERN_LEN = 2000  # longest caller-supplied regex accepted by any tool
+
+_MIB = 1024 * 1024
+STREAM_CHUNK_BYTES = 64 * 1024
+# An inline artifact answer holds at most 10 MiB of body, about 13 MiB once base64 encoded.
+MAX_INLINE_ARTIFACT_BYTES = 10 * _MIB
+# One console answer goes to an LLM client: 1 MiB is about 250k tokens, more than a client can use.
+# The same bound limits what a console read buffers, plus one line and one chunk.
+MAX_CONSOLE_BYTES = _MIB
+# A console line is cut at this length, so a log without newlines never buffers past it.
+MAX_CONSOLE_LINE_BYTES = 64 * 1024
+# The projected test report of a 15k-case build is a few MiB. A body past this is refused.
+MAX_TEST_REPORT_BYTES = 32 * _MIB
+
+
+def _size_text(size: int) -> str:
+    """A byte count as '10 MiB' when it is a whole number of MiB, else as bytes."""
+    return f'{size // _MIB} MiB' if size and size % _MIB == 0 else f'{size} bytes'
+
+
+class PayloadTooLargeError(ValueError):
+    """A body from a master is larger than the limit of the tool that reads it."""
+
+
+def _content_length(response: Response) -> int | None:
+    """The Content-Length header as an int, or None when it is absent or not a number."""
+    value = response.headers.get('Content-Length')
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    return None
+
+
+def _read_capped(response: Response, max_bytes: int, refusal: str) -> bytearray:
+    """Read a streamed body and refuse it once it passes max_bytes.
+
+    A declared Content-Length above the cap is refused before any read. The cap also holds while
+    reading, so at most max_bytes plus one chunk is ever held. The buffer is returned without a copy.
+    """
+    declared = _content_length(response)
+    if declared is not None and declared > max_bytes:
+        msg = f'{refusal} (Content-Length {declared} bytes)'
+        raise PayloadTooLargeError(msg)
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=STREAM_CHUNK_BYTES):
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            msg = f'{refusal} (more than {max_bytes} bytes)'
+            raise PayloadTooLargeError(msg)
+    return body
+
+
+def _console_line(raw: bytes | bytearray, max_line: int) -> tuple[str, int]:
+    """Decode one console line, cut at max_line with a marker, with its answer size in bytes."""
+    marker = f' [line cut at {max_line} bytes]' if len(raw) > max_line else ''
+    kept = bytes(raw[:max_line]).removesuffix(b'\r')
+    return kept.decode('utf-8', 'replace') + marker, len(kept) + len(marker) + 1
+
+
+def _iter_console_lines(chunks: Iterable[bytes], max_line: int = MAX_CONSOLE_LINE_BYTES) -> Iterator[tuple[str, int]]:
+    """Split a byte stream into (line, size) pairs while holding at most one line and one chunk.
+
+    A line longer than max_line is cut there with a marker, and the rest of it is dropped.
+    """
+    pending = bytearray()
+    dropping = False
+    for chunk in chunks:
+        pending.extend(chunk)
+        start = 0
+        while (newline := pending.find(b'\n', start)) != -1:
+            if dropping:
+                dropping = False
+            else:
+                yield _console_line(pending[start:newline], max_line)
+            start = newline + 1
+        del pending[:start]
+        if len(pending) > max_line:
+            if not dropping:
+                yield _console_line(pending, max_line)
+                dropping = True
+            pending.clear()
+    if pending and not dropping:
+        yield _console_line(pending, max_line)
+
 
 _PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
 
@@ -103,60 +187,175 @@ def _parse_parameter_definitions(properties: list | None) -> list[dict]:
     return params
 
 
-# A bare global flag group such as (?i) or (?im), not a scoped (?i:...) and not an escaped \(.
-_GLOBAL_FLAG_GROUP = re.compile(r'(?<!\\)\(\?([aiLmsux]+)\)')
+# Python flag letters of a global group. RE2 knows i, m and s. a and u are dropped because RE2
+# classes are ASCII and its input is UTF-8 already. x and L have no RE2 form.
+_PY_FLAG_LETTERS = frozenset('aiLmsux')
+_RE2_FLAG_LETTERS = 'ims'
+_DROPPED_FLAG_LETTERS = frozenset('au')
+_FLAG_LETTER_OF = {re.IGNORECASE: 'i', re.MULTILINE: 'm', re.DOTALL: 's'}
+
+# A compiled RE2 program is cached by the re2 module (128 entries), so its memory budget bounds the cache.
+_RE2_OPTIONS = re2.Options()
+_RE2_OPTIONS.max_mem = 1 << 20
+_RE2_OPTIONS.log_errors = False
+
+# Constructs that backtracking engines accept and RE2 refuses, with the name the caller sees.
+_UNSUPPORTED_GROUPS = (
+    ('(?<=', 'lookbehind (?<=...)'),
+    ('(?<!', 'negative lookbehind (?<!...)'),
+    ('(?=', 'lookahead (?=...)'),
+    ('(?!', 'negative lookahead (?!...)'),
+    ('(?>', 'atomic group (?>...)'),
+    ('(?P=', 'named backreference (?P=name)'),
+    ('(?(', 'conditional group (?(...)...)'),
+    ('(?#', 'comment group (?#...)'),
+)
+
+
+def _scan_pattern(pattern: str) -> tuple[list[tuple[int, int, str]], str | None]:
+    """Walk a pattern outside escapes and character classes.
+
+    Returns the spans of bare global flag groups such as (?i), and the name of the first construct
+    that RE2 does not support, or None.
+    """
+    flag_groups: list[tuple[int, int, str]] = []
+    unsupported: str | None = None
+    i, n, in_class = 0, len(pattern), False
+    while i < n:
+        ch = pattern[i]
+        if ch == '\\':
+            nxt = pattern[i + 1 : i + 2]
+            if unsupported is None and not in_class and nxt in set('123456789'):
+                unsupported = f'backreference \\{nxt}'
+            elif unsupported is None and nxt == 'Z':
+                unsupported = r'\Z (use \z for the end of the text)'
+            i += 2
+            continue
+        if in_class:
+            in_class = ch != ']'
+            i += 1
+            continue
+        if ch == '[':
+            i += 1
+            i += pattern[i : i + 1] == '^'
+            i += pattern[i : i + 1] == ']'
+            in_class = True
+            continue
+        if pattern.startswith('(?', i):
+            end = i + 2
+            while end < n and pattern[end] in _PY_FLAG_LETTERS:
+                end += 1
+            if end > i + 2 and pattern[end : end + 1] == ')':
+                flag_groups.append((i, end + 1, pattern[i + 2 : end]))
+                i = end + 1
+                continue
+            if unsupported is None:
+                unsupported = next(
+                    (name for prefix, name in _UNSUPPORTED_GROUPS if pattern.startswith(prefix, i)), None
+                )
+        elif ch in '*+?}' and pattern[i + 1 : i + 2] == '+' and unsupported is None:
+            unsupported = f'possessive quantifier {ch}+'
+        i += 1
+    return flag_groups, unsupported
 
 
 def hoist_inline_flags(pattern: str) -> str:
     """Move global flag groups that are not at the start, like 'a|(?i)b', to the front.
 
-    Python rejects them ('global flags not at the start'), callers write them anyway. A pattern
-    that compiles is returned unchanged, so this only rewrites patterns that would fail.
+    Callers write them anywhere and mean the whole pattern. RE2 would apply a later group only
+    from its position on, so every bare group is merged into one group at the front.
     """
-    try:
-        re.compile(pattern)
-    except re.error as e:
-        if 'global flags not at the start' not in str(e):
-            return pattern
-    else:
+    groups, _ = _scan_pattern(pattern)
+    if not groups or (len(groups) == 1 and groups[0][0] == 0):
         return pattern
-    flags = ''.join(dict.fromkeys(''.join(_GLOBAL_FLAG_GROUP.findall(pattern))))
-    return f'(?{flags}){_GLOBAL_FLAG_GROUP.sub("", pattern)}' if flags else pattern
+    flags = ''.join(dict.fromkeys(''.join(letters for _, _, letters in groups)))
+    body, cursor = [], 0
+    for start, end, _ in groups:
+        body.append(pattern[cursor:start])
+        cursor = end
+    body.append(pattern[cursor:])
+    return f'(?{flags}){"".join(body)}'
 
 
-def compile_user_regex(pattern: str, flags: int = 0) -> re.Pattern:
-    """re.compile for a caller-supplied pattern, with misplaced global flags moved to the front."""
-    return re.compile(hoist_inline_flags(pattern), flags)
+def compile_user_regex(pattern: str, flags: int = 0) -> 're2._Regexp':
+    """Compile a caller-supplied pattern with the linear-time RE2 engine.
+
+    Global flag groups are hoisted, and IGNORECASE, MULTILINE and DOTALL in flags become inline
+    flags. Any failure raises ValueError with a message that names the cause.
+    """
+    if len(pattern) > MAX_USER_PATTERN_LEN:
+        msg = f'pattern too long ({len(pattern)} > {MAX_USER_PATTERN_LEN} chars)'
+        raise ValueError(msg)
+    hoisted = hoist_inline_flags(pattern)
+    groups, unsupported = _scan_pattern(hoisted)
+    letters = set(groups[0][2]) if groups and groups[0][0] == 0 else set()
+    body = hoisted[groups[0][1] :] if letters else hoisted
+    for flag, letter in _FLAG_LETTER_OF.items():
+        if flags & flag:
+            letters.add(letter)
+    if flags & ~(re.IGNORECASE | re.MULTILINE | re.DOTALL):
+        msg = f'invalid regex pattern: flags {flags!r} are not supported'
+        raise ValueError(msg)
+    letters -= _DROPPED_FLAG_LETTERS
+    if unknown := sorted(letters - set(_RE2_FLAG_LETTERS)):
+        msg = (
+            f'invalid regex pattern: the inline flag (?{"".join(unknown)}) is not supported. '
+            f'Use only the flags i, m and s.'
+        )
+        raise ValueError(msg)
+    prefix = ''.join(c for c in _RE2_FLAG_LETTERS if c in letters)
+    final = f'(?{prefix}){body}' if prefix else body
+    try:
+        return re2.compile(final, _RE2_OPTIONS)
+    except (re2.error, UnicodeEncodeError) as e:
+        if unsupported is not None:
+            msg = (
+                f'invalid regex pattern: {unsupported} is not supported. Regex filters use the '
+                'linear-time RE2 engine, which has no backreferences, lookaround, atomic groups or '
+                'possessive quantifiers. Simplify the pattern, or use literal matching where the tool '
+                'offers it (literal=True).'
+            )
+        else:
+            detail = e.args[0] if e.args else e
+            if isinstance(detail, bytes):
+                detail = detail.decode('utf-8', 'replace')
+            msg = f'invalid regex pattern: {detail} (RE2 syntax)'
+        raise ValueError(msg) from e
 
 
-def _compile_query_pattern(pattern: str | None) -> 're.Pattern | None':
-    """Compile a query_items filter pattern with a length cap and a sanitized error.
+def _compile_query_pattern(pattern: str | None) -> 're2._Regexp | None':
+    """Compile a query_items filter pattern with the caller-pattern rules of compile_user_regex.
 
-    The matched strings are short (names/labels), but an uncapped or invalid user regex is a CPU /
-    error-leak surface, so bound the input and turn re.error into a clean ValueError (mirrors the
-    grep_build_artifact pattern guard).
+    An invalid, unsupported or over-long pattern raises a clean ValueError before any API call.
     """
     if not pattern:
         return None
-    if len(pattern) > _MAX_QUERY_PATTERN_LEN:
-        msg = f'pattern too long ({len(pattern)} > {_MAX_QUERY_PATTERN_LEN} chars)'
-        raise ValueError(msg)
-    try:
-        return compile_user_regex(pattern)
-    except re.error as e:
-        msg = f'invalid regex pattern: {e}'
-        raise ValueError(msg) from e
+    return compile_user_regex(pattern)
+
+
+# Names that a catch-all such as ".", ".+" or "[\s\S]" matches and a narrowing pattern does not.
+_CATCH_ALL_PROBES = ('\x00', '~', 'Q', '7', ' ')
+
+
+def pattern_narrows(pattern: str | None) -> bool:
+    """True when pattern is a valid regex that leaves some names out.
+
+    A pattern that matches the empty string (".*", "a|.*", "x?") or every probe name (".", ".+")
+    selects everything. An invalid pattern raises ValueError.
+    """
+    compiled = _compile_query_pattern(pattern)
+    if compiled is None or compiled.search('') is not None:
+        return False
+    return not all(compiled.search(probe) for probe in _CATCH_ALL_PROBES)
 
 
 def require_narrow_pattern(pattern: str, tool: str) -> None:
     """Reject a job-selecting regex that is invalid or matches every name.
 
-    A pattern that matches the empty string (".*", "a|.*", "x?") matches every job, so a fan-out
-    tool would read everything; this also compiles it once up front, so a bad regex fails the call
-    instead of every master or job.
+    A fan-out tool would read every job for a catch-all. The pattern is compiled once up front,
+    so a bad regex fails the call instead of every master or job.
     """
-    compiled = _compile_query_pattern(pattern)
-    if compiled is None or compiled.search('') is not None:
+    if not pattern_narrows(pattern):
         msg = f'{tool} needs a fullname_pattern that narrows the jobs (it must not match every name)'
         raise ValueError(msg)
 
@@ -262,6 +461,17 @@ class Jenkins:
         response.raise_for_status()
 
         return response
+
+    @contextmanager
+    def _stream(self, endpoint: str, params: dict | None = None) -> Iterator[Response]:
+        """Open a streaming GET of an endpoint and close it on every path, an HTTP error included."""
+        kwargs = {'params': params} if params else {}
+        response = self._session.get(self.endpoint_url(endpoint), timeout=self.timeout, stream=True, **kwargs)
+        try:
+            response.raise_for_status()
+            yield response
+        finally:
+            response.close()
 
     @property
     def crumb_header(self) -> dict[str, str]:
@@ -463,8 +673,12 @@ class Jenkins:
         pattern: str | None = None,
         offset: int = 0,
         limit: int | None = None,
+        max_bytes: int = MAX_CONSOLE_BYTES,
     ) -> str:
         """Get the console output of a specific build.
+
+        The console is read as a stream. The answer holds at most max_bytes of lines. When more
+        lines would follow, it ends with a truncation line that gives the offset to continue from.
 
         Args:
             fullname: The fullname of the job.
@@ -472,6 +686,7 @@ class Jenkins:
             pattern: Optional regex pattern to filter lines (only matching lines are returned).
             offset: Number of lines to skip from the beginning (after pattern filtering).
             limit: Maximum number of lines to return (after pattern filtering and offset).
+            max_bytes: Largest answer in bytes.
 
         Returns:
             The console output as a string.
@@ -479,55 +694,69 @@ class Jenkins:
         folder, name = self._parse_fullname(fullname)
         compiled = compile_user_regex(pattern) if pattern else None
 
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-
         matched: list[str] = []
-        skipped = 0
+        used = skipped = 0
+        truncated = False
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            for line, size in _iter_console_lines(response.iter_content(chunk_size=STREAM_CHUNK_BYTES)):
+                if compiled is not None and not compiled.search(line):
+                    continue
+                if skipped < offset:
+                    skipped += 1
+                    continue
+                if used + size > max_bytes:
+                    truncated = True
+                    break
+                matched.append(line)
+                used += size
+                if limit is not None and len(matched) >= limit:
+                    break
 
-        for raw_line in response.iter_lines(decode_unicode=True):
-            if compiled is not None and not compiled.search(raw_line):
-                continue
-            if skipped < offset:
-                skipped += 1
-                continue
-            matched.append(raw_line)
-            if limit is not None and len(matched) >= limit:
-                break
-
-        response.close()
+        if truncated:
+            matched.append(
+                f'[output truncated: one call returns at most {max_bytes} bytes of console text. '
+                f'Continue with offset={offset + len(matched)}, use get_build_console_tail for the end, '
+                'or export_build_log for the whole log]'
+            )
         return '\n'.join(matched)
 
-    def get_build_console_tail(self, *, fullname: str, number: int, lines: int = 200) -> str:
+    def get_build_console_tail(
+        self, *, fullname: str, number: int, lines: int = 200, max_bytes: int = MAX_CONSOLE_BYTES
+    ) -> str:
         """Return the last `lines` lines of a build's console without buffering the whole log.
 
-        Streams the console and keeps only a bounded ring of the most recent lines, so it is cheap
-        even on a multi-MB log. The failure summary and `Finished: <result>` marker live at the end.
+        Streams the console and keeps only the most recent lines that fit in max_bytes, so it is
+        cheap even on a multi-MB log. When the byte bound leaves lines out, a truncation line
+        comes first. The failure summary and `Finished: <result>` marker live at the end.
 
         Args:
             fullname: The fullname of the job.
             number: The build number.
             lines: Number of trailing lines to return.
+            max_bytes: Largest answer in bytes.
 
         Returns:
             The last `lines` lines joined by newlines.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        tail: deque[str] = deque(maxlen=lines)
-        for raw_line in response.iter_lines(decode_unicode=True):
-            tail.append(raw_line)
-        response.close()
-        return '\n'.join(tail)
+        tail: deque[tuple[str, int]] = deque()
+        used = seen = 0
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            for line, size in _iter_console_lines(response.iter_content(chunk_size=STREAM_CHUNK_BYTES)):
+                seen += 1
+                tail.append((line, size))
+                used += size
+                while len(tail) > lines or used > max_bytes:
+                    used -= tail.popleft()[1]
+
+        text = [line for line, _ in tail]
+        if len(text) < min(lines, seen):
+            text.insert(
+                0,
+                f'[output truncated: the last {lines} lines are more than {max_bytes} bytes, only the last '
+                f'{len(text)} are shown. Use export_build_log for the whole log]',
+            )
+        return '\n'.join(text)
 
     def stop_build(self, *, fullname: str, number: int) -> None:
         """Stop a running Jenkins build.
@@ -581,7 +810,15 @@ class Jenkins:
                 return {p['name']: p.get('value') for p in action['parameters']}
         return {}
 
-    def get_build_test_report(self, *, fullname: str, number: int, depth: int = 0, tree: str | None = None) -> dict:
+    def get_build_test_report(
+        self,
+        *,
+        fullname: str,
+        number: int,
+        depth: int = 0,
+        tree: str | None = None,
+        max_bytes: int = MAX_TEST_REPORT_BYTES,
+    ) -> dict:
         """Get the test report of a specific build.
 
         Args:
@@ -591,18 +828,18 @@ class Jenkins:
             tree: Optional Jenkins `tree` field projection. When set it narrows the payload to the
                 requested fields (e.g. drop per-case stdout/stderr/stackTrace), which keeps a large
                 parallel-test report small. Jenkins prefers tree over depth when both are present.
+            max_bytes: Largest report body read. A larger one raises PayloadTooLargeError.
 
         Returns:
             A dictionary representing the test report.
         """
         folder, name = self._parse_fullname(fullname)
         params = {'tree': tree} if tree else None
-        response = self.request(
-            'GET',
-            rest_endpoint.BUILD_TEST_REPORT(folder=folder, name=name, number=number, depth=depth),
-            params=params,
-        )
-        return response.json()
+        endpoint = rest_endpoint.BUILD_TEST_REPORT(folder=folder, name=name, number=number, depth=depth)
+        refusal = f'the test report is larger than the {_size_text(max_bytes)} read limit'
+        with self._stream(endpoint, params=params) as response:
+            body = _read_capped(response, max_bytes, refusal)
+        return json.loads(body)
 
     def get_build_history(self, *, fullname: str, count: int = 10) -> list[Build]:
         """Get the most recent builds of a job.
@@ -733,23 +970,28 @@ class Jenkins:
         )
         return [Artifact.model_validate(a) for a in response.json().get('artifacts', [])]
 
-    def get_build_artifact(self, *, fullname: str, number: int, relative_path: str) -> bytes:
-        """Download the content of a specific artifact from a build.
+    def get_build_artifact(
+        self, *, fullname: str, number: int, relative_path: str, max_bytes: int = MAX_INLINE_ARTIFACT_BYTES
+    ) -> bytearray:
+        """Download the content of a specific artifact from a build, up to max_bytes.
 
         Args:
             fullname: The fullname of the job.
             number: The build number.
             relative_path: The relative path of the artifact.
+            max_bytes: Largest artifact read inline. A larger one raises PayloadTooLargeError.
 
         Returns:
-            The artifact content as bytes.
+            The artifact content as a bytearray, the read buffer itself.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self.request(
-            'GET',
-            rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path),
+        endpoint = rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
+        refusal = (
+            f'the artifact is larger than the inline limit of {_size_text(max_bytes)}. '
+            'Use export_build_artifact for the whole file, or grep_build_artifact to search a text artifact'
         )
-        return response.content
+        with self._stream(endpoint) as response:
+            return _read_capped(response, max_bytes, refusal)
 
     def get_build_artifact_url(self, *, fullname: str, number: int, relative_path: str) -> str:
         """Get the direct URL of a specific artifact from a build.
@@ -783,25 +1025,17 @@ class Jenkins:
             The open requests.Response; closed when the context exits.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        response.raw.decode_content = True
-        try:
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            response.raw.decode_content = True
             yield response
-        finally:
-            response.close()
 
     @contextmanager
     def stream_build_artifact(self, *, fullname: str, number: int, relative_path: str) -> Iterator[Response]:
         """Open a streaming GET of a build artifact's raw bytes.
 
         Yields an open response with stream=True so the caller can pipe response.raw straight to a
-        sink without buffering the whole artifact in memory (unlike get_build_artifact, which returns
-        response.content). The caller must validate relative_path; it is interpolated into the URL.
+        sink without buffering the whole artifact in memory (unlike get_build_artifact, which reads
+        up to its inline limit). The caller must validate relative_path; it is interpolated into the URL.
 
         Args:
             fullname: The fullname of the job.
@@ -812,19 +1046,10 @@ class Jenkins:
             The open requests.Response; closed when the context exits.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(
-                rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
-            ),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        response.raw.decode_content = True
-        try:
+        endpoint = rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
+        with self._stream(endpoint) as response:
+            response.raw.decode_content = True
             yield response
-        finally:
-            response.close()
 
     def get_running_builds(self) -> list[Build]:
         """Get all running builds across all nodes, deduplicated.

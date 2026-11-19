@@ -27,7 +27,7 @@ async def test_export_build_log_uses_last_build(mock_jenkins, mock_s3, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 7
     mock_jenkins.stream_build_console_output.return_value = mocker.MagicMock()
 
-    result = await build_export.export_build_log(mocker.Mock(), fullname='PXC/build')
+    result = build_export.export_build_log(mocker.Mock(), fullname='PXC/build')
 
     assert result == {'url': 'https://signed', 'key': 'k', 'size_bytes': 123}
     mock_jenkins.stream_build_console_output.assert_called_once_with(fullname='PXC/build', number=7)
@@ -39,7 +39,7 @@ async def test_export_build_log_uses_last_build(mock_jenkins, mock_s3, mocker):
 async def test_export_build_log_explicit_number(mock_jenkins, mock_s3, mocker):
     mock_jenkins.stream_build_console_output.return_value = mocker.MagicMock()
 
-    await build_export.export_build_log(mocker.Mock(), fullname='PXC/build', number=3)
+    build_export.export_build_log(mocker.Mock(), fullname='PXC/build', number=3)
 
     mock_jenkins.stream_build_console_output.assert_called_once_with(fullname='PXC/build', number=3)
     mock_jenkins.get_item.assert_not_called()
@@ -50,14 +50,14 @@ async def test_export_build_log_no_builds_raises(mock_jenkins, mock_s3, mocker):
     mock_jenkins.get_item.return_value.lastBuild = None
 
     with pytest.raises(ValueError, match='No build found'):
-        await build_export.export_build_log(mocker.Mock(), fullname='PXC/build')
+        build_export.export_build_log(mocker.Mock(), fullname='PXC/build')
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('bad', ['../etc/passwd', '%2e%2e/x', '/abs', 'a/../../b', 'a\\b', '', 'x\x00y'])
 async def test_export_build_artifact_rejects_unsafe_path(mock_jenkins, mock_s3, mocker, bad):
     with pytest.raises(ValueError):  # noqa: PT011
-        await build_export.export_build_artifact(mocker.Mock(), fullname='J', relative_path=bad)
+        build_export.export_build_artifact(mocker.Mock(), fullname='J', relative_path=bad)
     mock_jenkins.stream_build_artifact.assert_not_called()
 
 
@@ -66,7 +66,7 @@ async def test_export_build_artifact_happy(mock_jenkins, mock_s3, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 9
     mock_jenkins.stream_build_artifact.return_value = mocker.MagicMock()
 
-    result = await build_export.export_build_artifact(mocker.Mock(), fullname='J', relative_path='reports/out.txt')
+    result = build_export.export_build_artifact(mocker.Mock(), fullname='J', relative_path='reports/out.txt')
 
     assert result['url'] == 'https://signed'
     mock_jenkins.stream_build_artifact.assert_called_once_with(fullname='J', number=9, relative_path='reports/out.txt')

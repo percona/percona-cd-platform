@@ -21,7 +21,7 @@ _FIND_SECONDS = 30
 
 
 @mcp.tool(tags={'read'})
-async def list_masters() -> list[dict]:
+def list_masters() -> list[dict]:
     """List the active Jenkins masters this server can reach, with a liveness check.
 
     Returns:

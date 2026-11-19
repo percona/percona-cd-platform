@@ -25,7 +25,7 @@ async def test_list_masters_reports_liveness(two_masters):
     two_masters['ps80'].get_version.return_value = '2.541.3'
     two_masters['ps57'].get_version.side_effect = RuntimeError('connection refused')
 
-    result = await fleet.list_masters()
+    result = fleet.list_masters()
 
     by_name = {m['name']: m for m in result}
     assert by_name['ps80'] == {'name': 'ps80', 'url': 'https://ps80.cd', 'reachable': True, 'version': '2.541.3'}

@@ -78,8 +78,16 @@ _CATALOG = [
                 '      console log; pattern is a regex line filter (slice big logs with pattern/limit)',
             ),
             (
+                'get_build_console_output',
+                '      one answer holds at most 1 MiB; a truncation line names the offset to continue from',
+            ),
+            (
                 'get_build_console_tail',
                 'get_build_console_tail(fullname, number?, lines?, master?)  last N console lines (the failure tail)',
+            ),
+            (
+                'get_build_console_tail',
+                '      at most 5000 lines and 1 MiB; a truncation line comes first when the byte cap cuts lines',
             ),
             (
                 'get_build_test_report',
@@ -94,12 +102,20 @@ _CATALOG = [
                 '      get_build_test_report is the RAW full report; prefer get_build_failure_summary for failures',
             ),
             (
+                'get_build_test_report',
+                '      no stdout/stderr, error text cut at 1200 chars, at most 1000 cases (max_cases), truncated flag',
+            ),
+            (
                 'get_all_build_artifacts',
                 'get_all_build_artifacts / get_build_artifact / get_build_artifact_url(fullname, ..., master?)',
             ),
             (
                 'get_all_build_artifacts',
                 '      each artifact carries a content hint; a .tar.gz -> list_archive_artifact / grep_build_artifact',
+            ),
+            (
+                'get_build_artifact',
+                '      get_build_artifact: 10 MiB inline at most, else export_build_artifact or grep_build_artifact',
             ),
             (
                 'get_build_history',
@@ -168,7 +184,7 @@ _CATALOG = [
                 'wait_for_build(fullname, queue_id? | number?, timeout_seconds?, master?)   queue id -> build number,',
             ),
             ('wait_for_build', '      then wait (<= 60 s per call) until it finishes; never raises on timeout'),
-            ('get_all_views', 'get_all_views / get_view(view_path, depth?, master?)         views'),
+            ('get_all_views', 'get_all_views / get_view(view_path, depth? 0-2, master?)     views'),
         ],
     ),
     (
@@ -230,8 +246,9 @@ _SAMPLES_READ = [
     '  "parameters of every <x> job" -> query_items(fullname_pattern="<x>", include_parameters=True)',
     '  "parameters of every job on a master" -> query_items(include_parameters=True, compact_parameters=True),',
     '      then call again with cursor=next_cursor until next_cursor is null',
-    '  "build history of every job on a master" -> query_items(include_builds=200, builds_since_days=90),',
-    '      paged the same way with cursor (one string per build: number, result, start, duration, cause)',
+    '  "build history of many jobs" -> query_items(fullname_pattern="<prefix>", include_builds=200,',
+    '      builds_since_days=90), paged the same way with cursor (one string per build: number, result,',
+    '      start, duration, cause). include_builds needs a narrowing fullname/label/color/class pattern',
     '  "what is running right now?" -> get_running_builds(master="<master>")',
     '  "summarise the last 10 builds of <job>" -> get_build_walk(fullname="<job>", count=10)',
     '  "just the build numbers of <job>" -> get_build_history(fullname="<job>", count=10)',
@@ -361,6 +378,8 @@ async def get_readme() -> str:
         '  - Job names are FULL folder paths, e.g. "folder/sub/job"; find exact names with query_items.',
         '  - get_all_items / query_items return a flat compact list capped by limit (total + truncated reported).',
         '  - On a big master, narrow with query_items(fullname_pattern=...) rather than raising limit.',
+        '  - query_items(include_builds=...) refuses a call with no narrowing pattern, ".*" included.',
+        '    A selection of more than 20 jobs gets at most 20 builds per job (builds_cap and note say so).',
         '  - number defaults to the most recent build when omitted (except stop_build, which needs one).',
         '  - Reads are open to any authenticated Percona user (JumpCloud SSO login); the exceptions are',
         '    get_item_config, search_item_configs, get_node_config (config.xml) and get_build_scripts',
@@ -373,5 +392,8 @@ async def get_readme() -> str:
         '    regex opt-in); list_archive_artifact lists members; extract_archive_artifact pulls one (inline or S3).',
         '  - query_items(label_pattern=...) filters jobs by agent label (arch), but only freestyle/matrix jobs expose',
         '    one; pipeline jobs keep their label in the Jenkinsfile, so they will not match.',
+        '  - Every regex argument (pattern, *_pattern) uses RE2 syntax, at most 2000 characters. RE2 runs in linear',
+        '    time and has no backreferences, lookaround, atomic groups or possessive quantifiers. \\d \\w \\b are',
+        '    ASCII only (use \\pL or \\pN for Unicode), and \\Z is written \\z. Inline flags i, m and s work.',
     ]
     return '\n'.join(lines)

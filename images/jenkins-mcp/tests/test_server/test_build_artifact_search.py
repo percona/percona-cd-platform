@@ -130,7 +130,7 @@ async def test_grep_inside_tar_member(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_list_archive_glob(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'a/x.log': b'1', 'a/y.txt': b'22', 'b/z.log': b'333'})))
-    out = await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', glob='*.log', number=1)
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', glob='*.log', number=1)
     assert sorted(e['name'] for e in out['entries']) == ['a/x.log', 'b/z.log']
     assert {e['name']: e['size'] for e in out['entries']}['b/z.log'] == 3
 
@@ -138,7 +138,7 @@ async def test_list_archive_glob(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_list_archive_max_entries_truncates(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({f'f{i}.log': b'.' for i in range(5)})))
-    out = await bas.list_archive_artifact(
+    out = bas.list_archive_artifact(
         mocker.Mock(), fullname='j', relative_path='a.tar.gz', glob='*.log', number=1, max_entries=2
     )
     assert len(out['entries']) == 2
@@ -148,14 +148,14 @@ async def test_list_archive_max_entries_truncates(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_list_rejects_non_archive(mock_jenkins, mocker):
     with pytest.raises(ValueError, match='must be a .tar.gz'):
-        await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='plain.log', number=1)
+        bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='plain.log', number=1)
 
 
 # ---- extract ----
 @pytest.mark.asyncio
 async def test_extract_inline_utf8(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'a/x.log': b'hello world'})))
-    out = await bas.extract_archive_artifact(
+    out = bas.extract_archive_artifact(
         mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a/x.log', number=1
     )
     assert out == {'member': 'a/x.log', 'size_bytes': 11, 'encoding': 'utf-8', 'content': 'hello world'}
@@ -164,7 +164,7 @@ async def test_extract_inline_utf8(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_extract_inline_base64_for_binary(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'a/blob.bin': b'\xff\xfe\x00'})))
-    out = await bas.extract_archive_artifact(
+    out = bas.extract_archive_artifact(
         mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a/blob.bin', number=1
     )
     assert out['encoding'] == 'base64'
@@ -182,7 +182,7 @@ async def test_extract_large_goes_to_s3(mock_jenkins, mocker):
         'mcp_jenkins.server.build_artifact_search.s3_export.presign_response',
         return_value={'url': 'https://signed', 'bucket': 'b', 'key': 'exports/archive/k', 'size_bytes': 100},
     )
-    out = await bas.extract_archive_artifact(
+    out = bas.extract_archive_artifact(
         mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='big.bin', number=1, max_inline_bytes=4
     )
     assert out['url'] == 'https://signed'
@@ -193,7 +193,7 @@ async def test_extract_large_goes_to_s3(mock_jenkins, mocker):
 async def test_extract_unknown_member_raises(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'a/x.log': b'hi'})))
     with pytest.raises(ValueError, match='member not found'):
-        await bas.extract_archive_artifact(
+        bas.extract_archive_artifact(
             mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a/missing.log', number=1
         )
 
@@ -203,7 +203,7 @@ async def test_extract_unknown_member_raises(mock_jenkins, mocker):
 @pytest.mark.parametrize('bad', ['../escape', '/etc/passwd', 'a\\b', 'ok/../../x', 'evil"; x="y'])
 async def test_extract_rejects_unsafe_member(mock_jenkins, mocker, bad):
     with pytest.raises(ValueError, match='unsafe member|control char'):
-        await bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member=bad, number=1)
+        bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member=bad, number=1)
 
 
 @pytest.mark.asyncio
@@ -213,7 +213,7 @@ async def test_extract_rejects_symlink_member(mock_jenkins, mocker):
     link.linkname = '/etc/passwd'
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({}, specials=[link])))
     with pytest.raises(ValueError, match='not a regular file'):
-        await bas.extract_archive_artifact(
+        bas.extract_archive_artifact(
             mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='evil-link', number=1
         )
 
@@ -223,16 +223,14 @@ async def test_extract_rejects_oversized_member(mock_jenkins, mocker, monkeypatc
     monkeypatch.setattr(bas, '_MAX_MEMBER_BYTES', 5)
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'big.log': b'0123456789'})))
     with pytest.raises(ValueError, match='too large'):
-        await bas.extract_archive_artifact(
-            mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='big.log', number=1
-        )
+        bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='big.log', number=1)
 
 
 @pytest.mark.asyncio
 async def test_list_bomb_guard_decompressed_total(mock_jenkins, mocker, monkeypatch):
     monkeypatch.setattr(bas, '_MAX_DECOMPRESSED_TOTAL', 4)
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({f'f{i}.log': b'XXXX' for i in range(5)})))
-    out = await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
     assert out['scan_limited'] is True  # _LimitedReader tripped the cap (distinct from normal truncation)
     assert out['truncated'] is False
 
@@ -263,16 +261,14 @@ async def test_extract_bomb_guard_raises(mock_jenkins, mocker, monkeypatch):
     monkeypatch.setattr(bas, '_MAX_MEMBER_BYTES', 8 * 1024 * 1024)
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_targz({'bomb.bin': b'\x00' * (1024 * 1024)})))
     with pytest.raises(ValueError, match='decompression limit'):
-        await bas.extract_archive_artifact(
-            mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='bomb.bin', number=1
-        )
+        bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='bomb.bin', number=1)
 
 
 @pytest.mark.asyncio
 async def test_malformed_archive_raises_sanitized(mock_jenkins, mocker):
     _set_stream(mock_jenkins, _FakeResponse(raw_bytes=b'this is not a gzip tarball'))
     with pytest.raises(ValueError, match='invalid or unsupported tar.gz archive'):
-        await bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+        bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
 
 
 # ---- grep (glob over many artifacts) ----
@@ -436,3 +432,75 @@ def test_regex_matcher_accepts_a_mid_pattern_flag():
 
     assert match('Build TIMED OUT')
     assert not match('Build passed')
+
+
+# ---- tar headers are bounded per member ----
+def _header_targz(
+    *, pax_bytes: int = 0, global_bytes: int = 0, long_name_bytes: int = 0, fmt: int = tarfile.PAX_FORMAT
+) -> bytes:
+    """A .tar.gz with one small member whose pax header, global header or GNU long name is large."""
+    buf = io.BytesIO()
+    global_headers = {'comment': 'g' * global_bytes} if global_bytes else None
+    with tarfile.open(fileobj=buf, mode='w:gz', format=fmt, pax_headers=global_headers) as tf:
+        info = tarfile.TarInfo(name=('d' * long_name_bytes) if long_name_bytes else 'a.log')
+        info.size = 3
+        if pax_bytes:
+            info.pax_headers = {'comment': 'x' * pax_bytes}
+        tf.addfile(info, io.BytesIO(b'abc'))
+    return buf.getvalue()
+
+
+@pytest.fixture
+def readers(monkeypatch):
+    """Record every _LimitedReader that _open_tar builds, to check how much it read."""
+    built = []
+
+    class _Recording(bas._LimitedReader):
+        def __init__(self, raw: io.BufferedIOBase, limit: int) -> None:
+            super().__init__(raw, limit)
+            built.append(self)
+
+    monkeypatch.setattr(bas, '_LimitedReader', _Recording)
+    return built
+
+
+@pytest.mark.parametrize(
+    'archive',
+    [
+        pytest.param({'pax_bytes': 2 * 1024 * 1024}, id='pax'),
+        pytest.param({'long_name_bytes': 2 * 1024 * 1024, 'fmt': tarfile.GNU_FORMAT}, id='gnu-long-name'),
+        pytest.param({'global_bytes': 600 * 1024, 'pax_bytes': 600 * 1024}, id='global-then-pax-share-one-budget'),
+    ],
+)
+def test_a_tar_header_over_one_mib_is_refused_after_one_mib(mock_jenkins, mocker, readers, archive):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(**archive)))
+    with pytest.raises(ValueError, match='tar header of more than 1048576 bytes'):
+        bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a.log', number=1)
+    assert readers[0]._read <= bas._MAX_HEADER_BYTES + 2 * tarfile.RECORDSIZE
+
+
+def test_list_reports_an_oversized_tar_header_as_scan_limited(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(pax_bytes=2 * 1024 * 1024)))
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+    assert out['scan_limited'] is True
+    assert out['entries'] == []
+
+
+def test_a_tar_header_under_one_mib_is_read(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(pax_bytes=900 * 1024)))
+    out = bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a.log', number=1)
+    assert out['content'] == 'abc'
+
+
+def test_each_member_gets_its_own_header_budget(mock_jenkins, mocker):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode='w:gz', format=tarfile.PAX_FORMAT) as tf:
+        for index in range(3):
+            info = tarfile.TarInfo(name=f'm{index}.log')
+            info.size = 1
+            info.pax_headers = {'comment': 'x' * (700 * 1024)}
+            tf.addfile(info, io.BytesIO(b'z'))
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=buf.getvalue()))
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+    assert [entry['name'] for entry in out['entries']] == ['m0.log', 'm1.log', 'm2.log']
+    assert out['scan_limited'] is False

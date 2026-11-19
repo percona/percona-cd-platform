@@ -1,6 +1,9 @@
 import base64
+import threading
 import time
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Literal
 
 from fastmcp import Context
@@ -8,6 +11,7 @@ from pydantic import BaseModel
 from requests.exceptions import HTTPError, RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
+from mcp_jenkins.jenkins.rest_client import PayloadTooLargeError
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_export import _resolve_number as _resolve_client_number
 from mcp_jenkins.server.build_export import _validate_relative_path
@@ -38,8 +42,35 @@ _FAILURE_STATUS_FILTERS: dict[str, set[str] | None] = {
 # Narrow testReport projection: per-case identity + status + short errorDetails, NOT the heavy
 # stdout/stderr/errorStackTrace, so a 15k-case parallel report does not come back whole.
 _FAILURE_REPORT_TREE = 'failCount,passCount,skipCount,suites[name,cases[className,name,status,duration,errorDetails]]'
+# The full test report tool reads the same way, with the stack trace and the suite timings added.
+# A matrix or other aggregated build answers with childReports, each child result in the same shape.
+_REPORT_FIELDS = (
+    'duration,empty,failCount,passCount,skipCount,'
+    'suites[name,duration,cases[className,name,status,duration,age,skipped,errorDetails,errorStackTrace]]'
+)
+_TEST_REPORT_TREE = f'{_REPORT_FIELDS},totalCount,childReports[child[number,url],result[{_REPORT_FIELDS}]]'
+_REPORT_TEXT_FIELDS = ('errorDetails', 'errorStackTrace')
+_MAX_REPORT_TEXT_CHARS = 1200
 # A wrapper case only hides failures when it is itself failing; a passing rolled-up report hides nothing.
 _WRAPPER_FAIL_STATUSES = {'FAILED', 'REGRESSION'}
+
+# Large inline reads run in worker threads and the pod has 1 GiB. These slots bound how many run at
+# once: an artifact read peaks near 50 MiB, a report read near the size of its parsed objects.
+_LARGE_READ_WAIT_SECONDS = 30
+_ARTIFACT_READ_SLOTS = threading.BoundedSemaphore(4)
+_REPORT_READ_SLOTS = threading.BoundedSemaphore(2)
+
+
+@contextmanager
+def _large_read(slots: threading.BoundedSemaphore, what: str) -> Iterator[None]:
+    """Hold one slot of a large read for the whole block, or refuse after the wait limit."""
+    if not slots.acquire(timeout=_LARGE_READ_WAIT_SECONDS):
+        msg = f'the gateway is busy with other large {what} reads. Retry the call in a minute'
+        raise ValueError(msg)
+    try:
+        yield
+    finally:
+        slots.release()
 
 
 def _resolve_number(ctx: Context, fullname: str, number: int | None, master: MasterArg) -> int:
@@ -92,7 +123,7 @@ def _artifact_hint(relative_path: str) -> str | None:
 
 
 @mcp.tool(tags=['read'])
-async def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
+def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all running builds from Jenkins
 
     Returns:
@@ -105,7 +136,7 @@ async def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dic
 
 
 @mcp.tool(tags=['read'])
-async def get_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
+def get_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get specific build info from Jenkins
 
     Args:
@@ -121,9 +152,7 @@ async def get_build(ctx: Context, fullname: str, number: int | None = None, mast
 
 
 @mcp.tool(tags=['read', 'config-read'])
-async def get_build_scripts(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> list[str]:
+def get_build_scripts(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[str]:
     """Get the scripts used in a specific build in Jenkins
 
     Args:
@@ -139,7 +168,7 @@ async def get_build_scripts(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_console_output(
+def get_build_console_output(
     ctx: Context,
     fullname: str,
     number: int | None = None,
@@ -149,6 +178,10 @@ async def get_build_console_output(
     master: MasterArg = None,
 ) -> str:
     """Get the console output of a specific build in Jenkins
+
+    One answer holds at most 1 MiB of console text and each line is cut at 64 KiB. A longer
+    answer ends with a truncation line that names the offset to continue from. A pattern filter
+    scans the whole console. Use export_build_log for the whole log.
 
     Args:
         fullname: The fullname of the job
@@ -170,26 +203,78 @@ async def get_build_console_output(
     )
 
 
+def _report_suites(report: dict) -> Iterator[dict]:
+    """The suites of a report, then the suites of each child report of an aggregated build."""
+    yield from report.get('suites') or []
+    for child in report.get('childReports') or []:
+        result = child.get('result') if isinstance(child, dict) else None
+        if isinstance(result, dict):
+            yield from result.get('suites') or []
+
+
+def _cap_report_cases(report: dict, max_cases: int, max_text: int) -> dict:
+    """Keep the first max_cases cases across all suites and cut each error text to max_text chars.
+
+    The suites of every child report of an aggregated build share the same case budget.
+    """
+    total = kept = 0
+    for suite in _report_suites(report):
+        cases = suite.get('cases') or []
+        total += len(cases)
+        suite['cases'] = cases[: max(0, max_cases - kept)]
+        kept += len(suite['cases'])
+        for case in suite['cases']:
+            for field in _REPORT_TEXT_FIELDS:
+                if isinstance(case.get(field), str):
+                    case[field] = case[field][:max_text]
+    report['cases_total'] = total
+    report['cases_returned'] = kept
+    report['truncated'] = kept < total
+    if kept < total:
+        report['note'] = (
+            f'{total - kept} of {total} cases are left out. '
+            'Use get_build_failure_summary for the failing cases of a large report'
+        )
+    return report
+
+
 @mcp.tool(tags=['read'])
-async def get_build_test_report(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
+def get_build_test_report(
+    ctx: Context, fullname: str, number: int | None = None, max_cases: int = 1000, master: MasterArg = None
 ) -> dict:
     """Get the test report of a specific build in Jenkins
+
+    The report holds the counts, the suites and the cases without stdout and stderr. An aggregated
+    (matrix) build returns childReports [{child {number, url}, result}] in the same shape. Each
+    errorDetails and errorStackTrace is cut at 1200 characters. For a large report with failures
+    use get_build_failure_summary.
 
     Args:
         fullname: The fullname of the job
         number: The number of the build, if None, get the last build
+        max_cases: Cap on returned cases across all suites and child reports (capped at 1000)
 
     Returns:
-        The test report of the build
+        The test report of the build, with cases_total, cases_returned and truncated
     """
+    max_cases = max(1, min(max_cases, _MAX_FAILURE_CASES))
     number = _resolve_number(ctx, fullname, number, master)
 
-    return jenkins(ctx, master).get_build_test_report(fullname=fullname, number=number)
+    client = jenkins(ctx, master)
+    with _large_read(_REPORT_READ_SLOTS, 'test report'):
+        try:
+            report = client.get_build_test_report(fullname=fullname, number=number, tree=_TEST_REPORT_TREE)
+        except PayloadTooLargeError as e:
+            msg = (
+                f'{e}. Use get_build_failure_summary for the failing cases, or get_build_console_tail '
+                'and grep_build_artifact for the test output'
+            )
+            raise PayloadTooLargeError(msg) from e
+        return _cap_report_cases(report, max_cases, _MAX_REPORT_TEXT_CHARS)
 
 
 @mcp.tool(tags=['read'])
-async def get_build_failure_summary(
+def get_build_failure_summary(
     ctx: Context,
     fullname: str,
     number: int | None = None,
@@ -236,51 +321,61 @@ async def get_build_failure_summary(
     wrapper_failures: list[dict] = []
     wrapper_seen: set[tuple[str, str]] = set()
 
-    try:
-        report = client.get_build_test_report(fullname=fullname, number=number, tree=_FAILURE_REPORT_TREE)
-    except HTTPError as e:
-        http_status = e.response.status_code if e.response is not None else None
-        report = None
-        notes.append(f'no test report (HTTP {http_status}); counts and cases are empty')
+    report_too_large = False
+    with _large_read(_REPORT_READ_SLOTS, 'test report'):
+        try:
+            report = client.get_build_test_report(fullname=fullname, number=number, tree=_FAILURE_REPORT_TREE)
+        except HTTPError as e:
+            http_status = e.response.status_code if e.response is not None else None
+            report = None
+            notes.append(f'no test report (HTTP {http_status}); counts and cases are empty')
+        except PayloadTooLargeError as e:
+            report = None
+            report_too_large = True
+            notes.append(
+                f'{e}. Counts and cases are empty. get_build_console_tail and grep_build_artifact '
+                'hold the failing tests'
+            )
 
-    if report:
-        counts['failCount'] = report.get('failCount') or 0
-        counts['skipCount'] = report.get('skipCount') or 0
-        counts['passCount'] = report.get('passCount') or 0
-        counts['total'] = counts['failCount'] + counts['skipCount'] + counts['passCount']
-        for suite in report.get('suites') or []:
-            suite_name = suite.get('name') or ''
-            for case in suite.get('cases') or []:
-                case_status = (case.get('status') or '').upper()
-                status_counts[case_status] = status_counts.get(case_status, 0) + 1
-                class_name = case.get('className') or ''
-                case_name = case.get('name') or ''
-                # Collect wrapper FAILURES from the raw report, before the display filter and the
-                # max_cases cut, so partial / wrapper_cases stay correct when status_filter excludes the
-                # wrapper or it sorts past the cap (and never flag a passing rolled-up report).
-                if case_status in _WRAPPER_FAIL_STATUSES:
-                    wrapper_key = (class_name, case_name)
-                    if wrapper_key not in wrapper_seen and _is_wrapper_case(
-                        {'className': class_name, 'suite': suite_name, 'name': case_name}
-                    ):
-                        wrapper_seen.add(wrapper_key)
-                        wrapper_failures.append({'name': case_name, 'className': class_name, 'suite': suite_name})
-                if wanted is not None and case_status not in wanted:
-                    continue
-                key = (class_name, case_name)
-                if key in seen:
-                    continue
-                seen.add(key)
-                entry = {
-                    'name': case_name,
-                    'className': class_name,
-                    'status': case_status,
-                    'suite': suite_name,
-                    'duration': case.get('duration'),
-                }
-                if include_error_details and case.get('errorDetails'):
-                    entry['errorDetails'] = case['errorDetails'][:max_error_chars]
-                selected.append(entry)
+        if report:
+            counts['failCount'] = report.get('failCount') or 0
+            counts['skipCount'] = report.get('skipCount') or 0
+            counts['passCount'] = report.get('passCount') or 0
+            counts['total'] = counts['failCount'] + counts['skipCount'] + counts['passCount']
+            for suite in report.get('suites') or []:
+                suite_name = suite.get('name') or ''
+                for case in suite.get('cases') or []:
+                    case_status = (case.get('status') or '').upper()
+                    status_counts[case_status] = status_counts.get(case_status, 0) + 1
+                    class_name = case.get('className') or ''
+                    case_name = case.get('name') or ''
+                    # Collect wrapper FAILURES from the raw report, before the display filter and the
+                    # max_cases cut, so partial / wrapper_cases stay correct when status_filter excludes the
+                    # wrapper or it sorts past the cap (and never flag a passing rolled-up report).
+                    if case_status in _WRAPPER_FAIL_STATUSES:
+                        wrapper_key = (class_name, case_name)
+                        if wrapper_key not in wrapper_seen and _is_wrapper_case(
+                            {'className': class_name, 'suite': suite_name, 'name': case_name}
+                        ):
+                            wrapper_seen.add(wrapper_key)
+                            wrapper_failures.append({'name': case_name, 'className': class_name, 'suite': suite_name})
+                    if wanted is not None and case_status not in wanted:
+                        continue
+                    key = (class_name, case_name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    entry = {
+                        'name': case_name,
+                        'className': class_name,
+                        'status': case_status,
+                        'suite': suite_name,
+                        'duration': case.get('duration'),
+                    }
+                    if include_error_details and case.get('errorDetails'):
+                        entry['errorDetails'] = case['errorDetails'][:max_error_chars]
+                    selected.append(entry)
+        report = None  # the parsed report is freed before its slot is released
 
     truncated = len(selected) > max_cases
     cases = selected[:max_cases]
@@ -322,11 +417,13 @@ async def get_build_failure_summary(
     if wrapper_cases:
         result['wrapper_cases'] = wrapper_cases
         result['see_also'] = ['get_build_console_tail', 'grep_build_artifact']
+    elif report_too_large:
+        result['see_also'] = ['get_build_console_tail', 'grep_build_artifact']
     return result
 
 
 @mcp.tool(tags=['read'])
-async def get_build_console_tail(
+def get_build_console_tail(
     ctx: Context, fullname: str, number: int | None = None, lines: int = 200, master: MasterArg = None
 ) -> str:
     """Get the LAST N lines of a build's console (the cheap path to the failure tail + result).
@@ -338,7 +435,8 @@ async def get_build_console_tail(
     Args:
         fullname: The fullname of the job
         number: The number of the build, if None, get the last build
-        lines: Number of trailing lines to return (capped at 5000)
+        lines: Number of trailing lines to return (capped at 5000, and at 1 MiB of text; a
+            truncation line comes first when the byte cap leaves lines out)
 
     Returns:
         The last `lines` lines of the console output.
@@ -349,9 +447,7 @@ async def get_build_console_tail(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_parameters(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> dict:
+def get_build_parameters(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the parameters of a specific build in Jenkins
 
     For the parameters of several recent builds, call get_build_walk once instead of this per build.
@@ -369,7 +465,7 @@ async def get_build_parameters(
 
 
 @mcp.tool(tags=['operate'])
-async def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg = None) -> None:
+def stop_build(ctx: Context, fullname: str, number: int, master: MasterArg = None) -> None:
     """Stop a specific build in Jenkins
 
     Args:
@@ -426,7 +522,7 @@ def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None)
 
 
 @mcp.tool(tags=['read'])
-async def get_all_build_artifacts(
+def get_all_build_artifacts(
     ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
 ) -> list[dict]:
     """List the artifacts of a specific build in Jenkins
@@ -453,12 +549,14 @@ async def get_all_build_artifacts(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_artifact(
+def get_build_artifact(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> dict:
     """Download an artifact from a specific build in Jenkins
 
     Binary files are returned as base64-encoded content; text files are returned as plain text.
+    The inline limit is 10 MiB. A larger artifact is refused: use export_build_artifact for the
+    whole file, or grep_build_artifact to search a text artifact.
 
     Args:
         fullname: The fullname of the job
@@ -474,16 +572,17 @@ async def get_build_artifact(
         raise ValueError(msg)
     number = _resolve_number(ctx, fullname, number, master)
 
-    content = jenkins(ctx, master).get_build_artifact(fullname=fullname, number=number, relative_path=relative_path)
-
-    try:
-        return {'content': content.decode('utf-8'), 'encoding': 'utf-8'}
-    except UnicodeDecodeError:
-        return {'content': base64.b64encode(content).decode('ascii'), 'encoding': 'base64'}
+    client = jenkins(ctx, master)
+    with _large_read(_ARTIFACT_READ_SLOTS, 'artifact'):
+        content = client.get_build_artifact(fullname=fullname, number=number, relative_path=relative_path)
+        try:
+            return {'content': content.decode('utf-8'), 'encoding': 'utf-8'}
+        except UnicodeDecodeError:
+            return {'content': base64.b64encode(content).decode('ascii'), 'encoding': 'base64'}
 
 
 @mcp.tool(tags=['read'])
-async def get_build_artifact_url(
+def get_build_artifact_url(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> str:
     """Get the direct URL of an artifact from a specific build in Jenkins
@@ -506,7 +605,7 @@ async def get_build_artifact_url(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_history(
+def get_build_history(
     ctx: Context, fullname: str, count: int = 10, limit: int | None = None, master: MasterArg = None
 ) -> list[dict]:
     """Get the most recent builds of a Jenkins job (number, result, timing only).
@@ -616,7 +715,7 @@ def get_build_walk(
 
 
 @mcp.tool(tags=['read'])
-async def get_build_stages(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
+def get_build_stages(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the pipeline stage breakdown of a build (which stage ran/failed and per-stage durations).
 
     Args:
@@ -632,9 +731,7 @@ async def get_build_stages(ctx: Context, fullname: str, number: int | None = Non
 
 
 @mcp.tool(tags=['read'])
-async def get_build_changeset(
-    ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
-) -> list[dict]:
+def get_build_changeset(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[dict]:
     """Get the SCM changes (commits) included in a build.
 
     Args:
@@ -651,7 +748,7 @@ async def get_build_changeset(
 
 
 @mcp.tool(tags=['operate'])
-async def replay_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> int:
+def replay_build(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> int:
     """Re-run a job using the same parameters as a previous build (retrigger a probe).
 
     Triggers a fresh build with the parameters of build `number` (or the last build). Does not

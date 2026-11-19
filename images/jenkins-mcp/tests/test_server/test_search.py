@@ -50,7 +50,7 @@ def test_search_happy_path(mock_jenkins, mocker):
     mock_jenkins.query_items.assert_called_once_with(fullname_pattern='pxc.*', folder_depth=None)
 
 
-@pytest.mark.parametrize('bad', ['', '.*', '*', '   '])
+@pytest.mark.parametrize('bad', ['', '.*', '*', '   ', '.+', '.*?', '.', '^.*$', r'[\s\S]', ' .* '])
 def test_search_rejects_catch_all(mock_jenkins, mocker, bad):
     with pytest.raises(ValueError, match='job_pattern'):
         search.search_build_logs(mocker.Mock(), pattern='x', job_pattern=bad)
@@ -121,7 +121,7 @@ def test_search_skips_folders_and_unbuilt(mock_jenkins, mocker):
 
 def test_search_rejects_invalid_regex(mock_jenkins, mocker):
     mock_jenkins.query_items.return_value = []
-    with pytest.raises(ValueError, match='invalid pattern regex'):
+    with pytest.raises(ValueError, match='pattern: invalid regex pattern'):
         search.search_build_logs(mocker.Mock(), pattern='(unclosed', job_pattern='pxc.*')
     mock_jenkins.query_items.assert_not_called()
 

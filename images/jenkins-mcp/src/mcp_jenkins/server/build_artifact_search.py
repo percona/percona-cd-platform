@@ -18,6 +18,7 @@ import time
 import zlib
 from collections import deque
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, BinaryIO
 
 import urllib3
@@ -41,10 +42,11 @@ _MAX_BYTES_SCANNED = 64 * 1024 * 1024  # grep: stop after this many (decompresse
 _MAX_LINE_LEN = 8192  # grep: cap a single line at read time (a no-newline blob never buffers past this)
 _MAX_MATCHES = 200  # grep: hard ceiling on returned matches
 _MAX_CONTEXT_LINES = 10  # grep: hard ceiling on context_lines
-_MAX_PATTERN_LEN = 2000  # grep: reject longer regex patterns (ReDoS surface)
+_MAX_PATTERN_LEN = 2000  # grep: reject longer patterns, literal or regex
 _MAX_ENTRIES = 2000  # list: hard ceiling on returned members
 _MAX_MEMBERS_SCANNED = 50000  # list/grep/extract: hard ceiling on members examined
 _MAX_DECOMPRESSED_TOTAL = 256 * 1024 * 1024  # any tar op: cumulative gunzipped bytes (bomb guard)
+_MAX_HEADER_BYTES = 1024 * 1024  # any tar op: the pax, long-name and sparse headers of one member
 _MAX_MEMBER_BYTES = 25 * 1024 * 1024  # extract: largest single member we will read
 _MAX_INLINE_BYTES = 256 * 1024  # extract: inline up to this, else S3
 _MAX_GLOB_FILES = 30  # grep glob: most artifacts one call greps (the MTR worker-log fan is w_1..w_30)
@@ -69,6 +71,23 @@ class _LimitedReader:
         self._raw = raw
         self._limit = limit
         self._read = 0
+        self._header_end: int | None = None
+
+    @contextmanager
+    def header_budget(self, budget: int) -> Iterator[None]:
+        """Bound the bytes read while tarfile parses the headers of one member.
+
+        A nested call (a pax or long-name header followed by the next header) keeps the outer
+        bound, so one member's chain of headers shares one budget.
+        """
+        if self._header_end is not None:
+            yield
+            return
+        self._header_end = self._read + budget
+        try:
+            yield
+        finally:
+            self._header_end = None
 
     def read(self, size: int = -1) -> bytes:
         # Clamp the request to the remaining budget BEFORE reading. tarfile reads
@@ -79,16 +98,34 @@ class _LimitedReader:
         if remaining <= 0:
             msg = f'archive exceeds the {self._limit}-byte decompression limit'
             raise _ArchiveLimitError(msg)
+        if self._header_end is not None:
+            header_left = self._header_end - self._read
+            if header_left <= 0:
+                msg = f'archive has a tar header of more than {_MAX_HEADER_BYTES} bytes'
+                raise _ArchiveLimitError(msg)
+            remaining = min(remaining, header_left)
         want = remaining if size < 0 or size > remaining else size
         chunk = self._raw.read(want)
         self._read += len(chunk)
         return chunk
 
 
+def _bounded_tarinfo(reader: _LimitedReader) -> type[tarfile.TarInfo]:
+    """A TarInfo class whose header parsing reads at most _MAX_HEADER_BYTES per member."""
+
+    class _BoundedTarInfo(tarfile.TarInfo):
+        def _proc_member(self, archive: tarfile.TarFile) -> tarfile.TarInfo:
+            with reader.header_budget(_MAX_HEADER_BYTES):
+                return super()._proc_member(archive)
+
+    return _BoundedTarInfo
+
+
 def _open_tar(response: 'Response') -> tarfile.TarFile:
     """Open the artifact as a streaming, decompressed-byte-bounded tar (gunzip done here, not by tarfile)."""
     gz = gzip.GzipFile(fileobj=response.raw, mode='rb')
-    return tarfile.open(fileobj=_LimitedReader(gz, _MAX_DECOMPRESSED_TOTAL), mode='r|')
+    reader = _LimitedReader(gz, _MAX_DECOMPRESSED_TOTAL)
+    return tarfile.open(fileobj=reader, mode='r|', tarinfo=_bounded_tarinfo(reader))
 
 
 def _iter_members(tf: tarfile.TarFile) -> Iterator[tarfile.TarInfo]:
@@ -153,11 +190,7 @@ def _build_matcher(pattern: str, literal: bool, ignore_case: bool) -> Callable[[
             needle = pattern.lower()
             return lambda line: needle in line.lower()
         return lambda line: pattern in line
-    try:
-        rx = compile_user_regex(pattern, re.IGNORECASE if ignore_case else 0)
-    except re.error as e:
-        msg = f'invalid regex pattern: {e}'
-        raise ValueError(msg) from e
+    rx = compile_user_regex(pattern, re.IGNORECASE if ignore_case else 0)
     return lambda line: rx.search(line) is not None
 
 
@@ -378,8 +411,8 @@ def grep_build_artifact(
         number: Build number, if None the last build
         archive_member: If set, grep this member inside the .tar.gz at relative_path
         ignore_case: Case-insensitive match
-        literal: Treat pattern as a literal substring (default). Set False for regex (bounded input,
-            but Python re has no timeout, so a pathological regex can still burn CPU on a long line).
+        literal: Treat pattern as a literal substring (default). Set False for an RE2 regex (linear
+            time, no backreferences or lookaround).
         context_lines: Lines of context to keep before/after each match (capped at 10)
         max_matches: Max matches to return per file (capped at 200, and 200 across a glob)
         context: Alias of context_lines
@@ -468,7 +501,7 @@ def _grep_member(
 
 
 @mcp.tool(tags=['read'])
-async def list_archive_artifact(
+def list_archive_artifact(
     ctx: Context,
     fullname: str,
     relative_path: str,
@@ -530,7 +563,7 @@ async def list_archive_artifact(
 
 
 @mcp.tool(tags=['read'])
-async def extract_archive_artifact(
+def extract_archive_artifact(
     ctx: Context,
     fullname: str,
     relative_path: str,
