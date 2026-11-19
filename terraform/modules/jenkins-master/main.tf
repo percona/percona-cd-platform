@@ -907,6 +907,7 @@ locals {
     data_volume_id          = aws_ebs_volume.data.id
     jenkins_package_version = var.jenkins_package_version
     java_package            = var.java_package
+    java_releasever         = var.java_releasever
     observability_label     = var.jenkins_home_dirname == null ? "" : var.hostname
     hetzner_plugin          = var.hetzner_plugin
     packages                = join(" ", var.base_packages)
