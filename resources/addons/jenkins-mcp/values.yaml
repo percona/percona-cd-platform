@@ -14,8 +14,8 @@ s3:
 # empty digest falls back to the tag.
 image:
   repository: percona-cd/jenkins-mcp
-  tag: "0.10.12-f58e2fa41a81"
-  digest: ""
+  tag: "0.10.13-67f3c9479f7c"
+  digest: "sha256:858a375cada706dcf94a50c963d51f64c7f7e1e0424a3352ab2b0c955d5436a8"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
