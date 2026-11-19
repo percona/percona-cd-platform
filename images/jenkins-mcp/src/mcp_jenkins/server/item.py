@@ -11,7 +11,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
-from mcp_jenkins.jenkins.rest_client import require_narrow_pattern
+from mcp_jenkins.jenkins.rest_client import _compile_query_pattern, require_narrow_pattern
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_artifact_search import _build_matcher
 
@@ -288,10 +288,26 @@ def _compact_entries(items: list) -> list[tuple[str, dict]]:
 
 
 _MAX_INCLUDE_BUILDS = 200
-# A fullname_pattern that selects at most this many jobs reads builds job by job, so a narrow
-# query does not make the master load the history of every job.
+# A narrowing selection of at most this many jobs reads builds job by job, so a narrow query
+# does not make the master load the history of every job.
 _PER_JOB_BUILDS_MAX = 20
+# A larger selection takes one request, and Jenkins loads builds for every job of the master
+# because the name filter runs here. That request reads at most this many builds per job.
+_BULK_BUILDS_MAX = 20
+# include_builds needs one of these patterns to leave jobs out, so one call cannot walk the build
+# history of every job on a master. A pattern that matches the empty string or every probe name
+# (".*", ".+", ".") selects everything and does not count.
+_NARROWING_PATTERNS = ('fullname_pattern', 'label_pattern', 'color_pattern', 'class_pattern')
+_CATCH_ALL_PROBES = ('\x00', '~', 'Q', '7', ' ')
 _UPSTREAM_CAUSE = re.compile(r'^upstream project "(.+)" build number (\d+)$')
+
+
+def _narrows(pattern: str | None) -> bool:
+    """True when pattern is a valid regex that leaves some names out."""
+    compiled = _compile_query_pattern(pattern)
+    if compiled is None or compiled.search('') is not None:
+        return False
+    return not all(compiled.search(probe) for probe in _CATCH_ALL_PROBES)
 
 
 def _duration(millis: int | None) -> str:
@@ -433,9 +449,13 @@ def query_items(
         include_builds: Also return up to this many most recent builds per job (capped at 200), each
             one string "#number RESULT start duration cause". Use it for build history across many
             jobs instead of get_build_walk per job. Paged like compact_parameters. more=True marks a
-            job with older builds past the cap inside the window. A fullname_pattern that matches
-            at most 20 jobs reads only those jobs' history.
+            job with older builds past the cap inside the window. Needs at least one of
+            fullname_pattern, label_pattern, color_pattern or class_pattern that narrows the jobs.
+            A match-everything pattern such as ".*" is refused. A selection of at most 20 jobs
+            reads only those jobs' history with the cap of 200. A larger selection is read in one
+            request with at most 20 builds per job, and the result then carries builds_cap and a note.
         builds_since_days: With include_builds, keep only builds started in the last N days (N >= 1).
+            The window is applied to the builds read, it does not replace a narrowing pattern.
         cursor: With compact_parameters or include_builds, the next_cursor of the previous result.
 
     Returns:
@@ -454,7 +474,6 @@ def query_items(
         raise ValueError(msg)
     limit = max(1, min(limit, 2000))
     per_job = max(0, min(include_builds, _MAX_INCLUDE_BUILDS))
-    client = jenkins(ctx, master)
     query = {
         'class_pattern': class_pattern,
         'fullname_pattern': fullname_pattern,
@@ -462,18 +481,30 @@ def query_items(
         'label_pattern': label_pattern,
         'folder_depth': folder_depth,
     }
-    if per_job and fullname_pattern:
+    if per_job and not any(_narrows(query[name]) for name in _NARROWING_PATTERNS):
+        msg = (
+            f'include_builds needs a pattern that narrows the jobs: one of {", ".join(_NARROWING_PATTERNS)} '
+            '(a match-everything pattern such as ".*" does not count, and builds_since_days does not narrow)'
+        )
+        raise ValueError(msg)
+    client = jenkins(ctx, master)
+    note = None
+    if per_job:
         found = client.query_items(**query)
         jobs = [i for i in found[:limit] if not isinstance(getattr(i, 'jobs', None), list)]
         if len(jobs) <= _PER_JOB_BUILDS_MAX:
             for i in jobs:
                 i.builds = client.get_job_builds(fullname=i.fullname, count=per_job + 1)
         else:
+            if per_job > _BULK_BUILDS_MAX:
+                per_job = _BULK_BUILDS_MAX
+                note = (
+                    f'the selection of {len(jobs)} jobs exceeds {_PER_JOB_BUILDS_MAX}, so builds per job are '
+                    f'capped at {_BULK_BUILDS_MAX}. A narrower pattern returns deeper history.'
+                )
             found = client.query_items(**query, include_builds=per_job + 1)
     else:
-        found = client.query_items(
-            **query, include_parameters=include_parameters, include_builds=per_job + 1 if per_job else 0
-        )
+        found = client.query_items(**query, include_parameters=include_parameters)
     if per_job or (include_parameters and compact_parameters):
         keyed = (
             _build_entries(found[:limit], per_job, builds_since_days) if per_job else _compact_entries(found[:limit])
@@ -489,6 +520,9 @@ def query_items(
         }
         if per_job:
             result['builds_total'] = sum(len(e['builds']) for _, e in entries)
+        if note:
+            result['builds_cap'] = per_job
+            result['note'] = note
         return result
     items = []
     for i in found:

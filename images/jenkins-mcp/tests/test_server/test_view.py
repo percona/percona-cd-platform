@@ -99,3 +99,22 @@ async def test_get_view_with_depth(mock_jenkins, mocker):
     view.get_view(mocker.Mock(), view_path='frontend', depth=1)
 
     mock_jenkins.get_view.assert_called_once_with(view_path='frontend', depth=1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('depth', [0, 2])
+async def test_get_view_accepts_depth_0_to_2(mock_jenkins, mocker, depth):
+    mock_jenkins.get_view.return_value = {'name': 'frontend'}
+
+    await view.get_view(mocker.Mock(), view_path='frontend', depth=depth)
+
+    mock_jenkins.get_view.assert_called_once_with(view_path='frontend', depth=depth)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('depth', [-1, 3, 100])
+async def test_get_view_refuses_depth_outside_0_to_2(mock_jenkins, mocker, depth):
+    with pytest.raises(ValueError, match='depth must be 0 to 2'):
+        await view.get_view(mocker.Mock(), view_path='frontend', depth=depth)
+
+    mock_jenkins.get_view.assert_not_called()

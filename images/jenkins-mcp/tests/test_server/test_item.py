@@ -16,6 +16,13 @@ def mock_jenkins(mocker):
     yield mock_jenkins
 
 
+@pytest.fixture
+def bulk_builds(mocker):
+    """Send every include_builds call down the one-request path, whatever the job count, uncapped."""
+    mocker.patch('mcp_jenkins.server.item._PER_JOB_BUILDS_MAX', 0)
+    mocker.patch('mcp_jenkins.server.item._BULK_BUILDS_MAX', 200)
+
+
 @pytest.mark.asyncio
 async def test_get_all_items(mock_jenkins, mocker):
     mock_jenkins.get_items.return_value = [
@@ -301,7 +308,7 @@ def _build(number, result='SUCCESS', *, hours_ago=1, duration=3_600_000, causes=
 
 
 @pytest.mark.asyncio
-async def test_query_items_include_builds(mock_jenkins, mocker):
+async def test_query_items_include_builds(mock_jenkins, bulk_builds, mocker):
     upstream = 'Started by upstream project "parent/ARCH=x86_64" build number 73'
     mock_jenkins.query_items.return_value = [
         Job(
@@ -321,9 +328,8 @@ async def test_query_items_include_builds(mock_jenkins, mocker):
         Folder(fullname='dir', jobs=[], class_='Folder', name='dir', url='2'),
     ]
 
-    result = item.query_items(mocker.Mock(), include_builds=10)
+    result = item.query_items(mocker.Mock(), include_builds=10, fullname_pattern='job1|dir')
 
-    mock_jenkins.query_items.assert_called_once()
     # one build past the cap is fetched, so more=True only when an older build really exists
     assert mock_jenkins.query_items.call_args.kwargs['include_builds'] == 11
     assert result['items'] == [
@@ -339,7 +345,7 @@ async def test_query_items_include_builds(mock_jenkins, mocker):
 
 
 @pytest.mark.asyncio
-async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
+async def test_query_items_builds_since_days_and_more(mock_jenkins, bulk_builds, mocker):
     mock_jenkins.query_items.return_value = [
         Job(
             fullname='busy', color='blue', name='busy', url='1', class_='Job', builds=[_build(3), _build(2), _build(1)]
@@ -355,7 +361,9 @@ async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
         Job(fullname='never', color='notbuilt', name='never', url='3', class_='Job', builds=[]),
     ]
 
-    result = item.query_items(mocker.Mock(), include_builds=2, builds_since_days=30)
+    result = item.query_items(
+        mocker.Mock(), include_builds=2, builds_since_days=30, fullname_pattern='^(busy|old|never)$'
+    )
 
     # busy has a third build inside the window past its 2-build cap: more=True
     assert [(e['fullname'], len(e['builds']), e.get('more', False)) for e in result['items']] == [
@@ -367,7 +375,7 @@ async def test_query_items_builds_since_days_and_more(mock_jenkins, mocker):
 
 
 @pytest.mark.asyncio
-async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, mocker):
+async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, bulk_builds, mocker):
     mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 400)
     builds = [_build(n, causes=('Started by user ' + 'x' * 40,)) for n in range(30, 0, -1)]
     mock_jenkins.query_items.return_value = [
@@ -376,7 +384,7 @@ async def test_query_items_splits_a_job_larger_than_a_page(mock_jenkins, mocker)
 
     parts, lines, cursor, first = [], [], None, None
     while True:
-        result = item.query_items(mocker.Mock(), include_builds=30, cursor=cursor)
+        result = item.query_items(mocker.Mock(), include_builds=30, fullname_pattern='^big$', cursor=cursor)
         first = first or result
         assert len(json.dumps(result['items'], separators=(',', ':'))) <= 400
         parts += [e['part'] for e in result['items']]
@@ -436,7 +444,7 @@ def test_query_items_compact_leaves_folders_out(mock_jenkins, mocker):
     assert result['items'] == [{'fullname': 'job', 'parameters': []}]
 
 
-def test_query_items_cursor_never_repeats_a_job_when_entries_grow(mock_jenkins, mocker):
+def test_query_items_cursor_never_repeats_a_job_when_entries_grow(mock_jenkins, bulk_builds, mocker):
     mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 500)
 
     def jobs(extra):
@@ -453,9 +461,9 @@ def test_query_items_cursor_never_repeats_a_job_when_entries_grow(mock_jenkins, 
         ]
 
     mock_jenkins.query_items.return_value = jobs(0)
-    first = item.query_items(mocker.Mock(), include_builds=20)
+    first = item.query_items(mocker.Mock(), include_builds=20, fullname_pattern='^job')
     mock_jenkins.query_items.return_value = jobs(8)  # job00 gains builds between the two calls
-    second = item.query_items(mocker.Mock(), include_builds=20, cursor=first['next_cursor'])
+    second = item.query_items(mocker.Mock(), include_builds=20, fullname_pattern='^job', cursor=first['next_cursor'])
 
     names = [e['fullname'] for e in first['items'] + second['items']]
     assert len(names) == len(set(names))
@@ -469,7 +477,7 @@ def test_query_items_rejects_a_non_positive_window(mock_jenkins, mocker):
     mock_jenkins.query_items.assert_not_called()
 
 
-def test_query_items_more_is_false_at_exactly_the_cap(mock_jenkins, mocker):
+def test_query_items_more_is_false_at_exactly_the_cap(mock_jenkins, bulk_builds, mocker):
     mock_jenkins.query_items.return_value = [
         Job(
             fullname='exact',
@@ -481,7 +489,7 @@ def test_query_items_more_is_false_at_exactly_the_cap(mock_jenkins, mocker):
         ),
     ]
 
-    result = item.query_items(mocker.Mock(), include_builds=5)
+    result = item.query_items(mocker.Mock(), include_builds=5, fullname_pattern='^exact$')
 
     assert len(result['items'][0]['builds']) == 5
     assert 'more' not in result['items'][0]
@@ -511,3 +519,152 @@ def test_query_items_wide_pattern_falls_back_to_one_tree_request(mock_jenkins, m
 
     mock_jenkins.get_job_builds.assert_not_called()
     assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 11
+
+
+_MATCH_EVERYTHING = ['', '.*', '^.*$', '.+', '.', '(?s).*', 'a|.*', 'x?', '[\\s\\S]', '^']
+
+
+def test_query_items_builds_without_a_pattern_is_refused(mock_jenkins, mocker):
+    with pytest.raises(ValueError, match='include_builds needs a pattern that narrows the jobs') as refused:
+        item.query_items(mocker.Mock(), include_builds=200)
+
+    for name in ('fullname_pattern', 'label_pattern', 'color_pattern', 'class_pattern'):
+        assert name in str(refused.value)
+    assert mock_jenkins.method_calls == []
+
+
+def test_query_items_builds_since_days_alone_is_refused(mock_jenkins, mocker):
+    # builds_since_days filters in the gateway, the master still loads every job's history
+    with pytest.raises(ValueError, match='include_builds needs a pattern that narrows the jobs'):
+        item.query_items(mocker.Mock(), include_builds=200, builds_since_days=1)
+
+    assert mock_jenkins.method_calls == []
+
+
+@pytest.mark.parametrize('field', ['fullname_pattern', 'label_pattern', 'color_pattern', 'class_pattern'])
+@pytest.mark.parametrize('pattern', _MATCH_EVERYTHING)
+def test_query_items_builds_with_a_match_everything_pattern_is_refused(mock_jenkins, mocker, field, pattern):
+    with pytest.raises(ValueError, match='include_builds needs a pattern that narrows the jobs'):
+        item.query_items(mocker.Mock(), include_builds=10, **{field: pattern})
+
+    assert mock_jenkins.method_calls == []
+
+
+@pytest.mark.parametrize(
+    ('field', 'pattern'),
+    [
+        ('fullname_pattern', '^pmm3-'),
+        ('label_pattern', 'docker-aarch64'),
+        ('color_pattern', 'red'),
+        ('class_pattern', 'FreeStyleProject'),
+    ],
+)
+def test_query_items_builds_with_each_narrowing_pattern_is_accepted(mock_jenkins, mocker, field, pattern):
+    mock_jenkins.query_items.return_value = [Job(fullname='pmm3-a', color='red', name='a', url='1', class_='Job')]
+    mock_jenkins.get_job_builds.return_value = [_build(1)]
+
+    result = item.query_items(mocker.Mock(), include_builds=5, **{field: pattern})
+
+    # the narrow selection is read without builds first, then each job's history alone
+    assert mock_jenkins.query_items.call_args_list[0].kwargs[field] == pattern
+    assert all(c.kwargs.get('include_builds', 0) == 0 for c in mock_jenkins.query_items.call_args_list)
+    mock_jenkins.get_job_builds.assert_called_once_with(fullname='pmm3-a', count=6)
+    assert [e['fullname'] for e in result['items']] == ['pmm3-a']
+
+
+def test_query_items_one_narrowing_pattern_is_enough(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = []
+
+    item.query_items(mocker.Mock(), include_builds=5, fullname_pattern='.*', label_pattern='docker-x64')
+
+    mock_jenkins.query_items.assert_called_once()
+
+
+def test_query_items_without_builds_needs_no_pattern(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = []
+
+    item.query_items(mocker.Mock())
+    item.query_items(mocker.Mock(), include_parameters=True, compact_parameters=True)
+
+    assert mock_jenkins.query_items.call_count == 2
+
+
+def test_query_items_include_builds_is_capped_at_200(mock_jenkins, bulk_builds, mocker):
+    mock_jenkins.query_items.return_value = [Job(fullname='a', color='blue', name='a', url='1', class_='Job')]
+
+    item.query_items(mocker.Mock(), include_builds=10_000, fullname_pattern='^a')
+
+    assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 201
+
+
+def test_query_items_refused_call_sends_no_request_to_the_master(mocker):
+    from mcp_jenkins.jenkins import Jenkins
+
+    session = mocker.Mock()
+    mocker.patch('mcp_jenkins.jenkins.rest_client.requests.Session', autospec=True, return_value=session)
+    client = Jenkins(url='https://example.com/', username='u', password='p')
+    mocker.patch('mcp_jenkins.server.item.jenkins', return_value=client)
+
+    with pytest.raises(ValueError, match='include_builds needs a pattern'):
+        item.query_items(mocker.Mock(), include_builds=200, fullname_pattern='.*', builds_since_days=90)
+
+    session.request.assert_not_called()
+    session.get.assert_not_called()
+
+
+def _jobs(count, builds=None):
+    return [
+        Job(fullname=f'pmm3-{n:02d}', color='blue', name='x', url='u', class_='Job', builds=builds)
+        for n in range(count)
+    ]
+
+
+def test_query_items_wide_selection_caps_bulk_builds_at_20(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = _jobs(21, builds=[_build(k) for k in range(21, 0, -1)])
+
+    result = item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=200)
+
+    # the one-request read asks Jenkins for 21 builds per job, not 201
+    assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 21
+    mock_jenkins.get_job_builds.assert_not_called()
+    assert result['builds_cap'] == 20
+    assert '21 jobs' in result['note']
+    assert all(len(e['builds']) == 20 and e['more'] is True for e in result['items'])
+
+
+def test_query_items_wide_selection_cap_holds_on_every_page(mock_jenkins, mocker):
+    mocker.patch('mcp_jenkins.server.item._COMPACT_PAGE_CHARS', 2000)
+    mock_jenkins.query_items.return_value = _jobs(25, builds=[_build(k) for k in range(21, 0, -1)])
+
+    cursor, pages = None, 0
+    while True:
+        result = item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=200, cursor=cursor)
+        pages += 1
+        assert result['builds_cap'] == 20
+        assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 21
+        cursor = result['next_cursor']
+        if cursor is None:
+            break
+    assert pages > 1
+
+
+def test_query_items_narrow_selection_keeps_the_200_cap(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = _jobs(20)
+    mock_jenkins.get_job_builds.return_value = [_build(1)]
+
+    result = item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=200)
+
+    assert mock_jenkins.get_job_builds.call_count == 20
+    assert all(c.kwargs['count'] == 201 for c in mock_jenkins.get_job_builds.call_args_list)
+    assert 'builds_cap' not in result
+    assert 'note' not in result
+
+
+def test_query_items_wide_selection_under_the_cap_is_unchanged(mock_jenkins, mocker):
+    mock_jenkins.query_items.return_value = _jobs(21, builds=[_build(1)])
+
+    result = item.query_items(mocker.Mock(), fullname_pattern='^pmm3-', include_builds=10)
+
+    assert mock_jenkins.query_items.call_args_list[-1].kwargs['include_builds'] == 11
+    assert 'builds_cap' not in result
+    assert 'note' not in result
