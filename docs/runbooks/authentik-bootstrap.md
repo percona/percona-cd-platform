@@ -200,9 +200,9 @@ limit and the shell pushes it over, which OOM-kills the worker. Use a
 one-off pod from the same image and Secrets instead:
 
 ```bash
-kubectl -n authentik run ak-shell-oneoff --image=ghcr.io/goauthentik/server:2026.2.4 \
+kubectl -n authentik run ak-shell-oneoff --image=ghcr.io/goauthentik/server:2026.2.7 \
   --restart=Never --overrides='{"spec":{"serviceAccountName":"authentik","containers":[{"name":"shell",
-  "image":"ghcr.io/goauthentik/server:2026.2.4","command":["sleep","900"],
+  "image":"ghcr.io/goauthentik/server:2026.2.7","command":["sleep","900"],
   "envFrom":[{"secretRef":{"name":"authentik"}},{"secretRef":{"name":"authentik-config"}}],
   "resources":{"requests":{"memory":"512Mi"},"limits":{"memory":"1Gi"}}}]}}'
 kubectl -n authentik wait --for=condition=Ready pod/ak-shell-oneoff --timeout=120s
