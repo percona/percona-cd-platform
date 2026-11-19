@@ -15,3 +15,8 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    {{- with (.Values.metrics | default dict).port }}
+    - name: metrics
+      port: {{ int . }}
+      targetPort: metrics
+    {{- end }}

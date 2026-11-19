@@ -111,6 +111,11 @@ def main(
             logger.warning('No mode flag given (--read-only / --enable-operate); defaulting to read-only.')
         mcp.enable(tags={'read'}, only=True)
 
+    if transport in ('sse', 'streamable-http'):
+        from mcp_jenkins.server.metrics_listener import start_metrics_listener
+
+        start_metrics_listener(host, port)
+
     if transport == 'stdio':
         asyncio.run(mcp.run_async(transport=transport))
     elif transport in ('sse', 'streamable-http'):

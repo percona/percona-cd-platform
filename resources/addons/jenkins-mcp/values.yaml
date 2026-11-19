@@ -118,14 +118,21 @@ serviceMonitor:
   enabled: true
   interval: 30s
 
+# A port of its own for /metrics, which the ingress does not route. Empty serves /metrics on the
+# main port 9887, as every image does. Set a port (for example 9888) only once the running image
+# reads MCP_METRICS_PORT: the Deployment, the Service and the ServiceMonitor then use that port.
+# Procedure: docs/runbooks/jenkins-mcp-operate.md, "Serve the metrics on their own port".
+metrics:
+  port: ""
+
 # NetworkPolicy for the namespace (templates/networkpolicies.yaml), enforced by the VPC CNI policy
 # engine (terraform/eks-addons.tf). Off by default, because ArgoCD applies a merge to main straight
 # to production. Turn it on in its own change after the live checks.
 networkPolicy:
   enabled: false
-  # Container port of the gateway (deployment.yaml) and the port that /metrics answers on.
+  # Container port of the gateway (deployment.yaml). The scraper rule uses metrics.port when
+  # that is set, and this port otherwise.
   gatewayPort: 9887
-  metricsPort: 9887
   # Internet-facing ALB nodes sit in the public subnets (terraform/vpc.tf public_subnets).
   albSourceCidrs:
     - 10.220.96.0/24
@@ -138,7 +145,7 @@ networkPolicy:
     - 10.220.0.0/19
     - 10.220.32.0/19
     - 10.220.64.0/19
-  # Scraper pods allowed on metricsPort (the Alloy DaemonSet, resources/addons/alloy).
+  # Scraper pods allowed on the metrics port (the Alloy DaemonSet, resources/addons/alloy).
   scraper:
     namespace: alloy
     podLabels:

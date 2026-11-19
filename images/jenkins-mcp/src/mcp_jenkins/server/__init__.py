@@ -89,12 +89,19 @@ async def healthz(_request: Request) -> PlainTextResponse:
     return PlainTextResponse('OK', status_code=200)
 
 
-@mcp.custom_route('/metrics', methods=['GET'])
 async def metrics(_request: Request) -> Response:
     """Prometheus metrics endpoint: aggregate tool-call counters (no user labels)."""
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# With MCP_METRICS_PORT set, only the separate listener in metrics_listener serves /metrics,
+# so the main port answers 404 for it.
+from mcp_jenkins.server.metrics_listener import metrics_port_configured  # noqa: E402
+
+if not metrics_port_configured():
+    mcp.custom_route('/metrics', methods=['GET'])(metrics)
 
 
 # Register the per-request audit middleware (user attribution -> structured JSON -> Loki).

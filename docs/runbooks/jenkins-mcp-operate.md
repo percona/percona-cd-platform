@@ -206,6 +206,23 @@ service from source alone will not work without them.
   exception to the justfile-only rule, since there is no `just tf-import` recipe. Run it from
   `terraform/` with `AWS_PROFILE` exported, and `just tf-state-backup` first.
 
+## Serve the metrics on their own port
+
+The public ingress routes every path of the main port 9887, so `/metrics` on that port is public.
+The chart value `metrics.port` moves `/metrics` to a port that the ingress does not route. The value
+is empty by default, which keeps `/metrics` on 9887. ArgoCD applies a chart change at once, but an
+image reaches the cluster later through its own bump pull request. Turn the port on in this order:
+
+1. Merge the chart support with `metrics.port: ""`. The rendered manifests do not change.
+2. Merge the bump pull request of the first image that reads `MCP_METRICS_PORT`. Wait until both
+   pods run that image.
+3. Set `metrics.port: 9888` in `resources/addons/jenkins-mcp/values.yaml` and merge.
+4. Check that `https://jenkins-mcp.cd.percona.com/metrics` answers 404.
+5. Check that Mimir still receives `mcp_tool_calls_total` from the namespace `jenkins-mcp`.
+
+If step 3 lands before step 2, the ServiceMonitor scrapes a port that the old image does not serve,
+and the metrics stop until the image arrives. To roll back, set `metrics.port: ""` again.
+
 ## Verify
 
 ```sh

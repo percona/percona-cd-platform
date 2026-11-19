@@ -1,11 +1,12 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $np := .Values.networkPolicy }}
+{{- $metricsPort := (.Values.metrics | default dict).port | default $np.gatewayPort }}
 {{- $gatewaySources := concat ($np.albSourceCidrs | default list) ($np.probeSourceCidrs | default list) }}
 {{- if not $np.albSourceCidrs }}
 {{- fail "jenkins-mcp: networkPolicy.albSourceCidrs is empty, so the load balancer could not reach the gateway." }}
 {{- end }}
 {{/*
-Default deny for the namespace. Ingress: the ALB and probe sources on gatewayPort, Alloy on metricsPort.
+Default deny for the namespace. Ingress: the ALB and probe sources on gatewayPort, Alloy on the metrics port.
 Egress: kube-dns, the Pod Identity agent, and TCP 443 to public addresses (masters, Authentik, S3).
 */}}
 apiVersion: networking.k8s.io/v1
@@ -52,7 +53,7 @@ spec:
               {{- toYaml $np.scraper.podLabels | nindent 14 }}
       ports:
         - protocol: TCP
-          port: {{ $np.metricsPort }}
+          port: {{ int $metricsPort }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

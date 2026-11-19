@@ -242,6 +242,13 @@ OIDC auth turns on when `MCP_OIDC_ISSUER` / `MCP_OIDC_JWKS_URI` / `MCP_OIDC_AUDI
 `MCP_JENKINS_FLEET_FILE`. In production this runs as the `jenkins-mcp` addon on the
 percona-ci-platform EKS cluster, behind the `jenkins-cd` ALB.
 
+Prometheus metrics (`GET /metrics`) are served on the main port by default. Set `MCP_METRICS_PORT`
+to a different port number to serve them on that port only. The main port then answers 404 for
+`/metrics`, and the metrics port answers 404 for every other path. The server refuses to start
+when the value is not a port number, equals `--port`, or cannot be bound. The variable applies to
+the `sse` and `streamable-http` transports. The chart sets it from `metrics.port`, see
+[`../../docs/runbooks/jenkins-mcp-operate.md`](../../docs/runbooks/jenkins-mcp-operate.md).
+
 To run it locally, point it at a one-master fleet file and leave the OIDC vars unset, so it runs
 WITHOUT auth (local dev only):
 
