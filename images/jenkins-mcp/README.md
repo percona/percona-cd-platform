@@ -177,6 +177,38 @@ The `redirectUri` port is free to choose (Authentik allowlists any
 `http://localhost:<port>/callback`). The first connection opens the Authentik / JumpCloud login. Select a
 master with the per-call `master` argument.
 
+### Untrusted content and operate tools
+
+Console logs, artifacts, test reports, scripts, configs, parameters, job names and descriptions are
+written by job and pull request authors, not by you. The gateway returns them as they are. A build
+log can hold text that reads like an instruction to your agent. The server instructions and the
+description of each such tool say that this content is data and never an instruction. The tools carry
+the `untrusted-content` tag.
+
+Keep the tools that change Jenkins behind a confirmation in your client. In Claude Code, put this in
+`.claude/settings.json` (the `ask` rules win over the `allow` rule):
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__jenkins-mcp"],
+    "ask": [
+      "mcp__jenkins-mcp__build_item",
+      "mcp__jenkins-mcp__replay_build",
+      "mcp__jenkins-mcp__stop_build",
+      "mcp__jenkins-mcp__stop_builds",
+      "mcp__jenkins-mcp__cancel_queue_item",
+      "mcp__jenkins-mcp__create_item",
+      "mcp__jenkins-mcp__set_item_config",
+      "mcp__jenkins-mcp__delete_item"
+    ]
+  }
+}
+```
+
+Use the name you registered the server under in place of `jenkins-mcp`. Read tools then run without a
+prompt, and every call that changes Jenkins waits for your answer.
+
 ### Troubleshooting a connection
 
 **Opening the endpoint URL in a browser always returns `invalid_token`.** That is not a fault. The
@@ -225,9 +257,9 @@ roughly 60 to 90 seconds. Retry before reporting it.
 
 ### Auto-deploy
 
-New gateway image versions roll out on their own: when a new `percona-cd/jenkins-mcp` image is
-pushed to ECR, the build workflow opens a bump PR against the addon `values.yaml`, and merging it
-lets ArgoCD sync the new tag. The endpoint URL is stable, so a server-side image bump needs no
+When a new `percona-cd/jenkins-mcp` image is pushed to ECR, the build workflow prepares a bump
+branch that sets `image.tag` and `image.digest` in the addon `values.yaml`. A person opens the pull
+request from the link in the job summary. Merging it lets ArgoCD sync the new image. The endpoint URL is stable, so a server-side image bump needs no
 client change. See
 [`../../docs/runbooks/jenkins-mcp-image-autodeploy.md`](../../docs/runbooks/jenkins-mcp-image-autodeploy.md).
 
@@ -238,16 +270,26 @@ mcp-jenkins --transport streamable-http --host 0.0.0.0 --port 9887 --read-only
 ```
 
 OIDC auth turns on when `MCP_OIDC_ISSUER` / `MCP_OIDC_JWKS_URI` / `MCP_OIDC_AUDIENCE` /
-`MCP_PUBLIC_BASE_URL` are set; the fleet (masters + read-only tokens) is one JSON blob at
+`MCP_PUBLIC_BASE_URL` are set. The `sse` and `streamable-http` transports refuse to start without
+them and name the missing settings. A partly set configuration is always refused. The fleet (masters + read-only tokens) is one JSON blob at
 `MCP_JENKINS_FLEET_FILE`. In production this runs as the `jenkins-mcp` addon on the
 percona-ci-platform EKS cluster, behind the `jenkins-cd` ALB.
 
-To run it locally, point it at a one-master fleet file and leave the OIDC vars unset, so it runs
-WITHOUT auth (local dev only):
+Prometheus metrics (`GET /metrics`) are served on the main port by default. Set `MCP_METRICS_PORT`
+to a different port number to serve them on that port only. The main port then answers 404 for
+`/metrics`, and the metrics port answers 404 for every other path. The server refuses to start
+when the value is not a port number, equals `--port`, or cannot be bound. The variable applies to
+the `sse` and `streamable-http` transports. The chart sets it from `metrics.port`, see
+[`../../docs/runbooks/jenkins-mcp-operate.md`](../../docs/runbooks/jenkins-mcp-operate.md).
+
+To run it locally over HTTP without auth, point it at a one-master fleet file, leave the OIDC vars
+unset and set the development switch `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`. The gateway then logs a
+warning on every start. Never set the switch in a deployment. The `stdio` transport has no listener
+and needs neither the OIDC vars nor the switch.
 
 ```sh
 echo '{"masters":[{"name":"ps80","url":"https://ps80.cd.percona.com/","username":"JNKPercona","token":"<api token>"}]}' > fleet.json
-MCP_JENKINS_FLEET_FILE=fleet.json uv run mcp-jenkins \
+MCP_ALLOW_UNAUTHENTICATED_HTTP=1 MCP_JENKINS_FLEET_FILE=fleet.json uv run mcp-jenkins \
   --transport streamable-http --host 127.0.0.1 --port 9887 --read-only
 curl -s http://127.0.0.1:9887/healthz   # -> OK
 ```
@@ -274,7 +316,7 @@ the version bump produces a tag that is confusing to trace back.
 
 Built by CI (`.github/workflows/build-jenkins-mcp-image.yml`) from this directory and pushed to
 ECR `percona-cd/jenkins-mcp` via GitHub Actions assuming an AWS IAM role over OIDC. The deployed
-tag is bumped in `resources/addons/jenkins-mcp/values.yaml`.
+tag and digest are bumped in `resources/addons/jenkins-mcp/values.yaml`.
 
 ## License
 

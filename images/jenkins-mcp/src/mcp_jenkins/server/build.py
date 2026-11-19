@@ -122,7 +122,7 @@ def _artifact_hint(relative_path: str) -> str | None:
     return None
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_running_builds(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all running builds from Jenkins
 
@@ -151,7 +151,7 @@ def get_build(ctx: Context, fullname: str, number: int | None = None, master: Ma
     return jenkins(ctx, master).get_build(fullname=fullname, number=number).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read', 'config-read'])
+@mcp.tool(tags=['read', 'config-read', 'untrusted-content'])
 def get_build_scripts(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[str]:
     """Get the scripts used in a specific build in Jenkins
 
@@ -167,7 +167,7 @@ def get_build_scripts(ctx: Context, fullname: str, number: int | None = None, ma
     return jenkins(ctx, master).get_build_replay(fullname=fullname, number=number).scripts
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_console_output(
     ctx: Context,
     fullname: str,
@@ -238,7 +238,7 @@ def _cap_report_cases(report: dict, max_cases: int, max_text: int) -> dict:
     return report
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_test_report(
     ctx: Context, fullname: str, number: int | None = None, max_cases: int = 1000, master: MasterArg = None
 ) -> dict:
@@ -273,7 +273,7 @@ def get_build_test_report(
         return _cap_report_cases(report, max_cases, _MAX_REPORT_TEXT_CHARS)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_failure_summary(
     ctx: Context,
     fullname: str,
@@ -422,7 +422,7 @@ def get_build_failure_summary(
     return result
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_console_tail(
     ctx: Context, fullname: str, number: int | None = None, lines: int = 200, master: MasterArg = None
 ) -> str:
@@ -446,7 +446,7 @@ def get_build_console_tail(
     return jenkins(ctx, master).get_build_console_tail(fullname=fullname, number=number, lines=lines)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_parameters(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the parameters of a specific build in Jenkins
 
@@ -521,7 +521,7 @@ def stop_builds(ctx: Context, items: list[StopTarget], master: MasterArg = None)
     return {'results': results, 'stopped': stopped, 'failed': len(results) - stopped}
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_all_build_artifacts(
     ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None
 ) -> list[dict]:
@@ -548,7 +548,7 @@ def get_all_build_artifacts(
     return artifacts
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_artifact(
     ctx: Context, fullname: str, relative_path: str, number: int | None = None, master: MasterArg = None
 ) -> dict:
@@ -660,7 +660,7 @@ def _walk_row(raw: dict, include: set[str]) -> dict:
     return row
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_walk(
     ctx: Context,
     fullname: str,
@@ -714,7 +714,7 @@ def get_build_walk(
     return {'fullname': fullname, 'builds': builds, 'errors': errors, 'notes': notes}
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_stages(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> dict:
     """Get the pipeline stage breakdown of a build (which stage ran/failed and per-stage durations).
 
@@ -730,7 +730,7 @@ def get_build_stages(ctx: Context, fullname: str, number: int | None = None, mas
     return jenkins(ctx, master).get_build_stages(fullname=fullname, number=number).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_build_changeset(ctx: Context, fullname: str, number: int | None = None, master: MasterArg = None) -> list[dict]:
     """Get the SCM changes (commits) included in a build.
 

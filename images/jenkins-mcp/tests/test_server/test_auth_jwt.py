@@ -8,6 +8,8 @@ would catch a regression here.
 """
 
 import base64
+import hashlib
+import hmac
 import json
 import time
 
@@ -79,15 +81,22 @@ async def test_valid_rs256_token_accepted(rsa_keypair, verifier):
 
 @pytest.mark.asyncio
 async def test_hs256_signed_with_public_key_rejected(rsa_keypair, verifier):
-    # Algorithm confusion: an attacker who has the public key mints an HS256 token using it as
-    # the HMAC secret. A verifier that honours the token's alg header would accept it.
-    import warnings
+    # Algorithm confusion: an HS256 token whose HMAC secret is the RSA public key PEM, minted with
+    # the standard library. A verifier that honours the token's alg header would accept it.
+    def b64(raw):
+        return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
 
-    private_pem, public_pem = rsa_keypair
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        hmac_key = jwk.import_key(public_pem.encode(), 'oct')
-    token = jose_jwt.encode({'alg': 'HS256'}, _claims(), hmac_key, algorithms=['HS256'])
+    _, public_pem = rsa_keypair
+    hmac_key = public_pem.encode()
+    header = b64(json.dumps({'alg': 'HS256', 'typ': 'JWT'}).encode())
+    signing_input = f'{header}.{b64(json.dumps(_claims()).encode())}'
+    signature = hmac.new(hmac_key, signing_input.encode(), hashlib.sha256).digest()
+    token = f'{signing_input}.{b64(signature)}'
+
+    header_part, _, signature_part = token.rsplit('.', 2)
+    assert json.loads(base64.urlsafe_b64decode(header_part + '=='))['alg'] == 'HS256'
+    expected = hmac.new(hmac_key, signing_input.encode(), hashlib.sha256).digest()
+    assert hmac.compare_digest(base64.urlsafe_b64decode(signature_part + '=='), expected)
 
     assert await verifier.verify_token(token) is None
 

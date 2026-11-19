@@ -12,7 +12,9 @@ def test_main_stdio(mocker):
     mock_mcp.run_async.assert_called_once_with(transport='stdio')
 
 
-def test_main_sse(mocker):
+def test_main_sse(mocker, monkeypatch):
+    # No OIDC settings here: the development switch must be set to start an HTTP transport.
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     mocker.patch('mcp_jenkins.asyncio')
     mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
 
@@ -20,7 +22,9 @@ def test_main_sse(mocker):
     mock_mcp.run_async.assert_called_once_with(transport='sse', host='127.0.0.1', port=9887)
 
 
-def test_main_streamable_http(mocker):
+def test_main_streamable_http(mocker, monkeypatch):
+    # No OIDC settings here: the development switch must be set to start an HTTP transport.
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     mocker.patch('mcp_jenkins.asyncio')
     mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
 
@@ -75,3 +79,15 @@ def test_main_both_mode_flags_are_mutually_exclusive(mocker):
     assert result.exit_code != 0
     mock_mcp.enable.assert_not_called()  # no tools enabled when the flags conflict
     mock_mcp.run_async.assert_not_called()  # server never starts
+
+
+def test_main_operate_refuses_start_on_a_preflight_violation(mocker):
+    mocker.patch('mcp_jenkins.asyncio')
+    mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
+    mocker.patch('mcp_jenkins.core.fleet.write_preflight', return_value=['ps80: identity holds RunScripts'])
+
+    result = CliRunner().invoke(main, ['--transport', 'stdio', '--enable-operate'])
+
+    assert result.exit_code == 1
+    mock_mcp.enable.assert_not_called()
+    mock_mcp.run_async.assert_not_called()

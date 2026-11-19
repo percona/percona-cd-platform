@@ -188,6 +188,45 @@ jobs:
       - name: pytest
         run: python -m pytest terraform/lambdas/tests images/jenkins-endpoint-reconciler terraform/modules/jenkins-master/tests
 
+  # The gateway tests live in jenkins-mcp-tests.yml. A pull request runs them only when it
+  # changes the gateway source or that wiring. Pushes, merge queue runs and any diff error
+  # run them or fail, so ci-gate never passes on a filter that could not decide.
+  jenkins-mcp-changes:
+    name: jenkins-mcp change filter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2          # the pull request merge commit and its base parent
+      - name: decide whether the gateway tests run
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          run=true
+          if [ "$EVENT" = "pull_request" ]; then
+            changed="$(git diff --name-only HEAD^1 HEAD)"
+            printf '%s\n' "$changed"
+            if ! grep -qE '^(images/jenkins-mcp/|\.github/workflows/(jenkins-mcp-tests|ci)\.yml$)' <<< "$changed"; then
+              run=false
+            fi
+          fi
+          echo "gateway tests run: ${run}"
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+
+  jenkins-mcp-tests:
+    name: jenkins-mcp
+    needs: [jenkins-mcp-changes]
+    if: needs.jenkins-mcp-changes.outputs.run == 'true'
+    uses: ./.github/workflows/jenkins-mcp-tests.yml
+    permissions:
+      contents: read            # checkout in the called workflow
+
   ci-gate:
     name: ci-gate
     # The single required status check for branch protection. Runs even when a
@@ -202,6 +241,8 @@ jobs:
       - clouds-catalog-drift
       - helm-render
       - lambda-pytest
+      - jenkins-mcp-changes
+      - jenkins-mcp-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

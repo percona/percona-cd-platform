@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke-boot the jenkins-mcp image: start it with an empty fleet in read-only
 # mode and assert /healthz serves 200. No Jenkins or Authentik is needed (the
-# liveness route returns local state only and OIDC stays off without MCP_OIDC_*).
+# liveness route returns local state only). The image has no OIDC settings here, so the
+# development switch MCP_ALLOW_UNAUTHENTICATED_HTTP=1 lets the HTTP transport start.
 set -euo pipefail
 
 IMG="${1:?usage: smoke.sh <image-ref>}"
@@ -13,6 +14,7 @@ chmod 0644 "$fleet" # the container runs as uid 65532 and must read the mount
 
 cid="$(docker run -d -p 9887:9887 \
   -e MCP_JENKINS_FLEET_FILE=/etc/jenkins-mcp/fleet.json \
+  -e MCP_ALLOW_UNAUTHENTICATED_HTTP=1 \
   -v "$fleet:/etc/jenkins-mcp/fleet.json:ro" \
   "$IMG" --transport streamable-http --host 0.0.0.0 --port 9887 --read-only)"
 trap 'docker rm -f "$cid" >/dev/null 2>&1 || true; rm -f "$fleet"' EXIT

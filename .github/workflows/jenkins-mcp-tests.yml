@@ -1,0 +1,35 @@
+name: jenkins-mcp-tests
+
+# Unit tests and ruff on the vendored gateway source (images/jenkins-mcp). Called by
+# ci.yml, which feeds the result into the required ci-gate check, and by
+# build-jenkins-mcp-image.yml, whose image jobs depend on it.
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  test:
+    name: pytest + ruff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read            # checkout
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          enable-cache: true
+      - name: sync (frozen)
+        working-directory: images/jenkins-mcp
+        run: uv sync --all-extras --dev --frozen
+      - name: pytest
+        working-directory: images/jenkins-mcp
+        run: uv run --frozen pytest -q
+      - name: ruff check + format
+        working-directory: images/jenkins-mcp
+        run: |
+          uv run --frozen ruff check .
+          uv run --frozen ruff format --check .

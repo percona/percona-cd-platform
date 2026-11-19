@@ -2,6 +2,7 @@
 # 0038: Auto-deploy the jenkins-mcp image via a CI-authored bump PR
 
 **Status:** Accepted (2026-06-23)
+**Amended:** see [Amendments](#amendments) (a person opens the bump pull request, and the bump pins the image digest)
 **Related:** [ADR 0025](0025-singleton-controller-rollout-gating.md) (the "build is not deploy" gap this closes for a stateless addon, see the amendment there bounding this exception), [ADR 0005](0005-gitops-bridge-bootstrap.md) (the addons ApplicationSet whose `aws.accountId` broadcast and `selfHeal` posture jenkins-mcp stays inside), [ADR 0027](0027-baked-jenkins-controller-image.md) (sibling first-party ECR image, but a singleton controller, so explicitly NOT a candidate for this auto-deploy path).
 
 > **Implementation status: NOT YET MERGED (2026-06-23).** The build pipeline (`.github/workflows/build-jenkins-mcp-image.yml`) already pushes `0.3.0-<short-sha>` on every push to `main`; the deploy half is the manual `image.tag` edit in `resources/addons/jenkins-mcp/values.yaml`. This ADR records the decision to automate the PR-authoring half with a `bump` job in that same workflow.
@@ -53,10 +54,23 @@ Add a `bump` job to `build-jenkins-mcp-image.yml`, mirroring the repo's existing
 - jenkins-mcp still resolves a non-empty `aws.accountId` from the addons appset broadcast (it was not carved out).
 - `just ci` passes.
 
+## Amendments
+
+### The bump prepares a branch, a person opens the pull request, and the bump pins the digest
+
+GitHub Actions may not create or approve pull requests in this repository, and the default workflow token is read-only. The `gh pr create` step of decision 3 therefore fails.
+
+1. **The bump job prepares the branch only.** It creates the branch and the verified `createCommitOnBranch` commit with `GITHUB_TOKEN` and `contents: write`. It no longer holds `pull-requests: write`.
+2. **A person opens the pull request.** The job summary carries the branch, the diff and a prefilled pull request link. The run ends green when the branch is ready.
+3. **The optional `JENKINS_MCP_BUMP_TOKEN` is gone.** A person-opened pull request runs `ci-gate`, so the PAT has no purpose. A GitHub App token can open the pull request later without a rewrite of the job.
+4. **The bump pins the image digest.** The commit sets `image.tag` and `image.digest`, the multi-arch index digest that the push step reports. The Deployment pulls `repository:tag@digest`, and falls back to the tag when the digest is empty.
+
+The acceptance criteria above read with these changes: the run prepares a branch, not a pull request, and the commit touches `image.tag` and `image.digest`.
+
 ## References
 
 - Build + bump workflow: [`.github/workflows/build-jenkins-mcp-image.yml`](../../.github/workflows/build-jenkins-mcp-image.yml)
 - Pattern this mirrors: [`.github/workflows/refresh-fork-locks.yml`](../../.github/workflows/refresh-fork-locks.yml)
-- Deploy target: `resources/addons/jenkins-mcp/values.yaml` (`image.tag`)
+- Deploy target: `resources/addons/jenkins-mcp/values.yaml` (`image.tag`, `image.digest`)
 - ECR repo + lifecycle: `terraform/ecr.tf` (`aws_ecr_repository.jenkins_mcp`)
 - Operator procedure: [docs/runbooks/jenkins-mcp-image-autodeploy.md](../runbooks/jenkins-mcp-image-autodeploy.md)

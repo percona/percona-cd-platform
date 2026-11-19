@@ -203,27 +203,32 @@ jobs:
           {
             echo "Pushed \`${REGISTRY}/${IMAGE_REPO}:${TAG}\`"
             echo "Digest \`${DIGEST}\`"
-            echo "A deploy bump PR for \`${TAG}\` is opened automatically by the bump job."
+            echo "The bump job prepares a deploy bump branch for \`${TAG}\` and links its pull request in its summary."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # ---- open a deploy bump PR for the just-pushed tag (verified commit) ----
-  # createCommitOnBranch signs the commit with GitHub's key, so the bump PR meets
+  # ---- prepare a deploy bump branch for the just-pushed image (verified commit) ----
+  # GITHUB_TOKEN may not open pull requests here. The job summary links a prefilled
+  # pull request, and the step outputs branch and title for a later token-backed step.
+  # createCommitOnBranch signs the commit with GitHub's key, so the bump branch meets
   # main's required-signed-commits rule with no GPG key or GitHub App. A human
   # squash-merges the one-line PR to deploy; ArgoCD then syncs HEAD.
   bump:
-    name: open deploy bump PR
+    name: prepare deploy bump branch
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: [publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      branch: ${{ steps.branch.outputs.branch }}
+      title: ${{ steps.branch.outputs.title }}
     permissions:
       contents: write           # createCommitOnBranch on the bump branch
-      pull-requests: write      # gh pr create
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - name: open bump PR
+      - name: prepare bump branch
+        id: branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_TAG: ${{ needs.publish.outputs.tag }}
@@ -235,13 +240,16 @@ jobs:
           # The deploy tag lives at snapscheduler.image.tagOverride (4-space indent).
           cur="$(grep -E '^    tagOverride: ' "$VALUES" | head -1 | sed -E 's|^    tagOverride: "?([^"]*)"?.*|\1|')"
           if [ "$cur" = "$NEW_TAG" ]; then
-            echo "values.yaml already on ${NEW_TAG}; nothing to bump."
+            echo "values.yaml already on ${NEW_TAG}; nothing to bump." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          sed -E "s|^    tagOverride: .*|    tagOverride: \"${NEW_TAG}\"|" "$VALUES" > /tmp/values.yaml
+          rc=0
+          diff -U0 "$VALUES" /tmp/values.yaml > /tmp/bump.diff || rc=$?
+          [ "$rc" = "1" ] || { echo "expected a change in $VALUES, diff exit code $rc"; exit 1; }
           BRANCH="chore/deploy-snapscheduler-${RUN_ID}"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
             -f ref="refs/heads/${BRANCH}" -f sha="${BASE_SHA}"
-          sed -E "s|^    tagOverride: .*|    tagOverride: \"${NEW_TAG}\"|" "$VALUES" > /tmp/values.yaml
           CONTENT_B64="$(base64 -w0 /tmp/values.yaml)"
           # shellcheck disable=SC2016  # $vars are GraphQL variables substituted by gh -f, not the shell.
           gh api graphql -f query='
@@ -256,7 +264,7 @@ jobs:
             -f nwo="$GITHUB_REPOSITORY" -f branch="$BRANCH" \
             -f path="$VALUES" -f contents="$CONTENT_B64" -f head="$BASE_SHA" \
             -f msg="chore(snapscheduler): deploy image ${NEW_TAG}"
-          BODY="$(mktemp)"
+          BODY="${RUNNER_TEMP}/bump-pr-body.md"
           {
             printf '%s\n' '## Deploy'
             printf '%s\n' ''
@@ -264,6 +272,20 @@ jobs:
             printf '%s\n' '- The commit is GitHub-verified (createCommitOnBranch), so it satisfies the signed-commits rule on main.'
             printf '%s\n' '- Squash-merge to deploy. ArgoCD syncs HEAD. No auto-merge.'
           } > "$BODY"
-          gh pr create --base main --head "$BRANCH" \
-            --title "chore(snapscheduler): deploy image ${NEW_TAG}" \
-            --body-file "$BODY"
+          TITLE="chore(snapscheduler): deploy image ${NEW_TAG}"
+          title_q="$(jq -rn --arg v "$TITLE" '$v|@uri')"
+          body_q="$(jq -rn --rawfile v "$BODY" '$v|@uri')"
+          COMPARE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1&title=${title_q}&body=${body_q}"
+          {
+            printf '%s\n' '### Deploy bump branch ready'
+            printf '%s\n' ''
+            printf '%s\n' "Branch \`${BRANCH}\` holds one verified commit on \`${VALUES}\`:"
+            printf '%s\n' '```diff'
+            grep -vE '^(---|\+\+\+|@@)' /tmp/bump.diff
+            printf '%s\n' '```'
+            printf '%s\n' 'GitHub Actions may not open pull requests in this repository, so a person opens it.'
+            printf '%s\n' "[Open the pull request](${COMPARE}) with the title and body filled in, then review and squash-merge to deploy."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Deploy bump branch ready::${BRANCH}. Open the pull request from the job summary."

@@ -8,7 +8,7 @@ from fastmcp.server.dependencies import get_http_request
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from mcp_jenkins.core.fleet import client_for, get_fleet
+from mcp_jenkins.core.fleet import check_operate, client_for, get_fleet, write_call
 from mcp_jenkins.core.grants import get_grants
 from mcp_jenkins.core.scope import allowed_masters, check_master
 from mcp_jenkins.jenkins import Jenkins
@@ -85,10 +85,13 @@ def jenkins(ctx: Context, master: str | None = None) -> Jenkins:
     """Return a Jenkins client for the selected master, with server-held read-only credentials.
 
     The optional master overrides the header/default selection for this call. The caller's master
-    scope is checked before the session cache, so a cached client never bypasses it.
+    scope and, for an operate or manage call, the master's preflight state are checked before the
+    session cache, so a cached client never bypasses them.
     """
     name = _selected_master(ctx, master)
     check_master(name)
+    if write_call.get():
+        check_operate(name)
     singleton = ctx.request_context.lifespan_context.jenkins_session_singleton
 
     if singleton:

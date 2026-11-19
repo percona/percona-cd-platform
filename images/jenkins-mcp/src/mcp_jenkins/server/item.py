@@ -16,7 +16,7 @@ from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_artifact_search import _build_matcher
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_all_items(ctx: Context, limit: int = 200, master: MasterArg = None) -> dict:
     """List jobs and folders on a master as a flat, compact list.
 
@@ -41,7 +41,7 @@ def get_all_items(ctx: Context, limit: int = 200, master: MasterArg = None) -> d
     }
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dict:
     """Get specific item from Jenkins
 
@@ -54,7 +54,7 @@ def get_item(ctx: Context, fullname: str, master: MasterArg = None) -> dict:
     return jenkins(ctx, master).get_item(fullname=fullname).model_dump(exclude_none=True)
 
 
-@mcp.tool(tags=['read', 'config-read'])
+@mcp.tool(tags=['read', 'config-read', 'untrusted-content'])
 def get_item_config(ctx: Context, fullname: str, master: MasterArg = None) -> str:
     """Get a job/folder's raw config.xml (jenkins-mcp-writers only).
 
@@ -95,7 +95,7 @@ def _redact(line: str) -> str:
     return _ENCRYPTED_BLOB.sub('{[redacted]}', line)
 
 
-@mcp.tool(tags=['read', 'config-read'])
+@mcp.tool(tags=['read', 'config-read', 'untrusted-content'])
 def search_item_configs(
     ctx: Context,
     pattern: str,
@@ -401,7 +401,7 @@ def _page_after(
     return [e for _, e in page], _encode_cursor(page[-1][0]) if more and page else None
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def query_items(
     ctx: Context,
     class_pattern: str = None,
@@ -552,7 +552,7 @@ def build_item(
     return jenkins(ctx, master).build_item(fullname=fullname, build_type=build_type, data=data)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_item_parameters(ctx: Context, fullname: str, master: MasterArg = None) -> list[dict]:
     """Get the parameter definitions of a Jenkins job.
 

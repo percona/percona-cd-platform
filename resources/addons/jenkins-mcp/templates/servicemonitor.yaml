@@ -19,7 +19,11 @@ spec:
     matchNames:
       - {{ .Release.Namespace }}
   endpoints:
+    {{- if (.Values.metrics | default dict).port }}
+    - port: metrics       # Service port NAME (metrics.port, a port the ingress does not route)
+    {{- else }}
     - port: http          # Service port NAME (80 -> targetPort http -> container 9887)
+    {{- end }}
       path: /metrics      # distinct from the /healthz probe path
       interval: {{ .Values.serviceMonitor.interval | default "30s" }}
       scheme: http

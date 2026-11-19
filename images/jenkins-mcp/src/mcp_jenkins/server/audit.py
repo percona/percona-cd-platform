@@ -23,7 +23,7 @@ from loguru import logger
 from prometheus_client import Counter, Histogram
 from requests.exceptions import HTTPError
 
-from mcp_jenkins.core.fleet import get_fleet
+from mcp_jenkins.core.fleet import OperateNotVerifiedError, get_fleet, write_call
 from mcp_jenkins.core.grants import build_denial
 from mcp_jenkins.core.scope import SERVICE_ACCOUNTS_GROUP, MasterScopeError, allowed_masters
 
@@ -369,7 +369,12 @@ class AuditMiddleware(Middleware):
                         ' instead.'
                     )
                 raise ToolError(msg)
-            result = await call_next(context)
+            # core.lifespan.jenkins() reads this flag and refuses a master the operate preflight has not verified.
+            flag = write_call.set(bool(known_tags & _WRITE_TAGS))
+            try:
+                result = await call_next(context)
+            finally:
+                write_call.reset(flag)
             record['status'] = 'ok'
             # Dropped names only matter when the call failed (an argument the tool does not take).
             record['args'].pop('dropped_keys', None)
@@ -380,6 +385,11 @@ class AuditMiddleware(Middleware):
             record['status'] = 'denied'
             record['deny_reason'] = 'master_scope'
             _DENIED.labels(tool=tool, reason='master_scope').inc()
+            raise
+        except OperateNotVerifiedError:
+            record['status'] = 'denied'
+            record['deny_reason'] = 'operate_not_verified'
+            _DENIED.labels(tool=tool, reason='operate_not_verified').inc()
             raise
         except Exception as e:  # noqa: BLE001
             if record.get('status') != 'denied':

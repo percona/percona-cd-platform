@@ -1,8 +1,17 @@
 {{- if and (not .Values.readOnly) (not .Values.enableOperate) }}
 {{- fail "jenkins-mcp: set readOnly=true OR enableOperate=true. The server itself fails closed to read-only without a mode flag, but the deployment must still declare its access mode explicitly." }}
 {{- end }}
+{{- with .Values.image.digest }}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}
+{{- fail (printf "jenkins-mcp: image.digest must be empty or sha256:<64 hex>, got %q" .) }}
+{{- end }}
+{{- end }}
 {{- if and (gt (int .Values.replicaCount) 1) (not .Values.statelessHttp) }}
 {{- fail "jenkins-mcp: replicaCount above 1 requires statelessHttp=true. A stateful transport keeps each client's session in one pod's memory and the ALB has no stickiness, so extra replicas reject session-bound requests." }}
+{{- end }}
+{{- $metricsPort := (.Values.metrics | default dict).port }}
+{{- if and $metricsPort (or (lt (int $metricsPort) 1) (gt (int $metricsPort) 65535) (eq (int $metricsPort) 9887)) }}
+{{- fail "jenkins-mcp: metrics.port must be a port number from 1 to 65535 other than the main port 9887." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -41,7 +50,7 @@ spec:
       {{- end }}
       containers:
         - name: jenkins-mcp
-          image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ (.Values.aws | default dict).accountId }}.dkr.ecr.{{ (.Values.aws | default dict).region | default "us-east-1" }}.amazonaws.com/{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --transport
@@ -82,9 +91,17 @@ spec:
             - name: MCP_JENKINS_SERVICE_GRANTS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- if $metricsPort }}
+            - name: MCP_METRICS_PORT
+              value: {{ int $metricsPort | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 9887
+            {{- if $metricsPort }}
+            - name: metrics
+              containerPort: {{ int $metricsPort }}
+            {{- end }}
           # timeoutSeconds defaults to 1, which a Python server under a heavy read can miss even
           # with the request work off the event loop: Python's regex engine never releases the GIL,
           # so filtering a large console measurably stalls the loop for whole seconds (worst
