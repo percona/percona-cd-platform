@@ -9,11 +9,11 @@
 #   docker buildx build --platform linux/amd64,linux/arm64 \
 #     -t <account>.dkr.ecr.us-east-1.amazonaws.com/percona-cd/jenkins-mcp:<tag> \
 #     --push images/jenkins-mcp
-# Base: uv + Python 3.13 (Debian bookworm slim). Pinned BY DIGEST so an upstream
+# Base: uv + Python 3.13 (Debian trixie slim). Pinned BY DIGEST so an upstream
 # re-push of the same tag cannot change our base. Multi-arch INDEX digest (carries
 # linux/amd64 + linux/arm64) so the one pin builds both platforms.
-# Refresh with: docker buildx imagetools inspect ghcr.io/astral-sh/uv:python3.13-bookworm-slim --format '{{.Manifest.Digest}}'
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca
+# Refresh with: docker buildx imagetools inspect ghcr.io/astral-sh/uv:python3.13-trixie-slim --format '{{.Manifest.Digest}}'
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim@sha256:803d2b80b6913e562837d69f037f39bfea80f51ef3f0dd0d8fdffbd95688fd6d
 
 WORKDIR /app
 
