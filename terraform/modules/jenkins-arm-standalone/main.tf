@@ -49,6 +49,8 @@ data "aws_availability_zones" "available" {
 
 data "aws_region" "current" {}
 
+data "aws_caller_identity" "current" {}
+
 # ---------- network substrate (moved from module.ps3) ----------
 
 resource "aws_vpc" "this" {
@@ -181,6 +183,40 @@ data "aws_iam_policy_document" "worker" {
         "arn:aws:s3:::${statement.value}",
         "arn:aws:s3:::${statement.value}/*",
       ]
+    }
+  }
+
+  # Bedrock invoke on Anthropic models (worker_bedrock_invoke). A cross-region
+  # inference profile (us.anthropic.*, global.anthropic.*) needs the profile
+  # ARN in the calling region plus the foundation model in every destination
+  # region, hence the region wildcard on foundation-model.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInvokeAnthropic"
+      effect = "Allow"
+      actions = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+      ]
+      resources = [
+        "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*anthropic.*",
+      ]
+    }
+  }
+
+  # Claude Code resolves inference profiles at startup.
+  dynamic "statement" {
+    for_each = var.worker_bedrock_invoke ? [1] : []
+    content {
+      sid    = "BedrockInferenceProfileRead"
+      effect = "Allow"
+      actions = [
+        "bedrock:GetInferenceProfile",
+        "bedrock:ListInferenceProfiles",
+      ]
+      resources = ["*"]
     }
   }
 }

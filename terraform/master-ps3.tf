@@ -19,6 +19,10 @@ module "ps3_arm_fleet" {
   instance_types    = ["m8g.2xlarge", "m7g.2xlarge", "m6g.2xlarge", "m7gd.2xlarge", "m6gd.2xlarge", "r8g.2xlarge", "r7g.2xlarge", "r6g.2xlarge"]
   max_size          = 16
 
+  # MySQL team AI steps in Jenkins jobs (EOL commit analysis) call Anthropic
+  # models on Bedrock with the worker instance role, no stored key.
+  worker_bedrock_invoke = true
+
   # The in-cluster ps3-k8s controller reaches Fleet workers by private IP over the
   # EKS<->ps3 VPC peering (ec2-fleet privateIpUsed), so allow SSH from the EKS VPC.
   extra_ssh_cidrs = [module.vpc.vpc_cidr_block]
