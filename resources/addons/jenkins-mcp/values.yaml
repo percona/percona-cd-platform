@@ -123,7 +123,7 @@ serviceMonitor:
 # reads MCP_METRICS_PORT: the Deployment, the Service and the ServiceMonitor then use that port.
 # Procedure: docs/runbooks/jenkins-mcp-operate.md, "Serve the metrics on their own port".
 metrics:
-  port: ""
+  port: 9888
 
 # NetworkPolicy for the namespace (templates/networkpolicies.yaml), enforced by the VPC CNI policy
 # engine (terraform/eks-addons.tf). Off by default, because ArgoCD applies a merge to main straight
