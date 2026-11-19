@@ -26,7 +26,7 @@ jenkins:
       # with the EC2 masters (PR #128). It also carries the 2026-09-16 advisory
       # fixes (script-security, pipeline-groovy-lib, workflow-multibranch, gradle,
       # warnings-ng, PR #546) and forces apache-httpcomponents-client-5-api.
-      tag: "2.568.3-42072f1caf57b76ec142b36983c33c22c54c143b"
+      tag: "2.568.3-67f3c9479f7cec614e3f1b0b3de714be0b6be100"
       pullPolicy: IfNotPresent
 
     # Plugins are BAKED into the image (community via plugins.txt; the 2 Percona
