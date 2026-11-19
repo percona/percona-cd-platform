@@ -1,6 +1,9 @@
+import threading
+
 import pytest
 
 from mcp_jenkins.jenkins.model.build import Artifact, Build, BuildReplay, ChangeSetItem, PipelineStage, PipelineStages
+from mcp_jenkins.jenkins.rest_client import PayloadTooLargeError
 from mcp_jenkins.server import build
 
 
@@ -95,9 +98,65 @@ async def test_get_build_console_output_no_build(mock_jenkins, mocker):
 @pytest.mark.asyncio
 async def test_get_build_test_reports(mock_jenkins, mocker):
     mock_jenkins.get_item.return_value.lastBuild.number = 1
-    mock_jenkins.get_build_test_report.return_value = {'reports': ['report1', 'report2']}
+    mock_jenkins.get_build_test_report.return_value = {'failCount': 0, 'suites': [{'name': 's', 'cases': [{}]}]}
 
-    assert build.get_build_test_report(mocker.Mock(), fullname='job1') == {'reports': ['report1', 'report2']}
+    assert build.get_build_test_report(mocker.Mock(), fullname='job1') == {
+        'failCount': 0,
+        'suites': [{'name': 's', 'cases': [{}]}],
+        'cases_total': 1,
+        'cases_returned': 1,
+        'truncated': False,
+    }
+    mock_jenkins.get_build_test_report.assert_called_once_with(fullname='job1', number=1, tree=build._TEST_REPORT_TREE)
+
+
+def test_test_report_tree_leaves_out_stdout_and_stderr():
+    assert 'stdout' not in build._TEST_REPORT_TREE
+    assert 'stderr' not in build._TEST_REPORT_TREE
+    assert 'errorStackTrace' in build._TEST_REPORT_TREE
+
+
+def _report_with(cases_per_suite: list[int]) -> dict:
+    return {
+        'suites': [
+            {'name': f's{suite}', 'cases': [{'name': f'c{suite}.{case}'} for case in range(count)]}
+            for suite, count in enumerate(cases_per_suite)
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    ('max_cases', 'kept', 'truncated'),
+    [(5, 5, False), (4, 4, True), (6, 5, False), (1, 1, True), (5000, 5, False)],
+)
+def test_test_report_caps_cases_across_suites(mock_jenkins, mocker, max_cases, kept, truncated):
+    mock_jenkins.get_build_test_report.return_value = _report_with([3, 0, 2])
+    out = build.get_build_test_report(mocker.Mock(), fullname='job1', number=1, max_cases=max_cases)
+    assert sum(len(suite['cases']) for suite in out['suites']) == kept
+    assert (out['cases_total'], out['cases_returned'], out['truncated']) == (5, kept, truncated)
+    assert ('note' in out) is truncated
+
+
+def test_test_report_case_cap_is_bounded(mock_jenkins, mocker):
+    mock_jenkins.get_build_test_report.return_value = _report_with([1500])
+    out = build.get_build_test_report(mocker.Mock(), fullname='job1', number=1, max_cases=99999)
+    assert out['cases_returned'] == build._MAX_FAILURE_CASES
+    assert 'get_build_failure_summary' in out['note']
+
+
+def test_test_report_cuts_long_error_text(mock_jenkins, mocker):
+    case = {'name': 'c', 'errorDetails': 'd' * 5000, 'errorStackTrace': 't' * 5000}
+    mock_jenkins.get_build_test_report.return_value = {'suites': [{'name': 's', 'cases': [case]}]}
+    out = build.get_build_test_report(mocker.Mock(), fullname='job1', number=1)
+    kept = out['suites'][0]['cases'][0]
+    assert len(kept['errorDetails']) == len(kept['errorStackTrace']) == build._MAX_REPORT_TEXT_CHARS
+
+
+def test_get_build_artifact_refusal_reaches_the_caller(mock_jenkins, mocker):
+    refusal = PayloadTooLargeError('inline limit of 10 MiB, use export_build_artifact')
+    mock_jenkins.get_build_artifact.side_effect = refusal
+    with pytest.raises(ValueError, match='export_build_artifact'):
+        build.get_build_artifact(mocker.Mock(), fullname='job1', relative_path='big.bin', number=1)
 
 
 @pytest.mark.asyncio
@@ -569,3 +628,172 @@ async def test_get_build_history_accepts_limit_alias(mock_jenkins, mocker):
     build.get_build_history(mocker.Mock(), fullname='job1', limit=3)
 
     mock_jenkins.get_build_history.assert_called_once_with(fullname='job1', count=3)
+
+
+# ---- a report over the read limit ----
+def test_test_report_tool_adds_the_pointer_to_a_refusal(mock_jenkins, mocker):
+    mock_jenkins.get_build_test_report.side_effect = PayloadTooLargeError('the test report is larger than X')
+    with pytest.raises(PayloadTooLargeError, match='larger than X') as refused:
+        build.get_build_test_report(mocker.Mock(), fullname='j', number=1)
+    assert 'get_build_failure_summary' in str(refused.value)
+
+
+def test_failure_summary_degrades_when_the_report_is_too_large(mock_jenkins, mocker):
+    mock_jenkins.get_build.return_value = Build(number=1, url='u', result='UNSTABLE')
+    mock_jenkins.get_build_stages.return_value = PipelineStages(stages=[])
+    mock_jenkins.get_build_test_report.side_effect = PayloadTooLargeError(
+        'the test report is larger than the 32 MiB read limit'
+    )
+    out = build.get_build_failure_summary(mocker.Mock(), fullname='j', number=1)
+    assert out['cases'] == []
+    assert out['test_counts']['failCount'] == 0
+    note = next(n for n in out['notes'] if 'read limit' in n)
+    assert 'get_build_console_tail' in note
+    assert 'grep_build_artifact' in note
+    assert 'get_build_failure_summary' not in note
+    assert out['see_also'] == ['get_build_console_tail', 'grep_build_artifact']
+    assert build._REPORT_READ_SLOTS._value == 2
+
+
+# ---- aggregated (matrix) reports ----
+def _matrix_report() -> dict:
+    def child(number: int, cases: list[dict]) -> dict:
+        return {
+            'child': {'number': number, 'url': f'https://m/job/x/axis={number}/{number}/'},
+            'result': {'failCount': 1, 'suites': [{'name': f's{number}', 'cases': cases}]},
+        }
+
+    return {
+        'failCount': 2,
+        'totalCount': 6,
+        'childReports': [
+            child(1, [{'name': 'a1'}, {'name': 'a2'}]),
+            child(2, [{'name': 'b1'}, {'name': 'b2', 'errorStackTrace': 't' * 5000}, {'name': 'b3'}]),
+            child(3, [{'name': 'c1', 'errorDetails': 'd' * 5000}]),
+        ],
+    }
+
+
+def _child_cases(out: dict) -> list[list[str]]:
+    return [
+        [case['name'] for suite in child['result']['suites'] for case in suite['cases']]
+        for child in out['childReports']
+    ]
+
+
+def test_test_report_tree_keeps_child_reports():
+    assert 'childReports[child[number,url],result[' in build._TEST_REPORT_TREE
+    assert build._TEST_REPORT_TREE.count('errorStackTrace') == 2
+
+
+def test_matrix_report_under_the_cap_is_whole(mock_jenkins, mocker):
+    mock_jenkins.get_build_test_report.return_value = _matrix_report()
+    out = build.get_build_test_report(mocker.Mock(), fullname='j', number=1, max_cases=10)
+    assert _child_cases(out) == [['a1', 'a2'], ['b1', 'b2', 'b3'], ['c1']]
+    assert (out['cases_total'], out['cases_returned'], out['truncated']) == (6, 6, False)
+    assert out['childReports'][0]['child']['number'] == 1
+
+
+def test_matrix_report_over_the_cap_cuts_inside_the_second_child(mock_jenkins, mocker):
+    mock_jenkins.get_build_test_report.return_value = _matrix_report()
+    out = build.get_build_test_report(mocker.Mock(), fullname='j', number=1, max_cases=3)
+    assert _child_cases(out) == [['a1', 'a2'], ['b1'], []]
+    assert (out['cases_total'], out['cases_returned'], out['truncated']) == (6, 3, True)
+    assert out['note'].startswith('3 of 6 cases are left out')
+
+
+def test_matrix_report_error_texts_are_cut_inside_a_child(mock_jenkins, mocker):
+    mock_jenkins.get_build_test_report.return_value = _matrix_report()
+    out = build.get_build_test_report(mocker.Mock(), fullname='j', number=1)
+    cases = [case for child in out['childReports'] for suite in child['result']['suites'] for case in suite['cases']]
+    by_name = {case['name']: case for case in cases}
+    assert len(by_name['b2']['errorStackTrace']) == build._MAX_REPORT_TEXT_CHARS
+    assert len(by_name['c1']['errorDetails']) == build._MAX_REPORT_TEXT_CHARS
+
+
+# ---- concurrent large reads ----
+def _blocking_artifact(mock_jenkins):
+    """Make get_build_artifact wait on a gate, and count the calls that entered it."""
+    gate = threading.Event()
+    entered = threading.Semaphore(0)
+
+    def read(**_kwargs: object) -> bytearray:
+        entered.release()
+        assert gate.wait(10)
+        return bytearray(b'ok')
+
+    mock_jenkins.get_build_artifact.side_effect = read
+    return gate, entered
+
+
+def _read_artifact_in_thread(mocker, results: list) -> threading.Thread:
+    def run() -> None:
+        try:
+            results.append(build.get_build_artifact(mocker.Mock(), fullname='j', relative_path='a.txt', number=1))
+        except ValueError as e:
+            results.append(e)
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    return thread
+
+
+def test_fifth_artifact_read_waits_for_a_free_slot(mock_jenkins, mocker, monkeypatch):
+    monkeypatch.setattr(build, '_ARTIFACT_READ_SLOTS', threading.BoundedSemaphore(4))
+    gate, entered = _blocking_artifact(mock_jenkins)
+    results: list = []
+    threads = [_read_artifact_in_thread(mocker, results) for _ in range(4)]
+    for _ in range(4):
+        assert entered.acquire(timeout=5)
+    fifth = _read_artifact_in_thread(mocker, results)
+    assert not entered.acquire(timeout=0.3)  # the fifth read waits outside the client
+    gate.set()
+    for thread in [*threads, fifth]:
+        thread.join(5)
+    assert results == [{'content': 'ok', 'encoding': 'utf-8'}] * 5
+    assert mock_jenkins.get_build_artifact.call_count == 5
+
+
+def test_artifact_read_past_the_wait_limit_gets_the_busy_error(mock_jenkins, mocker, monkeypatch):
+    monkeypatch.setattr(build, '_ARTIFACT_READ_SLOTS', threading.BoundedSemaphore(1))
+    monkeypatch.setattr(build, '_LARGE_READ_WAIT_SECONDS', 0.2)
+    gate, entered = _blocking_artifact(mock_jenkins)
+    results: list = []
+    first = _read_artifact_in_thread(mocker, results)
+    assert entered.acquire(timeout=5)
+    with pytest.raises(ValueError, match='busy with other large artifact reads. Retry'):
+        build.get_build_artifact(mocker.Mock(), fullname='j', relative_path='a.txt', number=1)
+    gate.set()
+    first.join(5)
+    assert results == [{'content': 'ok', 'encoding': 'utf-8'}]
+
+
+def test_artifact_slot_is_released_on_an_error(mock_jenkins, mocker, monkeypatch):
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(build, '_ARTIFACT_READ_SLOTS', slots)
+    monkeypatch.setattr(build, '_LARGE_READ_WAIT_SECONDS', 0.2)
+    mock_jenkins.get_build_artifact.side_effect = PayloadTooLargeError('too large')
+    for _ in range(3):
+        with pytest.raises(PayloadTooLargeError):
+            build.get_build_artifact(mocker.Mock(), fullname='j', relative_path='a.txt', number=1)
+    assert slots._value == 1
+
+
+def test_report_slot_is_released_on_an_error(mock_jenkins, mocker, monkeypatch):
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(build, '_REPORT_READ_SLOTS', slots)
+    monkeypatch.setattr(build, '_LARGE_READ_WAIT_SECONDS', 0.2)
+    mock_jenkins.get_build_test_report.side_effect = PayloadTooLargeError('too large')
+    for _ in range(3):
+        with pytest.raises(PayloadTooLargeError):
+            build.get_build_test_report(mocker.Mock(), fullname='j', number=1)
+    assert slots._value == 1
+
+
+def test_report_reads_wait_on_their_own_slots(mock_jenkins, mocker, monkeypatch):
+    monkeypatch.setattr(build, '_REPORT_READ_SLOTS', threading.BoundedSemaphore(1))
+    monkeypatch.setattr(build, '_LARGE_READ_WAIT_SECONDS', 0.2)
+    with build._large_read(build._REPORT_READ_SLOTS, 'test report'):
+        with pytest.raises(ValueError, match='busy with other large test report reads'):
+            build.get_build_test_report(mocker.Mock(), fullname='j', number=1)
+        mock_jenkins.get_build_test_report.assert_not_called()

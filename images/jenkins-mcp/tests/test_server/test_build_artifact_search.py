@@ -432,3 +432,75 @@ def test_regex_matcher_accepts_a_mid_pattern_flag():
 
     assert match('Build TIMED OUT')
     assert not match('Build passed')
+
+
+# ---- tar headers are bounded per member ----
+def _header_targz(
+    *, pax_bytes: int = 0, global_bytes: int = 0, long_name_bytes: int = 0, fmt: int = tarfile.PAX_FORMAT
+) -> bytes:
+    """A .tar.gz with one small member whose pax header, global header or GNU long name is large."""
+    buf = io.BytesIO()
+    global_headers = {'comment': 'g' * global_bytes} if global_bytes else None
+    with tarfile.open(fileobj=buf, mode='w:gz', format=fmt, pax_headers=global_headers) as tf:
+        info = tarfile.TarInfo(name=('d' * long_name_bytes) if long_name_bytes else 'a.log')
+        info.size = 3
+        if pax_bytes:
+            info.pax_headers = {'comment': 'x' * pax_bytes}
+        tf.addfile(info, io.BytesIO(b'abc'))
+    return buf.getvalue()
+
+
+@pytest.fixture
+def readers(monkeypatch):
+    """Record every _LimitedReader that _open_tar builds, to check how much it read."""
+    built = []
+
+    class _Recording(bas._LimitedReader):
+        def __init__(self, raw: io.BufferedIOBase, limit: int) -> None:
+            super().__init__(raw, limit)
+            built.append(self)
+
+    monkeypatch.setattr(bas, '_LimitedReader', _Recording)
+    return built
+
+
+@pytest.mark.parametrize(
+    'archive',
+    [
+        pytest.param({'pax_bytes': 2 * 1024 * 1024}, id='pax'),
+        pytest.param({'long_name_bytes': 2 * 1024 * 1024, 'fmt': tarfile.GNU_FORMAT}, id='gnu-long-name'),
+        pytest.param({'global_bytes': 600 * 1024, 'pax_bytes': 600 * 1024}, id='global-then-pax-share-one-budget'),
+    ],
+)
+def test_a_tar_header_over_one_mib_is_refused_after_one_mib(mock_jenkins, mocker, readers, archive):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(**archive)))
+    with pytest.raises(ValueError, match='tar header of more than 1048576 bytes'):
+        bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a.log', number=1)
+    assert readers[0]._read <= bas._MAX_HEADER_BYTES + 2 * tarfile.RECORDSIZE
+
+
+def test_list_reports_an_oversized_tar_header_as_scan_limited(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(pax_bytes=2 * 1024 * 1024)))
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+    assert out['scan_limited'] is True
+    assert out['entries'] == []
+
+
+def test_a_tar_header_under_one_mib_is_read(mock_jenkins, mocker):
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=_header_targz(pax_bytes=900 * 1024)))
+    out = bas.extract_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', member='a.log', number=1)
+    assert out['content'] == 'abc'
+
+
+def test_each_member_gets_its_own_header_budget(mock_jenkins, mocker):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode='w:gz', format=tarfile.PAX_FORMAT) as tf:
+        for index in range(3):
+            info = tarfile.TarInfo(name=f'm{index}.log')
+            info.size = 1
+            info.pax_headers = {'comment': 'x' * (700 * 1024)}
+            tf.addfile(info, io.BytesIO(b'z'))
+    _set_stream(mock_jenkins, _FakeResponse(raw_bytes=buf.getvalue()))
+    out = bas.list_archive_artifact(mocker.Mock(), fullname='j', relative_path='a.tar.gz', number=1)
+    assert [entry['name'] for entry in out['entries']] == ['m0.log', 'm1.log', 'm2.log']
+    assert out['scan_limited'] is False

@@ -28,6 +28,21 @@ and injects it per call, so no user ever handles a Jenkins token.
   and none without one. Each call keeps the account's own name in the audit log. Onboarding is in
   `docs/runbooks/jenkins-mcp-operate.md`, "Onboard a service account".
 
+## Read limits
+
+Inline read tools hold a bounded part of a master's answer in memory. The whole file goes through
+the export tools (`export_build_log`, `export_build_artifact`), which stream to S3.
+
+- `get_build_artifact` returns at most 10 MiB inline and refuses a larger artifact.
+- `get_build_console_output` returns at most 1 MiB, cuts a line at 64 KiB, and ends a cut answer
+  with a line that names the offset to continue from.
+- `get_build_console_tail` returns at most 5000 lines and 1 MiB of the end of the log.
+- `get_build_test_report` returns at most 1000 cases without stdout or stderr, and refuses a report
+  body over 32 MiB.
+- The archive tools refuse a tar member whose pax, long-name or sparse headers pass 1 MiB.
+- At most 4 inline artifact reads and 2 test report reads run at once. A call that waits more than
+  30 seconds for a slot gets a busy error and can retry.
+
 ## Connect your MCP client
 
 The gateway speaks MCP over streamable HTTP at `https://jenkins-mcp.cd.percona.com/mcp`. It is

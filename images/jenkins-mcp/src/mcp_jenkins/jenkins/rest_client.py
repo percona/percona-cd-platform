@@ -1,6 +1,7 @@
+import json
 import re
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from functools import reduce
 from typing import Literal
@@ -26,6 +27,88 @@ from mcp_jenkins.jenkins.model.node import Node
 from mcp_jenkins.jenkins.model.queue import Queue, QueueItem
 
 MAX_USER_PATTERN_LEN = 2000  # longest caller-supplied regex accepted by any tool
+
+_MIB = 1024 * 1024
+STREAM_CHUNK_BYTES = 64 * 1024
+# An inline artifact answer holds at most 10 MiB of body, about 13 MiB once base64 encoded.
+MAX_INLINE_ARTIFACT_BYTES = 10 * _MIB
+# One console answer goes to an LLM client: 1 MiB is about 250k tokens, more than a client can use.
+# The same bound limits what a console read buffers, plus one line and one chunk.
+MAX_CONSOLE_BYTES = _MIB
+# A console line is cut at this length, so a log without newlines never buffers past it.
+MAX_CONSOLE_LINE_BYTES = 64 * 1024
+# The projected test report of a 15k-case build is a few MiB. A body past this is refused.
+MAX_TEST_REPORT_BYTES = 32 * _MIB
+
+
+def _size_text(size: int) -> str:
+    """A byte count as '10 MiB' when it is a whole number of MiB, else as bytes."""
+    return f'{size // _MIB} MiB' if size and size % _MIB == 0 else f'{size} bytes'
+
+
+class PayloadTooLargeError(ValueError):
+    """A body from a master is larger than the limit of the tool that reads it."""
+
+
+def _content_length(response: Response) -> int | None:
+    """The Content-Length header as an int, or None when it is absent or not a number."""
+    value = response.headers.get('Content-Length')
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    return None
+
+
+def _read_capped(response: Response, max_bytes: int, refusal: str) -> bytearray:
+    """Read a streamed body and refuse it once it passes max_bytes.
+
+    A declared Content-Length above the cap is refused before any read. The cap also holds while
+    reading, so at most max_bytes plus one chunk is ever held. The buffer is returned without a copy.
+    """
+    declared = _content_length(response)
+    if declared is not None and declared > max_bytes:
+        msg = f'{refusal} (Content-Length {declared} bytes)'
+        raise PayloadTooLargeError(msg)
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=STREAM_CHUNK_BYTES):
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            msg = f'{refusal} (more than {max_bytes} bytes)'
+            raise PayloadTooLargeError(msg)
+    return body
+
+
+def _console_line(raw: bytes | bytearray, max_line: int) -> tuple[str, int]:
+    """Decode one console line, cut at max_line with a marker, with its answer size in bytes."""
+    marker = f' [line cut at {max_line} bytes]' if len(raw) > max_line else ''
+    kept = bytes(raw[:max_line]).removesuffix(b'\r')
+    return kept.decode('utf-8', 'replace') + marker, len(kept) + len(marker) + 1
+
+
+def _iter_console_lines(chunks: Iterable[bytes], max_line: int = MAX_CONSOLE_LINE_BYTES) -> Iterator[tuple[str, int]]:
+    """Split a byte stream into (line, size) pairs while holding at most one line and one chunk.
+
+    A line longer than max_line is cut there with a marker, and the rest of it is dropped.
+    """
+    pending = bytearray()
+    dropping = False
+    for chunk in chunks:
+        pending.extend(chunk)
+        start = 0
+        while (newline := pending.find(b'\n', start)) != -1:
+            if dropping:
+                dropping = False
+            else:
+                yield _console_line(pending[start:newline], max_line)
+            start = newline + 1
+        del pending[:start]
+        if len(pending) > max_line:
+            if not dropping:
+                yield _console_line(pending, max_line)
+                dropping = True
+            pending.clear()
+    if pending and not dropping:
+        yield _console_line(pending, max_line)
+
 
 _PARAMETERS_TREE = 'property[parameterDefinitions[name,type,description,defaultParameterValue[value],choices]]'
 
@@ -250,15 +333,29 @@ def _compile_query_pattern(pattern: str | None) -> 're2._Regexp | None':
     return compile_user_regex(pattern)
 
 
-def require_narrow_pattern(pattern: str, tool: str) -> None:
-    """Reject a job-selecting regex that is invalid or matches every name.
+# Names that a catch-all such as ".", ".+" or "[\s\S]" matches and a narrowing pattern does not.
+_CATCH_ALL_PROBES = ('\x00', '~', 'Q', '7', ' ')
 
-    A pattern that matches the empty string (".*", "a|.*", "x?") matches every job, so a fan-out
-    tool would read everything; this also compiles it once up front, so a bad regex fails the call
-    instead of every master or job.
+
+def pattern_narrows(pattern: str | None) -> bool:
+    """True when pattern is a valid regex that leaves some names out.
+
+    A pattern that matches the empty string (".*", "a|.*", "x?") or every probe name (".", ".+")
+    selects everything. An invalid pattern raises ValueError.
     """
     compiled = _compile_query_pattern(pattern)
     if compiled is None or compiled.search('') is not None:
+        return False
+    return not all(compiled.search(probe) for probe in _CATCH_ALL_PROBES)
+
+
+def require_narrow_pattern(pattern: str, tool: str) -> None:
+    """Reject a job-selecting regex that is invalid or matches every name.
+
+    A fan-out tool would read every job for a catch-all. The pattern is compiled once up front,
+    so a bad regex fails the call instead of every master or job.
+    """
+    if not pattern_narrows(pattern):
         msg = f'{tool} needs a fullname_pattern that narrows the jobs (it must not match every name)'
         raise ValueError(msg)
 
@@ -364,6 +461,17 @@ class Jenkins:
         response.raise_for_status()
 
         return response
+
+    @contextmanager
+    def _stream(self, endpoint: str, params: dict | None = None) -> Iterator[Response]:
+        """Open a streaming GET of an endpoint and close it on every path, an HTTP error included."""
+        kwargs = {'params': params} if params else {}
+        response = self._session.get(self.endpoint_url(endpoint), timeout=self.timeout, stream=True, **kwargs)
+        try:
+            response.raise_for_status()
+            yield response
+        finally:
+            response.close()
 
     @property
     def crumb_header(self) -> dict[str, str]:
@@ -565,8 +673,12 @@ class Jenkins:
         pattern: str | None = None,
         offset: int = 0,
         limit: int | None = None,
+        max_bytes: int = MAX_CONSOLE_BYTES,
     ) -> str:
         """Get the console output of a specific build.
+
+        The console is read as a stream. The answer holds at most max_bytes of lines. When more
+        lines would follow, it ends with a truncation line that gives the offset to continue from.
 
         Args:
             fullname: The fullname of the job.
@@ -574,6 +686,7 @@ class Jenkins:
             pattern: Optional regex pattern to filter lines (only matching lines are returned).
             offset: Number of lines to skip from the beginning (after pattern filtering).
             limit: Maximum number of lines to return (after pattern filtering and offset).
+            max_bytes: Largest answer in bytes.
 
         Returns:
             The console output as a string.
@@ -581,55 +694,69 @@ class Jenkins:
         folder, name = self._parse_fullname(fullname)
         compiled = compile_user_regex(pattern) if pattern else None
 
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-
         matched: list[str] = []
-        skipped = 0
+        used = skipped = 0
+        truncated = False
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            for line, size in _iter_console_lines(response.iter_content(chunk_size=STREAM_CHUNK_BYTES)):
+                if compiled is not None and not compiled.search(line):
+                    continue
+                if skipped < offset:
+                    skipped += 1
+                    continue
+                if used + size > max_bytes:
+                    truncated = True
+                    break
+                matched.append(line)
+                used += size
+                if limit is not None and len(matched) >= limit:
+                    break
 
-        for raw_line in response.iter_lines(decode_unicode=True):
-            if compiled is not None and not compiled.search(raw_line):
-                continue
-            if skipped < offset:
-                skipped += 1
-                continue
-            matched.append(raw_line)
-            if limit is not None and len(matched) >= limit:
-                break
-
-        response.close()
+        if truncated:
+            matched.append(
+                f'[output truncated: one call returns at most {max_bytes} bytes of console text. '
+                f'Continue with offset={offset + len(matched)}, use get_build_console_tail for the end, '
+                'or export_build_log for the whole log]'
+            )
         return '\n'.join(matched)
 
-    def get_build_console_tail(self, *, fullname: str, number: int, lines: int = 200) -> str:
+    def get_build_console_tail(
+        self, *, fullname: str, number: int, lines: int = 200, max_bytes: int = MAX_CONSOLE_BYTES
+    ) -> str:
         """Return the last `lines` lines of a build's console without buffering the whole log.
 
-        Streams the console and keeps only a bounded ring of the most recent lines, so it is cheap
-        even on a multi-MB log. The failure summary and `Finished: <result>` marker live at the end.
+        Streams the console and keeps only the most recent lines that fit in max_bytes, so it is
+        cheap even on a multi-MB log. When the byte bound leaves lines out, a truncation line
+        comes first. The failure summary and `Finished: <result>` marker live at the end.
 
         Args:
             fullname: The fullname of the job.
             number: The build number.
             lines: Number of trailing lines to return.
+            max_bytes: Largest answer in bytes.
 
         Returns:
             The last `lines` lines joined by newlines.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        tail: deque[str] = deque(maxlen=lines)
-        for raw_line in response.iter_lines(decode_unicode=True):
-            tail.append(raw_line)
-        response.close()
-        return '\n'.join(tail)
+        tail: deque[tuple[str, int]] = deque()
+        used = seen = 0
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            for line, size in _iter_console_lines(response.iter_content(chunk_size=STREAM_CHUNK_BYTES)):
+                seen += 1
+                tail.append((line, size))
+                used += size
+                while len(tail) > lines or used > max_bytes:
+                    used -= tail.popleft()[1]
+
+        text = [line for line, _ in tail]
+        if len(text) < min(lines, seen):
+            text.insert(
+                0,
+                f'[output truncated: the last {lines} lines are more than {max_bytes} bytes, only the last '
+                f'{len(text)} are shown. Use export_build_log for the whole log]',
+            )
+        return '\n'.join(text)
 
     def stop_build(self, *, fullname: str, number: int) -> None:
         """Stop a running Jenkins build.
@@ -683,7 +810,15 @@ class Jenkins:
                 return {p['name']: p.get('value') for p in action['parameters']}
         return {}
 
-    def get_build_test_report(self, *, fullname: str, number: int, depth: int = 0, tree: str | None = None) -> dict:
+    def get_build_test_report(
+        self,
+        *,
+        fullname: str,
+        number: int,
+        depth: int = 0,
+        tree: str | None = None,
+        max_bytes: int = MAX_TEST_REPORT_BYTES,
+    ) -> dict:
         """Get the test report of a specific build.
 
         Args:
@@ -693,18 +828,18 @@ class Jenkins:
             tree: Optional Jenkins `tree` field projection. When set it narrows the payload to the
                 requested fields (e.g. drop per-case stdout/stderr/stackTrace), which keeps a large
                 parallel-test report small. Jenkins prefers tree over depth when both are present.
+            max_bytes: Largest report body read. A larger one raises PayloadTooLargeError.
 
         Returns:
             A dictionary representing the test report.
         """
         folder, name = self._parse_fullname(fullname)
         params = {'tree': tree} if tree else None
-        response = self.request(
-            'GET',
-            rest_endpoint.BUILD_TEST_REPORT(folder=folder, name=name, number=number, depth=depth),
-            params=params,
-        )
-        return response.json()
+        endpoint = rest_endpoint.BUILD_TEST_REPORT(folder=folder, name=name, number=number, depth=depth)
+        refusal = f'the test report is larger than the {_size_text(max_bytes)} read limit'
+        with self._stream(endpoint, params=params) as response:
+            body = _read_capped(response, max_bytes, refusal)
+        return json.loads(body)
 
     def get_build_history(self, *, fullname: str, count: int = 10) -> list[Build]:
         """Get the most recent builds of a job.
@@ -835,23 +970,28 @@ class Jenkins:
         )
         return [Artifact.model_validate(a) for a in response.json().get('artifacts', [])]
 
-    def get_build_artifact(self, *, fullname: str, number: int, relative_path: str) -> bytes:
-        """Download the content of a specific artifact from a build.
+    def get_build_artifact(
+        self, *, fullname: str, number: int, relative_path: str, max_bytes: int = MAX_INLINE_ARTIFACT_BYTES
+    ) -> bytearray:
+        """Download the content of a specific artifact from a build, up to max_bytes.
 
         Args:
             fullname: The fullname of the job.
             number: The build number.
             relative_path: The relative path of the artifact.
+            max_bytes: Largest artifact read inline. A larger one raises PayloadTooLargeError.
 
         Returns:
-            The artifact content as bytes.
+            The artifact content as a bytearray, the read buffer itself.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self.request(
-            'GET',
-            rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path),
+        endpoint = rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
+        refusal = (
+            f'the artifact is larger than the inline limit of {_size_text(max_bytes)}. '
+            'Use export_build_artifact for the whole file, or grep_build_artifact to search a text artifact'
         )
-        return response.content
+        with self._stream(endpoint) as response:
+            return _read_capped(response, max_bytes, refusal)
 
     def get_build_artifact_url(self, *, fullname: str, number: int, relative_path: str) -> str:
         """Get the direct URL of a specific artifact from a build.
@@ -885,25 +1025,17 @@ class Jenkins:
             The open requests.Response; closed when the context exits.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        response.raw.decode_content = True
-        try:
+        with self._stream(rest_endpoint.BUILD_CONSOLE_OUTPUT(folder=folder, name=name, number=number)) as response:
+            response.raw.decode_content = True
             yield response
-        finally:
-            response.close()
 
     @contextmanager
     def stream_build_artifact(self, *, fullname: str, number: int, relative_path: str) -> Iterator[Response]:
         """Open a streaming GET of a build artifact's raw bytes.
 
         Yields an open response with stream=True so the caller can pipe response.raw straight to a
-        sink without buffering the whole artifact in memory (unlike get_build_artifact, which returns
-        response.content). The caller must validate relative_path; it is interpolated into the URL.
+        sink without buffering the whole artifact in memory (unlike get_build_artifact, which reads
+        up to its inline limit). The caller must validate relative_path; it is interpolated into the URL.
 
         Args:
             fullname: The fullname of the job.
@@ -914,19 +1046,10 @@ class Jenkins:
             The open requests.Response; closed when the context exits.
         """
         folder, name = self._parse_fullname(fullname)
-        response = self._session.get(
-            self.endpoint_url(
-                rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
-            ),
-            timeout=self.timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-        response.raw.decode_content = True
-        try:
+        endpoint = rest_endpoint.BUILD_ARTIFACT(folder=folder, name=name, number=number, relative_path=relative_path)
+        with self._stream(endpoint) as response:
+            response.raw.decode_content = True
             yield response
-        finally:
-            response.close()
 
     def get_running_builds(self) -> list[Build]:
         """Get all running builds across all nodes, deduplicated.

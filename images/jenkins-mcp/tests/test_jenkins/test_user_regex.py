@@ -36,33 +36,33 @@ def _timed(call):
         pytest.param(lambda p: _build_matcher(p, literal=False, ignore_case=True), id='grep-matcher-ignorecase'),
     ],
 )
-def test_catastrophic_pattern_is_linear_on_every_compile_path(compile_path):
+def test_catastrophic_pattern_is_linear_on_every_compile_path(re2_engine, compile_path):
     matcher = compile_path(CATASTROPHIC)
     result, seconds = _timed(lambda: matcher(TEXT))
     assert not result
     assert seconds < BUDGET_SECONDS, f'{seconds:.3f}s'
 
 
-def test_catastrophic_pattern_through_narrow_pattern_guard_is_fast():
+def test_catastrophic_pattern_through_narrow_pattern_guard_is_fast(re2_engine):
     _, seconds = _timed(lambda: require_narrow_pattern(CATASTROPHIC, 'find_items'))
     assert seconds < BUDGET_SECONDS
 
 
-def test_console_output_filter_is_linear(mocker):
+def test_console_output_filter_is_linear(re2_engine, mocker):
     session = mocker.Mock()
     mocker.patch('mcp_jenkins.jenkins.rest_client.requests.Session', autospec=True, return_value=session)
-    session.get.return_value.iter_lines.return_value = iter([TEXT, TEXT + 'x'])
+    session.get.return_value.iter_content.return_value = iter([f'{TEXT}\n{TEXT}x\n'.encode()])
     client = Jenkins(url='https://example.com/', username='u', password='p')
 
     out, seconds = _timed(lambda: client.get_build_console_output(fullname='job', number=1, pattern=CATASTROPHIC))
 
     assert out == ''
     assert seconds < BUDGET_SECONDS * 2
-    session.get.return_value.iter_lines.return_value = iter(['a', 'b=='])
+    session.get.return_value.iter_content.return_value = iter([b'a\nb==\n'])
     assert client.get_build_console_output(fullname='job', number=1, pattern='=+$') == 'b=='
 
 
-def test_query_items_patterns_are_linear(mocker):
+def test_query_items_patterns_are_linear(re2_engine, mocker):
     from mcp_jenkins.jenkins.model.item import Job
 
     session = mocker.Mock()

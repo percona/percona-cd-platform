@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from requests import HTTPError
 
@@ -711,7 +713,8 @@ class TestBuild:
 
     def _mock_console_lines(self, mock_session, mocker, lines: list[str]):
         mock_response = mocker.Mock()
-        mock_response.iter_lines.return_value = iter(lines)
+        body = ''.join(f'{line}\n' for line in lines).encode()
+        mock_response.iter_content.return_value = iter([body[:7], body[7:]])
         mock_session.get.return_value = mock_response
         return mock_response
 
@@ -865,39 +868,12 @@ class TestBuild:
         assert jenkins.get_build_parameters(fullname='example-job', number=1) == {}
 
     def test_get_build_test_report(self, jenkins, mock_session, mocker):
-        mock_session.request.return_value = mocker.Mock(
-            json=lambda: {
-                'suites': [
-                    {
-                        'name': 'Example Suite',
-                        'cases': [
-                            {
-                                'name': 'test_case_1',
-                                'className': 'ExampleTest',
-                                'status': 'PASSED',
-                            },
-                            {
-                                'name': 'test_case_2',
-                                'className': 'ExampleTest',
-                                'status': 'FAILED',
-                                'errorDetails': 'AssertionError: expected X but got Y',
-                            },
-                        ],
-                    }
-                ]
-            }
-        )
-
-        assert jenkins.get_build_test_report(fullname='example-job', number=1) == {
+        report = {
             'suites': [
                 {
                     'name': 'Example Suite',
                     'cases': [
-                        {
-                            'name': 'test_case_1',
-                            'className': 'ExampleTest',
-                            'status': 'PASSED',
-                        },
+                        {'name': 'test_case_1', 'className': 'ExampleTest', 'status': 'PASSED'},
                         {
                             'name': 'test_case_2',
                             'className': 'ExampleTest',
@@ -908,6 +884,12 @@ class TestBuild:
                 }
             ]
         }
+        body = json.dumps(report).encode()
+        mock_session.get.return_value = mocker.Mock(headers={'Content-Length': str(len(body))})
+        mock_session.get.return_value.iter_content.return_value = iter([body[:10], body[10:]])
+
+        assert jenkins.get_build_test_report(fullname='example-job', number=1) == report
+        mock_session.get.return_value.close.assert_called_once()
 
     def test_get_running_builds(self, jenkins, mock_session, mocker):
         mock_session.request.return_value = mocker.Mock(
@@ -1012,25 +994,25 @@ class TestBuild:
         assert jenkins.get_build_artifacts(fullname='example-job', number=1) == []
 
     def test_get_build_artifact(self, jenkins, mock_session, mocker):
-        mock_session.request.return_value = mocker.Mock(content=b'<html>report</html>')
+        mock_session.get.return_value = mocker.Mock(headers={})
+        mock_session.get.return_value.iter_content.return_value = iter([b'<html>', b'report</html>'])
 
         result = jenkins.get_build_artifact(
             fullname='example-job', number=1, relative_path='playwright-report/index.html'
         )
         assert result == b'<html>report</html>'
 
-        mock_session.request.assert_called_once_with(
-            method='GET',
-            url='https://example.com/job/example-job/1/artifact/playwright-report/index.html',
-            headers={'Jenkins-Crumb': 'crumb-value'},
-            params=None,
-            data=None,
+        mock_session.get.assert_called_once_with(
+            'https://example.com/job/example-job/1/artifact/playwright-report/index.html',
             timeout=75,
+            stream=True,
         )
+        mock_session.get.return_value.close.assert_called_once()
 
     def test_get_build_artifact_binary(self, jenkins, mock_session, mocker):
         binary_content = bytes(range(256))
-        mock_session.request.return_value = mocker.Mock(content=binary_content)
+        mock_session.get.return_value = mocker.Mock(headers={})
+        mock_session.get.return_value.iter_content.return_value = iter([binary_content])
 
         result = jenkins.get_build_artifact(fullname='example-job', number=1, relative_path='trace.zip')
         assert result == binary_content

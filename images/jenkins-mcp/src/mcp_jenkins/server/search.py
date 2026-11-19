@@ -23,7 +23,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
-from mcp_jenkins.jenkins.rest_client import compile_user_regex, hoist_inline_flags
+from mcp_jenkins.jenkins.rest_client import compile_user_regex, hoist_inline_flags, pattern_narrows
 from mcp_jenkins.server import mcp
 
 if TYPE_CHECKING:
@@ -46,9 +46,6 @@ _TIME_BUDGET_LIMIT = 300
 # next scan. Running builds are excluded before this point, since their console never ends at all.
 _FETCH_WORKERS = 8
 _fetch_pool = ThreadPoolExecutor(max_workers=_FETCH_WORKERS, thread_name_prefix='log-scan')
-
-# job_pattern values that would scan everything; rejected so a search is always narrowed.
-_CATCH_ALL = {'', '.*', '.+', '.*?', '*'}
 
 
 def _clamp(value: int, hard_max: int, name: str, notes: list[str]) -> int:
@@ -262,9 +259,14 @@ def search_build_logs(
         all_fetches_failed (every fetch failed, so an empty result is an outage rather than a clean
         miss), has_more with next_start_after_job (the resume cursor), and any clamp notes.
     """
-    if not job_pattern or job_pattern.strip() in _CATCH_ALL:
-        msg = 'job_pattern is required and must not be a catch-all (e.g. ".*"); narrow it.'
-        raise ValueError(msg)
+    catch_all = 'job_pattern is required and must not be a catch-all (e.g. ".*"); narrow it.'
+    try:
+        narrows = pattern_narrows(job_pattern.strip() if job_pattern else job_pattern)
+    except ValueError as e:
+        msg = f'{catch_all} {e}'
+        raise ValueError(msg) from e
+    if not narrows:
+        raise ValueError(catch_all)
 
     notes: list[str] = []
     max_jobs = _clamp(max_jobs, _MAX_JOBS_LIMIT, 'max_jobs', notes)

@@ -78,8 +78,16 @@ _CATALOG = [
                 '      console log; pattern is a regex line filter (slice big logs with pattern/limit)',
             ),
             (
+                'get_build_console_output',
+                '      one answer holds at most 1 MiB; a truncation line names the offset to continue from',
+            ),
+            (
                 'get_build_console_tail',
                 'get_build_console_tail(fullname, number?, lines?, master?)  last N console lines (the failure tail)',
+            ),
+            (
+                'get_build_console_tail',
+                '      at most 5000 lines and 1 MiB; a truncation line comes first when the byte cap cuts lines',
             ),
             (
                 'get_build_test_report',
@@ -94,12 +102,20 @@ _CATALOG = [
                 '      get_build_test_report is the RAW full report; prefer get_build_failure_summary for failures',
             ),
             (
+                'get_build_test_report',
+                '      no stdout/stderr, error text cut at 1200 chars, at most 1000 cases (max_cases), truncated flag',
+            ),
+            (
                 'get_all_build_artifacts',
                 'get_all_build_artifacts / get_build_artifact / get_build_artifact_url(fullname, ..., master?)',
             ),
             (
                 'get_all_build_artifacts',
                 '      each artifact carries a content hint; a .tar.gz -> list_archive_artifact / grep_build_artifact',
+            ),
+            (
+                'get_build_artifact',
+                '      get_build_artifact: 10 MiB inline at most, else export_build_artifact or grep_build_artifact',
             ),
             (
                 'get_build_history',

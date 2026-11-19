@@ -98,7 +98,9 @@ def _artifact_stream():
 def equals_client(mocker):
     session = mocker.Mock()
     mocker.patch('mcp_jenkins.jenkins.rest_client.requests.Session', autospec=True, return_value=session)
-    session.get.side_effect = lambda *_a, **_k: mocker.Mock(iter_lines=lambda **_kw: iter([TEXT, TEXT]))
+    session.get.side_effect = lambda *_a, **_k: mocker.Mock(
+        headers={}, iter_content=lambda **_kw: iter([f'{TEXT}\n{TEXT}\n'.encode()])
+    )
     client = Jenkins(url='https://example.com/', username='u', password='p')
     mocker.patch.object(client, 'get_items', return_value=[_job(NARROW), _job(TEXT)])
     mocker.patch.object(client, 'get_item_config', return_value=f'<a>\n{TEXT}\n</a>')
@@ -144,7 +146,7 @@ async def test_sweep_finds_the_known_pattern_arguments():
 
 
 @pytest.mark.asyncio
-async def test_every_pattern_argument_runs_on_re2_in_linear_time(equals_client, mocker):
+async def test_every_pattern_argument_runs_on_re2_in_linear_time(re2_engine, equals_client, mocker):
     compiled = mocker.spy(rest_client.re2, 'compile')
     slow = []
     for tool, target, pattern_names in await _pattern_arguments():

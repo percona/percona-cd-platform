@@ -11,7 +11,7 @@ from fastmcp import Context
 from requests.exceptions import RequestException
 
 from mcp_jenkins.core.lifespan import MasterArg, jenkins
-from mcp_jenkins.jenkins.rest_client import _compile_query_pattern, require_narrow_pattern
+from mcp_jenkins.jenkins.rest_client import pattern_narrows, require_narrow_pattern
 from mcp_jenkins.server import mcp
 from mcp_jenkins.server.build_artifact_search import _build_matcher
 
@@ -298,16 +298,7 @@ _BULK_BUILDS_MAX = 20
 # history of every job on a master. A pattern that matches the empty string or every probe name
 # (".*", ".+", ".") selects everything and does not count.
 _NARROWING_PATTERNS = ('fullname_pattern', 'label_pattern', 'color_pattern', 'class_pattern')
-_CATCH_ALL_PROBES = ('\x00', '~', 'Q', '7', ' ')
 _UPSTREAM_CAUSE = re.compile(r'^upstream project "(.+)" build number (\d+)$')
-
-
-def _narrows(pattern: str | None) -> bool:
-    """True when pattern is a valid regex that leaves some names out."""
-    compiled = _compile_query_pattern(pattern)
-    if compiled is None or compiled.search('') is not None:
-        return False
-    return not all(compiled.search(probe) for probe in _CATCH_ALL_PROBES)
 
 
 def _duration(millis: int | None) -> str:
@@ -481,7 +472,7 @@ def query_items(
         'label_pattern': label_pattern,
         'folder_depth': folder_depth,
     }
-    if per_job and not any(_narrows(query[name]) for name in _NARROWING_PATTERNS):
+    if per_job and not any(pattern_narrows(query[name]) for name in _NARROWING_PATTERNS):
         msg = (
             f'include_builds needs a pattern that narrows the jobs: one of {", ".join(_NARROWING_PATTERNS)} '
             '(a match-everything pattern such as ".*" does not count, and builds_since_days does not narrow)'
