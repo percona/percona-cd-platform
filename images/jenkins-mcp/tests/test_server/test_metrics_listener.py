@@ -173,6 +173,7 @@ def test_start_listener_exits_on_a_bad_value(monkeypatch, mocker):
 
 
 def test_main_starts_the_listener_before_the_http_server(monkeypatch, mocker):
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     port = _free_port()
     monkeypatch.setenv(METRICS_PORT_ENV, str(port))
     mock_asyncio = mocker.patch('mcp_jenkins.asyncio')
@@ -198,6 +199,7 @@ def test_main_starts_the_listener_before_the_http_server(monkeypatch, mocker):
 
 @pytest.mark.parametrize('value', ['not-a-port', '9887', '70000'])
 def test_main_refuses_to_start_with_a_bad_value(monkeypatch, mocker, value):
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     monkeypatch.setenv(METRICS_PORT_ENV, value)
     mocker.patch('mcp_jenkins.asyncio')
     mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
@@ -209,6 +211,7 @@ def test_main_refuses_to_start_with_a_bad_value(monkeypatch, mocker, value):
 
 
 def test_main_refuses_to_start_when_the_port_is_taken(monkeypatch, mocker):
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     mocker.patch('mcp_jenkins.asyncio')
     mock_mcp = mocker.patch('mcp_jenkins.server.mcp')
     mock_logger = mocker.patch('mcp_jenkins.server.metrics_listener.logger')
@@ -237,6 +240,7 @@ def test_main_stdio_starts_no_listener(monkeypatch, mocker):
 
 
 def test_main_http_without_a_port_starts_no_listener(monkeypatch, mocker):
+    monkeypatch.setenv('MCP_ALLOW_UNAUTHENTICATED_HTTP', '1')
     monkeypatch.delenv(METRICS_PORT_ENV, raising=False)
     mocker.patch('mcp_jenkins.asyncio')
     mocker.patch('mcp_jenkins.server.mcp')
