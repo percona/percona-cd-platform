@@ -28,7 +28,13 @@ async def test_list_masters_reports_liveness(two_masters):
     result = fleet.list_masters()
 
     by_name = {m['name']: m for m in result}
-    assert by_name['ps80'] == {'name': 'ps80', 'url': 'https://ps80.cd', 'reachable': True, 'version': '2.541.3'}
+    assert by_name['ps80'] == {
+        'name': 'ps80',
+        'url': 'https://ps80.cd',
+        'reachable': True,
+        'version': '2.541.3',
+        'operate': 'not enabled',
+    }
     assert by_name['ps57']['reachable'] is False
     assert 'connection refused' in by_name['ps57']['error']
 

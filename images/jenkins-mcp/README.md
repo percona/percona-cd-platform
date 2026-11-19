@@ -238,7 +238,8 @@ mcp-jenkins --transport streamable-http --host 0.0.0.0 --port 9887 --read-only
 ```
 
 OIDC auth turns on when `MCP_OIDC_ISSUER` / `MCP_OIDC_JWKS_URI` / `MCP_OIDC_AUDIENCE` /
-`MCP_PUBLIC_BASE_URL` are set; the fleet (masters + read-only tokens) is one JSON blob at
+`MCP_PUBLIC_BASE_URL` are set. The `sse` and `streamable-http` transports refuse to start without
+them and name the missing settings. A partly set configuration is always refused. The fleet (masters + read-only tokens) is one JSON blob at
 `MCP_JENKINS_FLEET_FILE`. In production this runs as the `jenkins-mcp` addon on the
 percona-ci-platform EKS cluster, behind the `jenkins-cd` ALB.
 
@@ -249,12 +250,14 @@ when the value is not a port number, equals `--port`, or cannot be bound. The va
 the `sse` and `streamable-http` transports. The chart sets it from `metrics.port`, see
 [`../../docs/runbooks/jenkins-mcp-operate.md`](../../docs/runbooks/jenkins-mcp-operate.md).
 
-To run it locally, point it at a one-master fleet file and leave the OIDC vars unset, so it runs
-WITHOUT auth (local dev only):
+To run it locally over HTTP without auth, point it at a one-master fleet file, leave the OIDC vars
+unset and set the development switch `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`. The gateway then logs a
+warning on every start. Never set the switch in a deployment. The `stdio` transport has no listener
+and needs neither the OIDC vars nor the switch.
 
 ```sh
 echo '{"masters":[{"name":"ps80","url":"https://ps80.cd.percona.com/","username":"JNKPercona","token":"<api token>"}]}' > fleet.json
-MCP_JENKINS_FLEET_FILE=fleet.json uv run mcp-jenkins \
+MCP_ALLOW_UNAUTHENTICATED_HTTP=1 MCP_JENKINS_FLEET_FILE=fleet.json uv run mcp-jenkins \
   --transport streamable-http --host 127.0.0.1 --port 9887 --read-only
 curl -s http://127.0.0.1:9887/healthz   # -> OK
 ```

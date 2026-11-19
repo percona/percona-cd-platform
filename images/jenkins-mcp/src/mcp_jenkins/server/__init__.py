@@ -14,22 +14,28 @@ from mcp_jenkins.core import AuthMiddleware, LifespanContext, lifespan
 if TYPE_CHECKING:
     from fastmcp.server.auth import RemoteAuthProvider
 
-__all__ = ['mcp']
+__all__ = ['http_auth_error', 'mcp']
+
+
+# The four settings of the OAuth2 resource server. The HTTP transports start only with all four.
+OIDC_SETTINGS = ('MCP_OIDC_ISSUER', 'MCP_OIDC_JWKS_URI', 'MCP_OIDC_AUDIENCE', 'MCP_PUBLIC_BASE_URL')
+# Set to 1 to serve an HTTP transport with no authentication, for local development only.
+ALLOW_UNAUTHENTICATED_HTTP = 'MCP_ALLOW_UNAUTHENTICATED_HTTP'
+_HTTP_TRANSPORTS = ('sse', 'streamable-http')
 
 
 def _build_auth() -> 'RemoteAuthProvider | None':
-    """Build the OAuth2 resource-server auth provider from env, or None for local dev.
+    """Build the OAuth2 resource-server auth provider from env, or None when a setting is missing.
 
     When the MCP_OIDC_* vars are set, the server validates incoming bearer JWTs against the
     IdP (Authentik) JWKS and FastMCP auto-serves RFC 9728 protected-resource-metadata plus the
-    401 WWW-Authenticate challenge. Unset means run open, for local development only.
+    401 WWW-Authenticate challenge. Without them only stdio starts, see http_auth_error.
     """
     issuer = os.getenv('MCP_OIDC_ISSUER')
     jwks_uri = os.getenv('MCP_OIDC_JWKS_URI')
     audience = os.getenv('MCP_OIDC_AUDIENCE')
     base_url = os.getenv('MCP_PUBLIC_BASE_URL')
     if not all((issuer, jwks_uri, audience, base_url)):
-        logger.warning('MCP_OIDC_* not fully set; running WITHOUT auth (local dev only).')
         return None
 
     from fastmcp.server.auth import RemoteAuthProvider
@@ -42,6 +48,35 @@ def _build_auth() -> 'RemoteAuthProvider | None':
         base_url=base_url,
         scopes_supported=['openid', 'profile'],
         resource_name='Jenkins MCP',
+    )
+
+
+def http_auth_error(transport: str, auth: object) -> str | None:
+    """Return why the transport must not start, or None when it may start.
+
+    stdio has no listener and needs no auth. An HTTP transport needs all four OIDC settings and the
+    provider built from them. With none set, the development switch allows an open start with a
+    warning. A partly set configuration is always refused, the switch does not cover it.
+    """
+    if transport not in _HTTP_TRANSPORTS:
+        return None
+    missing = [name for name in OIDC_SETTINGS if not os.getenv(name)]
+    if missing and len(missing) < len(OIDC_SETTINGS):
+        return (
+            f'Refusing to start {transport}: the OIDC settings are only partly set, missing {", ".join(missing)}. '
+            f'Set all of {", ".join(OIDC_SETTINGS)}.'
+        )
+    if not missing:
+        return None if auth is not None else f'Refusing to start {transport}: no auth provider was built.'
+    if os.getenv(ALLOW_UNAUTHENTICATED_HTTP) == '1':
+        logger.warning(
+            f'{ALLOW_UNAUTHENTICATED_HTTP}=1: serving {transport} WITHOUT authentication. Every caller '
+            f'reaches every served tool with the service credentials. Local development only.'
+        )
+        return None
+    return (
+        f'Refusing to start {transport} without authentication: missing {", ".join(missing)}. '
+        f'Set them, or set {ALLOW_UNAUTHENTICATED_HTTP}=1 for local development only.'
     )
 
 

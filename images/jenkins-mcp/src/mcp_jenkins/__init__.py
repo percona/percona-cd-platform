@@ -83,10 +83,15 @@ def main(
 
     os.environ['jenkins_session_singleton'] = str(jenkins_session_singleton).lower()
 
-    from mcp_jenkins.server import mcp
+    from mcp_jenkins.server import http_auth_error, mcp
 
     if read_only and enable_operate:
         logger.error('--read-only and --enable-operate are mutually exclusive; pass at most one.')
+        sys.exit(1)
+
+    auth_error = http_auth_error(transport, mcp.auth)
+    if auth_error:
+        logger.error(auth_error)
         sys.exit(1)
 
     if enable_operate:

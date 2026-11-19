@@ -10,7 +10,7 @@ import functools
 import anyio
 from loguru import logger
 
-from mcp_jenkins.core.fleet import client_for, get_fleet
+from mcp_jenkins.core.fleet import client_for, get_fleet, operate_status
 from mcp_jenkins.core.scope import allowed_masters
 from mcp_jenkins.jenkins.rest_client import _compile_query_pattern, require_narrow_pattern
 from mcp_jenkins.server import mcp
@@ -26,7 +26,9 @@ def list_masters() -> list[dict]:
 
     Returns:
         One entry per configured master the caller may reach: name, url, reachable (bool), version (Jenkins core
-        version when reachable), and error (a short message when the liveness check failed).
+        version when reachable), operate (the permission preflight: "verified", "not verified" when the
+        master could not be probed, "refused", or "not enabled" on a read-only gateway; only a verified
+        master takes operate and manage calls), and error (a short message when the liveness check failed).
     """
     results = []
     allowed = allowed_masters()
@@ -34,6 +36,7 @@ def list_masters() -> list[dict]:
         if allowed is not None and master.name not in allowed:
             continue
         entry: dict = {'name': master.name, 'url': master.url, 'reachable': False, 'version': None}
+        entry['operate'] = operate_status(master.name)
         try:
             entry['version'] = client_for(master.name).get_version()
             entry['reachable'] = True

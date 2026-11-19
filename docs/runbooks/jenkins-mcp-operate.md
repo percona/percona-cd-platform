@@ -45,7 +45,7 @@ code. External Secrets Operator syncs it to the k8s secret `jenkins-mcp-fleet`, 
    `resources/jenkins-masters/<inst>/init.groovy.d/matrix.groovy`. It must NOT hold
    `Overall/RunScripts`, `Job/Configure`, `Job/Create`, or credentials permissions: the operate
    preflight probes `/script` and `/view/all/newJob` on every master and refuses to start the gateway
-   in operate mode if any returns 200 (fail-closed).
+   in operate mode if any returns 200 (fail-closed). See "Operate preflight states" below.
 2. **Mint an API token for `JNKPercona` on that master** (Jenkins UI, the `JNKPercona` user,
    Security, Add new API token). Copy it once.
 3. **Add the entry to the fleet secret.** Edit the JSON in the AWS console (Secrets Manager,
@@ -168,6 +168,40 @@ export MCP_JENKINS_SERVICE_GRANTS="$(helm template t resources/addons/jenkins-mc
 
 A refused call returns the reason (audit `deny_reason` `not_granted`).
 
+## Operate preflight states
+
+In operate mode the gateway probes `/script` and `/view/all/newJob` on each master at start. Each
+master gets one state. `list_masters` shows it in the `operate` field, and the start log has one
+`operate preflight: <master> <state>` line per master.
+
+| State | Cause | Effect |
+|---|---|---|
+| `verified` | Both probes answered 403 | All tools work for this master |
+| `not verified` | A probe errored or answered something other than 200 or 403 (master down, 502, 401) | Read tools work. Operate and manage calls to this master are refused (audit `deny_reason` `operate_not_verified`) |
+| `refused` | A probe answered 200 after start | Operate and manage calls to this master are refused until a restart |
+| `not enabled` | The gateway runs read-only | No operate or manage tools are served |
+
+A probe that answers 200 at start still refuses the whole start. A `not verified` master recovers
+without a restart:
+
+1. Wait until the master is up again.
+2. Make an operate or manage call to it. The gateway probes it again, at most once per 60 s per master.
+3. Call `list_masters`. Expect `operate: verified`.
+
+Job Configure and Job Delete have no probe. Both are per-job permissions, and the job configure page
+and `config.xml` answer 200 with Job/ExtendedRead alone, which the gateway holds. `/view/all/newJob`
+(Job/Create) stays the proxy for job-definition rights.
+
+## Authentication at start
+
+The `sse` and `streamable-http` transports start only with all four of `MCP_OIDC_ISSUER`,
+`MCP_OIDC_JWKS_URI`, `MCP_OIDC_AUDIENCE` and `MCP_PUBLIC_BASE_URL`. Without them the pod exits with
+`Refusing to start ... without authentication: missing <names>`. Fix the chart values or the secret
+and let the pod restart. A partly set configuration exits with `only partly set`.
+
+`MCP_ALLOW_UNAUTHENTICATED_HTTP=1` allows an HTTP start with none of the four set, for local
+development only. It never covers a partly set configuration. Never set it in a deployment.
+
 ## Do not grant Job/Create to activate the manage tier
 
 The manage tools (`create_item`, `set_item_config`, `delete_item`) are served and writers-gated, but
@@ -230,6 +264,7 @@ and the metrics stop until the image arrives. To roll back, set `metrics.port: "
 kubectl -n jenkins-mcp logs deploy/jenkins-mcp --since=5m | grep -iE 'operate|preflight'
 #   -> "Operate (write) mode enabled" (passed), or "Refusing operate ... over-privileged"
 #      (a master grants too much; fix its matrix auth and restart).
+#   -> one "operate preflight: <master> verified | not verified | refused" line per master.
 ```
 
 Every call is audited to Loki under the caller's Authentik `sub` (event `mcp_tool_call`); an export
