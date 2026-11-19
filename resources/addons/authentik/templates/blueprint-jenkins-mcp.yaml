@@ -42,7 +42,10 @@ data:
         attrs:
           client_id: jenkins-mcp
           client_type: public
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          # Explicit consent: a new connection needs one click from the signed-in
+          # user, so a link that starts another person's connector cannot get a
+          # code silently. Token refresh never runs this flow.
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           include_claims_in_id_token: true
           access_token_validity:  minutes=30

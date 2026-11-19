@@ -3,6 +3,8 @@ Authentik blueprint — declarative bootstrap of:
   1. SAML Source (`duo-saml`)            — Authentik as SP to the JumpCloud IdP
      (slug kept from the Duo era so the ACS and metadata URLs never moved)
   2. SAML groups Property Mapping        — propagate the `groups` attr inward
+  2a. SAML user Property Mappings, drop reserved group names and reject
+      XML comments in the assertion
   2b. JumpCloud IdP signing certificate  — pinned for signature verification
   3. OAuth2 Provider `grafana`           — Authentik as IdP to Grafana
   4. Application `grafana`               — binds the provider; gives the launcher tile
@@ -92,18 +94,134 @@ data:
           expression: |
             import re
             raw = request.context.get("group_id", "")
-            # JumpCloud names differ from the Duo-era names the consumers
-            # key on, so translate rather than touch four consumers.
+            # Shared block: keep it identical in saml-reserved-group-filter.
+            # Renames map JumpCloud names to the names the consumers key on.
+            # Reserved names grant access and are managed in Authentik only.
             renames = {
                 "Security Training Completed": "percona",
                 "grafana_cd_admins - SSO": "grafana_cd_admins",
             }
+            reserved = {"grafana_cd_admins", "percona"}
+            reserved_prefixes = ("jenkins-mcp-", "authentik")
+
+            def is_reserved(value):
+                if value in renames:
+                    return False
+                match = re.match(r"^cn=([^,]+)", value, re.IGNORECASE)
+                stripped = match.group(1) if match else value
+                for candidate in (value, stripped):
+                    folded = candidate.strip().lower()
+                    if folded in reserved or folded.startswith(reserved_prefixes):
+                        return True
+                return False
+            # End of shared block.
             if raw in renames:
                 return {"name": renames[raw]}
+            # saml-reserved-group-filter drops reserved names first. This
+            # raise fires only if that filter stops working.
+            if is_reserved(raw):
+                raise ValueError(f"SAML group {raw!r} uses a reserved name")
             m = re.match(r"^cn=([^,]+)", raw, re.IGNORECASE)
             return {"name": m.group(1) if m else raw}
 
-      # ---- 1b. JumpCloud IdP signing certificate ----
+      # ---- 1a. User Property Mapping: drop reserved group names ----
+      # Removes reserved names from properties["groups"] in place, so the
+      # source never creates, links or renames them. This relies on
+      # `properties` being the dict the source mapper returns (checked on
+      # 2026.2.4, re-check after an upgrade). It never raises.
+      - model: authentik_sources_saml.samlsourcepropertymapping
+        identifiers:
+          name: saml-reserved-group-filter
+        id: saml-reserved-group-filter
+        attrs:
+          name: saml-reserved-group-filter
+          expression: |
+            import re
+            dropped = []
+            try:
+                # Shared block: keep it identical in duo-group-strip-dn.
+                # Renames map JumpCloud names to the names the consumers key on.
+                # Reserved names grant access and are managed in Authentik only.
+                renames = {
+                    "Security Training Completed": "percona",
+                    "grafana_cd_admins - SSO": "grafana_cd_admins",
+                }
+                reserved = {"grafana_cd_admins", "percona"}
+                reserved_prefixes = ("jenkins-mcp-", "authentik")
+
+                def is_reserved(value):
+                    if value in renames:
+                        return False
+                    match = re.match(r"^cn=([^,]+)", value, re.IGNORECASE)
+                    stripped = match.group(1) if match else value
+                    for candidate in (value, stripped):
+                        folded = candidate.strip().lower()
+                        if folded in reserved or folded.startswith(reserved_prefixes):
+                            return True
+                    return False
+                # End of shared block.
+                groups = properties.get("groups") if isinstance(properties, dict) else None
+                if isinstance(groups, list):
+                    kept = []
+                    for value in groups:
+                        if isinstance(value, str) and is_reserved(value):
+                            dropped.append(value)
+                        else:
+                            kept.append(value)
+                    groups[:] = kept
+            except Exception as exc:
+                ak_logger.warning("saml-reserved-group-filter failed", error=repr(exc))
+                return {}
+            if dropped:
+                ak_logger.info("saml-reserved-group-filter", dropped=dropped)
+            return {}
+
+      # ---- 1b. User Property Mapping: reject XML comments in the assertion ----
+      # The parsed NameID text stops at a comment, so XPath reads the raw tree.
+      # A comment or processing instruction in a NameID or attribute value
+      # raises and denies the login. Any other error is logged and allows it.
+      - model: authentik_sources_saml.samlsourcepropertymapping
+        identifiers:
+          name: saml-xml-comment-guard
+        id: saml-xml-comment-guard
+        attrs:
+          name: saml-xml-comment-guard
+          expression: |
+            from lxml import etree
+            namespaces = {"saml": "urn:oasis:names:tc:SAML:2.0:assertion"}
+            marked = "descendant-or-self::*[self::saml:NameID or self::saml:AttributeValue]"
+            hidden = marked + "//node()[self::comment() or self::processing-instruction()]"
+            found = 0
+            checked = 0
+            trees = 0
+            failure = None
+            for key in ("root", "assertion", "name_id"):
+                try:
+                    node = request.context.get(key)
+                    if isinstance(node, str) and node.lstrip().startswith("<"):
+                        parser = etree.XMLParser(
+                            resolve_entities=False, no_network=True, remove_comments=False, remove_pis=False
+                        )
+                        node = etree.fromstring(node.encode(), parser)
+                    if not isinstance(node, etree._Element):
+                        continue
+                    node_checked = int(node.xpath("count(" + marked + ")", namespaces=namespaces))
+                    node_found = len(node.xpath(hidden, namespaces=namespaces))
+                except Exception as exc:
+                    failure = (failure + " " if failure else "") + key + ": " + repr(exc)
+                    continue
+                trees += 1
+                checked += node_checked
+                found += node_found
+            if found:
+                raise ValueError("SAML login rejected: XML comment in NameID or attribute value")
+            if failure:
+                ak_logger.warning("saml-xml-comment-guard failed", error=failure)
+                return {}
+            ak_logger.info("saml-xml-comment-guard", trees=trees, checked=checked)
+            return {}
+
+      # ---- 1c. JumpCloud IdP signing certificate ----
       # Public half of JumpCloud's SAML signing key, so it is config and not
       # a secret: it belongs in git, not Secrets Manager. key_data is omitted
       # because a verification-only keypair holds no private key (the API
@@ -200,11 +318,12 @@ data:
           digest_algorithm: "http://www.w3.org/2001/04/xmlenc#sha256"
           signature_algorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
           temporary_user_delete_after: "days=1"
-          # No user_property_mappings: Authentik's get_base_user_properties
-          # already extracts username/email/name/groups from the assertion;
-          # we only need to rewrite group names, which goes through the
-          # group_property_mappings field below (NOT user_property_mappings;
-          # that field can't rename groups in the post-2024.8 source pipeline).
+          # get_base_user_properties extracts username/email/name/groups. The
+          # user mappings run ordered by name: the filter drops reserved group
+          # names, the guard rejects a tampered assertion. Renames are group mappings.
+          user_property_mappings:
+            - !KeyOf saml-reserved-group-filter
+            - !KeyOf saml-xml-comment-guard
           group_property_mappings:
             - !KeyOf duo-group-strip-dn
 
