@@ -257,6 +257,67 @@ image reaches the cluster later through its own bump pull request. Turn the port
 If step 3 lands before step 2, the ServiceMonitor scrapes a port that the old image does not serve,
 and the metrics stop until the image arrives. To roll back, set `metrics.port: ""` again.
 
+## Audit archive of write calls
+
+Jenkins records the gateway's service account as the starter of every build the gateway starts.
+The audit line in Loki names the person, and Loki keeps it for 30 days. The audit archive keeps the
+record of every operate, manage and write call for 400 days. The gateway stores the same JSON as
+the Loki line, one object per call, in the bucket `percona-ci-platform-jenkins-mcp-audit`
+(`terraform/jenkins-mcp-audit.tf`). Reads are not stored. The key starts with the call time in UTC:
+`audit/write/YYYY/MM/DD/YYYYMMDDTHHMMSS.ffffffZ-<request_id>.json`.
+
+The gateway may only put objects there. Versioning and Object Lock (GOVERNANCE, 400 days) keep a
+stored record from being replaced or deleted. A record that does not reach S3 never fails the tool
+call. It increments `mcp_audit_archive_failures_total{reason="error|timeout|backlog"}` and logs a
+warning. Stored records increment `mcp_audit_archive_stored_total`.
+
+### Turn the archive on
+
+1. Run `just tf-plan`. Check that the plan creates the bucket, its settings and the policy
+   `percona-ci-platform-jenkins-mcp-audit`, and adds one policy attachment to the jenkins-mcp role.
+2. Run `just tf-apply`.
+3. Merge the bump pull request of the first image that reads `MCP_AUDIT_S3_BUCKET`. Wait until both
+   pods run that image.
+4. Set `auditArchive.bucket: percona-ci-platform-jenkins-mcp-audit` in
+   `resources/addons/jenkins-mcp/values.yaml` and merge.
+5. Run one write call, for example `cancel_queue_item` with an id that does not exist.
+6. Check that a new object exists under `audit/write/<today>/` in the bucket.
+7. Check in Mimir that `mcp_audit_archive_stored_total` grew and
+   `mcp_audit_archive_failures_total` did not.
+
+To turn the archive off, set `auditArchive.bucket: ""`. The stored records stay until they expire.
+
+### Find who started, replayed or stopped a build
+
+Use Loki for a build of the last 30 days. Use the archive for an older build. Run the `aws`
+commands with read access to the bucket. The gateway's own role cannot read it.
+
+1. Read the build's start time and cause from Jenkins:
+   `<master>/job/<job>/<number>/api/json?tree=timestamp,actions[causes[userId,shortDescription]]`.
+2. If the cause names the gateway's service account, convert `timestamp` (milliseconds) to a UTC
+   date: `date -u -d @$(( <timestamp> / 1000 ))`.
+3. Copy the records of that day and of the day before:
+
+   ```sh
+   aws s3 cp --recursive s3://percona-ci-platform-jenkins-mcp-audit/audit/write/2026/11/19/ ./audit/
+   ```
+
+4. Select the calls on the job:
+
+   ```sh
+   jq -c 'select(.args.fullname == "<job>" or any(.args.items[]?; .fullname == "<job>"))
+     | [.ts, .tool, .status, .master, .preferred_username, .sub, .args.number, .args.items]' ./audit/*.json
+   ```
+
+5. For a started build, take the last `build_item` or `replay_build` call with status `ok` on that
+   master before the build's `timestamp`. A build waits in the queue, so the call can be minutes
+   older than the start.
+6. For a stopped build, take the `stop_build` or `stop_builds` call that names the build number.
+7. Read the person from `preferred_username` and `sub`.
+
+If two calls on the same job fall in the queue window, the record cannot tell which one started
+the build. Record both people and their times.
+
 ## Verify
 
 ```sh

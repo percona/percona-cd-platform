@@ -87,6 +87,10 @@ spec:
               value: {{ (.Values.aws | default dict).region | default "us-east-1" | quote }}
             - name: MCP_S3_PRESIGN_TTL
               value: {{ .Values.s3.presignTtl | default 21600 | quote }}
+            {{- with (.Values.auditArchive | default dict).bucket }}
+            - name: MCP_AUDIT_S3_BUCKET
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.serviceGrants }}
             - name: MCP_JENKINS_SERVICE_GRANTS
               value: {{ toJson . | quote }}

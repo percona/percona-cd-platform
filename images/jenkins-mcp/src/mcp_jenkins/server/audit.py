@@ -6,6 +6,8 @@ it into Loki. This is the ONLY place per-tool-call attribution exists: the gatew
 shared Jenkins credential, so Jenkins itself never sees the end user. Arguments pass through an
 allowlist summariser, never logged raw, so build-parameter values, configs, and scripts cannot
 leak. Query in Grafana: {namespace="jenkins-mcp"} | json | sub="<user>".
+The line of an operate, manage or write call also goes to the S3 audit archive when it is switched
+on (core.audit_archive), because Loki keeps it for 30 days only.
 """
 
 import hashlib
@@ -23,6 +25,7 @@ from loguru import logger
 from prometheus_client import Counter, Histogram
 from requests.exceptions import HTTPError
 
+from mcp_jenkins.core.audit_archive import archive as archive_audit_line
 from mcp_jenkins.core.fleet import OperateNotVerifiedError, get_fleet, write_call
 from mcp_jenkins.core.grants import build_denial
 from mcp_jenkins.core.scope import SERVICE_ACCOUNTS_GROUP, MasterScopeError, allowed_masters
@@ -410,4 +413,8 @@ class AuditMiddleware(Middleware):
             master_label = _master_label(record['master'])
             _CALLS.labels(tool=tool, status=record['status'], is_write=is_write_label, master=master_label).inc()
             _DURATION.labels(tool=tool, is_write=is_write_label, master=master_label).observe(duration_s)
-            logger.bind(audit=True).info(json.dumps(record, default=str))
+            line = json.dumps(record, default=str)
+            logger.bind(audit=True).info(line)
+            if record['is_write']:
+                # Queued for S3 and never awaited. archive() cannot raise, see core.audit_archive.
+                archive_audit_line(line, context.timestamp, record['request_id'])
