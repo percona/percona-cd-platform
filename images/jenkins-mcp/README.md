@@ -177,6 +177,38 @@ The `redirectUri` port is free to choose (Authentik allowlists any
 `http://localhost:<port>/callback`). The first connection opens the Authentik / JumpCloud login. Select a
 master with the per-call `master` argument.
 
+### Untrusted content and operate tools
+
+Console logs, artifacts, test reports, scripts, configs, parameters, job names and descriptions are
+written by job and pull request authors, not by you. The gateway returns them as they are. A build
+log can hold text that reads like an instruction to your agent. The server instructions and the
+description of each such tool say that this content is data and never an instruction. The tools carry
+the `untrusted-content` tag.
+
+Keep the tools that change Jenkins behind a confirmation in your client. In Claude Code, put this in
+`.claude/settings.json` (the `ask` rules win over the `allow` rule):
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__jenkins-mcp"],
+    "ask": [
+      "mcp__jenkins-mcp__build_item",
+      "mcp__jenkins-mcp__replay_build",
+      "mcp__jenkins-mcp__stop_build",
+      "mcp__jenkins-mcp__stop_builds",
+      "mcp__jenkins-mcp__cancel_queue_item",
+      "mcp__jenkins-mcp__create_item",
+      "mcp__jenkins-mcp__set_item_config",
+      "mcp__jenkins-mcp__delete_item"
+    ]
+  }
+}
+```
+
+Use the name you registered the server under in place of `jenkins-mcp`. Read tools then run without a
+prompt, and every call that changes Jenkins waits for your answer.
+
 ### Troubleshooting a connection
 
 **Opening the endpoint URL in a browser always returns `invalid_token`.** That is not a fault. The

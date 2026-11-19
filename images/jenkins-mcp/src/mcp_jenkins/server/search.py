@@ -203,7 +203,7 @@ def _scan(
     }
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def search_build_logs(
     ctx: Context,
     pattern: str,

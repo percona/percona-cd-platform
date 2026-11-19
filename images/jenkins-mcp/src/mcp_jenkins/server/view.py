@@ -7,7 +7,7 @@ from mcp_jenkins.server import mcp
 _MAX_VIEW_DEPTH = 2
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_all_views(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all top-level views from Jenkins.
 
@@ -17,7 +17,7 @@ def get_all_views(ctx: Context, master: MasterArg = None) -> list[dict]:
     return jenkins(ctx, master).get_views()
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_view(ctx: Context, view_path: str, depth: int = 0, master: MasterArg = None) -> dict:
     """Get a Jenkins view by path, returning its jobs and/or nested sub-views.
 

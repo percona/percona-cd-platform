@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 _T = TypeVar('_T')
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[dict]:
     """Get all items in Jenkins queue
 
@@ -29,7 +29,7 @@ def get_all_queue_items(ctx: Context, master: MasterArg = None) -> list[dict]:
     return [item.model_dump(exclude_none=True, exclude={'task'}) for item in jenkins(ctx, master).get_queue().items]
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def get_queue_item(ctx: Context, id: int | None = None, number: int | None = None, master: MasterArg = None) -> dict:
     """Get a specific item in Jenkins queue by id
 

@@ -47,7 +47,7 @@ def list_masters() -> list[dict]:
     return results
 
 
-@mcp.tool(tags={'read'})
+@mcp.tool(tags={'read', 'untrusted-content'})
 async def find_items(
     fullname_pattern: str,
     class_pattern: str | None = None,

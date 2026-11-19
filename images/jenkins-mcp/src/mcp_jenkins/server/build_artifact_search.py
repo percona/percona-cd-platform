@@ -376,7 +376,7 @@ def _grep_glob(
     }
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def grep_build_artifact(
     ctx: Context,
     fullname: str,
@@ -500,7 +500,7 @@ def _grep_member(
     raise ValueError(msg)
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def list_archive_artifact(
     ctx: Context,
     fullname: str,
@@ -562,7 +562,7 @@ def list_archive_artifact(
     }
 
 
-@mcp.tool(tags=['read'])
+@mcp.tool(tags=['read', 'untrusted-content'])
 def extract_archive_artifact(
     ctx: Context,
     fullname: str,

@@ -4,7 +4,7 @@ from mcp_jenkins.core.lifespan import MasterArg, jenkins
 from mcp_jenkins.server import mcp
 
 
-@mcp.tool(tags={'write'})
+@mcp.tool(tags={'write', 'untrusted-content'})
 def run_groovy_script(ctx: Context, script: str, master: MasterArg = None) -> str:
     """Execute an arbitrary Groovy script on Jenkins.
 
