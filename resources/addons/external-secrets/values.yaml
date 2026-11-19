@@ -39,3 +39,23 @@ external-secrets:
     podDisruptionBudget:
       enabled: true
       minAvailable: 1
+
+# Namespaces whose ExternalSecrets may use the ClusterSecretStore
+# aws-secrets-manager. A new consumer namespace must be added here in the same
+# change as its first ExternalSecret, or that ExternalSecret fails with a store
+# error. An empty list fails the render, so the store is never open to all.
+clusterSecretStore:
+  allowedNamespaces:
+    - alloy-gateway
+    - argocd
+    - authentik
+    - grafana
+    - headlamp
+    - jenkins-mcp
+    - jenkins-ps3-k8s
+    - mtr
+
+# Deny namespaced AWS SecretStores and the namespaced AWS generators. Without a
+# credential of their own they run on the operator's Pod Identity role, which
+# would bypass the namespace list above. docs/adr/0050.
+denyNamespacedAwsStores: true
