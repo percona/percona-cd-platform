@@ -161,8 +161,8 @@ The chart pins the image by an **immutable SHA-TAG** `<lts>-<gitsha>` (e.g.
 subchart (5.9.18) has no `digest` key, so a real digest pin waits on the pilot
 chart rebuild. The ECR repo is IMMUTABLE, so the SHA-tag cannot be overwritten,
 which gets most of the immutability benefit. Be honest in bump PRs: this is a
-**TAG bump, not a digest bump**. The build records the actual pushed `@sha256:`
-digest in the PR body for traceability.
+**TAG bump, not a digest bump**. The `publish` job records the actual pushed
+`@sha256:` digest in its job summary for traceability.
 
 ## CI
 

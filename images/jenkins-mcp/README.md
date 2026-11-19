@@ -225,9 +225,9 @@ roughly 60 to 90 seconds. Retry before reporting it.
 
 ### Auto-deploy
 
-New gateway image versions roll out on their own: when a new `percona-cd/jenkins-mcp` image is
-pushed to ECR, the build workflow opens a bump PR against the addon `values.yaml`, and merging it
-lets ArgoCD sync the new tag. The endpoint URL is stable, so a server-side image bump needs no
+When a new `percona-cd/jenkins-mcp` image is pushed to ECR, the build workflow prepares a bump
+branch that sets `image.tag` and `image.digest` in the addon `values.yaml`. A person opens the pull
+request from the link in the job summary. Merging it lets ArgoCD sync the new image. The endpoint URL is stable, so a server-side image bump needs no
 client change. See
 [`../../docs/runbooks/jenkins-mcp-image-autodeploy.md`](../../docs/runbooks/jenkins-mcp-image-autodeploy.md).
 
@@ -274,7 +274,7 @@ the version bump produces a tag that is confusing to trace back.
 
 Built by CI (`.github/workflows/build-jenkins-mcp-image.yml`) from this directory and pushed to
 ECR `percona-cd/jenkins-mcp` via GitHub Actions assuming an AWS IAM role over OIDC. The deployed
-tag is bumped in `resources/addons/jenkins-mcp/values.yaml`.
+tag and digest are bumped in `resources/addons/jenkins-mcp/values.yaml`.
 
 ## License
 
