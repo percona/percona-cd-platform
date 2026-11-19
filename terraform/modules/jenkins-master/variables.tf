@@ -164,6 +164,12 @@ variable "java_package" {
   default     = "java-17-amazon-corretto"
 }
 
+variable "java_releasever" {
+  description = "Amazon Linux release whose repository the controller JVM is upgraded from, after the install from the image's own release. The default is the first release with the Corretto builds that fix CVE-2026-114938. Empty skips the upgrade."
+  type        = string
+  default     = "2023.12.20261117"
+}
+
 variable "jenkins_home_dirname" {
   description = "Directory name under /mnt used as JENKINS_HOME. Defaults to hostname. Set to the SOURCE master's hostname when booting from a snapshot-restored data volume, so the restored tree is adopted in place without a rename. The observability master label stays this module's hostname either way."
   type        = string

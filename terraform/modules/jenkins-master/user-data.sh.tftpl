@@ -87,6 +87,11 @@ install_software() {
     grep -q 'repo_gpgcheck=0' /etc/yum.repos.d/jenkins.repo
     rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2026.key
     retry yum -y install ${java_package}
+%{ if java_releasever != "" ~}
+    # The image is locked to its own Amazon Linux release. This takes the
+    # controller JVM from a newer release that carries its security fixes.
+    retry dnf -y upgrade --releasever=${java_releasever} '${java_package}*' || echo "WARN: Java upgrade from release ${java_releasever} failed" >&2
+%{ endif ~}
     retry yum -y update --security
     retry yum -y install jenkins-${jenkins_package_version} git dnf-automatic aws-cli xfsprogs
 
