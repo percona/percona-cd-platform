@@ -126,10 +126,10 @@ metrics:
   port: 9888
 
 # NetworkPolicy for the namespace (templates/networkpolicies.yaml), enforced by the VPC CNI policy
-# engine (terraform/eks-addons.tf). Off by default, because ArgoCD applies a merge to main straight
-# to production. Turn it on in its own change after the live checks.
+# engine (terraform/eks-addons.tf). ArgoCD applies a merge to main straight to production, so a
+# change of a rule needs the live checks of docs/runbooks/jenkins-mcp-operate.md first.
 networkPolicy:
-  enabled: false
+  enabled: true
   # Container port of the gateway (deployment.yaml). The scraper rule uses metrics.port when
   # that is set, and this port otherwise.
   gatewayPort: 9887
