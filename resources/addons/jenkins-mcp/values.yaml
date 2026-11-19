@@ -169,3 +169,8 @@ networkPolicy:
     - 192.168.0.0/16
   # Extra egress rules in NetworkPolicy form, appended unchanged.
   extraEgress: []
+
+# Security alerts on the scraped counters (templates/prometheusrule.yaml). The Alloy DS syncs every
+# PrometheusRule to the Mimir ruler. The rule needs the scrape above, so it renders only with both on.
+prometheusRule:
+  enabled: true

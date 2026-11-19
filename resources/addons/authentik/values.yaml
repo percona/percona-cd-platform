@@ -29,6 +29,20 @@ saml:
 networkPolicy:
   vpcCidr: 10.220.0.0/16
 
+# Consumed by templates/cronjob-gateway-token-offboarding.yaml and the
+# offboarding alert in templates/prometheusrule-authentik.yaml. The job is
+# off. When enabled, mode must be "report" (log only) or "revoke" (delete).
+# postgresHost is the Service of the bundled Postgres.
+gatewayTokenOffboarding:
+  enabled: "false"
+  mode: ""
+  schedule: "15 3 * * *"
+  providerName: jenkins-mcp-provider
+  maxLoginAgeDays: 30
+  maxUsers: 15
+  includeServiceAccounts: false
+  postgresHost: authentik-postgresql
+
 # Subchart values. The dependency `authentik` is the official chart at
 # https://charts.goauthentik.io which bundles the Bitnami Postgres chart
 # (image switched upstream to docker.io/library/postgres after the Bitnami

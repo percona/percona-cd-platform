@@ -1,5 +1,5 @@
 {{/*
-Authentik availability alerts. Every SSO-backed app (Grafana, ArgoCD,
+Authentik availability and security alerts. Every SSO-backed app (Grafana, ArgoCD,
 Headlamp, the Jenkins MCP gateway) signs in through the single
 authentik-server pod, so a pod that stays unready is a platform-wide login
 outage. Synced to the Mimir ruler by the Alloy DS
@@ -39,3 +39,63 @@ spec:
             description: >-
               The server is crash looping. Read the last container logs in the
               authentik namespace before the next restart overwrites them.
+    # Security signals. The two log counts are recorded by the Loki ruler
+    # (prometheusrule-authentik-logs-loki.yaml) and remote-written here. A
+    # window without a matching line has no sample, so these never fire on
+    # missing data. Runbook: docs/runbooks/authentik-security-alerts.md.
+    - name: authentik-security.alerts
+      rules:
+        - alert: AuthentikRefreshTokenReplayed
+          expr: sum(authentik:refresh_token_replays:count5m) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: A revoked OAuth refresh token was presented to Authentik
+            description: >-
+              Authentik refused a refresh token that it had already rotated or
+              revoked. Two clients that share one token store and refresh at
+              the same time cause this, and so does a stolen token. Find the
+              user and the client in the Authentik admin Events list (action
+              suspicious_request) and ask the user whether they run several
+              clients. Runbook: docs/runbooks/authentik-security-alerts.md.
+        - alert: AuthentikSourceMappingFailed
+          expr: sum(authentik:source_mapping_failures:count5m) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: A SAML source property mapping failed and Authentik rejected a login
+            description: >-
+              A user or group mapping on the JumpCloud SAML source raised an
+              error, so the login was refused. An assertion with an XML comment
+              in the NameID or an attribute (an account takeover attempt) causes
+              this, and so does a broken mapping, which then fails every login.
+              Read the configuration_error event in the Authentik admin Events
+              list. It names the mapping. Runbook:
+              docs/runbooks/authentik-security-alerts.md.
+        {{- if eq (.Values.gatewayTokenOffboarding.enabled | toString) "true" }}
+        # The offboarding job runs daily. No success for 36 hours means at
+        # least one run failed or did not start. The absent branch covers a
+        # job that has never succeeded since its CronJob was created.
+        - alert: AuthentikGatewayTokenOffboardingStale
+          expr: |
+            (time() - max(kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}", cronjob="authentik-gateway-token-offboarding"}) > 129600)
+              or
+            (
+                absent(kube_cronjob_status_last_successful_time{namespace="{{ .Release.Namespace }}", cronjob="authentik-gateway-token-offboarding"})
+              and on ()
+                (time() - max(kube_cronjob_created{namespace="{{ .Release.Namespace }}", cronjob="authentik-gateway-token-offboarding"}) > 129600)
+            )
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The gateway refresh token offboarding job has not succeeded for 36 hours
+            description: >-
+              Refresh tokens of users who left are not being removed. Read the
+              logs of the last authentik-gateway-token-offboarding Job in the
+              authentik namespace. A run that matched more users than maxUsers
+              stops on purpose and names the count. Runbook:
+              docs/runbooks/authentik-security-alerts.md.
+        {{- end }}

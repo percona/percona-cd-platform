@@ -1,0 +1,128 @@
+{{/*
+Daily job: delete the Jenkins MCP gateway refresh tokens of every user whose
+last SSO login is older than maxLoginAgeDays, so a user offboarded in
+JumpCloud loses gateway access within that window.
+
+It runs files/gateway-token-offboarding.py through `ak shell` in the
+Authentik image against the Authentik database. It holds no API token, only
+the secret key and the Postgres password the worker already holds. Mode
+"report" logs the matches, mode "revoke" deletes them. The script stops
+without deleting when more than maxUsers users match.
+
+Off until gatewayTokenOffboarding.enabled is "true". Once on, mode is
+required, so the chart refuses to render until the owner picks one.
+*/}}
+{{- $cfg := .Values.gatewayTokenOffboarding }}
+{{- if eq ($cfg.enabled | toString) "true" }}
+{{- $mode := required "gatewayTokenOffboarding.mode must be set to report or revoke when the job is enabled" $cfg.mode }}
+{{- if not (has $mode (list "report" "revoke")) }}
+{{- fail (printf "gatewayTokenOffboarding.mode must be report or revoke, got %q" $mode) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-gateway-token-offboarding
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: gateway-token-offboarding
+data:
+  offboard.py: |
+{{ .Files.Get "files/gateway-token-offboarding.py" | indent 4 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: authentik-gateway-token-offboarding
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: gateway-token-offboarding
+spec:
+  schedule: {{ $cfg.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: gateway-token-offboarding
+          annotations:
+            checksum/script: {{ .Files.Get "files/gateway-token-offboarding.py" | sha256sum }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          priorityClassName: platform-default
+          nodeSelector:
+            workload.percona.com/tier: obs-state
+          tolerations:
+            - key: workload.percona.com/tier
+              operator: Equal
+              value: obs-state
+              effect: NoSchedule
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: offboard
+              image: "{{ .Values.authentik.global.image.repository | default "ghcr.io/goauthentik/server" }}:{{ required "authentik.global.image.tag is required" .Values.authentik.global.image.tag }}"
+              command: ["/bin/sh", "-c"]
+              args:
+                - exec ak shell -c "$(cat /etc/offboarding/offboard.py)"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              env:
+                - name: TMPDIR
+                  value: /tmp/
+                - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+                  value: "false"
+                - name: AUTHENTIK_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: authentik-config
+                      key: AUTHENTIK_SECRET_KEY
+                - name: AUTHENTIK_POSTGRESQL__HOST
+                  value: {{ $cfg.postgresHost | quote }}
+                - name: AUTHENTIK_POSTGRESQL__NAME
+                  value: {{ .Values.authentik.postgresql.auth.database | quote }}
+                - name: AUTHENTIK_POSTGRESQL__USER
+                  value: {{ .Values.authentik.postgresql.auth.username | quote }}
+                - name: AUTHENTIK_POSTGRESQL__PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: authentik-config
+                      key: AUTHENTIK_POSTGRESQL__PASSWORD
+                - name: OFFBOARDING_MODE
+                  value: {{ $mode | quote }}
+                - name: OFFBOARDING_PROVIDER
+                  value: {{ $cfg.providerName | quote }}
+                - name: OFFBOARDING_MAX_LOGIN_AGE_DAYS
+                  value: {{ $cfg.maxLoginAgeDays | quote }}
+                - name: OFFBOARDING_MAX_USERS
+                  value: {{ $cfg.maxUsers | quote }}
+                - name: OFFBOARDING_INCLUDE_SERVICE_ACCOUNTS
+                  value: {{ $cfg.includeServiceAccounts | toString | quote }}
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /etc/offboarding
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: authentik-gateway-token-offboarding
+{{- end }}
