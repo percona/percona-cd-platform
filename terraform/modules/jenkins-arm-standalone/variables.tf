@@ -14,6 +14,12 @@ variable "cache_bucket_name" {
   default     = null
 }
 
+variable "worker_bedrock_invoke" {
+  description = "Grant the worker role Amazon Bedrock invoke on Anthropic models (foundation models and cross-region inference profiles), plus inference-profile reads for Claude Code. Every job on the master's EC2 workers inherits it, so pair it with a Bedrock spend alert."
+  type        = bool
+  default     = false
+}
+
 variable "key_name" {
   description = "EC2 key pair for workers. The ec2-fleet plugin SSH launcher uses the matching Jenkins credential. An environment fact, passed by the caller (no default in a public module)."
   type        = string
