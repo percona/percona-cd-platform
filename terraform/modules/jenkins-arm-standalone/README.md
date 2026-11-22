@@ -40,6 +40,7 @@ preserved byte for byte.
 | `short_name` | Master short name (e.g. `jenkins-ps3`); prefixes resource names and sets `iit-billing-tag`. |
 | `vpc_cidr` | VPC CIDR. Must equal the existing master VPC being moved in, so the re-parent is zero-diff. |
 | `cache_bucket_name` | Worker build-cache S3 bucket. `null` disables the worker S3 IAM statement. |
+| `worker_bedrock_invoke` | Grant the worker role Bedrock invoke on Anthropic models plus inference-profile reads (Claude Code with `CLAUDE_CODE_USE_BEDROCK=1`). Default `false`. |
 | `key_name` | EC2 key pair for workers; the ec2-fleet SSH launcher uses the matching Jenkins credential. |
 | `instance_types` | Graviton types for the diversified pool (three or more same-size types recommended). |
 | `max_size` | ASG maximum. The ec2-fleet plugin scales `DesiredCapacity` within `[0, max_size]`. |
