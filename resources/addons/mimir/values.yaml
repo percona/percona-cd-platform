@@ -64,6 +64,10 @@ mimir-distributed:
         storage_prefix: alertmanager
         s3:
           bucket_name: REPLACE_VIA_APPSET
+      # The fallback config comes from the Secret mimir-alertmanager-config
+      # (templates/externalsecret-alertmanager.yaml), mounted at /configs/.
+      alertmanager:
+        fallback_config_file: /configs/alertmanager_fallback_config.yaml
       ruler_storage:
         backend: s3
         storage_prefix: rules
@@ -322,6 +326,20 @@ mimir-distributed:
   alertmanager:
     enabled: true
     replicas: 1
+    # Keep the ring replication factor at its default 3 even with one replica.
+    # With factor 1, Mimir 3.0.4 stops the tenant state service after the first
+    # notification, and every later one fails with "invalid service state".
+    # Empty: the chart renders no fallback ConfigMap. The config file comes
+    # from the ESO Secret below and mimir.structuredConfig names its path.
+    fallbackConfig: ""
+    extraVolumes:
+      - name: alertmanager-fallback-config
+        secret:
+          secretName: mimir-alertmanager-config
+    extraVolumeMounts:
+      - name: alertmanager-fallback-config
+        mountPath: /configs/
+        readOnly: true
     priorityClassName: platform-stateful-high
     nodeSelector:
       workload.percona.com/tier: lgtm-stateful
