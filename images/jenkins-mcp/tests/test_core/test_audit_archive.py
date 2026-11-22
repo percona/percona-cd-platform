@@ -1,11 +1,13 @@
 import json
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from botocore.exceptions import ClientError, ReadTimeoutError
+from loguru import logger
 from prometheus_client import REGISTRY
 
 from mcp_jenkins.core import audit_archive
@@ -87,21 +89,52 @@ def test_archive_puts_one_object(sink):
     assert _KEY.match(kwargs['Key'])
     assert kwargs['Body'] == line.encode()
     assert kwargs['ContentType'] == 'application/json'
-    # A checksum header lets the put pass Object Lock, and If-None-Match refuses an overwrite.
+    # S3 verifies the body against the checksum, and If-None-Match refuses an overwrite.
     assert kwargs['ChecksumAlgorithm'] == 'SHA256'
     assert kwargs['IfNoneMatch'] == '*'
     assert _stored() == before + 1
 
 
-def test_client_has_short_timeouts(monkeypatch, mocker):
-    audit_archive._client.cache_clear()
-    boto_client = mocker.patch('boto3.client')
+@pytest.fixture
+def fresh_client(monkeypatch):
+    """No S3 client built yet, and none left behind for the next test."""
+    monkeypatch.setattr(audit_archive, '_client_instance', None, raising=False)
+    yield
+    monkeypatch.setattr(audit_archive, '_client_instance', None, raising=False)
+
+
+def test_client_has_short_timeouts(fresh_client, mocker):
+    session = mocker.patch('boto3.session.Session')
     audit_archive._client()
-    config = boto_client.call_args.kwargs['config']
+    config = session.return_value.client.call_args.kwargs['config']
     assert config.connect_timeout <= 2
     assert config.read_timeout <= 3
     assert config.retries == {'total_max_attempts': 2, 'mode': 'standard'}
-    audit_archive._client.cache_clear()
+
+
+def test_client_is_built_once_from_a_session_of_its_own(fresh_client, mocker):
+    # The default boto3 session is shared with the export tools and is not thread safe, and both
+    # pool threads can ask for the client at the same moment.
+    default_client = mocker.patch('boto3.client')
+    session = mocker.patch('boto3.session.Session')
+
+    def slow_build(*_args: object, **_kwargs: object) -> object:
+        time.sleep(0.2)
+        return object()
+
+    session.return_value.client.side_effect = slow_build
+    start = threading.Barrier(2)
+
+    def build():
+        start.wait()
+        return audit_archive._client()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = [f.result() for f in [pool.submit(build), pool.submit(build)]]
+
+    assert first is second
+    session.return_value.client.assert_called_once()
+    default_client.assert_not_called()
 
 
 def test_s3_error_is_counted_not_raised(sink):
@@ -110,6 +143,20 @@ def test_s3_error_is_counted_not_raised(sink):
     audit_archive.archive('{}', datetime.now(UTC), 'ab' * 16)
     sink.drain()
     assert _failures('error') == before + 1
+
+
+def test_s3_error_log_line_names_the_s3_error_code(sink):
+    warnings: list[str] = []
+    sink_id = logger.add(warnings.append, level='WARNING', format='{message}')
+    try:
+        sink.put_object.side_effect = ClientError({'Error': {'Code': 'NoSuchBucket'}}, 'PutObject')
+        audit_archive.archive('{}', datetime(2026, 11, 19, tzinfo=UTC), 'ab' * 16)
+        sink.drain()
+    finally:
+        logger.remove(sink_id)
+    line = next(w for w in warnings if w.startswith('audit archive:'))
+    assert 'error storing audit/write/2026/11/19/' in line
+    assert line.rstrip().endswith('ClientError NoSuchBucket')
 
 
 def test_s3_timeout_is_counted_as_timeout(sink):

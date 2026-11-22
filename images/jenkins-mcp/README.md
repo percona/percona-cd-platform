@@ -282,6 +282,12 @@ when the value is not a port number, equals `--port`, or cannot be bound. The va
 the `sse` and `streamable-http` transports. The chart sets it from `metrics.port`, see
 [`../../docs/runbooks/jenkins-mcp-operate.md`](../../docs/runbooks/jenkins-mcp-operate.md).
 
+Set `MCP_AUDIT_S3_BUCKET` to also store the audit line of every operate, manage and write call as
+one JSON object in that bucket, under `audit/write/`. A pool of two threads stores the line, so a
+slow or failed write never delays or fails the tool call. Failures increment
+`mcp_audit_archive_failures_total` and log a warning. Unset or empty, nothing is stored. The chart
+sets it from `auditArchive.bucket`, see the same runbook.
+
 To run it locally over HTTP without auth, point it at a one-master fleet file, leave the OIDC vars
 unset and set the development switch `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`. The gateway then logs a
 warning on every start. Never set the switch in a deployment. The `stdio` transport has no listener

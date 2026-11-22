@@ -39,6 +39,8 @@ for _reason in ('error', 'timeout', 'backlog'):
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='audit-archive')
 _pending_lock = threading.Lock()
 _pending = 0
+_client_lock = threading.Lock()
+_client_instance: 'BaseClient | None' = None
 
 
 @lru_cache(maxsize=1)
@@ -47,21 +49,28 @@ def bucket() -> str | None:
     return os.getenv(BUCKET_ENV, '').strip() or None
 
 
-@lru_cache(maxsize=1)
 def _client() -> 'BaseClient':
-    import boto3
-    from botocore.config import Config
+    """One S3 client for the pool, built once under a lock from a boto3 session of its own.
 
-    return boto3.client(
-        's3',
-        region_name=os.getenv('MCP_AWS_REGION', 'us-east-1'),
-        config=Config(
-            signature_version='s3v4',
-            connect_timeout=_CONNECT_TIMEOUT_S,
-            read_timeout=_READ_TIMEOUT_S,
-            retries={'total_max_attempts': 2, 'mode': 'standard'},
-        ),
-    )
+    The default boto3 session is not thread safe, and the export tools use it from the tool threads.
+    """
+    global _client_instance  # noqa: PLW0603
+    with _client_lock:
+        if _client_instance is None:
+            import boto3.session
+            from botocore.config import Config
+
+            _client_instance = boto3.session.Session().client(
+                's3',
+                region_name=os.getenv('MCP_AWS_REGION', 'us-east-1'),
+                config=Config(
+                    signature_version='s3v4',
+                    connect_timeout=_CONNECT_TIMEOUT_S,
+                    read_timeout=_READ_TIMEOUT_S,
+                    retries={'total_max_attempts': 2, 'mode': 'standard'},
+                ),
+            )
+        return _client_instance
 
 
 def object_key(ts: datetime, request_id: str) -> str:
@@ -79,6 +88,13 @@ def _is_timeout(error: Exception) -> bool:
     return isinstance(error, ConnectTimeoutError | ReadTimeoutError | TimeoutError)
 
 
+def _error_name(error: Exception) -> str:
+    """The exception class, and for an S3 answer its error code, such as AccessDenied or NoSuchBucket."""
+    response = getattr(error, 'response', None)
+    code = response.get('Error', {}).get('Code') if isinstance(response, dict) else None
+    return f'{type(error).__name__} {code}' if code else type(error).__name__
+
+
 def _release() -> None:
     global _pending  # noqa: PLW0603
     with _pending_lock:
@@ -87,8 +103,8 @@ def _release() -> None:
 
 def _put(target: str, key: str, body: bytes) -> None:
     try:
-        # SHA256 makes the put carry a checksum header, which Object Lock requires. If-None-Match
-        # refuses to replace an object that already holds the key.
+        # S3 checks the stored bytes against the SHA256 checksum. If-None-Match refuses to replace
+        # an object that already holds the key.
         _client().put_object(
             Bucket=target,
             Key=key,
@@ -101,7 +117,7 @@ def _put(target: str, key: str, body: bytes) -> None:
     except Exception as e:  # noqa: BLE001
         reason = 'timeout' if _is_timeout(e) else 'error'
         _FAILURES.labels(reason=reason).inc()
-        logger.warning('audit archive: {} storing {}: {}', reason, key, type(e).__name__)
+        logger.warning('audit archive: {} storing {}: {}', reason, key, _error_name(e))
     finally:
         _release()
 

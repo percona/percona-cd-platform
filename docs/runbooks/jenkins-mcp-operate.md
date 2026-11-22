@@ -266,26 +266,50 @@ the Loki line, one object per call, in the bucket `percona-ci-platform-jenkins-m
 (`terraform/jenkins-mcp-audit.tf`). Reads are not stored. The key starts with the call time in UTC:
 `audit/write/YYYY/MM/DD/YYYYMMDDTHHMMSS.ffffffZ-<request_id>.json`.
 
-The gateway may only put objects there. Versioning and Object Lock (GOVERNANCE, 400 days) keep a
-stored record from being replaced or deleted. A record that does not reach S3 never fails the tool
+The gateway may only put objects under `audit/write/`. It cannot read, list or delete them. Each put
+carries `If-None-Match` and the IAM policy requires that header, so S3 refuses to replace a stored record. A lifecycle rule deletes a record
+after 400 days. The bucket has no versioning and no Object Lock.
+
+The bucket name is the only switch. A record that does not reach S3 never fails or delays the tool
 call. It increments `mcp_audit_archive_failures_total{reason="error|timeout|backlog"}` and logs a
-warning. Stored records increment `mcp_audit_archive_stored_total`.
+warning that starts with `audit archive:` and names the S3 error code. Stored records increment
+`mcp_audit_archive_stored_total`. The gateway reaches S3 on TCP 443 and gets its credentials from
+the Pod Identity agent. The namespace NetworkPolicy allows both.
 
 ### Turn the archive on
 
-1. Run `just tf-plan`. Check that the plan creates the bucket, its settings and the policy
-   `percona-ci-platform-jenkins-mcp-audit`, and adds one policy attachment to the jenkins-mcp role.
-2. Run `just tf-apply`.
-3. Merge the bump pull request of the first image that reads `MCP_AUDIT_S3_BUCKET`. Wait until both
-   pods run that image.
-4. Set `auditArchive.bucket: percona-ci-platform-jenkins-mcp-audit` in
+Each change below is its own pull request. Merge one only when the check of the one before passed.
+
+1. Merge the Terraform change. Run `just tf-plan`.
+2. Check that the plan only adds the bucket `percona-ci-platform-jenkins-mcp-audit`, its five
+   settings, the policy `percona-ci-platform-jenkins-mcp-audit`, and one attachment to the
+   jenkins-mcp role.
+3. Run `just tf-apply`.
+4. Merge the bump pull request of the first image that reads `MCP_AUDIT_S3_BUCKET` (0.10.14 or
+   later). Wait until both pods run that image.
+5. Set `auditArchive.bucket: percona-ci-platform-jenkins-mcp-audit` in
    `resources/addons/jenkins-mcp/values.yaml` and merge.
-5. Run one write call, for example `cancel_queue_item` with an id that does not exist.
-6. Check that a new object exists under `audit/write/<today>/` in the bucket.
-7. Check in Mimir that `mcp_audit_archive_stored_total` grew and
+6. Wait until both pods have the env `MCP_AUDIT_S3_BUCKET`:
+   `kubectl -n jenkins-mcp get deploy jenkins-mcp -o jsonpath='{..env[?(@.name=="MCP_AUDIT_S3_BUCKET")].value}'`.
+7. Run one write call, for example `cancel_queue_item` with a queue id that does not exist.
+8. List the records of today:
+   `aws s3 ls s3://percona-ci-platform-jenkins-mcp-audit/audit/write/$(date -u +%Y/%m/%d)/`.
+   Expected result: one new object whose name ends in the `request_id` of the Loki audit line.
+9. Check in Mimir that `mcp_audit_archive_stored_total` grew and
    `mcp_audit_archive_failures_total` did not.
 
+If step 8 shows no object, read the pod log for `audit archive:`. `AccessDenied` points at the IAM
+policy, `NoSuchBucket` at the chart value, and `timeout` at the NetworkPolicy or the S3 endpoint.
+
 To turn the archive off, set `auditArchive.bucket: ""`. The stored records stay until they expire.
+
+### Read one record back
+
+Run the `aws` commands with read access to the bucket. The gateway's own role cannot read it.
+
+1. Find the `request_id` of the call in Loki, or the day of the call in UTC.
+2. Find the key: `aws s3 ls s3://percona-ci-platform-jenkins-mcp-audit/audit/write/YYYY/MM/DD/ | grep <request_id>`.
+3. Print the record: `aws s3 cp s3://percona-ci-platform-jenkins-mcp-audit/<key> - | jq .`.
 
 ### Find who started, replayed or stopped a build
 
