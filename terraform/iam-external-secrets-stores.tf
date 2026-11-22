@@ -1,7 +1,8 @@
 # Owner: platform
 # One IAM role per External Secrets consumer (docs/adr/0050). The operator role
 # assumes it for the consumer's scoped ClusterSecretStore. The role reads only
-# the consumer's keys and trusts only an allowed esoNamespace session tag.
+# the consumer's keys. It trusts only a session that the consumer's own store
+# tagged with an allowed namespace, or with no namespace for the store validation.
 #
 # `exclusive = true` denies the consumer's keys to the operator role, so the
 # shared store stops serving them. Set it only after every ExternalSecret of the
@@ -48,10 +49,25 @@ data "aws_iam_policy_document" "eso_store_trust" {
       identifiers = [module.pod_identity_external_secrets.iam_role_arn]
     }
 
+    # The operator validates a ClusterSecretStore with an empty esoNamespace tag.
+    # Every read for an ExternalSecret carries the namespace of that ExternalSecret.
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/esoNamespace"
-      values   = each.value.namespaces
+      values   = concat(each.value.namespaces, [""])
+    }
+
+    # Only the consumer's own ClusterSecretStore may use the role.
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/esoStoreName"
+      values   = ["aws-secrets-manager-${each.key}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/esoStoreKind"
+      values   = ["ClusterSecretStore"]
     }
   }
 }
