@@ -43,10 +43,13 @@ summary = {
     "tokens": sum(row["tokens"] for row in per_user),
     "deleted_rows": 0,
 }
+# The cap stops a mass deletion. A report run only names the excess.
 if len(per_user) > max_users:
-    summary["error"] = f"{len(per_user)} users exceed OFFBOARDING_MAX_USERS={max_users}, nothing deleted"
-    print(json.dumps(summary))
-    raise SystemExit(1)
+    summary["over_max_users"] = True
+    if mode == "revoke":
+        summary["error"] = f"{len(per_user)} users exceed OFFBOARDING_MAX_USERS={max_users}, nothing deleted"
+        print(json.dumps(summary))
+        raise SystemExit(1)
 if mode == "revoke" and per_user:
     with transaction.atomic():
         summary["deleted_rows"] = stale.delete()[0]

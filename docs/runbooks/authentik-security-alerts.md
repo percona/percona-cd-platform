@@ -34,7 +34,7 @@ The job is off by default. To turn it on:
 4. Compare the matched users with the users you expect to lose access.
 5. Set `mode: revoke` and merge.
 
-If more users match than `maxUsers` (15), the job deletes nothing and fails. Read the summary line, then decide whether the match is right before you raise `maxUsers`.
+If more users match than `maxUsers` (15), a `revoke` run deletes nothing and fails. A `report` run succeeds and sets `over_max_users` in the summary line. Read the summary line, then decide whether the match is right before you raise `maxUsers`.
 
 To roll back, set `enabled: "false"` and merge. A deleted token cannot be restored. Its user signs in again.
 

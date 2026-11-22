@@ -6,7 +6,7 @@ JumpCloud loses gateway access within that window.
 It runs files/gateway-token-offboarding.py through `ak shell` in the
 Authentik image against the Authentik database. It holds no API token, only
 the secret key and the Postgres password the worker already holds. Mode
-"report" logs the matches, mode "revoke" deletes them. The script stops
+"report" logs the matches, mode "revoke" deletes them. A revoke run stops
 without deleting when more than maxUsers users match.
 
 Off until gatewayTokenOffboarding.enabled is "true". Once on, mode is
