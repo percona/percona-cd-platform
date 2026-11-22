@@ -13,8 +13,10 @@
 #                         (policy in iam-jenkins-controller.tf)
 #   cloudwatch-exporter   read-only CloudWatch metrics + tag discovery for
 #                         YACE (policy in iam-cloudwatch-exporter.tf)
-#   jenkins-mcp           scoped S3 export access for the MCP gateway (policy
-#                         in iam-jenkins-mcp.tf, bucket jenkins-mcp-exports.tf)
+#   jenkins-mcp           scoped S3 export access and put-only audit archive
+#                         access for the MCP gateway (policies in
+#                         iam-jenkins-mcp.tf, buckets jenkins-mcp-exports.tf
+#                         and jenkins-mcp-audit.tf)
 #   karpenter             handled by karpenter-prereqs.tf (the eks//modules/karpenter
 #                         submodule creates its own association inline)
 #
@@ -397,8 +399,9 @@ module "pod_identity_cloudwatch_exporter" {
 
 # ---------------------------------------------------------------------------
 # jenkins-mcp — token-free Jenkins MCP gateway (resources/addons/jenkins-mcp/).
-# Scoped S3 access for its log/artifact export tools. Policy in
-# iam-jenkins-mcp.tf, bucket in jenkins-mcp-exports.tf. See docs/adr/0039.
+# Scoped S3 access for its log/artifact export tools and put-only access for
+# its audit archive. Policies in iam-jenkins-mcp.tf, buckets in
+# jenkins-mcp-exports.tf and jenkins-mcp-audit.tf. See docs/adr/0039.
 # ---------------------------------------------------------------------------
 
 module "pod_identity_jenkins_mcp" {
@@ -408,7 +411,8 @@ module "pod_identity_jenkins_mcp" {
   # 31 chars, under the 38-char `name_prefix` cap on aws_iam_role.
   name = "${local.cluster_name}-jenkins-mcp"
   additional_policy_arns = {
-    s3_exports = aws_iam_policy.jenkins_mcp.arn
+    s3_exports    = aws_iam_policy.jenkins_mcp.arn
+    audit_archive = aws_iam_policy.jenkins_mcp_audit.arn
   }
 
   associations = {
