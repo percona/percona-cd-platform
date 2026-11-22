@@ -412,3 +412,8 @@ mimir-distributed:
   # distributor-to-ingester gRPC ring path.
   kafka:
     enabled: false
+
+# Secrets Manager key of the Alertmanager SES SMTP login and recipient
+# (terraform/ses-alertmanager.tf). Read by templates/externalsecret-alertmanager.yaml.
+alertmanagerEmail:
+  secretsManagerKey: percona-ci-platform/mimir/alertmanager-smtp

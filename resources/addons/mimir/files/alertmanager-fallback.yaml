@@ -1,0 +1,30 @@
+# Alertmanager config of the tenant anonymous, loaded as Mimir's fallback config.
+# ESO fills the three template fields from Secrets Manager (templates/externalsecret-alertmanager.yaml).
+# Helm reads this file with .Files.Get and does not template it. The three values
+# hold no quote or backslash (base64, key id, validated address), so plain quotes fit.
+global:
+  smtp_smarthost: email-smtp.us-east-1.amazonaws.com:587
+  smtp_from: alerts@notify.cd.percona.com
+  smtp_auth_username: "{{ .smtp_username }}"
+  smtp_auth_password: "{{ .smtp_password }}"
+  smtp_require_tls: true
+
+# Only alerts with the label notify="security" reach a person. The mixin alerts
+# of Kubernetes and Mimir stay on the empty receiver.
+route:
+  receiver: empty
+  routes:
+    - receiver: security-email
+      matchers:
+        - notify="security"
+      group_by: [alertname, namespace]
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+
+receivers:
+  - name: empty
+  - name: security-email
+    email_configs:
+      - to: "{{ .email_to }}"
+        send_resolved: true

@@ -14,6 +14,11 @@ locals {
       secret_names = ["jenkins-mcp/fleet"]
       exclusive    = false
     }
+    mimir = {
+      namespaces   = ["mimir"]
+      secret_names = ["mimir/alertmanager-smtp"]
+      exclusive    = false
+    }
   }
 
   # Secrets Manager appends a 6-character suffix to every secret ARN.

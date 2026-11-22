@@ -262,3 +262,14 @@ variable "pmm_agent_ami_promote_subject_claims" {
     "repo:percona/pmm:environment:pmm-agent-ami-factory-test",
   ]
 }
+
+variable "alertmanager_email_to" {
+  description = "Mailbox that receives the Alertmanager security mails (ses-alertmanager.tf). Set it in the gitignored local.auto.tfvars, never in a committed file. It must be an @percona.com address, the only domain the sender may mail."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._%+-]+@percona\\.com$", var.alertmanager_email_to))
+    error_message = "alertmanager_email_to must be one @percona.com address."
+  }
+}

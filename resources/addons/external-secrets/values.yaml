@@ -62,9 +62,12 @@ denyNamespacedAwsStores: true
 
 # Per-consumer ClusterSecretStores (docs/adr/0050). Each one assumes the IAM
 # role that terraform/iam-external-secrets-stores.tf creates for the consumer
-# and serves only the listed namespaces. Empty: no scoped store is rendered.
+# and serves only the listed namespaces.
 # Entry shape (roleName is the eso_store_role_names output of terraform):
 #   jenkins-mcp:
 #     roleName: percona-ci-platform-eso-jenkins-mcp
 #     namespaces: [jenkins-mcp]
-scopedStores: {}
+scopedStores:
+  mimir:
+    roleName: percona-ci-platform-eso-mimir
+    namespaces: [mimir]
