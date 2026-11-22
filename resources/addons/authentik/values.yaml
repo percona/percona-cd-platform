@@ -30,12 +30,12 @@ networkPolicy:
   vpcCidr: 10.220.0.0/16
 
 # Consumed by templates/cronjob-gateway-token-offboarding.yaml and the
-# offboarding alert in templates/prometheusrule-authentik.yaml. The job is
-# off. When enabled, mode must be "report" (log only) or "revoke" (delete).
-# postgresHost is the Service of the bundled Postgres.
+# offboarding alert in templates/prometheusrule-authentik.yaml. The job runs
+# in mode "report", which only logs the users and token counts. Mode "revoke"
+# deletes the tokens. postgresHost is the Service of the bundled Postgres.
 gatewayTokenOffboarding:
-  enabled: "false"
-  mode: ""
+  enabled: "true"
+  mode: "report"
   schedule: "15 3 * * *"
   providerName: jenkins-mcp-provider
   maxLoginAgeDays: 30

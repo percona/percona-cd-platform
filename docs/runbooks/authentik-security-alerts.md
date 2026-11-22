@@ -22,17 +22,18 @@ To roll back, set `refresh_token_validity: days=30` again and repeat steps 1 to 
 
 ## Offboarding job
 
-The CronJob `authentik-gateway-token-offboarding` runs daily at 03:15 UTC. It deletes the gateway refresh tokens of every user whose last SSO login is older than 30 days. Service accounts are skipped. A user who left the company cannot sign in to JumpCloud again, so the gateway access ends. A user who still works signs in once and continues.
+The CronJob `authentik-gateway-token-offboarding` runs daily at 03:15 UTC. It finds the gateway refresh tokens of every user whose last SSO login is older than 30 days. Service accounts are skipped.
+
+The job runs in mode `report`. It logs the matched users and token counts and deletes nothing. In mode `revoke` it deletes the matched tokens. A user who left the company cannot sign in to JumpCloud again, so the gateway access ends. A user who still works signs in once and continues.
 
 The job runs `ak shell` in the Authentik image with the database credentials the worker already has. It holds no API token. It deletes tokens and never marks them revoked, because a revoked token presented again fires `AuthentikRefreshTokenReplayed`.
 
-The job is off by default. To turn it on:
+To switch from `report` to `revoke`:
 
-1. Set `gatewayTokenOffboarding.enabled: "true"` and `gatewayTokenOffboarding.mode: report` in `resources/addons/authentik/values.yaml`.
-2. Merge and wait for the next run, or start one with `kubectl -n authentik create job --from=cronjob/authentik-gateway-token-offboarding offboarding-manual-1`.
-3. Read the job log. Expected result: one `gateway_token_offboarding_user` line per matched user and one `gateway_token_offboarding` summary line with `"deleted_rows": 0`.
-4. Compare the matched users with the users you expect to lose access.
-5. Set `mode: revoke` and merge.
+1. Wait for the next run, or start one with `kubectl -n authentik create job --from=cronjob/authentik-gateway-token-offboarding offboarding-manual-1`.
+2. Read the job log. Expected result: one `gateway_token_offboarding_user` line per matched user and one `gateway_token_offboarding` summary line with `"deleted_rows": 0`.
+3. Compare the matched users with the users you expect to lose access.
+4. Set `gatewayTokenOffboarding.mode: revoke` in `resources/addons/authentik/values.yaml` and merge.
 
 If more users match than `maxUsers` (15), a `revoke` run deletes nothing and fails. A `report` run succeeds and sets `over_max_users` in the summary line. Read the summary line, then decide whether the match is right before you raise `maxUsers`.
 
