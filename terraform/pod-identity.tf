@@ -126,8 +126,11 @@ module "pod_identity_external_secrets" {
   # but cannot actually fetch secrets, and every ExternalSecret reconcile
   # fails with AccessDeniedException. This extra policy fills the gap,
   # scoped to the cluster's prefix (percona-ci-platform/*).
+  # assume_store_roles lets the operator assume the per-consumer store roles
+  # of iam-external-secrets-stores.tf (docs/adr/0050).
   additional_policy_arns = {
-    secrets_read = aws_iam_policy.eso_secrets_manager_read.arn
+    secrets_read       = aws_iam_policy.eso_secrets_manager_read.arn
+    assume_store_roles = aws_iam_policy.eso_assume_store_roles.arn
   }
 
   associations = {
@@ -156,6 +159,19 @@ data "aws_iam_policy_document" "eso_secrets_manager_read" {
     resources = [
       "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.cluster_name}/*",
     ]
+  }
+
+  # Keys of an exclusive consumer (iam-external-secrets-stores.tf) are read
+  # only through that consumer's scoped store role, never through this role.
+  dynamic "statement" {
+    for_each = length(local.eso_exclusive_secret_arns) > 0 ? [1] : []
+
+    content {
+      sid       = "DenyExclusiveConsumerSecrets"
+      effect    = "Deny"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = local.eso_exclusive_secret_arns
+    }
   }
 }
 
