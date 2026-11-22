@@ -50,6 +50,7 @@ spec:
           for: 0m
           labels:
             severity: warning
+            notify: security
           annotations:
             summary: A revoked OAuth refresh token was presented to Authentik
             description: >-
@@ -64,6 +65,7 @@ spec:
           for: 0m
           labels:
             severity: warning
+            notify: security
           annotations:
             summary: A SAML source property mapping failed and Authentik rejected a login
             description: >-
@@ -90,6 +92,7 @@ spec:
           for: 10m
           labels:
             severity: warning
+            notify: security
           annotations:
             summary: The gateway refresh token offboarding job has not succeeded for 36 hours
             description: >-

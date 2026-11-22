@@ -23,6 +23,7 @@ spec:
           for: 0m
           labels:
             severity: warning
+            notify: security
           annotations:
             summary: The Jenkins MCP gateway denied more than 4 tool calls in 15 minutes
             description: >-
@@ -44,6 +45,7 @@ spec:
           for: 15m
           labels:
             severity: warning
+            notify: security
           annotations:
             summary: HTTP 401 answers on the Jenkins MCP gateway are 10 times above their weekly rate
             description: >-
