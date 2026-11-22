@@ -59,3 +59,12 @@ clusterSecretStore:
 # credential of their own they run on the operator's Pod Identity role, which
 # would bypass the namespace list above. docs/adr/0050.
 denyNamespacedAwsStores: true
+
+# Per-consumer ClusterSecretStores (docs/adr/0050). Each one assumes the IAM
+# role that terraform/iam-external-secrets-stores.tf creates for the consumer
+# and serves only the listed namespaces. Empty: no scoped store is rendered.
+# Entry shape (roleName is the eso_store_role_names output of terraform):
+#   jenkins-mcp:
+#     roleName: percona-ci-platform-eso-jenkins-mcp
+#     namespaces: [jenkins-mcp]
+scopedStores: {}

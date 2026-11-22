@@ -92,6 +92,10 @@ ingressEnabled: true   # set false for a ClusterIP-only deploy (e.g. a port-forw
 # AWS Secrets Manager, synced to a file the pod mounts. Provisioned out-of-band.
 externalSecret:
   remoteKey: percona-ci-platform/jenkins-mcp/fleet
+  # ClusterSecretStore that serves the key. aws-secrets-manager is the shared
+  # store. aws-secrets-manager-jenkins-mcp is the scoped store of docs/adr/0050,
+  # usable once the external-secrets addon renders it (scopedStores).
+  storeName: aws-secrets-manager
 
 resources:
   requests:

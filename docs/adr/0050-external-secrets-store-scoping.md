@@ -1,6 +1,6 @@
 # 0050 - External Secrets store scoping
 
-**Status:** Accepted for the namespace allowlist. The role per consumer is proposed.
+**Status:** Accepted for the namespace allowlist. The role per consumer is built and switched off.
 **Related:** [ADR 0004](0004-pod-identity-default.md) (Pod Identity is the in-cluster AWS auth, `enable_irsa = false` in `terraform/eks.tf`)
 
 ## Context
@@ -23,9 +23,19 @@
 - A compromise of the operator pod still reaches every key.
 - An ExternalSecret in a namespace outside the list fails with a store error until the namespace is added.
 
-## Proposed next step: one role per consumer
+## Role per consumer (built, switched off)
 
-- Each consumer gets an IAM role that reads only its own keys. The operator role assumes it through `spec.provider.aws.role` on a ClusterSecretStore of its own, which serves only the consumer's namespaces.
-- That store sets `sessionTagsPolicy: Simple`, so the operator tags the session with the ExternalSecret's namespace. The role's trust requires that tag to name an allowed namespace.
-- When a consumer's ExternalSecrets all use its own store, an explicit deny keeps its keys from the operator role. The shared store then cannot serve them.
+- `terraform/iam-external-secrets-stores.tf` creates one IAM role per entry of `local.eso_store_consumers`. The role may read only the consumer's keys, by exact name with the 6 character suffix of Secrets Manager. The first consumer is `jenkins-mcp`.
+- The role trusts only the operator's Pod Identity role, for `sts:AssumeRole` and `sts:TagSession`, and only when the session tag `esoNamespace` names one of the consumer's namespaces. `terraform/pod-identity.tf` lets the operator role assume these roles.
+- A `scopedStores` entry in the addon values renders a ClusterSecretStore `aws-secrets-manager-<consumer>`. It sets `spec.provider.aws.role` to the consumer's role, `sessionTagsPolicy: Simple` and a namespace condition. The operator then tags each session with the namespace of the ExternalSecret.
+- `exclusive = true` on a consumer adds an explicit deny for its keys to the operator role. The shared store then cannot serve them.
+- It ships switched off. `scopedStores` is `{}` and `exclusive` is `false`, so no new store renders and the shared store serves every key as before. The Terraform only adds the roles and the assume policy.
 - `authentik/config` is read by four namespaces and holds the bootstrap token next to the OIDC client secrets. Scoping ArgoCD, Grafana and Headlamp to their client secret needs that secret split first.
+
+### Switch on one consumer
+
+1. Apply the Terraform. Read the role name from the output `eso_store_role_names`.
+2. Add the consumer to `scopedStores` with `roleName` and `namespaces`.
+3. Set the consumer chart's store to `aws-secrets-manager-<consumer>` (`externalSecret.storeName` for jenkins-mcp).
+4. Check that every ExternalSecret of the consumer shows `SecretSynced`.
+5. Set `exclusive = true` for the consumer and apply the Terraform.

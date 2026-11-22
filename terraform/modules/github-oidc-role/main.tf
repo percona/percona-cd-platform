@@ -52,28 +52,70 @@ data "aws_iam_openid_connect_provider" "github_actions" {
 }
 
 data "aws_iam_policy_document" "trust" {
-  statement {
-    sid     = "GithubActionsOidcAssume"
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+  # Subject-only trust. Dropped once require_workflow_ref is true, so only
+  # the workflow-bound statement below remains.
+  dynamic "statement" {
+    for_each = var.require_workflow_ref ? [] : [1]
 
-    principals {
-      type        = "Federated"
-      identifiers = [data.aws_iam_openid_connect_provider.github_actions.arn]
+    content {
+      sid     = "GithubActionsOidcAssume"
+      effect  = "Allow"
+      actions = ["sts:AssumeRoleWithWebIdentity"]
+
+      principals {
+        type        = "Federated"
+        identifiers = [data.aws_iam_openid_connect_provider.github_actions.arn]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:aud"
+        values   = [var.audience]
+      }
+
+      # Explicit enumeration, never StringLike. The header comment gives the
+      # rationale.
+      condition {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:sub"
+        values   = var.subject_claims
+      }
     }
+  }
 
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = [var.audience]
-    }
+  # Workflow-bound trust: the same aud and sub, plus the workflow file of the
+  # job (job_workflow_ref). It matches a subset of the subject-only statement,
+  # so it widens nothing. require_workflow_ref drops the subject-only one.
+  dynamic "statement" {
+    for_each = length(var.workflow_refs) > 0 ? [1] : []
 
-    # Explicit enumeration; never StringLike. See the header comment for
-    # the rationale.
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = var.subject_claims
+    content {
+      sid     = "GithubActionsOidcAssumeWorkflowBound"
+      effect  = "Allow"
+      actions = ["sts:AssumeRoleWithWebIdentity"]
+
+      principals {
+        type        = "Federated"
+        identifiers = [data.aws_iam_openid_connect_provider.github_actions.arn]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:aud"
+        values   = [var.audience]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:sub"
+        values   = var.subject_claims
+      }
+
+      condition {
+        test     = "StringEqualsIgnoreCase"
+        variable = "token.actions.githubusercontent.com:job_workflow_ref"
+        values   = var.workflow_refs
+      }
     }
   }
 }

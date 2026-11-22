@@ -65,3 +65,25 @@ variable "max_session_duration" {
     error_message = "max_session_duration must be between 3600 and 43200 seconds."
   }
 }
+
+variable "workflow_refs" {
+  description = "Exact `job_workflow_ref` values (\"<owner>/<repo>/.github/workflows/<file>@<ref>\") that the workflow-bound trust statement accepts. Empty: no workflow-bound statement."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for ref in var.workflow_refs : !can(regex("[*?]", ref))])
+    error_message = "workflow_refs must be exact strings. Wildcard characters (* or ?) are not supported."
+  }
+}
+
+variable "require_workflow_ref" {
+  description = "When true, drop the subject-only trust statement, so only a token from one of workflow_refs can assume the role. Requires a non-empty workflow_refs."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.require_workflow_ref || length(var.workflow_refs) > 0
+    error_message = "require_workflow_ref needs at least one entry in workflow_refs."
+  }
+}
