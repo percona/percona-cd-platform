@@ -65,6 +65,12 @@ module "gha_mtr_ingest_image_push" {
     "repo:percona/percona-cd-platform:ref:refs/heads/main",
   ]
 
+  # Only the build-mtr-ingest-image.yml workflow on main may assume this role once
+  # require_workflow_ref is true. Until then the subject alone still matches.
+  workflow_refs = [
+    "percona/percona-cd-platform/.github/workflows/build-mtr-ingest-image.yml@refs/heads/main",
+  ]
+
   permissions_policy_json = data.aws_iam_policy_document.gha_mtr_ingest_image_push_perms.json
 
   tags = local.tags

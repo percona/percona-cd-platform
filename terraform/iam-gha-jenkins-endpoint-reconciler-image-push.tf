@@ -67,6 +67,12 @@ module "gha_jenkins_endpoint_reconciler_image_push" {
     "repo:percona/percona-cd-platform:ref:refs/heads/main",
   ]
 
+  # Only the build-jenkins-endpoint-reconciler-image.yml workflow on main may assume this role once
+  # require_workflow_ref is true. Until then the subject alone still matches.
+  workflow_refs = [
+    "percona/percona-cd-platform/.github/workflows/build-jenkins-endpoint-reconciler-image.yml@refs/heads/main",
+  ]
+
   permissions_policy_json = data.aws_iam_policy_document.gha_jenkins_endpoint_reconciler_image_push_perms.json
 
   tags = local.tags
