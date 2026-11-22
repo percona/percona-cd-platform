@@ -121,8 +121,10 @@ _require-clean-lockfile:
 # ---------- terraform / opentofu ----------
 # Offline init — no backend, no credentials, no -upgrade (matches CI's
 # `tofu init -backend=false`, so `just ci` does not rewrite .terraform.lock.hcl).
+# A git hook exports GIT_INDEX_FILE and GIT_DIR. Module downloads run git clone,
+# so the git repository variables are unset first to keep the caller's index intact.
 tf-init:
-    tofu -chdir=terraform init -backend=false
+    unset $(git rev-parse --local-env-vars) && tofu -chdir=terraform init -backend=false
 
 # Real backend init (reads the inherited AWS_PROFILE). Honors the committed
 # lockfile, so plan and apply run the providers main pins.
