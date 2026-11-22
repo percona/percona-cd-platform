@@ -324,6 +324,14 @@ Built by CI (`.github/workflows/build-jenkins-mcp-image.yml`) from this director
 ECR `percona-cd/jenkins-mcp` via GitHub Actions assuming an AWS IAM role over OIDC. The deployed
 tag and digest are bumped in `resources/addons/jenkins-mcp/values.yaml`.
 
+The `Dockerfile` has two stages. The build stage (`ghcr.io/astral-sh/uv:python3.13-trixie-slim`)
+installs a uv-managed standalone CPython 3.13 and the locked venv. The runtime stage
+(`gcr.io/distroless/cc-debian13:nonroot`) gets only the interpreter and `/app`. It has no shell
+and no package manager, so debug the image with the venv's Python
+(`--entrypoint /app/.venv/bin/python`). Both `FROM` lines are pinned by digest, and Dependabot
+bumps both. The interpreter bundles its own OpenSSL, SQLite and zlib, so a scanner of Debian
+packages does not see them. They get updates when the uv image of the build stage is bumped.
+
 ## License
 
 AGPL-3.0 (see `LICENSE`), matching the percona-cd-platform repository. This project began as a
