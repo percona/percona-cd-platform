@@ -1,0 +1,31 @@
+{{/*
+Loki-ruler recording rules: security log lines of the Authentik server.
+
+The Alloy DS `loki.rules.kubernetes "loki_ruler"` component syncs
+PrometheusRule resources labelled `percona.com/ruler: loki` to the Loki
+ruler, which evaluates the LogQL and remote-writes the samples to Mimir. The
+alerts in prometheusrule-authentik.yaml read the recorded series.
+
+The selector uses `instance` ("<namespace>/<pod>:<container>"), which
+loki.source.kubernetes sets on every pod stream. The line filters match text
+that Authentik writes for a revoked refresh token presented at the token
+endpoint and for a SAML source mapping that raised during a login.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: authentik-logs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: authentik
+    app.kubernetes.io/component: rules
+    percona.com/ruler: loki
+spec:
+  groups:
+    - name: authentik-logs.rules
+      interval: 1m
+      rules:
+        - record: authentik:refresh_token_replays:count5m
+          expr: sum(count_over_time({instance=~"{{ .Release.Namespace }}/authentik-server-.+"} |= "Revoked refresh token was used" [5m]))
+        - record: authentik:source_mapping_failures:count5m
+          expr: sum(count_over_time({instance=~"{{ .Release.Namespace }}/authentik-server-.+"} |= "Mapping failed to evaluate" [5m]))

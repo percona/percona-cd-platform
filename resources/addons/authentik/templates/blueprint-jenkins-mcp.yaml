@@ -49,7 +49,9 @@ data:
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           include_claims_in_id_token: true
           access_token_validity:  minutes=30
-          refresh_token_validity: days=30
+          # A client idle for 7 days signs in again. Each refresh issues a new
+          # 7 day token, so an active client keeps working.
+          refresh_token_validity: days=7
           # Loopback regex covers Claude Code's ephemeral callback port (RFC 8252).
           # The two strict cursor entries cover the Cursor MCP OAuth callback (web
           # and the desktop deep link); Cursor pre-registers this same client_id.

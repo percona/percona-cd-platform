@@ -1,0 +1,59 @@
+{{- if and .Values.serviceMonitor.enabled .Values.prometheusRule.enabled }}
+# Security alerts on the gateway counters. The thresholds are first values from the code and from
+# about 12,000 tool calls and 6 denials in 29 days. Tune them after a week of data.
+# Runbook: docs/runbooks/authentik-security-alerts.md.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: jenkins-mcp
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: rules
+spec:
+  groups:
+    - name: jenkins-mcp-security.alerts
+      rules:
+        # A denial is rare (6 in 29 days). Five in 15 minutes means a client loops on a tool it may
+        # not use, or someone probes the operate tier or another master. A new (pod, tool, reason)
+        # series hides its first increment from increase(), so a burst can read one low per series.
+        - alert: JenkinsMcpAuthzDenialBurst
+          expr: sum(increase(mcp_authz_denied_total{namespace="{{ .Release.Namespace }}"}[15m])) > 4
+          for: 0m
+          labels:
+            severity: warning
+            notify: security
+          annotations:
+            summary: The Jenkins MCP gateway denied more than 4 tool calls in 15 minutes
+            description: >-
+              Signed-in callers asked for tools or masters outside their grant.
+              Find the user, the tool and the deny_reason in the gateway audit
+              log in Loki ({instance=~"jenkins-mcp/.+"} |= "mcp_tool_call" |
+              json | status="denied"). A writer without the group is an
+              onboarding gap. Many tools or masters from one user is a probe.
+              Runbook: docs/runbooks/authentik-security-alerts.md.
+        # Unauthenticated scanners and expired access tokens answer 401 all day, so a fixed
+        # threshold would fire constantly. This fires only when the 15 minute rate is both above
+        # 0.2 per second and 10 times the rate of the 7 days before.
+        - alert: JenkinsMcpUnauthorizedBurst
+          expr: |
+            sum(rate(mcp_http_requests_total{namespace="{{ .Release.Namespace }}", path="/mcp", status="401"}[15m])) > 0.2
+              and
+            sum(rate(mcp_http_requests_total{namespace="{{ .Release.Namespace }}", path="/mcp", status="401"}[15m]))
+              > 10 * (sum(rate(mcp_http_requests_total{namespace="{{ .Release.Namespace }}", path="/mcp", status="401"}[7d] offset 1h)) or vector(0))
+          for: 15m
+          labels:
+            severity: warning
+            notify: security
+          annotations:
+            summary: HTTP 401 answers on the Jenkins MCP gateway are 10 times above their weekly rate
+            description: >-
+              Many requests reach /mcp with a missing, expired or invalid
+              token. A new scanner or token guessing on the public hostname
+              causes this, and so does a broken Authentik signing key or JWKS
+              fetch, which rejects every real user. Compare with the 200 rate
+              on the jenkins-mcp dashboard panel "HTTP responses on /mcp". If
+              200 dropped to 0, check Authentik first. Runbook:
+              docs/runbooks/authentik-security-alerts.md.
+{{- end }}
