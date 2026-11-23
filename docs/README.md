@@ -41,6 +41,7 @@ Index of design notes, runbooks, and ADRs for the platform.
 Step-by-step procedures for operational tasks.
 
 - [`add-jenkins-host.md`](runbooks/add-jenkins-host.md): bring a new Jenkins host onto the shared ALB
+- [`alertmanager-email.md`](runbooks/alertmanager-email.md): the Alertmanager security mail (recipient, rotation, test alert, no mail)
 - [`authentik-blueprint-ops.md`](runbooks/authentik-blueprint-ops.md): manage Authentik blueprints (export, apply, troubleshoot)
 - [`authentik-bootstrap.md`](runbooks/authentik-bootstrap.md): Authentik first-time configuration
 - [`authentik-cert-rotation.md`](runbooks/authentik-cert-rotation.md): rotate Authentik signing certificates
