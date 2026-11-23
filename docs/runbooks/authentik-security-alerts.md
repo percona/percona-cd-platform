@@ -2,7 +2,9 @@
 
 The Jenkins MCP gateway signs users in through Authentik. This page covers how long a gateway session lasts, the job that ends the sessions of users who stopped signing in, and the alerts on security signals at Authentik and at the gateway.
 
-The Mimir Alertmanager has no receiver yet (ADR 0031). The alerts show in Alertmanager, in the Mimir ruler API and on the dashboards. They page nobody.
+The Mimir Alertmanager mails every alert with the label `notify: security` to the security mailbox ([Alertmanager security mail](alertmanager-email.md)). Five alerts of this page carry the label: `AuthentikRefreshTokenReplayed`, `AuthentikSourceMappingFailed`, `AuthentikGatewayTokenOffboardingStale`, `JenkinsMcpAuthzDenialBurst` and `JenkinsMcpUnauthorizedBurst`.
+
+The other alerts of this page show in Alertmanager, in the Mimir ruler API and on the dashboards. They mail nobody.
 
 ## Gateway token lifetime
 
