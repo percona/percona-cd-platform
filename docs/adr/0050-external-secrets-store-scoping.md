@@ -26,7 +26,7 @@
 ## Role per consumer (in use for Mimir)
 
 - `terraform/iam-external-secrets-stores.tf` creates one IAM role per entry of `local.eso_store_consumers`. The role may read only the consumer's keys, by exact name with the 6 character suffix of Secrets Manager. The first consumer is `jenkins-mcp`.
-- The role trusts only the operator's Pod Identity role, for `sts:AssumeRole` and `sts:TagSession`, and only when the session tag `esoNamespace` names one of the consumer's namespaces. `terraform/pod-identity.tf` lets the operator role assume these roles.
+- The role trusts only the operator's Pod Identity role, for `sts:AssumeRole` and `sts:TagSession`. The session tags `esoStoreName` and `esoStoreKind` must name the consumer's own ClusterSecretStore. The tag `esoNamespace` must name one of the consumer's namespaces or be empty. The operator sends an empty namespace only when it validates the store, and a store that fails validation serves nothing. `terraform/pod-identity.tf` lets the operator role assume these roles.
 - A `scopedStores` entry in the addon values renders a ClusterSecretStore `aws-secrets-manager-<consumer>`. It sets `spec.provider.aws.role` to the consumer's role, `sessionTagsPolicy: Simple` and a namespace condition. The operator then tags each session with the namespace of the ExternalSecret.
 - `exclusive = true` on a consumer adds an explicit deny for its keys to the operator role. The shared store then cannot serve them.
 - Mimir is the first consumer with a scoped store (`scopedStores.mimir`, ADR 0051). It was never on the shared store's namespace list. `jenkins-mcp` has its role and still uses the shared store. `exclusive` is `false` for both.
